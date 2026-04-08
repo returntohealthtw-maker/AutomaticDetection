@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 環境變數（重要：不可推上 GitHub）
+.env
+*.env
+
+# 資料庫（本機 SQLite）
+*.db
+*.sqlite
+*.sqlite3
+
+# 報告 PDF
+後端系統/reports/
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# Android build
+Android source code/.gradle/
+Android source code/app/build/
+Android source code/build/
+Android source code/local.properties
+Android source code/*.iml
+Android source code/.idea/
+
+# 相關資料（PDF、ZIP 等大型檔案）
+相關資料/
+SalonExample.zip
+前端原型/*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ngrok
+ngrok.exe

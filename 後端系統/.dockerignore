@@ -1,0 +1,6 @@
+.env
+eeg_dev.db
+reports/
+__pycache__/
+*.pyc
+.git/

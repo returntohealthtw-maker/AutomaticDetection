@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>腦波系統 · 即時監控</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0f1117; color:#e0e0e0; font-family:'Segoe UI','Microsoft JhengHei',sans-serif; }
+
+  .header {
+    background:linear-gradient(135deg,#1a1a3e,#2D3561);
+    padding:16px 24px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  .header h1 { font-size:20px; font-weight:700; color:white; }
+  .header h1 span { color:#00BCD4; }
+  .ws-status { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .ws-dot { width:10px; height:10px; border-radius:50%; background:#666; }
+  .ws-dot.connected { background:#00C853; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .stats-bar {
+    display:flex; gap:12px; padding:16px 24px; flex-wrap:wrap;
+    border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .stat-box {
+    background:rgba(255,255,255,0.05); border-radius:12px; padding:12px 20px;
+    border:1px solid rgba(255,255,255,0.08); min-width:140px;
+  }
+  .stat-box .label { font-size:11px; color:#888; margin-bottom:4px; }
+  .stat-box .value { font-size:26px; font-weight:700; color:white; }
+  .stat-box .value.green { color:#00C853; }
+  .stat-box .value.cyan  { color:#00BCD4; }
+  .stat-box .value.orange{ color:#FF6B35; }
+
+  .main { display:flex; gap:0; height:calc(100vh - 130px); }
+
+  /* 左側：即時 Feed */
+  .feed-panel {
+    width:380px; flex-shrink:0; overflow-y:auto;
+    border-right:1px solid rgba(255,255,255,0.06);
+    padding:16px;
+  }
+  .feed-panel h2 { font-size:13px; color:#888; margin-bottom:12px; font-weight:500; text-transform:uppercase; letter-spacing:1px; }
+
+  .feed-item {
+    background:rgba(255,255,255,0.04); border-radius:12px;
+    padding:14px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.07);
+    animation:slide-in 0.3s ease;
+  }
+  .feed-item.new { border-color:#00BCD4; background:rgba(0,188,212,0.07); }
+  @keyframes slide-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .fi-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .fi-name { font-size:15px; font-weight:700; color:white; }
+  .fi-time { font-size:11px; color:#666; }
+  .fi-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .tag { padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600; }
+  .tag-success { background:rgba(0,200,83,0.2); color:#00C853; }
+  .tag-fail    { background:rgba(255,82,82,0.2); color:#ff5252; }
+  .tag-adult   { background:rgba(45,53,97,0.6);  color:#90caf9; }
+  .tag-child   { background:rgba(107,63,160,0.4);color:#ce93d8; }
+  .fi-bars { display:flex; gap:6px; margin-top:8px; align-items:flex-end; height:36px; }
+  .fi-bar-wrap { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; }
+  .fi-bar { width:100%; border-radius:3px 3px 0 0; min-height:2px; }
+  .fi-blabel { font-size:9px; color:#666; }
+
+  /* 右側：場次詳情 */
+  .detail-panel { flex:1; overflow-y:auto; padding:20px 24px; }
+  .detail-panel h2 { font-size:14px; color:#888; margin-bottom:16px; font-weight:500; text-transform:uppercase; letter-spacing:1px; }
+
+  .session-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .session-table th {
+    background:rgba(255,255,255,0.05); color:#888; font-weight:500;
+    padding:10px 14px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06);
+    font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .session-table td { padding:12px 14px; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .session-table tr:hover td { background:rgba(255,255,255,0.03); }
+
+  .badge { padding:3px 10px; border-radius:8px; font-size:11px; font-weight:600; display:inline-block; }
+  .badge-success { background:rgba(0,200,83,0.2); color:#00C853; }
+  .badge-fail    { background:rgba(255,82,82,0.2); color:#ff5252; }
+  .badge-pending { background:rgba(255,152,0,0.2); color:#ff9800; }
+
+  .empty-state { text-align:center; padding:60px 20px; color:#444; }
+  .empty-state .icon { font-size:48px; margin-bottom:12px; }
+  .empty-state p { font-size:14px; }
+
+  /* 腦波即時圖 */
+  .wave-mini { display:flex; gap:4px; align-items:flex-end; height:40px; margin-top:4px; }
+  .wm-bar { width:6px; border-radius:2px 2px 0 0; background:#00BCD4; opacity:0.7; }
+
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧠 腦波系統 · <span>即時監控</span></h1>
+  <div class="ws-status">
+    <div class="ws-dot" id="ws-dot"></div>
+    <span id="ws-text">連線中...</span>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-box">
+    <div class="label">今日場次</div>
+    <div class="value cyan" id="stat-total">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">成功</div>
+    <div class="value green" id="stat-success">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">失敗</div>
+    <div class="value orange" id="stat-fail">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">最新受測者</div>
+    <div class="value" id="stat-last" style="font-size:16px;">—</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">後端伺服器</div>
+    <div class="value green" style="font-size:14px;">192.168.50.250:8000</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 左側 Feed -->
+  <div class="feed-panel">
+    <h2>即時上傳 Feed</h2>
+    <div id="feed-list">
+      <div class="empty-state">
+        <div class="icon">📡</div>
+        <p>等待手機上傳資料...<br>請確認手機與電腦在同一 WiFi</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右側 Table -->
+  <div class="detail-panel">
+    <h2>場次紀錄</h2>
+    <table class="session-table">
+      <thead>
+        <tr>
+          <th>時間</th>
+          <th>顧問</th>
+          <th>受測者</th>
+          <th>年齡</th>
+          <th>報告類型</th>
+          <th>擷取筆數</th>
+          <th>狀態</th>
+          <th>Session ID</th>
+        </tr>
+      </thead>
+      <tbody id="session-tbody">
+        <tr>
+          <td colspan="7" style="text-align:center;color:#444;padding:40px;">尚無資料</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const WS_URL  = `ws://${location.hostname}:8000/ws/monitor`;
+const API_URL = `http://${location.hostname}:8000/api/v1`;
+
+let statTotal   = 0;
+let statSuccess = 0;
+let statFail    = 0;
+let ws;
+let reconnectTimer;
+
+const BAND_COLORS = {
+  delta:     '#607d8b',
+  theta:     '#9c27b0',
+  low_alpha: '#4caf50',
+  high_alpha:'#8bc34a',
+  low_beta:  '#ff9800',
+  high_beta: '#f44336',
+  low_gamma: '#e91e63',
+  high_gamma:'#9c27b0',
+};
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    document.getElementById('ws-dot').classList.add('connected');
+    document.getElementById('ws-text').textContent = '已連線';
+    clearTimeout(reconnectTimer);
+    // 心跳：每 20 秒送一個 ping 維持連線
+    setInterval(() => { if(ws.readyState === 1) ws.send('ping'); }, 20000);
+  };
+
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.event === 'new_session') handleNewSession(msg.data, msg.ts);
+    } catch {}
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-dot').classList.remove('connected');
+    document.getElementById('ws-text').textContent = '已斷線，重連中...';
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function handleNewSession(d, ts) {
+  statTotal++;
+  if (d.is_success) statSuccess++; else statFail++;
+  document.getElementById('stat-total').textContent   = statTotal;
+  document.getElementById('stat-success').textContent = statSuccess;
+  document.getElementById('stat-fail').textContent    = statFail;
+  document.getElementById('stat-last').textContent    = d.subject_name || '—';
+
+  addFeedItem(d, ts);
+  prependTableRow(d, ts);
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+
+function reportLabel(type) {
+  const m = {
+    life_trial:'人生劇本 體驗版', life_full:'人生劇本 完整版', life_vip:'人生劇本 VIP',
+    child_trial:'天賦解碼 體驗版', child_full:'天賦解碼 完整版', child_vip:'天賦解碼 VIP',
+    adult:'成人報告', child:'兒童報告',
+  };
+  return m[type] || type;
+}
+
+function addFeedItem(d, ts) {
+  const list = document.getElementById('feed-list');
+  const empty = list.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const pct = Math.min(100, Math.round(d.captures / 180 * 100));
+  const barH = [35, 55, 70, 60, 40, 65, 45, 50]; // 示意高度
+
+  const item = document.createElement('div');
+  item.className = 'feed-item new';
+  item.innerHTML = `
+    <div class="fi-top">
+      <span class="fi-name">${d.subject_name || '（未填姓名）'}</span>
+      <span class="fi-time">${formatTime(ts)}</span>
+    </div>
+    <div style="font-size:12px;color:#00BCD4;margin-top:2px;">
+      顧問：${d.consultant_name || '未填寫'}
+    </div>
+    <div class="fi-tags">
+      <span class="tag ${d.is_success ? 'tag-success' : 'tag-fail'}">
+        ${d.is_success ? '✅ 成功' : '❌ 失敗'}
+      </span>
+      <span class="tag ${d.report_type && d.report_type.startsWith('child') ? 'tag-child' : 'tag-adult'}">
+        ${reportLabel(d.report_type)}
+      </span>
+    </div>
+    <div style="font-size:12px;color:#666;margin-top:8px;">
+      擷取 ${d.captures} 筆 &nbsp;·&nbsp; 完成率 ${pct}%
+    </div>
+    <div style="margin-top:8px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;">
+      <div style="height:100%;width:${pct}%;background:${d.is_success?'#00C853':'#ff5252'};border-radius:2px;"></div>
+    </div>
+    <div class="fi-bars">
+      ${barH.map((h,i) => `<div class="fi-bar-wrap">
+        <div class="fi-bar" style="height:${h}%;background:${Object.values(BAND_COLORS)[i]};opacity:0.8;"></div>
+        <div class="fi-blabel">${['δ','θ','α↓','α↑','β↓','β↑','γ↓','γ↑'][i]}</div>
+      </div>`).join('')}
+    </div>`;
+
+  list.prepend(item);
+  setTimeout(() => item.classList.remove('new'), 2000);
+}
+
+function prependTableRow(d, ts) {
+  const tbody = document.getElementById('session-tbody');
+  // 移除「尚無資料」提示
+  const empty = tbody.querySelector('td[colspan]');
+  if (empty) empty.closest('tr').remove();
+
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td style="color:#888;">${formatTime(ts)}</td>
+    <td style="color:#00BCD4;font-weight:600;">${d.consultant_name || '—'}</td>
+    <td style="font-weight:600;color:white;">${d.subject_name || '—'}</td>
+    <td>${d.subject_age ? d.subject_age + ' 歲' : '—'}</td>
+    <td>${reportLabel(d.report_type)}</td>
+    <td style="color:#00BCD4;">${d.captures}</td>
+    <td><span class="badge ${d.is_success ? 'badge-success' : 'badge-fail'}">
+      ${d.is_success ? '成功' : '失敗'}
+    </span></td>
+    <td style="color:#444;font-size:11px;">#${d.session_id}</td>`;
+  tbody.prepend(row);
+}
+
+// 頁面載入時先抓歷史資料
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API_URL}/sessions-recent?limit=50`);
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!list.length) return;
+
+    // 從舊到新排序後逐筆加入（最新的在最上面）
+    list.reverse().forEach(d => {
+      statTotal++;
+      if (d.is_success) statSuccess++; else statFail++;
+      const ts = d.created_at || Date.now();
+      addFeedItem(d, ts);
+      prependTableRow(d, ts);
+    });
+
+    document.getElementById('stat-total').textContent   = statTotal;
+    document.getElementById('stat-success').textContent = statSuccess;
+    document.getElementById('stat-fail').textContent    = statFail;
+    if (list.length > 0) {
+      document.getElementById('stat-last').textContent = list[0].subject_name || '—';
+    }
+  } catch(e) {
+    console.warn('載入歷史資料失敗:', e);
+  }
+}
+
+connect();
+loadHistory();
+</script>
+</body>
+</html>
