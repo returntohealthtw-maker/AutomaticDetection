@@ -26,7 +26,7 @@ public class ApiUploader {
 
     // ── 修改成你的電腦 WiFi IP ────────────────────────────────────────────────
     // 手機與電腦必須在同一 WiFi 網路下
-    public static final String BASE_URL = "http://192.168.50.250:8000";
+    public static final String BASE_URL = "https://backend-production-2da61.up.railway.app";
     // ──────────────────────────────────────────────────────────────────────────
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");

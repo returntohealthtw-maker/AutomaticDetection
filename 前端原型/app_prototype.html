@@ -1903,9 +1903,11 @@ function selectPayMethod(el) {
 // 自動偵測後端位址（電腦開 localhost，手機開 IP）
 const _isFile = location.protocol === 'file:';
 const _host   = _isFile ? 'localhost' : location.hostname;
-const _port   = _isFile ? '8000' : (location.port || '8000');
-const API_BASE    = `http://${_host}:${_port}/api/v1`;
-const STATIC_BASE = _isFile ? '' : `http://${_host}:${_port}/static-app`;
+const _port   = _isFile ? '8000' : (location.port || '');
+const _proto  = _isFile ? 'http' : location.protocol.replace(':', '');
+const _portStr = _port ? `:${_port}` : '';
+const API_BASE    = `${_proto}://${_host}${_portStr}/api/v1`;
+const STATIC_BASE = _isFile ? '' : `${_proto}://${_host}${_portStr}/static-app`;
 let _pollTimer   = null;
 let _currentOrderId = null;
 let _pollCountdown  = 15 * 60; // 15 分鐘倒數（秒）
