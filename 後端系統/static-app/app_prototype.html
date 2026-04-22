@@ -768,7 +768,7 @@
 
           <div class="form-group">
             <label class="form-label">姓名 *</label>
-            <input class="form-input" placeholder="請輸入姓名">
+            <input class="form-input" id="subject-name-input" placeholder="請輸入姓名">
           </div>
           <div class="form-group">
             <label class="form-label">出生日期 *</label>
@@ -792,7 +792,10 @@
             <input class="form-input" placeholder="請填寫（無則留空）">
           </div>
 
-          <button class="btn btn-primary" onclick="goto('screen-reports')">
+          <button class="btn btn-primary" onclick="
+            const n = document.getElementById('subject-name-input').value.trim();
+            _currentSubjectName = n || '受測者';
+            goto('screen-reports')">
             下一步：選擇報告 →
           </button>
         </div>
@@ -816,6 +819,23 @@
         </div>
 
         <div style="flex:1;overflow-y:auto;padding:12px 16px 16px;">
+
+          <!-- 🧪 測試選項 -->
+          <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">🧪 開發測試</span>
+          </div>
+          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:2px dashed #ef9a9a;">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" onclick="selectSingleReport(this,'test_1','NT$1','screen-qr-test')" style="margin:0;border-color:#ef9a9a;">
+                <div class="report-icon" style="font-size:20px;width:32px;">🧪</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">NT$1 功能測試</div>
+                  <div class="desc">測試付款→腦波全流程</div>
+                </div>
+                <div style="font-size:15px;font-weight:800;color:#c2185b;">NT$1</div>
+              </div>
+            </div>
+          </div>
 
           <!-- 個人報告 -->
           <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
@@ -1058,6 +1078,50 @@
           </div>
 
           <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
+            🧪 開發測試：模擬付款成功
+          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: QR 付款（NT$1 測試）===== -->
+      <div class="screen" id="screen-qr-test">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar" style="--header-bg:#880e4f;">
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
+          <h2>🧪 測試付款 NT$1</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#880e4f,#c2185b);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:4px;">測試訂單</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-test-title">NT$1 功能測試</div>
+            <div style="font-size:32px;font-weight:800;color:#FFCDD2;margin:8px 0;">NT$1</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.7);">🧪 開發測試專用，完整付款→腦波流程</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 掃碼付款</div>
+            <img src="/static-app/ecpay/qr_1.png" alt="測試 QR Code" style="width:200px;height:200px;border-radius:12px;border:3px dashed #ef9a9a;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動啟動腦波檢測</div>
+            <div style="background:#fce4ec;border:1px solid #ef9a9a;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#c2185b;text-align:center;">
+              ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
+            </div>
+            <div id="qr-test-link-box" style="width:100%;background:#fce4ec;border:1px dashed #ef9a9a;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#c2185b;margin-bottom:6px;font-weight:600;">🔗 或點擊連結付款</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-test-link" href="#" target="_blank" style="font-size:12px;color:#880e4f;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-test-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #ef9a9a;background:white;border-radius:8px;font-size:11px;color:#c2185b;cursor:pointer;">複製</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
+          </div>
+
+          <button class="btn" style="width:100%;background:#fce4ec;color:#c2185b;border:1px solid #ef9a9a;font-size:13px;" onclick="simulatePaid('screen-qr-test')">
             🧪 開發測試：模擬付款成功
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
@@ -1908,10 +1972,12 @@ const _proto  = _isFile ? 'http' : location.protocol.replace(':', '');
 const _portStr = _port ? `:${_port}` : '';
 const API_BASE    = `${_proto}://${_host}${_portStr}/api/v1`;
 const STATIC_BASE = _isFile ? '' : `${_proto}://${_host}${_portStr}/static-app`;
-let _pollTimer   = null;
+let _pollTimer      = null;
 let _currentOrderId = null;
-let _pollCountdown  = 15 * 60; // 15 分鐘倒數（秒）
+let _pollCountdown  = 15 * 60;
 let _countdownTimer = null;
+let _currentSubjectName = '受測者';
+let _currentReportType  = '';
 
 async function createPaymentOrder(reportType, amount, subjectName) {
   try {
@@ -1990,9 +2056,21 @@ function showPaymentResult(status, qrScreenId) {
     title.textContent = "付款成功！";
     msg.textContent   = "正在啟動腦波檢測...";
     btn.textContent   = "開始檢測 →";
-    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-mbti"); };
-    // 2 秒後自動跳轉
-    setTimeout(() => { overlay.style.display = "none"; goto("screen-mbti"); }, 2000);
+
+    // ── 呼叫 Android 原生橋接（App 安裝版）────────────────────────────
+    if (window.AndroidBridge &&
+        typeof window.AndroidBridge.startBrainwaveDetection === 'function') {
+      btn.style.display = 'none'; // Android 自動跳轉，隱藏按鈕
+      window.AndroidBridge.startBrainwaveDetection(
+        _currentSubjectName || '受測者',
+        _currentReportType  || 'unknown',
+        _currentOrderId     || ''
+      );
+    } else {
+      // ── 瀏覽器測試 fallback：跳到 MBTI 畫面 ─────────────────────────
+      btn.onclick = () => { overlay.style.display = "none"; goto("screen-mbti"); };
+      setTimeout(() => { overlay.style.display = "none"; goto("screen-mbti"); }, 2000);
+    }
   } else if (status === "expired") {
     icon.textContent  = "⏰";
     title.textContent = "付款逾時";
@@ -2022,7 +2100,8 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   el.style.borderColor = '#FF6B35';
   el.style.background = '#fff5f2';
 
-  // 更新 QR 畫面標題（依報告類型設定標題）
+  _currentReportType = reportKey; // 記錄當前報告類型供 AndroidBridge 使用
+
   const reportNames = {
     'life_trial':  '腦波分析人生劇本 · 體驗版',
     'life_full':   '腦波分析人生劇本 · 完整版',
@@ -2030,11 +2109,13 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'child_trial': '兒童腦波天賦解碼 · 體驗版',
     'child_full':  '兒童腦波天賦解碼 · 完整版',
     'child_vip':   '兒童腦波天賦解碼 · VIP版',
+    'test_1':      '🧪 NT$1 功能測試',
   };
   const titleMap = {
     'screen-qr-trial': 'qr-trial-title',
     'screen-qr-full':  'qr-full-title',
     'screen-qr-vip':   'qr-vip-title',
+    'screen-qr-test':  'qr-test-title',
   };
   const titleEl = document.getElementById(titleMap[qrScreen]);
   if (titleEl) titleEl.textContent = reportNames[reportKey] || '';
@@ -2044,12 +2125,14 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     goto(qrScreen);
 
     // 金額對照
-    const amountMap = { 'life_trial':3000,'life_full':5000,'life_vip':12000,
-                        'child_trial':3000,'child_full':5000,'child_vip':12000 };
+    const amountMap = {
+      'life_trial':3000,'life_full':5000,'life_vip':12000,
+      'child_trial':3000,'child_full':5000,'child_vip':12000,
+      'test_1':1
+    };
     const amt = amountMap[reportKey] || 3000;
 
-    // 呼叫後端建立訂單（DEMO 模式：後端直接回傳靜態 QR Code）
-    const order = await createPaymentOrder(reportKey, amt, "受測者");
+    const order = await createPaymentOrder(reportKey, amt, _currentSubjectName);
     if (order && order.order_id) {
       _currentOrderId = order.order_id;
       // 更新訂單 ID 顯示
@@ -2061,6 +2144,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
         'screen-qr-trial': { box: 'qr-trial-link-box', a: 'qr-trial-link' },
         'screen-qr-full':  { box: 'qr-full-link-box',  a: 'qr-full-link'  },
         'screen-qr-vip':   { box: 'qr-vip-link-box',   a: 'qr-vip-link'   },
+        'screen-qr-test':  { box: 'qr-test-link-box',  a: 'qr-test-link'  },
       };
       const lm = linkMap[qrScreen];
       if (lm) {

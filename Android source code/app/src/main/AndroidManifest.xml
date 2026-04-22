@@ -41,17 +41,25 @@
             android:name=".threshold" android:exported="true" />
         <activity
             android:name=".multi_time" android:exported="true" />
-        <activity android:name="waiting"  android:exported="true" />
-        <activity android:name="flash"  android:exported="true" />
-        <activity android:name="report"  android:exported="true" />
+        <activity android:name=".waiting"  android:exported="true" />
+        <activity android:name=".flash"  android:exported="true" />
+        <activity android:name=".report"  android:exported="true" />
+        <!-- 前端原型 WebView App（目前的啟動頁，方便測試付款流程） -->
         <activity
-            android:name=".main" android:exported="true">
+            android:name=".WebAppActivity"
+            android:exported="true"
+            android:label="腦波檢測系統"
+            android:screenOrientation="portrait">
             <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+
+        <!-- 原有腦波偵測 App（保留，未來整合用） -->
+        <activity
+            android:name=".main" android:exported="true">
+            <!-- 已移除 LAUNCHER，不再顯示在桌面 -->
         </activity>
     </application>
 </manifest>

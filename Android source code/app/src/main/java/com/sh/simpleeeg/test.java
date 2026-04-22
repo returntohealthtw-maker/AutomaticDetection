@@ -103,6 +103,7 @@ public class test extends Activity {
         Glide.with(mContext).load(R.drawable.stop_test).apply(myGdiOptions).into(ivStopTest);
 
         dX = 0;
+        layoutChart.removeAllViews();
         clsLineChart = new CLS_LineChart(2);
         viewLineChart = clsLineChart.viewDrawAppearance(this, true, 30, 100, Color.RED, Color.GREEN, 1.0f);
         layoutChart.addView(viewLineChart,
@@ -115,16 +116,26 @@ public class test extends Activity {
         clsData.EnableRecording(true);
 
         // ── 開始新的腦波擷取場次，儲存至資料庫 ─────────────────────────
-        // TODO: 顧問姓名改由登入系統提供，目前先從 CLS_DATA 讀取
         CLS_DB.getInstance().setConsultantName(clsData.strGetTeacherName());
+
+        // 優先使用從 WebApp 傳入的受測者姓名（付款時填寫）
+        String subjectName = clsData.getSubjectName();
+        if (subjectName == null || subjectName.isEmpty()) {
+            subjectName = clsData.strName(); // fallback 到舊版填寫欄位
+        }
+        String reportType = clsData.getReportType();
+        if (reportType == null || reportType.isEmpty()) {
+            reportType = "adult";
+        }
+
         String gender = (clsData.iGetGender() == 1) ? "M" : "F";
         CLS_DB.getInstance().startSession(
-                clsData.strName(),
+                subjectName,
                 clsData.strGetBirthday(),
                 gender,
-                0,          // age（可由生日換算，此處先傳 0）
-                "adult",    // report type（可依需求調整）
-                null        // 不需要 callback
+                0,
+                reportType,
+                null
         );
         // ─────────────────────────────────────────────────────────────────
     }

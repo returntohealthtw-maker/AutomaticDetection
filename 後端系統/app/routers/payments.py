@@ -137,6 +137,7 @@ async def create_payment(req: CreatePaymentRequest):
         "child_trial": "兒童腦波天賦解碼體驗版",
         "child_full":  "兒童腦波天賦解碼完整版",
         "child_vip":   "兒童腦波天賦解碼VIP版",
+        "test_1":      "功能測試NT1元",
     }
     desc = report_labels.get(req.report_type, "腦波報告")
     order_id = _generate_order_id()

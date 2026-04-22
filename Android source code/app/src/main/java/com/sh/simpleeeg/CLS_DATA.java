@@ -85,7 +85,10 @@ public class CLS_DATA
     static int iTrainingNum = 0;
 
     static String str_Name, strPhone, strBirthday, strEmail;
-    static String strTeacherName = "";   // 登入的顧問姓名
+    static String strTeacherName  = "";   // 登入的顧問姓名
+    static String strSubjectName  = "受測者"; // 受測者姓名（付款時填寫）
+    static String strReportType   = "";   // 報告類型（life_trial / test_1 ...）
+    static String strOrderId      = "";   // 綠界訂單編號
     static int iGender=1;
 
     public static int iThreadProcess = 0;
@@ -156,8 +159,17 @@ public class CLS_DATA
     public String strGetEmail(){return strEmail;}
     public String strGetPhone(){return strPhone;}
     public int  iGetGender(){return iGender;}
-    public void setTeacherName(String name){ strTeacherName = (name != null) ? name : ""; }
-    public String strGetTeacherName(){ return strTeacherName; }
+    public void setTeacherName(String name)  { strTeacherName = (name != null) ? name : ""; }
+    public String strGetTeacherName()        { return strTeacherName; }
+
+    public void setSubjectName(String name)  { strSubjectName = (name != null && !name.isEmpty()) ? name : "受測者"; }
+    public String getSubjectName()           { return strSubjectName; }
+
+    public void setReportType(String type)   { strReportType = (type != null) ? type : ""; }
+    public String getReportType()            { return strReportType; }
+
+    public void setOrderId(String id)        { strOrderId = (id != null) ? id : ""; }
+    public String getOrderId()               { return strOrderId; }
     public void SetScale(float _fScale){fScale = _fScale;}
     public float fGetScale(){return fScale;}
     public void SendDataOk(boolean bVal){bSendDataOk = bVal;}
