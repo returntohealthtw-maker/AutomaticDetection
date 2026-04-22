@@ -6,7 +6,7 @@ import os
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor
+from app.routers import sessions, payments, monitor, companies, client_view
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -38,6 +38,8 @@ if os.path.isdir(_PROTOTYPE_DIR):
 app.include_router(sessions.router)
 app.include_router(payments.router)
 app.include_router(monitor.router)
+app.include_router(companies.router)
+app.include_router(client_view.router)
 
 
 @app.on_event("startup")
@@ -108,7 +110,11 @@ def pay_page(order_id: str):
 
 @app.get("/health")
 def health():
-    db_ok = check_connection()
+    """Railway Healthcheck 端點（永遠回傳 200，DB 狀態另行回報）"""
+    try:
+        db_ok = check_connection()
+    except Exception:
+        db_ok = False
     return {
         "api":      "ok",
         "database": "ok" if db_ok else "error"

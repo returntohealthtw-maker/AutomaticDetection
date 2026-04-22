@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session as DbSession
 from pydantic import BaseModel
 from typing import List, Optional
 import time
+import uuid
 
 from app.core.database import get_db
 from app.core import models
+from app.core.config import settings
 from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
 from app.services.report_generator import generate_report_async
 from app.routers.monitor import broadcast
@@ -45,6 +47,9 @@ class UploadSessionRequest(BaseModel):
     subject_gender:   str = "M"
     subject_age:      int = 0
     report_type:      str = "adult"   # adult / child
+    report_audience:  str = "student"  # teacher / student（天賦報告範本）
+    company_id:       Optional[int] = None
+    notify_email:     Optional[str] = None
     line_user_id:     Optional[str] = None   # LINE 使用者 ID（選填）
     start_time:       int = 0
     end_time:         int = 0
@@ -59,6 +64,7 @@ class SessionResponse(BaseModel):
     report_id:   int
     message:     str
     captures_saved: int
+    client_view_url: Optional[str] = None  # 客戶掃描 QR 開啟的五段摘要頁
 
 
 # ─── API 端點 ────────────────────────────────────────────────────────────────
@@ -79,6 +85,22 @@ async def upload_session(
     4. 回傳 session_id 和 report_id
     """
 
+    if req.company_id is not None:
+        co = (
+            db.query(models.Company)
+            .filter(
+                models.Company.company_id == req.company_id,
+                models.Company.is_active == 1,
+            )
+            .first()
+        )
+        if not co:
+            raise HTTPException(status_code=400, detail="企業無效或未於後端啟用")
+
+    aud = (req.report_audience or "student").lower()
+    if aud not in ("teacher", "student"):
+        aud = "student"
+
     # 1. 建立場次記錄
     session = models.Session(
         consultant_name  = req.consultant_name,
@@ -86,7 +108,9 @@ async def upload_session(
         subject_birthday = req.subject_birthday,
         subject_gender   = req.subject_gender,
         subject_age      = req.subject_age,
+        company_id       = req.company_id,
         report_type      = req.report_type,
+        report_audience  = aud,
         start_time       = req.start_time or int(time.time() * 1000),
         end_time         = req.end_time   or int(time.time() * 1000),
         total_captures   = len(req.captures),
@@ -121,11 +145,15 @@ async def upload_session(
     ]
     db.bulk_save_objects(capture_objects)
 
-    # 3. 建立報告待處理記錄
+    # 3. 建立報告待處理記錄（預先給 qr_token，檢測結束即可顯示 QR）
+    qr_token = uuid.uuid4().hex
+    notify = (req.notify_email or "").strip() or None
     report = models.Report(
         session_id   = session.session_id,
         status       = "pending",
-        line_user_id = req.line_user_id
+        line_user_id = req.line_user_id,
+        qr_token     = qr_token,
+        notify_email = notify,
     )
     db.add(report)
     db.commit()
@@ -152,11 +180,15 @@ async def upload_session(
             session_id = session.session_id
         )
 
+    base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+    client_url = f"{base}/api/v1/public/client/{qr_token}" if base else None
+
     return SessionResponse(
-        session_id     = session.session_id,
-        report_id      = report.report_id,
-        message        = "數據已接收，報告生成中",
-        captures_saved = len(req.captures)
+        session_id       = session.session_id,
+        report_id        = report.report_id,
+        message          = "數據已接收，報告生成中",
+        captures_saved   = len(req.captures),
+        client_view_url  = client_url,
     )
 
 
@@ -205,9 +237,16 @@ def get_report_status(report_id: int, db: DbSession = Depends(get_db)):
     ).first()
     if not report:
         raise HTTPException(status_code=404, detail="報告不存在")
+    base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+    client_url = (
+        f"{base}/api/v1/public/client/{report.qr_token}"
+        if base and report.qr_token
+        else None
+    )
     return {
-        "report_id":  report.report_id,
-        "status":     report.status,
-        "pdf_url":    report.pdf_url,
-        "line_sent":  report.line_sent
+        "report_id":       report.report_id,
+        "status":          report.status,
+        "pdf_url":         report.pdf_url,
+        "line_sent":       report.line_sent,
+        "client_view_url": client_url,
     }

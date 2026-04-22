@@ -1,15 +1,114 @@
 """
 報告生成引擎
-流程：讀取腦波數據 → 計算演算法 → 儲存結果 → 生成 PDF → 傳送 LINE
+流程：讀取腦波數據 → 計算演算法 → 儲存結果 → 生成 PDF → 傳送 LINE／Email
 """
 import os
+import json
 import time
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import httpx
 from sqlalchemy.orm import Session as DbSession
 from app.core.database import SessionLocal
 from app.core import models
 from app.core.config import settings
 from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
+
+
+def _clip_zh(text: str, max_len: int = 100) -> str:
+    t = (text or "").replace("\n", "").strip()
+    if len(t) <= max_len:
+        return t
+    return t[: max_len - 1] + "…"
+
+
+def _pct(indices: dict, key: str, default: float = 50.0) -> float:
+    if key not in indices:
+        return default
+    try:
+        return float(indices[key].get("pct", default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _resolve_talent_kind(session) -> str:
+    """對應「報告範本」四種：child_teacher / child_student / teen_teacher / teen_student"""
+    age = int(session.subject_age or 0)
+    aud = (getattr(session, "report_audience", None) or "student").lower()
+    is_teacher = aud == "teacher"
+    if age <= 12:
+        return "child_teacher" if is_teacher else "child_student"
+    return "teen_teacher" if is_teacher else "teen_student"
+
+
+def _talent_pdf_title(session) -> str:
+    k = _resolve_talent_kind(session)
+    titles = {
+        "child_teacher":  "兒童天賦報告教師版",
+        "child_student":  "兒童天賦報告學生版（3～12歲）",
+        "teen_teacher":   "青少年天賦報告教師版",
+        "teen_student":   "青少年天賦報告學生版（13～18歲）",
+    }
+    return titles.get(k, "腦波天賦分析報告")
+
+
+def _build_client_summaries(session, indices: dict, mbti: dict, avg) -> dict:
+    """
+    客戶掃描 QR 後顯示的五段文字（各約 100 字）。
+    內容由指標與 MBTI 自動生成，可再串接語言模型或人工校稿流程。
+    """
+    name = session.subject_name or "受測者"
+    age = int(session.subject_age or 0)
+    mbti_type = mbti.get("mbti_type", "—")
+    conf = int(mbti.get("confidence", 0) or 0)
+    srr = _pct(indices, "SRR")
+    emo = _pct(indices, "EMO")
+    foc = _pct(indices, "FOC")
+    cre = _pct(indices, "CRE")
+    soc = _pct(indices, "SOC")
+    res = _pct(indices, "RES")
+    ei = _pct(indices, "EI")
+
+    family = (
+        f"「{name}」目前{age}歲，從腦波情緒整合度（EMO {emo:.0f}%）與恢復指數（SRR {srr:.0f}%）觀察，"
+        f"家庭互動模式可能偏向「{'高敏感需求' if emo > 55 else '穩定支持'}」。"
+        f"建議照顧者以一致、可預測的作息與清楚的情感回應，降低不確定感；"
+        f"若 MBTI 推估為 {mbti_type}（信心 {conf}%），可搭配其偏好溝通節奏，避免過度催促造成防衛。"
+    )
+
+    personality = (
+        f"在性格張力上，外向／內向傾向指標（EI {ei:.0f}%）與社交指標（SOC {soc:.0f}%）顯示"
+        f"「{'外顯行動與人際期待' if ei > 52 else '內在評估與獨處需求'}」可能形成落差。"
+        f"地雷情境常出現在{'被否定感受' if emo > 58 else '被過度干預'}時；"
+        f"可練習先同理再引導，並給予可選擇的步驟，降低對立。"
+    )
+
+    stress = (
+        f"現階段壓力反應可從恢復指數（SRR {srr:.0f}%）與專注穩定（FOC {foc:.0f}%）綜合判讀："
+        f"{'生理與心理恢復節奏偏緊繃，需預留緩衝時間' if srr < 48 else '整體尚可，但需留意突發負荷'}。"
+        f"建議以規律睡眠、短暫離題活動與呼吸練習調節；課業或同儕壓力宜分段處理，避免長時間高警覺狀態。"
+    )
+
+    talent = (
+        f"天賦主軸可參考創造與覺察指標（CRE {cre:.0f}%）與情緒整合（EMO {emo:.0f}%）："
+        f"學習上適合「{'探索式、專題式' if cre > 52 else '結構化、步驟清楚'}」的任務設計。"
+        f"腦波整體顯示 {mbti_type} 類型在{'概念連結' if cre > 50 else '執行與回饋'}面向具優勢，可朝能發揮自主性的領域配置資源。"
+    )
+
+    career = (
+        f"就學科與未來職涯路徑，建議優先強化「{'人文社會與創意' if cre > 54 else '邏輯與操作'}」與「{'團隊協作' if soc > 52 else '獨立完成'}」的平衡。"
+        f"可選擇能累積小勝利的專案制學習；工作上適合{'顧問、教學、企劃' if soc > 55 else '分析、技術、研發'}等角色，並定期檢視壓力恢復（RES {res:.0f}%）以維持長期投入。"
+    )
+
+    return {
+        "family":       _clip_zh(family),
+        "personality":  _clip_zh(personality),
+        "stress":       _clip_zh(stress),
+        "talent":       _clip_zh(talent),
+        "career":       _clip_zh(career),
+    }
 
 
 async def generate_report_async(report_id: int, session_id: int):
@@ -80,11 +179,16 @@ async def generate_report_async(report_id: int, session_id: int):
         db.bulk_save_objects(index_objects)
         db.commit()
 
-        # 6. 生成 PDF
         session_obj = db.query(models.Session).filter(
             models.Session.session_id == session_id
         ).first()
 
+        summaries = _build_client_summaries(session_obj, indices, mbti, avg)
+        report.client_summary = json.dumps(summaries, ensure_ascii=False)
+        report.talent_report_kind = _resolve_talent_kind(session_obj)
+        db.commit()
+
+        # 6. 生成 PDF
         pdf_path = await _generate_pdf(
             session  = session_obj,
             indices  = indices,
@@ -103,14 +207,39 @@ async def generate_report_async(report_id: int, session_id: int):
 
         # 9. 傳送 LINE 通知
         if report.line_user_id:
+            base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+            client_link = (
+                f"{base}/api/v1/public/client/{report.qr_token}"
+                if base and report.qr_token
+                else ""
+            )
             await _send_line_message(
                 user_id  = report.line_user_id,
                 name     = session_obj.subject_name,
                 pdf_url  = pdf_url,
-                mbti     = mbti["mbti_type"]
+                mbti     = mbti["mbti_type"],
+                client_url = client_link,
             )
             report.line_sent = 1
             db.commit()
+
+        # 10. Email 傳送報告連結（若設定 SMTP）
+        if report.notify_email:
+            base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+            client_link = (
+                f"{base}/api/v1/public/client/{report.qr_token}"
+                if base and report.qr_token
+                else ""
+            )
+            ok = await _send_report_email(
+                to_addr   = report.notify_email,
+                subject   = f"【天賦檢測】{session_obj.subject_name or ''} 報告已產生",
+                pdf_url   = pdf_url,
+                extra_link = client_link,
+            )
+            if ok:
+                report.email_sent = 1
+                db.commit()
 
         print(f"[OK] Report {report_id} done: {pdf_url}")
 
@@ -118,8 +247,9 @@ async def generate_report_async(report_id: int, session_id: int):
         import traceback
         traceback.print_exc()
         print(f"[ERROR] Report {report_id} failed: {e}")
-        if report:
-            report.status = "failed"
+        rep = db.query(models.Report).filter(models.Report.report_id == report_id).first()
+        if rep:
+            rep.status = "failed"
             db.commit()
     finally:
         db.close()
@@ -149,8 +279,11 @@ async def _generate_pdf(session, indices: dict, mbti: dict, avg) -> str:
     h2_style    = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=13, spaceAfter=6)
     body_style  = styles["Normal"]
 
-    # 標題
-    report_title = "成人腦波深度報告" if session.report_type == "adult" else "兒童腦波分析報告"
+    # 標題（18 歲以下：教育機構天賦報告四版型；其餘沿用原成人／兒童命名）
+    if (session.subject_age or 0) <= 18:
+        report_title = _talent_pdf_title(session)
+    else:
+        report_title = "成人腦波深度報告" if session.report_type == "adult" else "兒童腦波分析報告"
     story.append(Paragraph(report_title, title_style))
     story.append(Spacer(1, 0.3*cm))
 
@@ -256,7 +389,9 @@ async def _upload_pdf(pdf_path: str, report_id: int) -> str:
         return f"{settings.REPORT_BASE_URL}/{os.path.basename(pdf_path)}"
 
 
-async def _send_line_message(user_id: str, name: str, pdf_url: str, mbti: str):
+async def _send_line_message(
+    user_id: str, name: str, pdf_url: str, mbti: str, client_url: str = ""
+):
     """透過 LINE Messaging API 傳送報告連結"""
     if not settings.LINE_CHANNEL_ACCESS_TOKEN:
         print(f"LINE Token 未設定，跳過傳送（{user_id}）")
@@ -293,12 +428,20 @@ async def _send_line_message(user_id: str, name: str, pdf_url: str, mbti: str):
                 "footer": {
                     "type": "box",
                     "layout": "vertical",
-                    "contents": [{
+                    "spacing": "sm",
+                    "contents": [
+                        {
                         "type": "button",
                         "style": "primary",
                         "color": "#2E86AB",
                         "action": {"type": "uri", "label": "查看報告 PDF", "uri": pdf_url}
-                    }]
+                        },
+                    ] + ([{
+                        "type": "button",
+                        "style": "secondary",
+                        "color": "#00BCD4",
+                        "action": {"type": "uri", "label": "客戶五段摘要", "uri": client_url}
+                    }] if client_url else [])
                 }
             }
         }]
@@ -318,3 +461,48 @@ async def _send_line_message(user_id: str, name: str, pdf_url: str, mbti: str):
             print(f"[OK] LINE sent to {user_id}")
         else:
             print(f"[ERROR] LINE failed: {resp.text}")
+
+
+async def _send_report_email(
+    to_addr: str, subject: str, pdf_url: str, extra_link: str = ""
+) -> bool:
+    """SMTP 寄送報告 PDF 連結，並可附客戶摘要頁連結。"""
+    if not settings.SMTP_HOST or not settings.SMTP_FROM:
+        print("[Email] SMTP 未設定，略過寄信")
+        return False
+    body = f"""您好，
+
+您的天賦檢測報告已產生。
+
+📄 PDF 報告：{pdf_url}
+"""
+    if extra_link:
+        body += f"\n📱 客戶摘要頁（五段重點）：{extra_link}\n"
+    body += "\n此信為系統自動發送，請勿直接回覆。\n"
+
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to_addr
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    try:
+        ctx = ssl.create_default_context()
+        port = int(settings.SMTP_PORT or 587)
+        if port == 465:
+            with smtplib.SMTP_SSL(settings.SMTP_HOST, port, context=ctx, timeout=20) as server:
+                if settings.SMTP_USER:
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.SMTP_FROM, [to_addr], msg.as_string())
+        else:
+            with smtplib.SMTP(settings.SMTP_HOST, port, timeout=20) as server:
+                server.ehlo()
+                server.starttls(context=ctx)
+                if settings.SMTP_USER:
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.SMTP_FROM, [to_addr], msg.as_string())
+        print(f"[OK] Email sent to {to_addr}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Email failed: {e}")
+        return False
