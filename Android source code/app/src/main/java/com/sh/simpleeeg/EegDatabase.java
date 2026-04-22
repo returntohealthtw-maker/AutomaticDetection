@@ -16,7 +16,7 @@ import androidx.room.RoomDatabase;
  */
 @Database(
     entities  = { SessionEntity.class, EegCaptureEntity.class },
-    version   = 1,
+    version   = 2,
     exportSchema = false
 )
 public abstract class EegDatabase extends RoomDatabase {
@@ -34,7 +34,10 @@ public abstract class EegDatabase extends RoomDatabase {
                             context.getApplicationContext(),
                             EegDatabase.class,
                             DB_NAME
-                    ).build();
+                    )
+                    // schema 升版時自動重建資料表（測試期可用；正式上線改用 Migration）
+                    .fallbackToDestructiveMigration()
+                    .build();
                 }
             }
         }
