@@ -26,9 +26,11 @@ class Settings(BaseSettings):
 
     USE_SQLITE: bool = False
 
-    PAYUNI_MERCHANT: str = ""
-    PAYUNI_HASH_KEY: str = ""
-    PAYUNI_HASH_IV:  str = ""
+    # 綠界金流 ECPay
+    ECPAY_MERCHANT_ID: str = ""
+    ECPAY_HASH_KEY:    str = ""
+    ECPAY_HASH_IV:     str = ""
+    ECPAY_TEST_MODE:   bool = True   # True = 測試環境，False = 正式環境
 
     @property
     def get_database_url(self) -> str:

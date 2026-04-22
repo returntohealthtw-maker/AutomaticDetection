@@ -1,46 +1,62 @@
 """
-統一金流 PAYUNi 付款模組
+綠界金流 ECPay 付款模組
+
 流程：
-  1. POST /payments/create    → Android 建立訂單，取得 QR Code URL
-  2. POST /payments/notify    → 統一金流付款完成 Webhook（伺服器接收）
-  3. GET  /payments/{id}/status → Android 輪詢付款狀態
+  1. POST /payments/create    → Android 建立訂單，取得 QR Code 圖片 URL
+  2. GET  /pay/ecpay/{id}     → 顧客掃描 QR Code 後，瀏覽器跳轉到此頁，自動 POST 到綠界
+  3. POST /payments/notify    → 綠界付款完成 Webhook（綠界伺服器呼叫）
+  4. GET  /payments/{id}/status → Android 輪詢付款狀態
+
+Hash Key / Hash IV 設定位置：
+  Railway → 專案 → backend service → Variables
+  新增三個變數：ECPAY_MERCHANT_ID / ECPAY_HASH_KEY / ECPAY_HASH_IV
 """
 import hashlib
-import hmac
-import json
 import time
 import urllib.parse
+import io
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session as DbSession
 
-from app.core.database import get_db
-from app.core import models
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/v1/payments", tags=["付款"])
 
-
-# ─── 資料表（Payment Order）需要先加到 models.py ───────────────────────────
-# 這裡暫時用 dict 模擬（正式版請將 PaymentOrder 加入 models.py）
-
-# 記憶體暫存（多機部署時改用 Redis）
+# 記憶體暫存訂單（多機部署時改用 Redis）
 _payment_store: dict[str, dict] = {}
+
+# ─── 綠界 URL ──────────────────────────────────────────────────────────────────
+_ECPAY_TEST_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
+_ECPAY_PROD_URL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5"
+
+
+def _ecpay_url() -> str:
+    return _ECPAY_TEST_URL if settings.ECPAY_TEST_MODE else _ECPAY_PROD_URL
+
+
+def _backend_base() -> str:
+    """取得後端 Base URL，用於組合 NotifyURL / QR code 連結"""
+    base = settings.REPORT_BASE_URL
+    idx = base.find("/reports")
+    return base[:idx] if idx != -1 else base.rstrip("/")
 
 
 # ─── Request/Response 模型 ────────────────────────────────────────────────────
 
 class CreatePaymentRequest(BaseModel):
-    report_type: str        # life_trial / life_full / life_vip / child_trial / ...
+    report_type: str        # life_trial / life_full / life_vip / ...
     subject_name: str = ""
     amount: int             # 3000 / 5000 / 12000
-    notify_email: str = ""  # 受測者 email（付款成功後報告寄送對象）
+    notify_email: str = ""
 
 class CreatePaymentResponse(BaseModel):
     order_id: str
-    qr_code_url: str        # 統一金流 QR Code URL（前端直接顯示）
+    qr_code_url: str        # 我方後端的 QR Code 圖片 URL
+    pay_url: str            # 顧客直接點開的付款連結
     amount: int
     expire_minutes: int = 15
 
@@ -50,96 +66,58 @@ class PaymentStatusResponse(BaseModel):
     paid_at: Optional[int] = None
 
 
-# ─── 統一金流 工具函數 ────────────────────────────────────────────────────────
+# ─── 綠界 CheckMacValue 計算 ──────────────────────────────────────────────────
 
-PAYUNI_API_URL   = "https://api.payuni.com.tw/api/order"
-PAYUNI_HASH_KEY  = settings.PAYUNI_HASH_KEY  if hasattr(settings, 'PAYUNI_HASH_KEY')  else "your_hash_key"
-PAYUNI_HASH_IV   = settings.PAYUNI_HASH_IV   if hasattr(settings, 'PAYUNI_HASH_IV')   else "your_hash_iv"
-PAYUNI_MERCHANT  = settings.PAYUNI_MERCHANT  if hasattr(settings, 'PAYUNI_MERCHANT')  else "your_merchant_id"
-
-
-def _sha256_hash(data: str) -> str:
-    """SHA-256 雜湊（用於統一金流簽章驗證）"""
-    return hashlib.sha256(data.encode("utf-8")).hexdigest().upper()
-
-
-def _verify_notify_hash(params: dict) -> bool:
+def _calc_check_mac(params: dict, hash_key: str, hash_iv: str) -> str:
     """
-    驗證統一金流回調簽章
-    驗證方式：將回傳參數（排除 HashStr）排序後組合，加上 HashKey/IV 做 SHA256
+    綠界簽章計算：
+      1. 所有參數（排除 CheckMacValue）依 key 字母排序
+      2. 組合成 QueryString
+      3. 前後加上 HashKey= / HashIV=
+      4. URL Encode（全小寫）並修正特定字元
+      5. SHA256 轉大寫
     """
-    check_code = params.get("HashStr", "")
-    # 取出所有非 HashStr 的參數，依 key 字母排序
-    sorted_params = sorted(
-        [(k, v) for k, v in params.items() if k != "HashStr"],
-        key=lambda x: x[0]
+    sorted_items = sorted(params.items(), key=lambda x: x[0].lower())
+    query = "&".join(f"{k}={v}" for k, v in sorted_items)
+    raw = f"HashKey={hash_key}&{query}&HashIV={hash_iv}"
+    encoded = urllib.parse.quote_plus(raw).lower()
+    # 綠界文件規定保留這幾個特殊字元
+    for src, dst in [("%21", "!"), ("%28", "("), ("%29", ")"), ("%2a", "*"), ("%2d", "-"), ("%5f", "_")]:
+        encoded = encoded.replace(src, dst)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest().upper()
+
+
+def _verify_ecpay_notify(params: dict) -> bool:
+    check_mac = params.pop("CheckMacValue", "")
+    computed = _calc_check_mac(
+        params,
+        settings.ECPAY_HASH_KEY,
+        settings.ECPAY_HASH_IV,
     )
-    raw = "&".join(f"{k}={v}" for k, v in sorted_params)
-    raw = f"HashIV={PAYUNI_HASH_IV}&{raw}&HashKey={PAYUNI_HASH_KEY}"
-    computed = _sha256_hash(raw)
-    return computed == check_code.upper()
+    return computed == check_mac.upper()
 
 
 def _generate_order_id() -> str:
-    """產生唯一訂單編號"""
-    ts = int(time.time() * 1000)
+    ts = int(time.time() * 1000) % 10**14
     return f"EEG{ts}"
 
 
-async def _create_payuni_order(order_id: str, amount: int, desc: str) -> str:
-    """
-    呼叫統一金流 API 建立 QR Code 訂單
-    回傳 QR Code URL（或 QR Code 圖片 URL）
+# ─── QR Code 圖片產生 ─────────────────────────────────────────────────────────
 
-    真實串接時請依照統一金流 API 文件實作 AES 加密。
-    目前為 DEMO 模式：直接回傳模擬 QR Code URL。
-    """
-    # ── DEMO 模式（尚未取得正式商店號時使用）──────────────────────────
-    if PAYUNI_MERCHANT == "your_merchant_id":
-        # 回傳靜態 QR Code 圖片（本地的 qr_*.png）
-        qr_map = {3000: "qr_trial.png", 5000: "qr_full.png", 12000: "qr_vip.png"}
-        qr_file = qr_map.get(amount, "qr_trial.png")
-        return f"{settings.REPORT_BASE_URL.replace('/reports','')}/{qr_file}"
-
-    # ── 正式模式：呼叫統一金流 API ────────────────────────────────────
-    import httpx, base64
-    from Crypto.Cipher import AES
-    from Crypto.Util.Padding import pad
-
-    order_data = {
-        "MerID":       PAYUNI_MERCHANT,
-        "MerTradeNo":  order_id,
-        "TradeAmt":    str(amount),
-        "Timestamp":   str(int(time.time())),
-        "ItemDesc":    desc,
-        "NotifyURL":   f"{settings.REPORT_BASE_URL.replace('/reports','')}/api/v1/payments/notify",
-        "ReturnURL":   f"{settings.REPORT_BASE_URL.replace('/reports','')}/api/v1/payments/return",
-        "PayType":     "QR",  # QR Code 付款
-    }
-
-    # AES-256-CBC 加密
-    key = PAYUNI_HASH_KEY.encode("utf-8")[:32]
-    iv  = PAYUNI_HASH_IV.encode("utf-8")[:16]
-    raw = urllib.parse.urlencode(order_data).encode("utf-8")
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    encrypted = base64.b64encode(cipher.encrypt(pad(raw, AES.block_size))).decode()
-
-    # 計算 HashStr（SHA256）
-    hash_str = _sha256_hash(
-        f"HashIV={PAYUNI_HASH_IV}&EncryptInfo={encrypted}&HashKey={PAYUNI_HASH_KEY}"
-    )
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(PAYUNI_API_URL, data={
-            "MerID":       PAYUNI_MERCHANT,
-            "EncryptInfo": encrypted,
-            "HashStr":     hash_str,
-        }, timeout=15)
-        result = resp.json()
-
-    if result.get("Status") == "SUCCESS":
-        return result.get("QRCodeUrl", "")
-    raise Exception(f"統一金流建單失敗：{result}")
+def _generate_qr_bytes(data: str) -> bytes:
+    """用 qrcode 套件產生 PNG bytes，供 /payments/{id}/qr 端點回傳"""
+    try:
+        import qrcode
+        qr = qrcode.QRCode(version=1, box_size=8, border=4)
+        qr.add_data(data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except ImportError:
+        # qrcode 套件未安裝時回傳空 bytes，前端改顯示文字連結
+        return b""
 
 
 # ─── API 端點 ────────────────────────────────────────────────────────────────
@@ -147,26 +125,24 @@ async def _create_payuni_order(order_id: str, amount: int, desc: str) -> str:
 @router.post("/create", response_model=CreatePaymentResponse)
 async def create_payment(req: CreatePaymentRequest):
     """
-    Android 呼叫：建立付款訂單，取得 QR Code URL
+    Android 呼叫：建立付款訂單
 
-    Android 顯示 QR Code 圖片後開始輪詢 /payments/{order_id}/status
+    - 回傳 qr_code_url（PNG 圖片 URL）→ 顧客掃碼後瀏覽器跳轉綠界付款頁
+    - 回傳 pay_url（可直接點開的連結）→ 顧問可貼給顧客用
     """
     report_labels = {
-        "life_trial":  "腦波分析人生劇本 體驗版",
-        "life_full":   "腦波分析人生劇本 完整版",
-        "life_vip":    "腦波分析人生劇本 VIP版",
-        "child_trial": "兒童腦波天賦解碼 體驗版",
-        "child_full":  "兒童腦波天賦解碼 完整版",
-        "child_vip":   "兒童腦波天賦解碼 VIP版",
+        "life_trial":  "腦波人生劇本體驗版",
+        "life_full":   "腦波人生劇本完整版",
+        "life_vip":    "腦波人生劇本VIP版",
+        "child_trial": "兒童腦波天賦解碼體驗版",
+        "child_full":  "兒童腦波天賦解碼完整版",
+        "child_vip":   "兒童腦波天賦解碼VIP版",
     }
     desc = report_labels.get(req.report_type, "腦波報告")
-
     order_id = _generate_order_id()
+    base = _backend_base()
+    pay_url = f"{base}/pay/ecpay/{order_id}"
 
-    # 呼叫統一金流取得 QR Code
-    qr_url = await _create_payuni_order(order_id, req.amount, desc)
-
-    # 儲存訂單狀態
     _payment_store[order_id] = {
         "order_id":     order_id,
         "status":       "pending",
@@ -174,16 +150,38 @@ async def create_payment(req: CreatePaymentRequest):
         "report_type":  req.report_type,
         "subject_name": req.subject_name,
         "notify_email": req.notify_email,
+        "trade_desc":   desc,
         "created_at":   int(time.time()),
         "paid_at":      None,
     }
 
     return CreatePaymentResponse(
         order_id       = order_id,
-        qr_code_url    = qr_url,
+        qr_code_url    = f"{base}/api/v1/payments/{order_id}/qr",
+        pay_url        = pay_url,
         amount         = req.amount,
         expire_minutes = 15,
     )
+
+
+@router.get("/{order_id}/qr")
+def get_qr_image(order_id: str):
+    """
+    回傳該訂單付款連結的 QR Code PNG 圖片
+    Android / 前端用 <img src=...> 顯示
+    """
+    order = _payment_store.get(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="訂單不存在")
+
+    base = _backend_base()
+    pay_url = f"{base}/pay/ecpay/{order_id}"
+    png = _generate_qr_bytes(pay_url)
+
+    if not png:
+        raise HTTPException(status_code=503, detail="QR Code 產生失敗，請確認 qrcode 套件已安裝")
+
+    return StreamingResponse(io.BytesIO(png), media_type="image/png")
 
 
 @router.get("/{order_id}/status", response_model=PaymentStatusResponse)
@@ -191,20 +189,18 @@ def get_payment_status(order_id: str):
     """
     Android 輪詢付款狀態（建議每 3 秒呼叫一次）
 
-    回傳 status:
-      - pending  → 等待付款（繼續顯示 QR Code）
-      - paid     → 付款成功（Android 跳轉腦波檢測畫面）
-      - expired  → 訂單逾時（Android 顯示逾時提示）
-      - failed   → 付款失敗
+    status:
+      pending → 等待付款
+      paid    → 付款成功 → Android 跳腦波檢測頁
+      expired → 逾時（15 分鐘）
+      failed  → 失敗
     """
     order = _payment_store.get(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="訂單不存在")
 
-    # 自動判斷是否逾時（15 分鐘）
     if order["status"] == "pending":
-        elapsed = time.time() - order["created_at"]
-        if elapsed > 15 * 60:
+        if time.time() - order["created_at"] > 15 * 60:
             order["status"] = "expired"
 
     return PaymentStatusResponse(
@@ -215,64 +211,114 @@ def get_payment_status(order_id: str):
 
 
 @router.post("/notify")
-async def payuni_notify(request: Request, background_tasks: BackgroundTasks):
+async def ecpay_notify(request: Request):
     """
-    統一金流付款完成 Webhook（只有統一金流伺服器會呼叫此 API）
+    【路徑1 - 非同步 Webhook】綠界伺服器付款完成後主動通知（1-10 秒後到達）
 
-    統一金流確認付款後，POST 到此端點。
-    我們驗證簽章 → 更新訂單狀態 → 觸發報告生成。
+    在綠界後台「特店管理 → 系統介接設定」填入：
+      付款完成通知網址：https://backend-production-2da61.up.railway.app/api/v1/payments/notify
     """
-    # 解析 form data
     form_data = await request.form()
     params = dict(form_data)
+    print(f"[ECPay Notify] 收到 Webhook：{params}")
 
-    print(f"[PayUni Notify] 收到回調：{params}")
+    if not _verify_ecpay_notify(params):
+        print("[ECPay Notify] 簽章驗證失敗")
+        return "0|ErrorMessage"
 
-    # 1. 驗證簽章
-    if not _verify_notify_hash(params):
-        print("[PayUni Notify] 簽章驗證失敗！")
-        # 統一金流要求回傳 "OK" 才停止重試，驗證失敗仍回 OK 但不處理
-        return "FAIL"
+    rtn_code     = params.get("RtnCode", "")
+    mer_trade_no = params.get("MerchantTradeNo", "")
 
-    # 2. 解析付款結果
-    status_code = params.get("Status", "")
-    mer_trade_no = params.get("MerTradeNo", "")  # 我們的訂單號
+    if rtn_code != "1":
+        print(f"[ECPay Notify] 訂單 {mer_trade_no} 付款未成功，RtnCode={rtn_code}")
+        return "1|OK"
 
-    if status_code != "SUCCESS":
-        print(f"[PayUni Notify] 訂單 {mer_trade_no} 付款未成功，狀態：{status_code}")
-        return "OK"
-
-    # 3. 更新訂單狀態
     order = _payment_store.get(mer_trade_no)
     if order and order["status"] == "pending":
         order["status"]  = "paid"
         order["paid_at"] = int(time.time())
-        print(f"[PayUni Notify] 訂單 {mer_trade_no} 付款成功！")
+        print(f"[ECPay Notify] 訂單 {mer_trade_no} Webhook 付款成功！")
 
-        # 4. 背景觸發：若已有腦波數據則生成報告（付款後才正式啟動）
-        # background_tasks.add_task(trigger_report_after_payment, mer_trade_no)
-
-    # 統一金流規定：必須回傳純文字 "OK"
-    return "OK"
+    return "1|OK"
 
 
-@router.post("/return")
-async def payuni_return(request: Request):
+@router.get("/return/{order_id}")
+async def ecpay_return(order_id: str, request: Request):
     """
-    統一金流付款完成後跳轉頁面（Browser ReturnURL）
-    App 使用 QR Code 付款時不需要此端點，但統一金流仍可能呼叫。
+    【路徑2 - 即時 ReturnURL】顧客完成付款後，瀏覽器立即跳轉到此頁（比 Webhook 快）
+
+    這裡同時驗證綠界的回傳參數 → 立即更新訂單狀態
+    → Android App 的輪詢最快在 3 秒內就能拿到 "paid" 狀態
+
+    延遲說明：
+      ① 顧客付款 → 綠界頁面跳轉到此 URL（幾乎即時，< 1 秒）
+      ② 此端點更新訂單狀態（< 0.1 秒）
+      ③ Android App 輪詢（每 3 秒）→ 最多 3 秒看到「付款成功」
+      ④ Webhook 隨後到達做二次確認（1~10 秒，不影響使用者體驗）
     """
-    return {"message": "付款完成，請返回 App 繼續操作"}
+    # 嘗試從 query params 或 form 驗證綠界簽章
+    params_raw = dict(request.query_params)
+
+    if params_raw and "RtnCode" in params_raw:
+        check_mac = params_raw.pop("CheckMacValue", "")
+        computed  = _calc_check_mac(
+            params_raw,
+            settings.ECPAY_HASH_KEY or "pwFHCqoQZGmho4w6",
+            settings.ECPAY_HASH_IV  or "EkRm7iFT261dpevs",
+        )
+        rtn_code = params_raw.get("RtnCode", "")
+        mer_no   = params_raw.get("MerchantTradeNo", order_id)
+
+        if computed == check_mac.upper() and rtn_code == "1":
+            order = _payment_store.get(mer_no)
+            if order and order["status"] == "pending":
+                order["status"]  = "paid"
+                order["paid_at"] = int(time.time())
+                print(f"[ECPay Return] 訂單 {mer_no} ReturnURL 立即確認付款成功！")
+    else:
+        # 沒有驗證參數時（測試環境），仍顯示成功頁讓測試流程繼續
+        print(f"[ECPay Return] 收到跳轉（無驗證參數），訂單：{order_id}")
+
+    from fastapi.responses import HTMLResponse
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>付款完成</title>
+<style>
+  body{{margin:0;display:flex;justify-content:center;align-items:center;
+       min-height:100vh;background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;
+       text-align:center;}}
+  .card{{background:white;border-radius:20px;padding:36px 28px;
+         box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:340px;width:90%;}}
+  .icon{{font-size:56px;margin-bottom:12px;}}
+  h2{{color:#1a1a2e;font-size:20px;margin:0 0 8px;}}
+  p{{color:#666;font-size:14px;line-height:1.6;}}
+  .hint{{background:#e8f5e9;border-radius:10px;padding:12px;margin-top:16px;
+         font-size:13px;color:#2e7d32;}}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✅</div>
+    <h2>付款完成！</h2>
+    <p>請返回 App 或關閉此頁面。</p>
+    <div class="hint">
+      📱 系統正在確認付款，<br>
+      App 將在 <strong>3 秒內自動跳轉</strong>至腦波檢測頁面。
+    </div>
+    <p style="color:#aaa;font-size:12px;margin-top:16px;">訂單：{order_id}</p>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
-# ─── 測試用：手動模擬付款成功（開發期間使用）────────────────────────────────
+# ─── 測試用：手動模擬付款成功 ─────────────────────────────────────────────────
 
 @router.post("/simulate-paid/{order_id}")
 def simulate_paid(order_id: str):
-    """
-    【僅限開發測試】模擬統一金流通知付款成功
-    正式環境請移除此端點
-    """
+    """【僅限開發測試】模擬綠界通知付款成功"""
     order = _payment_store.get(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="訂單不存在")

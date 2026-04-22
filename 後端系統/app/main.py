@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import os
+import urllib.parse
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
@@ -22,17 +23,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 掛載靜態 PDF 目錄（本地開發用）
+# 掛載靜態 PDF 目錄
 os.makedirs("reports", exist_ok=True)
 app.mount("/reports", StaticFiles(directory="reports"), name="reports")
 
-# 掛載前端原型資料夾（QR Code 圖片等靜態資源）
-# 後端系統的上一層即專案根目錄，前端原型在同一層
-_BACKEND_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 後端系統/
-_PROJECT_DIR  = os.path.dirname(_BACKEND_DIR)                                  # AutomaticDetection/
-_PROTOTYPE_DIR = os.path.join(_PROJECT_DIR, "前端原型")
-if os.path.isdir(_PROTOTYPE_DIR):
-    app.mount("/static-app", StaticFiles(directory=_PROTOTYPE_DIR), name="static-app")
+# 掛載前端靜態資源：
+#   Docker 容器內：/app/static-app/  (COPY . . 時隨 後端系統/static-app 一起複製進去)
+#   本地開發：後端系統/static-app/
+_BACKEND_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 後端系統/ or /app
+_STATIC_APP_DIR = os.path.join(_BACKEND_DIR, "static-app")
+
+# 相容舊版本：若 static-app 不存在，fallback 到 前端原型 資料夾（本地）
+if not os.path.isdir(_STATIC_APP_DIR):
+    _PROJECT_DIR   = os.path.dirname(_BACKEND_DIR)
+    _STATIC_APP_DIR = os.path.join(_PROJECT_DIR, "前端原型")
+
+if os.path.isdir(_STATIC_APP_DIR):
+    app.mount("/static-app", StaticFiles(directory=_STATIC_APP_DIR), name="static-app")
 
 # 掛載路由
 app.include_router(sessions.router)
@@ -63,13 +70,99 @@ def dashboard():
 @app.get("/app", response_class=FileResponse)
 def prototype_app():
     """前端 App 原型（手機瀏覽器測試用）"""
-    proto_path = os.path.join(_PROTOTYPE_DIR, "app_prototype.html")
+    proto_path = os.path.join(_STATIC_APP_DIR, "app_prototype.html")
     return FileResponse(proto_path, media_type="text/html")
+
+@app.get("/pay/ecpay/{order_id}")
+def pay_ecpay(order_id: str):
+    """
+    顧客掃描 QR Code 後開啟此頁面，自動 POST 到綠界付款頁
+
+    此路由需在 /pay/{order_id} 之前宣告，避免被通用路由截走
+    """
+    from fastapi.responses import HTMLResponse
+    from app.routers.payments import _payment_store, _calc_check_mac, _ecpay_url
+    from app.core.config import settings
+    from datetime import datetime
+
+    order = _payment_store.get(order_id)
+    if not order:
+        return HTMLResponse("<h2>訂單不存在或已過期</h2>", status_code=404)
+
+    base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    if base:
+        notify_url  = f"https://{base}/api/v1/payments/notify"
+        return_url  = f"https://{base}/api/v1/payments/return/{order_id}"
+    else:
+        notify_url  = "http://localhost:8000/api/v1/payments/notify"
+        return_url  = "http://localhost:8000/api/v1/payments/return/{order_id}"
+
+    trade_date = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    # 綠界訂單號最多 20 碼
+    mer_trade_no = order_id[:20]
+
+    params = {
+        "MerchantID":        settings.ECPAY_MERCHANT_ID or "2000132",  # 2000132 為綠界測試商家
+        "MerchantTradeNo":   mer_trade_no,
+        "MerchantTradeDate": trade_date,
+        "PaymentType":       "aio",
+        "TotalAmount":       str(order["amount"]),
+        "TradeDesc":         urllib.parse.quote(order["trade_desc"]),
+        "ItemName":          order["trade_desc"],
+        "ReturnURL":         notify_url,
+        "ClientBackURL":     return_url,
+        "ChoosePayment":     "Credit",
+        "EncryptType":       "1",
+    }
+
+    params["CheckMacValue"] = _calc_check_mac(
+        params,
+        settings.ECPAY_HASH_KEY or "pwFHCqoQZGmho4w6",   # 綠界測試 Hash Key
+        settings.ECPAY_HASH_IV  or "EkRm7iFT261dpevs",   # 綠界測試 Hash IV
+    )
+
+    fields_html = "\n".join(
+        f'    <input type="hidden" name="{k}" value="{v}">'
+        for k, v in params.items()
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>跳轉至綠界付款頁...</title>
+  <style>
+    body{{margin:0;display:flex;justify-content:center;align-items:center;
+         min-height:100vh;background:#f5f7fa;
+         font-family:'Microsoft JhengHei',sans-serif;text-align:center;}}
+    .msg{{color:#555;font-size:16px;}}
+    .spin{{font-size:36px;animation:spin 1s linear infinite;display:block;margin-bottom:16px;}}
+    @keyframes spin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}
+  </style>
+</head>
+<body>
+  <div>
+    <span class="spin">⏳</span>
+    <div class="msg">正在跳轉至綠界付款頁，請稍候...</div>
+    <form id="f" method="POST" action="{_ecpay_url()}">
+{fields_html}
+    </form>
+  </div>
+  <script>document.getElementById('f').submit();</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
 
 @app.get("/pay/{order_id}")
 def pay_page(order_id: str):
-    """付款短連結頁面：開啟後顯示訂單 QR Code"""
+    """付款短連結頁面（舊連結相容，顯示 QR Code）"""
     from fastapi.responses import HTMLResponse
+    import urllib.parse as _up
+    base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    pay_url = f"https://{base}/pay/ecpay/{order_id}" if base else f"/pay/ecpay/{order_id}"
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -79,16 +172,17 @@ def pay_page(order_id: str):
   <style>
     body{{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;
          background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;}}
-    .card{{background:white;border-radius:20px;padding:32px 24px;box-shadow:0 8px 32px rgba(0,0,0,0.12);
-           max-width:360px;width:90%;text-align:center;}}
-    .logo{{font-size:32px;margin-bottom:8px;}}
+    .card{{background:white;border-radius:20px;padding:32px 24px;
+           box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:360px;width:90%;text-align:center;}}
+    .logo{{font-size:40px;margin-bottom:8px;}}
     h2{{color:#1a1a2e;font-size:18px;margin:0 0 4px;}}
     .order-id{{font-size:12px;color:#aaa;margin-bottom:20px;}}
     .qr-wrap{{background:#f8f9ff;border-radius:16px;padding:20px;margin-bottom:16px;}}
     img{{width:200px;height:200px;border-radius:12px;}}
-    .hint{{font-size:12px;color:#888;margin-bottom:20px;}}
-    .status{{background:#fff3e0;border-radius:10px;padding:10px;font-size:13px;color:#e65100;}}
-    .footer{{font-size:11px;color:#ccc;margin-top:16px;}}
+    .hint{{font-size:12px;color:#888;margin-bottom:16px;}}
+    a.btn{{display:block;background:#2196F3;color:white;text-decoration:none;
+           border-radius:10px;padding:12px;font-size:14px;margin-bottom:12px;}}
+    .footer{{font-size:11px;color:#ccc;}}
   </style>
 </head>
 <body>
@@ -97,11 +191,13 @@ def pay_page(order_id: str):
     <h2>腦波報告付款</h2>
     <div class="order-id">訂單號：{order_id}</div>
     <div class="qr-wrap">
-      <img src="/static-app/qr_test.png" alt="付款 QR Code">
+      <img src="/api/v1/payments/{order_id}/qr" alt="付款 QR Code"
+           onerror="this.style.display='none';document.getElementById('qr-err').style.display='block'">
+      <p id="qr-err" style="display:none;color:#e57373;font-size:12px;">QR Code 載入失敗，請直接點下方連結</p>
     </div>
-    <div class="hint">請使用支援統一金流的 App 掃描 QR Code 完成付款</div>
-    <div class="status">⏱️ 請於 15 分鐘內完成付款</div>
-    <div class="footer">🔒 由統一金流提供安全金流服務</div>
+    <div class="hint">使用手機掃描 QR Code，或點下方按鈕前往付款</div>
+    <a class="btn" href="{pay_url}">💳 前往綠界付款頁</a>
+    <div class="footer">🔒 由綠界科技提供安全金流服務</div>
   </div>
 </body>
 </html>"""
