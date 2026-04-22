@@ -1,4 +1,5 @@
 FROM python:3.12-slim
+LABEL maintainer="AutomaticDetection" version="1.0"
 
 WORKDIR /app
 
