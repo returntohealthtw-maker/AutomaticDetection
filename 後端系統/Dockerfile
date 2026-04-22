@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p reports
+RUN mkdir -p reports && \
+    echo "=== static-app contents ===" && \
+    ls -la static-app/ 2>/dev/null || echo "WARNING: static-app not found"
 
 EXPOSE 8080
 

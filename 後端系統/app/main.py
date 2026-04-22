@@ -27,18 +27,23 @@ app.add_middleware(
 os.makedirs("reports", exist_ok=True)
 app.mount("/reports", StaticFiles(directory="reports"), name="reports")
 
-# 掛載前端靜態資源：
-#   Docker 容器內：/app/static-app/  (COPY . . 時隨 後端系統/static-app 一起複製進去)
-#   本地開發：後端系統/static-app/
-_BACKEND_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 後端系統/ or /app
-_STATIC_APP_DIR = os.path.join(_BACKEND_DIR, "static-app")
+# 掛載前端靜態資源
+# __file__ 在容器內為 /app/app/main.py，所以逐層往上：
+#   /app/app  → /app  → static-app 在 /app/static-app/
+_THIS_FILE     = os.path.abspath(__file__)               # /app/app/main.py
+_APP_PKG_DIR   = os.path.dirname(_THIS_FILE)             # /app/app
+_BACKEND_DIR   = os.path.dirname(_APP_PKG_DIR)           # /app
 
-# 相容舊版本：若 static-app 不存在，fallback 到 前端原型 資料夾（本地）
-if not os.path.isdir(_STATIC_APP_DIR):
-    _PROJECT_DIR   = os.path.dirname(_BACKEND_DIR)
-    _STATIC_APP_DIR = os.path.join(_PROJECT_DIR, "前端原型")
+# 依序嘗試幾個可能位置（Docker / 本地開發 都相容）
+_CANDIDATES = [
+    os.path.join(_BACKEND_DIR, "static-app"),                          # /app/static-app  ← Docker
+    os.path.join(os.path.dirname(_BACKEND_DIR), "後端系統", "static-app"),  # 本地開發
+    os.path.join(os.path.dirname(_BACKEND_DIR), "前端原型"),            # 舊版本相容
+]
+_STATIC_APP_DIR = next((p for p in _CANDIDATES if os.path.isdir(p)), None)
+print(f"[static-app] 使用路徑：{_STATIC_APP_DIR}")
 
-if os.path.isdir(_STATIC_APP_DIR):
+if _STATIC_APP_DIR:
     app.mount("/static-app", StaticFiles(directory=_STATIC_APP_DIR), name="static-app")
 
 # 掛載路由
@@ -70,7 +75,13 @@ def dashboard():
 @app.get("/app", response_class=FileResponse)
 def prototype_app():
     """前端 App 原型（手機瀏覽器測試用）"""
+    if not _STATIC_APP_DIR:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": "static-app directory not found", "checked": _CANDIDATES}, status_code=500)
     proto_path = os.path.join(_STATIC_APP_DIR, "app_prototype.html")
+    if not os.path.exists(proto_path):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": f"app_prototype.html not found at {proto_path}"}, status_code=500)
     return FileResponse(proto_path, media_type="text/html")
 
 @app.get("/pay/ecpay/{order_id}")
