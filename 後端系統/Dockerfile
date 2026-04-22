@@ -19,4 +19,4 @@ RUN mkdir -p reports
 EXPOSE 8080
 
 # PORT 環境變數由 Railway 注入，預設 8080
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
