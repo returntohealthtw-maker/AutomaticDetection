@@ -7,7 +7,7 @@ import urllib.parse
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -52,20 +52,33 @@ app.include_router(payments.router)
 app.include_router(monitor.router)
 app.include_router(companies.router)
 app.include_router(client_view.router)
+app.include_router(contact_requests.router)
 
 
 @app.on_event("startup")
 async def startup():
-    # 自動建立資料表
-    Base.metadata.create_all(bind=engine)
-    ok = check_connection()
-    status = "OK" if ok else "ERROR"
-    print(f"[DB] {status}")
+    """
+    啟動時嘗試初始化資料庫；若連不到 DB 也不要讓服務掛掉，
+    這樣 / 與 /app（前端原型）等不依賴 DB 的端點仍可服務 healthcheck，
+    避免 Railway Healthcheck 失敗。
+    """
+    try:
+        Base.metadata.create_all(bind=engine)
+        ok = check_connection()
+        print(f"[DB] {'OK' if ok else 'ERROR'}")
+    except Exception as e:
+        # 不 raise，讓 healthcheck 通過；DB 相關 endpoint 失敗時各自回 5xx
+        print(f"[DB] startup skipped: {e}")
 
 
 @app.get("/")
 def root():
     return {"status": "ok", "message": "腦波報告系統 API 運行中"}
+
+@app.get("/healthz")
+def healthz():
+    """Railway Healthcheck 專用，永遠回 200，不依賴 DB"""
+    return {"ok": True}
 
 @app.get("/dashboard", response_class=FileResponse)
 def dashboard():

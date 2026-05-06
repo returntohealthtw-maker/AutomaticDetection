@@ -24,6 +24,8 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.sh.simpleeeg.BuildConfig;
+
 public class WebAppActivity extends Activity {
 
     private static final String APP_URL =
@@ -57,11 +59,15 @@ public class WebAppActivity extends Activity {
         clsData.setTeacherName(consultant);
         CLS_DB.getInstance().setConsultantName(consultant);
 
-        // 啟動藍牙連線（在背景嘗試連線 EEG 裝置）
+        // 啟動藍牙連線（必須先 SetCallback，否則 Connect 失敗時會 NullPointerException 崩潰）
         try {
             CLS_BrainWave ble = new CLS_BrainWave();
+            ble.SetCallback((cmd, val) -> { /* WebView 啟動頁不需處理訊號 */ });
             ble.Connect(this);
-        } catch (Exception ignored) {}
+        } catch (Throwable t) {
+            // 藍牙尚未開啟或權限不足時不應讓 App 崩潰
+            android.util.Log.e("WebAppActivity", "BrainWave connect", t);
+        }
 
         // 建立 Layout
         RelativeLayout root = new RelativeLayout(this);
@@ -140,8 +146,7 @@ public class WebAppActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view,
                                                     WebResourceRequest req) {
-                view.loadUrl(req.getUrl().toString());
-                return true;
+                return false;
             }
 
             @Override
@@ -220,6 +225,14 @@ public class WebAppActivity extends Activity {
         public String getBackendUrl() {
             return "https://backend-production-2da61.up.railway.app";
         }
+
+        /**
+         * Debug 組建顯示「開發測試／模擬付款」；Release（加盟商版）隱藏。
+         */
+        @JavascriptInterface
+        public boolean isDebugBuild() {
+            return BuildConfig.DEBUG;
+        }
     }
 
     /** 腦波檢測完成後回到 WebApp，重新載入首頁 */
@@ -246,5 +259,11 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onResume()  { super.onResume();  webView.onResume(); }
     @Override
-    protected void onDestroy() { webView.destroy(); super.onDestroy();  }
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.destroy();
+            webView = null;
+        }
+        super.onDestroy();
+    }
 }

@@ -296,7 +296,7 @@
   #screen-mbti .status-bar { background:#6B3FA0; }
   #screen-mbti .top-bar { background:#6B3FA0; }
   .mbti-progress { padding:0 20px 14px; background:#6B3FA0; }
-  .mbti-dots { display:flex; gap:6px; justify-content:center; }
+  .mbti-dots { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; max-width:340px; margin:0 auto; }
   .mbti-dot {
     width:8px; height:8px; border-radius:50%;
     background:rgba(255,255,255,0.3); transition:all 0.3s;
@@ -473,15 +473,64 @@
   .detect-buttons { display:flex; gap:10px; }
   .btn-end { flex:1; padding:14px; background:rgba(255,82,82,0.2); border:1px solid rgba(255,82,82,0.4); border-radius:12px; color:#ff5252; font-weight:600; font-size:14px; cursor:pointer; }
 
-  /* ========== SCREEN 11: RESULTS ========== */
-  #screen-results { --header-bg:#2D3561; }
+  /* ========== SCREEN 11: RESULTS（個人整合分析報告） ========== */
+  #screen-results { --header-bg:#0d1729; background:#0d1729; }
+  #screen-results .status-bar { background:#0d1729; }
   .result-header {
-    background:linear-gradient(135deg,#1a1a3e,#2D3561);
-    padding:50px 20px 24px; text-align:center; color:white;
+    background:linear-gradient(135deg,#0d1729,#1a2540);
+    padding:50px 20px 24px; color:white;
   }
+  .result-brand {
+    font-size:11px; color:rgba(255,255,255,0.55); letter-spacing:1px; margin-bottom:6px;
+  }
+  .result-title-bar {
+    display:flex; align-items:baseline; gap:10px; margin-bottom:6px;
+  }
+  .result-title-bar .rt-main { font-size:18px; font-weight:800; color:white; }
+  .result-title-bar .rt-sep  { color:rgba(255,255,255,0.3); }
+  .result-title-bar .rt-sub  { font-size:15px; font-weight:700; color:#90caf9; }
+  .result-meta { font-size:11px; color:rgba(255,255,255,0.55); margin-top:2px; }
   .result-icon { font-size:56px; margin-bottom:8px; }
   .result-title { font-size:22px; font-weight:700; }
   .result-sub { font-size:13px; opacity:0.7; margin-top:4px; }
+
+  /* 報告主體 */
+  .report-body {
+    background:#0d1729; padding:14px 14px 80px; color:#e3eaf5;
+  }
+  .report-chips {
+    background:#172238; border-radius:14px; padding:12px 12px 8px;
+    margin-bottom:14px; display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .report-chip {
+    background:#22304d; color:#cfd9ee; padding:6px 12px; border-radius:14px;
+    font-size:12px; font-weight:500;
+  }
+  .report-section {
+    background:#172238; border-radius:14px; padding:14px;
+    margin-bottom:12px;
+  }
+  .report-section-title {
+    font-size:14px; font-weight:700; color:#e3eaf5; margin-bottom:10px;
+    padding-left:10px; border-left:3px solid #4a90e2;
+  }
+  .bw-row { margin-bottom:12px; }
+  .bw-row:last-child { margin-bottom:0; }
+  .bw-row .bw-head {
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12px; color:#cfd9ee; margin-bottom:4px;
+  }
+  .bw-row .bw-pct { color:#ffd166; font-weight:600; }
+  .bw-bar { height:6px; background:#22304d; border-radius:3px; overflow:hidden; }
+  .bw-fill {
+    height:100%;
+    background:linear-gradient(90deg,#7ec0ff,#a5b4fc 50%,#ffd166);
+    border-radius:3px;
+  }
+  .report-text-box {
+    background:#1a2540; border-radius:10px; padding:12px 14px;
+    font-size:13px; line-height:1.85; color:#cfd9ee; letter-spacing:0.3px;
+  }
   .score-section { margin-bottom:16px; }
   .score-item { margin-bottom:12px; }
   .score-item .si-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
@@ -591,6 +640,82 @@
   }
   .screen-dot.active { background:white; width:10px; height:10px; }
   .screen-dot:hover { background:rgba(255,255,255,0.7); }
+
+  /* Android App WebView：隱藏桌機原型用的左右導覽（fixed 在視窗右側常擋住報告列右緣觸控） */
+  html.android-webapp .flow-nav,
+  html.android-webapp .screen-list {
+    display: none !important;
+  }
+
+  /* 加盟商版（Android Release）：隱藏開發測試區与模擬付款按鈕 */
+  html.android-franchise [data-dev-only] {
+    display: none !important;
+  }
+
+  /* 管理員後台 */
+  .admin-tab {
+    flex:1; padding:8px 0; border:1px solid #e0e0e0; background:white;
+    border-radius:8px; font-size:12px; color:#666; cursor:pointer;
+  }
+  .admin-tab.active { background:#0d1729; color:white; border-color:#0d1729; }
+  .admin-card {
+    background:white; border-radius:12px; padding:12px 14px; margin-bottom:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  }
+  .admin-card .name { font-size:15px; font-weight:700; color:#1a1a2e; }
+  .admin-card .meta { font-size:11px; color:#888; margin-top:2px; }
+  .admin-card .row  { font-size:12px; color:#555; margin-top:4px; }
+  .admin-card .actions { display:flex; gap:8px; margin-top:10px; }
+  .admin-btn {
+    flex:1; padding:8px 0; border-radius:8px; font-size:12px; font-weight:600;
+    border:none; cursor:pointer;
+  }
+  .admin-btn.approve { background:#43a047; color:white; }
+  .admin-btn.reject  { background:#fff; color:#c62828; border:1px solid #ef9a9a; }
+  .admin-empty {
+    text-align:center; padding:40px 12px; color:#aaa; font-size:13px;
+  }
+  .rule-card {
+    background:white; border-radius:12px; padding:12px 14px; margin-bottom:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  }
+  .rule-card .rule-title {
+    font-size:14px; font-weight:700; color:#1a1a2e; margin-bottom:8px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .rule-row {
+    display:grid; grid-template-columns:88px 1fr 60px;
+    align-items:center; gap:8px; padding:6px 0;
+    border-top:1px solid #f0f0f0;
+  }
+  .rule-row:first-of-type { border-top:none; }
+  .rule-row .rule-role { font-size:13px; color:#333; }
+  .rule-row .rule-input {
+    width:100%; padding:6px 8px; border:1px solid #d8d8d8; border-radius:8px;
+    font-size:13px; text-align:right;
+  }
+  .rule-row .rule-suffix { font-size:12px; color:#888; }
+  .rule-mode-toggle {
+    display:flex; gap:4px; margin-bottom:8px;
+  }
+  .rule-mode-toggle button {
+    flex:1; padding:6px 0; border:1px solid #d8d8d8; background:white;
+    border-radius:8px; font-size:11px; color:#666; cursor:pointer;
+  }
+  .rule-mode-toggle button.active { background:#0d1729; color:white; border-color:#0d1729; }
+  .earn-card {
+    background:white; border-radius:12px; padding:12px 14px; margin-bottom:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  }
+  .earn-row {
+    display:flex; justify-content:space-between; align-items:flex-start;
+  }
+  .earn-row .earn-title { font-size:14px; font-weight:700; color:#1a1a2e; }
+  .earn-row .earn-meta  { font-size:11px; color:#888; margin-top:2px; }
+  .earn-row .earn-amt   { font-size:16px; font-weight:800; color:#4CAF50; }
+  .earn-row .earn-share { font-size:10px; color:#aaa; margin-top:2px; text-align:right; }
+  .earn-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .earn-tag  { font-size:10px; padding:2px 8px; border-radius:8px; background:#f0f0f0; color:#555; }
 </style>
 </head>
 <body>
@@ -647,7 +772,159 @@
           </button>
           <div style="text-align:center;margin-top:20px;">
             <span class="text-muted">首次使用？</span>
-            <a href="#" style="font-size:13px;color:#2D3561;font-weight:600;"> 聯絡我們取得帳號</a>
+            <a href="#" onclick="event.preventDefault();goto('screen-contact');" style="font-size:13px;color:#2D3561;font-weight:600;"> 聯絡我們取得帳號</a>
+          </div>
+          <div style="text-align:center;margin-top:14px;border-top:1px solid #eee;padding-top:14px;">
+            <a href="#" onclick="event.preventDefault();goto('screen-admin-login');" style="font-size:11px;color:#999;">🔐 管理員後台</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: 聯絡我們 / 申請帳號 ===== -->
+      <div class="screen" id="screen-contact">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-login')">‹</button>
+          <h2>聯絡我們 · 申請帳號</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;">
+          <div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#1565c0;line-height:1.6;">
+            💡 顧問帳號採人工審核制。送出申請後，管理員將於 1-2 個工作日內審核並以 Email 寄送登入資訊。
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">姓名 <span style="color:#e53935;">*</span></label>
+            <input id="contact-name" class="form-input" placeholder="請輸入您的姓名">
+          </div>
+          <div class="form-group">
+            <label class="form-label">手機 <span style="color:#e53935;">*</span></label>
+            <input id="contact-phone" class="form-input" type="tel" placeholder="09XX-XXX-XXX">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email <span style="color:#e53935;">*</span></label>
+            <input id="contact-email" class="form-input" type="email" placeholder="example@mail.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">所屬單位 / 身份 <span style="color:#e53935;">*</span></label>
+            <select id="contact-org-type" class="form-select" onchange="onOrgTypeChange()">
+              <option value="">— 請選擇 —</option>
+              <option value="加盟商">加盟商</option>
+              <option value="直營商">直營商</option>
+              <option value="代理商">代理商</option>
+              <option value="專案人員">專案人員（業務 / 合作推廣）</option>
+              <option value="工作人員">工作人員（總部雇員）</option>
+              <option value="其他">其他（請於下方說明）</option>
+            </select>
+            <input id="contact-org" class="form-input" placeholder="單位名稱（例如：XX 諮詢中心）" style="margin-top:8px;">
+            <input id="contact-org-other" class="form-input" placeholder="請說明您的身份" style="margin-top:8px;display:none;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">推薦人 / 加盟編號</label>
+            <input id="contact-ref" class="form-input" placeholder="若無可留空">
+          </div>
+          <div class="form-group">
+            <label class="form-label">備註</label>
+            <textarea id="contact-note" class="form-input" rows="3" placeholder="想說明的需求或問題"></textarea>
+          </div>
+
+          <button class="btn btn-primary" onclick="submitContactRequest()">送出申請</button>
+          <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">送出即同意我們以 Email/電話 與您聯繫</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: 申請完成 ===== -->
+      <div class="screen" id="screen-contact-done">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+          <div style="font-size:72px;margin-bottom:12px;">📨</div>
+          <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">申請已送出！</div>
+          <div style="font-size:13px;color:#666;line-height:1.6;margin-bottom:24px;">
+            我們已收到您的開戶申請，<br>管理員審核後會以 Email 通知。
+          </div>
+          <div id="contact-done-summary" style="background:#f8f9ff;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;text-align:left;font-size:12px;color:#555;margin-bottom:24px;"></div>
+          <button class="btn btn-primary" style="max-width:300px;" onclick="goto('screen-login')">返回登入</button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: 管理員登入 ===== -->
+      <div class="screen" id="screen-admin-login">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div style="background:linear-gradient(160deg,#0d1729,#1a2540);padding:50px 30px 30px;text-align:center;color:white;">
+          <div style="font-size:42px;">🔐</div>
+          <h1 style="font-size:20px;font-weight:700;margin-top:6px;">管理員後台</h1>
+          <p style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:4px;">顧問帳號審核 · 加盟商管理</p>
+        </div>
+        <div style="flex:1;padding:24px 20px;">
+          <div class="form-group">
+            <label class="form-label">管理員帳號</label>
+            <input id="admin-user" class="form-input" placeholder="admin" value="admin">
+          </div>
+          <div class="form-group">
+            <label class="form-label">密碼</label>
+            <input id="admin-pass" class="form-input" type="password" placeholder="請輸入密碼" value="••••••">
+          </div>
+          <button class="btn btn-primary" onclick="adminLogin()">登入後台</button>
+          <div style="text-align:center;margin-top:14px;">
+            <a href="#" onclick="event.preventDefault();goto('screen-login');" style="font-size:12px;color:#888;">← 返回顧問登入</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: 管理員後台主控台 ===== -->
+      <div class="screen" id="screen-admin-console">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar" style="--header-bg:#0d1729;">
+          <button class="back-btn" onclick="goto('screen-admin-login')">‹</button>
+          <h2 id="admin-console-title">管理員後台</h2>
+        </div>
+
+        <!-- 分頁切換（共用） -->
+        <div style="display:flex;gap:6px;padding:10px 12px;background:white;border-bottom:1px solid #eee;overflow-x:auto;">
+          <button class="admin-tab active" data-tab="pending"   onclick="switchAdminTab('pending')">待審核</button>
+          <button class="admin-tab"        data-tab="approved"  onclick="switchAdminTab('approved')">已核准</button>
+          <button class="admin-tab"        data-tab="rejected"  onclick="switchAdminTab('rejected')">已拒絕</button>
+          <button class="admin-tab"        data-tab="earnings"  onclick="switchAdminTab('earnings')">分潤總覽</button>
+          <button class="admin-tab"        data-tab="rules"     onclick="switchAdminTab('rules')">分潤規則</button>
+        </div>
+
+        <!-- ── 帳號審核分頁 ─────────────────────────────────────── -->
+        <div id="admin-pane-account" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+          <div style="background:#0d1729;color:white;padding:8px 16px 14px;display:flex;gap:8px;font-size:12px;">
+            <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px;flex:1;text-align:center;">
+              待審核 <b id="admin-pending-count" style="font-size:18px;color:#ffb300;display:block;">0</b>
+            </div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px;flex:1;text-align:center;">
+              已核准 <b id="admin-approved-count" style="font-size:18px;color:#66bb6a;display:block;">0</b>
+            </div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px;flex:1;text-align:center;">
+              已拒絕 <b id="admin-rejected-count" style="font-size:18px;color:#ef5350;display:block;">0</b>
+            </div>
+          </div>
+          <div id="admin-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;background:#f5f7fa;"></div>
+        </div>
+
+        <!-- ── 分潤總覽分頁 ─────────────────────────────────────── -->
+        <div id="admin-pane-earnings" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+          <div style="background:#0d1729;color:white;padding:14px 16px;">
+            <div style="font-size:12px;opacity:0.7;">本月總分潤（全公司）</div>
+            <div style="font-size:28px;font-weight:800;color:#4CAF50;" id="admin-total-earnings">NT$0</div>
+            <div id="admin-earnings-by-role" style="display:flex;gap:8px;font-size:11px;margin-top:8px;flex-wrap:wrap;"></div>
+          </div>
+          <div id="admin-earnings-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;background:#f5f7fa;"></div>
+        </div>
+
+        <!-- ── 分潤規則分頁 ─────────────────────────────────────── -->
+        <div id="admin-pane-rules" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#f5f7fa;">
+          <div style="background:#0d1729;color:white;padding:12px 16px;font-size:12px;line-height:1.5;">
+            💡 設定每個身份在不同報告類型的分潤比例（%）。<br>
+            加購升級可以選擇「依比例」或「固定金額」。
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:12px 12px 24px;">
+            <div id="admin-rules-table"></div>
+            <div style="display:flex;gap:8px;margin-top:14px;padding:0 4px;">
+              <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="resetShareRules()">回復預設</button>
+              <button class="btn btn-primary btn-sm" style="flex:2;" onclick="saveShareRules()">💾 儲存規則</button>
+            </div>
           </div>
         </div>
       </div>
@@ -690,9 +967,7 @@
               <span class="tag-status tag-done">✅ 完成</span>
             </div>
             <div class="hi-tags">
-              <span class="tag tag-purple">MBTI</span>
-              <span class="tag tag-blue">認知學習</span>
-              <span class="tag tag-green">壓力管理</span>
+              <span class="tag tag-purple">🎭 腦波分析人生劇本 · VIP版</span>
             </div>
             <div style="font-size:11px;color:#bbb;margin-top:6px;">今天 10:30 · 3分鐘</div>
           </div>
@@ -703,8 +978,7 @@
               <span class="tag-status" style="background:#e3f2fd;color:#1565c0;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">📊 查看</span>
             </div>
             <div class="hi-tags">
-              <span class="tag tag-blue">壓力管理</span>
-              <span class="tag tag-green">情緒調節</span>
+              <span class="tag tag-blue">🌟 兒童腦波天賦解碼 · 完整版</span>
             </div>
             <div style="font-size:11px;color:#bbb;margin-top:6px;">昨天 14:20 · 3分鐘</div>
           </div>
@@ -820,19 +1094,21 @@
 
         <div style="flex:1;overflow-y:auto;padding:12px 16px 16px;">
 
-          <!-- 🧪 測試選項 -->
-          <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-            <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">🧪 開發測試</span>
-          </div>
-          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:2px dashed #ef9a9a;">
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="report-item" onclick="selectSingleReport(this,'test_1','NT$1','screen-qr-test')" style="margin:0;border-color:#ef9a9a;">
-                <div class="report-icon" style="font-size:20px;width:32px;">🧪</div>
-                <div class="report-info">
-                  <div class="name" style="font-size:13px;">NT$1 功能測試</div>
-                  <div class="desc">測試付款→腦波全流程</div>
+          <!-- 🧪 測試選項（僅 Android Debug；加盟商 Release 由 android-franchise 隱藏） -->
+          <div data-dev-only>
+            <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+              <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">🧪 開發測試</span>
+            </div>
+            <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:2px dashed #ef9a9a;">
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div class="report-item" onclick="selectSingleReport(this,'test_1','NT$1','screen-qr-test')" style="margin:0;border-color:#ef9a9a;">
+                  <div class="report-icon" style="font-size:20px;width:32px;">🧪</div>
+                  <div class="report-info">
+                    <div class="name" style="font-size:13px;">NT$1 功能測試</div>
+                    <div class="desc">測試付款→腦波全流程</div>
+                  </div>
+                  <div style="font-size:15px;font-weight:800;color:#c2185b;">NT$1</div>
                 </div>
-                <div style="font-size:15px;font-weight:800;color:#c2185b;">NT$1</div>
               </div>
             </div>
           </div>
@@ -910,34 +1186,69 @@
             </div>
           </div>
 
+          <!-- 加購升級 -->
+          <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="background:#fff3e0;color:#e65100;padding:2px 10px;border-radius:10px;font-size:11px;">⬆️ 加購升級</span>
+            <span style="font-size:11px;color:#888;font-weight:400;">已購買者免重新檢測</span>
+          </div>
+          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:1px solid #ffe0b2;">
+            <div style="font-size:12px;color:#888;margin-bottom:10px;">💡 使用既有腦波資料升級報告版本，付款完成後直接生成新報告</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" onclick="selectUpgrade(this,'up_trial_full',2000,'screen-qr-up-2000')" style="margin:0;border-color:#ffcc80;">
+                <div class="report-icon" style="font-size:20px;width:32px;">⬆️</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">體驗版 → 完整版</div>
+                  <div class="desc">補差價升級為完整版報告</div>
+                </div>
+                <div class="report-price" style="color:#e65100;">NT$2,000</div>
+              </div>
+              <div class="report-item" onclick="selectUpgrade(this,'up_full_vip',7000,'screen-qr-up-7000')" style="margin:0;border-color:#ffcc80;">
+                <div class="report-icon" style="font-size:20px;width:32px;">👑</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">完整版 → VIP版</div>
+                  <div class="desc">補差價升級為 VIP 全方位報告</div>
+                </div>
+                <div class="report-price" style="color:#e65100;">NT$7,000</div>
+              </div>
+              <div class="report-item" onclick="selectUpgrade(this,'up_trial_vip',9000,'screen-qr-up-9000')" style="margin:0;border-color:#ffcc80;">
+                <div class="report-icon" style="font-size:20px;width:32px;">🚀</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">體驗版 → VIP版</div>
+                  <div class="desc">一次升級到 VIP，享最完整解析</div>
+                </div>
+                <div class="report-price" style="color:#e65100;">NT$9,000</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 關係報告 -->
           <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
             <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">關係報告</span>
           </div>
           <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
-            <div style="font-size:12px;color:#888;margin-bottom:10px;">⚠️ 須雙方皆已完成 VIP 版個人報告</div>
+            <div style="font-size:12px;color:#888;margin-bottom:10px;">⚠️ 僅可選擇已完成 VIP 版個人報告（含加購升級者），無需重新檢測</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+              <div class="report-item" onclick="openRelation('parent')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">👨‍👩‍👧</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">親子腦波共振關係報告</div>
-                  <div class="desc">分析親子腦波共鳴與互動模式</div>
+                  <div class="desc">分析親子腦波共鳴與互動模式（選 3 位以上）</div>
                 </div>
                 <div style="color:#c2185b;font-size:13px;font-weight:700;">›</div>
               </div>
-              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+              <div class="report-item" onclick="openRelation('couple')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">💑</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">夫妻腦波共振關係報告</div>
-                  <div class="desc">分析夫妻腦波同頻與相處模式</div>
+                  <div class="desc">分析夫妻腦波同頻與相處模式（選 2 位）</div>
                 </div>
                 <div style="color:#c2185b;font-size:13px;font-weight:700;">›</div>
               </div>
-              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+              <div class="report-item" onclick="openRelation('lover')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">💕</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">情侶腦波共振關係報告</div>
-                  <div class="desc">分析情侶腦波契合度與溝通傾向</div>
+                  <div class="desc">分析情侶腦波契合度與溝通傾向（選 2 位）</div>
                 </div>
                 <div style="color:#c2185b;font-size:13px;font-weight:700;">›</div>
               </div>
@@ -987,7 +1298,7 @@
           </div>
 
           <!-- 開發測試按鈕 -->
-          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-trial')">
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-trial')">
             🧪 開發測試：模擬付款成功
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
@@ -1032,7 +1343,7 @@
             <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
           </div>
 
-          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-full')">
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-full')">
             🧪 開發測試：模擬付款成功
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
@@ -1077,15 +1388,183 @@
             <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
           </div>
 
-          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
             🧪 開發測試：模擬付款成功
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
         </div>
       </div>
 
-      <!-- ===== SCREEN: QR 付款（NT$1 測試）===== -->
-      <div class="screen" id="screen-qr-test">
+      <!-- ============================================================ -->
+      <!--   ⬆️ 加購升級 QR 付款（付款成功 → 升級成功，不開腦波檢測）       -->
+      <!-- ============================================================ -->
+
+      <!-- 體驗版升級完整版 NT$2,000 -->
+      <div class="screen" id="screen-qr-up-2000">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar" style="--header-bg:#e65100;">
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
+          <h2>掃碼付款 · 加購升級</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#ef6c00,#ffa726);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(239,108,0,0.25);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">⬆️ 加購升級（免重新檢測）</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-2000-title">體驗版 → 完整版</div>
+            <div style="font-size:32px;font-weight:800;color:#fff;margin:8px 0;">NT$2,000</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);">補差價升級，付款後直接生成完整版報告</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
+            <img src="/static-app/ecpay/qr_2000.png" alt="升級 QR Code NT$2,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #ffa726;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成新版本報告，無需重新檢測</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
+            </div>
+            <div id="qr-up-2000-link-box" style="width:100%;background:#fff3e0;border:1px dashed #ffb74d;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#e65100;margin-bottom:6px;font-weight:600;">🔗 或點擊連結付款</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-up-2000-link" href="#" target="_blank" style="font-size:12px;color:#bf360c;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-up-2000-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #ffb74d;background:white;border-radius:8px;font-size:11px;color:#e65100;cursor:pointer;">複製</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
+          </div>
+
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-2000')">
+            🧪 開發測試：模擬升級付款成功
+          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+        </div>
+      </div>
+
+      <!-- 完整版升級 VIP 版 NT$7,000 -->
+      <div class="screen" id="screen-qr-up-7000">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar" style="--header-bg:#e65100;">
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
+          <h2>掃碼付款 · 加購升級</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#5d4037,#bf8f48);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">👑 加購升級（免重新檢測）</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-7000-title">完整版 → VIP版</div>
+            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$7,000</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);">補差價升級為 VIP 全方位報告</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
+            <img src="/static-app/ecpay/qr_7000.png" alt="升級 QR Code NT$7,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成 VIP 版報告，無需重新檢測</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
+            </div>
+            <div id="qr-up-7000-link-box" style="width:100%;background:#fffde7;border:1px dashed #FFD700;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#f9a825;margin-bottom:6px;font-weight:600;">🔗 或點擊連結付款</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-up-7000-link" href="#" target="_blank" style="font-size:12px;color:#f57f17;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-up-7000-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #FFD700;background:white;border-radius:8px;font-size:11px;color:#f57f17;cursor:pointer;">複製</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
+          </div>
+
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-7000')">
+            🧪 開發測試：模擬升級付款成功
+          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+        </div>
+      </div>
+
+      <!-- 體驗版升級 VIP 版 NT$9,000 -->
+      <div class="screen" id="screen-qr-up-9000">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="top-bar" style="--header-bg:#e65100;">
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
+          <h2>掃碼付款 · 加購升級</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#bf360c,#ffb300);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(191,54,12,0.3);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">🚀 加購升級（免重新檢測）</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-9000-title">體驗版 → VIP版</div>
+            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$9,000</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);">一次升級到 VIP，享最完整解析</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
+            <img src="/static-app/ecpay/qr_9000.png" alt="升級 QR Code NT$9,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成 VIP 版報告，無需重新檢測</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
+            </div>
+            <div id="qr-up-9000-link-box" style="width:100%;background:#fffde7;border:1px dashed #FFD700;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#f9a825;margin-bottom:6px;font-weight:600;">🔗 或點擊連結付款</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-up-9000-link" href="#" target="_blank" style="font-size:12px;color:#f57f17;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-up-9000-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #FFD700;background:white;border-radius:8px;font-size:11px;color:#f57f17;cursor:pointer;">複製</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
+          </div>
+
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-9000')">
+            🧪 開發測試：模擬升級付款成功
+          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+        </div>
+      </div>
+
+      <!-- 升級成功確認頁（共用） -->
+      <div class="screen" id="screen-upgrade-done">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+          <div style="font-size:72px;margin-bottom:12px;">🎉</div>
+          <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">升級成功！</div>
+          <div id="upgrade-done-msg" style="font-size:13px;color:#666;line-height:1.6;margin-bottom:16px;">
+            報告版本已升級，新版本報告生成中
+          </div>
+          <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#e65100;margin-bottom:24px;">
+            📧 完整報告將於 1-2 分鐘內寄送至受測者 Email；如需立即查看可至「歷史紀錄」開啟。
+          </div>
+          <button class="btn btn-primary" style="max-width:300px;" onclick="goto('screen-history')">前往歷史紀錄</button>
+          <button class="btn btn-secondary" style="max-width:300px;margin-top:10px;" onclick="goto('screen-home')">返回首頁</button>
+        </div>
+      </div>
+
+      <!-- 關係報告生成完成頁 -->
+      <div class="screen" id="screen-relation-done">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+          <div style="font-size:72px;margin-bottom:12px;">💞</div>
+          <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">關係報告生成中！</div>
+          <div id="relation-done-msg" style="font-size:13px;color:#666;line-height:1.6;margin-bottom:16px;"></div>
+          <div style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#c2185b;margin-bottom:24px;">
+            ✨ 系統正在分析雙方腦波共振資料，完成後將自動寄送至雙方 Email。
+          </div>
+          <button class="btn btn-primary" style="max-width:300px;" onclick="goto('screen-history')">前往歷史紀錄</button>
+          <button class="btn btn-secondary" style="max-width:300px;margin-top:10px;" onclick="goto('screen-home')">返回首頁</button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: QR 付款（NT$1 測試，僅 Debug）===== -->
+      <div class="screen" id="screen-qr-test" data-dev-only>
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
         <div class="top-bar" style="--header-bg:#880e4f;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
@@ -1121,7 +1600,7 @@
             <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
           </div>
 
-          <button class="btn" style="width:100%;background:#fce4ec;color:#c2185b;border:1px solid #ef9a9a;font-size:13px;" onclick="simulatePaid('screen-qr-test')">
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#fce4ec;color:#c2185b;border:1px solid #ef9a9a;font-size:13px;" onclick="simulatePaid('screen-qr-test')">
             🧪 開發測試：模擬付款成功
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
@@ -1133,55 +1612,26 @@
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
-          <h2>選擇關係人</h2>
+          <h2 id="relation-select-title">選擇關係人</h2>
         </div>
         <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;">
-          <div style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#c2185b;">
-            💡 以下為已完成 VIP 版個人報告的人員，請選擇 2 位（親子報告可選 3 位以上）
+          <div id="relation-hint" style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#c2185b;line-height:1.6;">
+            💡 以下為已完成 VIP 版個人報告（含加購升級）的人員，請選擇對象後直接生成報告，無需重新檢測腦波。
           </div>
 
-          <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px;">可選人員（共 4 人）</div>
+          <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px;" id="relation-count-label">可選人員</div>
 
-          <div id="relation-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
-              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">陳</div>
-              <div style="flex:1;">
-                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">陳小明</div>
-                <div style="font-size:11px;color:#888;margin-top:2px;">12歲 · 2026/03/03 完成 VIP</div>
-              </div>
-              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
-            </div>
-            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
-              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f093fb,#f5576c);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">林</div>
-              <div style="flex:1;">
-                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">林小花</div>
-                <div style="font-size:11px;color:#888;margin-top:2px;">14歲 · 2026/03/02 完成 VIP</div>
-              </div>
-              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
-            </div>
-            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
-              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#43e97b,#38f9d7);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">王</div>
-              <div style="flex:1;">
-                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">王小雯</div>
-                <div style="font-size:11px;color:#888;margin-top:2px;">38歲 · 2026/02/28 完成 VIP</div>
-              </div>
-              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
-            </div>
-            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
-              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fa709a,#fee140);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">張</div>
-              <div style="flex:1;">
-                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">張大偉</div>
-                <div style="font-size:11px;color:#888;margin-top:2px;">42歲 · 2026/02/20 完成 VIP</div>
-              </div>
-              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
-            </div>
+          <div id="relation-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
+
+          <div id="relation-empty" style="display:none;text-align:center;padding:30px 12px;color:#aaa;font-size:13px;">
+            尚未有可選的 VIP 客戶，請先完成 VIP 版個人報告或加購升級。
           </div>
 
           <div id="relation-selected-info" style="background:#f8f9ff;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#2D3561;display:none;">
             已選擇：<span id="relation-selected-names" style="font-weight:700;"></span>
           </div>
 
-          <button class="btn btn-primary" id="relation-submit-btn" style="opacity:0.4;pointer-events:none;" onclick="goto('screen-results')">
+          <button class="btn btn-primary" id="relation-submit-btn" style="opacity:0.4;pointer-events:none;" onclick="generateRelationReport()">
             生成關係報告 →
           </button>
           <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">報告將發送至雙方的 Email</div>
@@ -1294,6 +1744,67 @@
               </div>
             </div>
 
+            <!-- 加購升級分潤紀錄 -->
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">王小雯 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：體驗版 → VIP版</div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/28 16:30</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$2,250</div>
+                  <div style="font-size:10px;color:#aaa;">售價 NT$9,000 · 分潤25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
+                <span style="background:#fffde7;color:#f9a825;padding:2px 8px;border-radius:8px;font-size:11px;">VIP版</span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
+              </div>
+            </div>
+
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">吳小語 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：完整版 → VIP版</div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/26 14:00</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$1,750</div>
+                  <div style="font-size:10px;color:#aaa;">售價 NT$7,000 · 分潤25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
+                <span style="background:#fffde7;color:#f9a825;padding:2px 8px;border-radius:8px;font-size:11px;">VIP版</span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
+              </div>
+            </div>
+
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">林小新 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：體驗版 → 完整版</div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/24 10:00</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$500</div>
+                  <div style="font-size:10px;color:#aaa;">售價 NT$2,000 · 分潤25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
+                <span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;">完整版</span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
+              </div>
+            </div>
+
           </div>
         </div>
         <div class="nav-overlay">
@@ -1374,46 +1885,34 @@
         <div class="top-bar" style="background:#6B3FA0;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>MBTI 前測問卷</h2>
-          <span class="step-badge">步驟 3/4</span>
+          <span class="step-badge" id="mbti-step-badge">步驟 3/4</span>
         </div>
         <div class="mbti-progress">
-          <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;margin-bottom:8px;">第 3 / 10 題</div>
-          <div class="mbti-dots" id="mbti-dots">
-            <div class="mbti-dot done"></div>
-            <div class="mbti-dot done"></div>
-            <div class="mbti-dot active"></div>
-            <div class="mbti-dot"></div><div class="mbti-dot"></div><div class="mbti-dot"></div>
-            <div class="mbti-dot"></div><div class="mbti-dot"></div><div class="mbti-dot"></div>
-            <div class="mbti-dot"></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;margin-bottom:8px;">
+            <span id="mbti-progress-label">第 1 / 28 題</span>
+            <span style="margin-left:10px;">·</span>
+            <a href="#" onclick="event.preventDefault();skipMBTI();" style="color:#fff;text-decoration:underline;margin-left:8px;font-size:11px;">跳過問卷（僅以腦波判讀）</a>
           </div>
+          <div class="mbti-dots" id="mbti-dots"></div>
         </div>
 
         <div style="flex:1;overflow-y:auto;padding-bottom:16px;">
-          <div class="question-card">
-            <span class="q-dim-badge" style="background:#e8f5e9;color:#2e7d32;">E / I 維度</span>
-            <div class="q-num">第 3 題</div>
-            <div class="q-text">在一個社交聚會結束後，您通常感覺...</div>
-            <div class="q-options" id="mbti-options">
-              <div class="q-option" onclick="selectMBTI(this)">
-                <div class="opt-radio"></div>
-                充電了，精力充沛，想繼續和大家互動
-              </div>
-              <div class="q-option selected" onclick="selectMBTI(this)">
-                <div class="opt-radio">✓</div>
-                疲憊了，需要一個人靜一靜才能恢復
-              </div>
-            </div>
+          <div class="question-card" id="mbti-question-card">
+            <span class="q-dim-badge" id="mbti-dim-badge"></span>
+            <div class="q-num" id="mbti-q-num"></div>
+            <div class="q-text" id="mbti-q-text"></div>
+            <div class="q-options" id="mbti-options"></div>
           </div>
           <div style="padding:0 16px;">
             <div style="background:#f8f9ff;border-radius:14px;padding:12px 14px;font-size:12px;color:#888;line-height:1.6;">
-              💡 <b>提示：</b>請根據您平時的真實感受作答，沒有對錯之分。問卷答案將與腦波結果結合，提高 MBTI 判斷的準確性。
+              💡 <b>提示：</b>請根據您平時的真實感受作答，沒有對錯之分。問卷答案將與腦波結果結合，提高 MBTI 判斷的準確性。完整問卷約 3-5 分鐘。
             </div>
           </div>
         </div>
 
         <div class="mbti-nav">
-          <button class="btn btn-secondary btn-sm" onclick="goto('screen-reports')" style="flex:1;">← 上一題</button>
-          <button class="btn btn-primary btn-sm" onclick="goto('screen-connect')" style="flex:2;">下一題 →</button>
+          <button class="btn btn-secondary btn-sm" id="mbti-prev-btn" onclick="prevMBTI()" style="flex:1;">← 上一題</button>
+          <button class="btn btn-primary btn-sm"   id="mbti-next-btn" onclick="nextMBTI()" style="flex:2;">下一題 →</button>
         </div>
       </div>
 
@@ -1633,113 +2132,114 @@
         </div>
       </div>
 
-      <!-- ===== SCREEN 11: RESULTS ===== -->
+      <!-- ===== SCREEN 11: RESULTS（個人整合分析報告） ===== -->
       <div class="screen" id="screen-results">
         <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋</span></div>
-        <div style="overflow-y:auto;flex:1;padding-bottom:80px;">
+        <div style="overflow-y:auto;flex:1;background:#0d1729;">
           <div class="result-header">
-            <div class="result-icon">✅</div>
-            <div class="result-title">檢測完成！</div>
-            <div class="result-sub">陳小明 · 2026/03/03 09:41 · 3 分鐘（180筆）</div>
-            <div style="margin-top:10px;background:rgba(0,200,83,0.15);border:1px solid rgba(0,200,83,0.3);border-radius:10px;padding:8px 14px;font-size:12px;color:#00C853;display:flex;align-items:center;gap:6px;">
-              📧 報告生成中，完成後將自動發送至受測者 Email
+            <div class="result-brand">onlineReport · 線上腦波分析系統</div>
+            <div class="result-title-bar">
+              <span class="rt-main">腦波量測</span>
+              <span class="rt-sep">｜</span>
+              <span class="rt-sub">個人整合分析報告</span>
+            </div>
+            <div class="result-meta">陳小明 · 2026/03/03 09:41 · 3 分鐘（180 筆）</div>
+            <div style="margin-top:12px;background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.35);border-radius:10px;padding:8px 12px;font-size:12px;color:#a5d6a7;display:flex;align-items:center;gap:6px;">
+              📧 完整報告已寄送至受測者 Email
             </div>
           </div>
 
-          <div style="padding:16px;">
-            <!-- MBTI Result -->
-            <div class="mbti-result-card">
-              <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">🔮 MBTI 人格類型</div>
-              <div class="mbti-type">ENFP</div>
-              <div class="mbti-name">競選者 · The Campaigner</div>
-              <div class="confidence-badge conf-high">✅ 可信度：高</div>
-              <div class="mbti-dims">
-                <div class="mbti-dim">
-                  <div class="dim-letters">E <span style="opacity:0.5;font-size:12px;">vs I</span></div>
-                  <div class="dim-bar-wrap">
-                    <div class="dim-fill" style="width:75%;"></div>
-                  </div>
-                  <div class="dim-pct">75% 外向（β/α 1.42）</div>
-                </div>
-                <div class="mbti-dim">
-                  <div class="dim-letters">N <span style="opacity:0.5;font-size:12px;">vs S</span></div>
-                  <div class="dim-bar-wrap">
-                    <div class="dim-fill" style="width:78%;"></div>
-                  </div>
-                  <div class="dim-pct">78% 直覺（θ/β 1.35）</div>
-                </div>
-                <div class="mbti-dim">
-                  <div class="dim-letters">F <span style="opacity:0.5;font-size:12px;">vs T</span></div>
-                  <div class="dim-bar-wrap">
-                    <div class="dim-fill" style="width:62%;"></div>
-                  </div>
-                  <div class="dim-pct">62% 情感（REB 1.45）</div>
-                </div>
-                <div class="mbti-dim">
-                  <div class="dim-letters">P <span style="opacity:0.5;font-size:12px;">vs J</span></div>
-                  <div class="dim-bar-wrap">
-                    <div class="dim-fill" style="width:63%;"></div>
-                  </div>
-                  <div class="dim-pct">63% 認知（CCR 1.82）</div>
-                </div>
+          <div class="report-body">
+
+            <!-- 能力指標 chips -->
+            <div class="report-chips">
+              <span class="report-chip">直覺 83%</span>
+              <span class="report-chip">放鬆 77%</span>
+              <span class="report-chip">專注 47%</span>
+              <span class="report-chip">氣血 27%</span>
+              <span class="report-chip">內在安定 45%</span>
+              <span class="report-chip">高度專注 48%</span>
+              <span class="report-chip">邏輯分析 48%</span>
+              <span class="report-chip">觀察環境 22%</span>
+              <span class="report-chip">慈悲柔軟 36%</span>
+            </div>
+
+            <!-- 腦波指標概覽 -->
+            <div class="report-section">
+              <div class="report-section-title">腦波指標概覽</div>
+              <div class="bw-row">
+                <div class="bw-head"><span>直覺能力</span><span class="bw-pct">83%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:83%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>氣血飽滿</span><span class="bw-pct">27%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:27%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>內在安定</span><span class="bw-pct">45%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:45%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>觀察環境</span><span class="bw-pct">22%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:22%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>放鬆能力</span><span class="bw-pct">77%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:77%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>邏輯分析</span><span class="bw-pct">48%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:48%;"></div></div>
+              </div>
+              <div class="bw-row">
+                <div class="bw-head"><span>慈悲柔軟</span><span class="bw-pct">36%</span></div>
+                <div class="bw-bar"><div class="bw-fill" style="width:36%;"></div></div>
               </div>
             </div>
 
-            <!-- Score Cards -->
-            <div class="card">
-              <div class="card-title">各項能力評估</div>
-              <div class="score-section">
-                <div class="score-item">
-                  <div class="si-header">
-                    <span class="si-name">🧠 認知學習潛力</span>
-                    <span class="si-score" style="color:#2D3561;">78 分</span>
-                  </div>
-                  <div class="score-bar">
-                    <div class="score-fill" style="width:78%;background:linear-gradient(90deg,#2D3561,#5c6bc0);"></div>
-                  </div>
-                </div>
-                <div class="score-item">
-                  <div class="si-header">
-                    <span class="si-name">😌 壓力管理能力</span>
-                    <span class="si-score" style="color:#00897b;">62 分</span>
-                  </div>
-                  <div class="score-bar">
-                    <div class="score-fill" style="width:62%;background:linear-gradient(90deg,#00897b,#4db6ac);"></div>
-                  </div>
-                </div>
+            <!-- 原生家庭狀況 -->
+            <div class="report-section">
+              <div class="report-section-title">原生家庭狀況</div>
+              <div class="report-text-box">
+                你從小就很會感受氣氛與情緒變化，直覺能力明顯高於其他指標，代表你在家庭中經常扮演「先察覺、先調整」的角色。當環境出現緊張、情緒暗流或未說出口的期待時，你往往比別人更早感受到，但未必能直接說清楚原因。這樣的成長經驗容易讓你習慣把重點放在維持平衡，而不是優先表達自己的需求。 放鬆能力高，表示你學會用抽離、退一步或讓自己看起來沒事，來維持表面的和諧；但內在安定與氣血偏低，代表這種「撐住」其實很耗能。你不是沒有責任感，而是太早學會把情緒與需要往後放。
               </div>
             </div>
 
-            <!-- Key Indicators -->
-            <div class="card">
-              <div class="card-title">關鍵腦波指標</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
-                  <div style="font-size:10px;color:#888;">注意力（CCR）</div>
-                  <div style="font-size:20px;font-weight:700;color:#2D3561;">2.34</div>
-                  <div style="font-size:10px;color:#00C853;">↑ 良好</div>
-                </div>
-                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
-                  <div style="font-size:10px;color:#888;">壓力恢復（SRR）</div>
-                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.32</div>
-                  <div style="font-size:10px;color:#ff9800;">→ 中等</div>
-                </div>
-                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
-                  <div style="font-size:10px;color:#888;">理性情緒（REB）</div>
-                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.45</div>
-                  <div style="font-size:10px;color:#ff9800;">→ 情感傾向</div>
-                </div>
-                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
-                  <div style="font-size:10px;color:#888;">β/α 均值（E/I）</div>
-                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.42</div>
-                  <div style="font-size:10px;color:#00C853;">→ 外向</div>
-                </div>
+            <!-- 性格矛盾 -->
+            <div class="report-section">
+              <div class="report-section-title">性格矛盾</div>
+              <div class="report-text-box">
+                你的內在矛盾來自於「感受很快、驗證很慢」。直覺讓你迅速抓到問題核心，但觀察環境偏低，使你不容易用客觀證據來支持自己的判斷，久而久之容易懷疑自己是否想太多。你也能讓自己看起來很放鬆，但內在其實一直在預判與運算，導致身體真正放鬆、心理卻停不下來。 另一個矛盾是責任感與能量之間的落差。你願意把事情做好，但氣血不足讓你在長期高輸出後容易突然耗盡。
               </div>
             </div>
 
-            <div style="display:flex;gap:10px;">
+            <!-- 性格地雷 -->
+            <div class="report-section">
+              <div class="report-section-title">性格地雷</div>
+              <div class="report-text-box">
+                你最容易被觸發的狀況，是模糊期待與情緒暗示。當他人用「你應該懂」「你看著辦」來交代事情，你會下意識接住全部責任，卻沒有清楚邊界，最後變成內耗。你也對冷處理、語氣轉變非常敏感，一旦無法釐清對方真實想法，容易選擇抽離而不是對抗。 長時間被要求高專注、高產出而缺乏休息與段落，會快速消耗你。
+              </div>
+            </div>
+
+            <!-- 人生天賦 -->
+            <div class="report-section">
+              <div class="report-section-title">人生天賦</div>
+              <div class="report-text-box">
+                你最大的天賦是直覺式洞察與情緒調頻能力。你能在混亂中快速看懂人心與問題，並在壓力狀態下維持表面穩定，讓事情不至於失控。你同時具備一定的邏輯與專注能力，只要有清楚框架與節奏，就能把洞察轉為實際行動。 你適合做「把複雜變清楚」的人，而不是只負責衝刺的角色。
+              </div>
+            </div>
+
+            <!-- 最佳職業方向 -->
+            <div class="report-section">
+              <div class="report-section-title">最佳職業方向</div>
+              <div class="report-text-box">
+                你最省力、也最能發揮價值的職涯類型，是結合洞察、整合與陪伴的角色，例如：顧問、健康管理師、教練、個案管理、教育引導、課程設計、客戶成功、人資培訓、專案協調、品牌與內容策略等。 不建議長期處於高噪音、即時反應、細節密集且缺乏節奏的工作環境，那會快速耗盡你的能量。
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:6px;">
               <button class="btn btn-primary" style="flex:2;" onclick="goto('screen-home')">查看完整報告 →</button>
-              <button class="btn btn-secondary" style="flex:1;">下載 PDF</button>
+              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;">下載 PDF</button>
             </div>
           </div>
         </div>
@@ -1759,33 +2259,36 @@
         </div>
         <div class="filter-bar">
           <button class="filter-chip active">全部</button>
-          <button class="filter-chip">MBTI</button>
-          <button class="filter-chip">認知學習</button>
-          <button class="filter-chip">壓力管理</button>
+          <button class="filter-chip">人生劇本</button>
+          <button class="filter-chip">兒童天賦</button>
+          <button class="filter-chip">關係報告</button>
           <button class="filter-chip">本週</button>
         </div>
         <div style="flex:1;overflow-y:auto;padding:12px 16px;padding-bottom:80px;">
           <div style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500;">2026年3月</div>
           <div class="history-item" onclick="goto('screen-results')" style="margin:0 0 10px;">
             <div class="hi-top"><span class="hi-name">陳小明</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags"><span class="tag tag-purple">MBTI</span><span class="tag tag-blue">認知學習</span><span class="tag tag-green">壓力管理</span></div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/03 09:41 · 3分鐘 · 扣4點</div>
+            <div class="hi-tags"><span class="tag tag-purple">🎭 腦波分析人生劇本 · VIP版</span></div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/03 09:41 · 3分鐘 · NT$12,000</div>
           </div>
           <div class="history-item" style="margin:0 0 10px;">
             <div class="hi-top"><span class="hi-name">林小花</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags"><span class="tag tag-blue">壓力管理</span><span class="tag tag-green">情緒調節</span></div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/02 14:20 · 3分鐘 · 扣2點</div>
+            <div class="hi-tags"><span class="tag tag-blue">🌟 兒童腦波天賦解碼 · 完整版</span></div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/02 14:20 · 3分鐘 · NT$5,000</div>
           </div>
           <div class="history-item" style="margin:0 0 10px;opacity:0.7;">
             <div class="hi-top"><span class="hi-name">張大偉</span><span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">❌ 連線失敗</span></div>
-            <div style="font-size:12px;color:#aaa;margin-top:4px;">藍牙連線中斷，未扣點</div>
+            <div style="font-size:12px;color:#aaa;margin-top:4px;">藍牙連線中斷，未扣款</div>
             <div style="font-size:11px;color:#bbb;margin-top:4px;">2026/03/02 09:15</div>
           </div>
           <div style="font-size:12px;color:#888;margin:12px 0 8px;font-weight:500;">2026年2月</div>
           <div class="history-item" style="margin:0 0 10px;">
             <div class="hi-top"><span class="hi-name">王小雯</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags"><span class="tag tag-purple">MBTI</span></div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/02/28 10:00 · 3分鐘 · 扣2點</div>
+            <div class="hi-tags">
+              <span class="tag tag-purple">🎭 腦波分析人生劇本 · 體驗版</span>
+              <span class="tag" style="background:#fff3e0;color:#e65100;">⬆️ 已加購升級 VIP</span>
+            </div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/02/28 10:00 · 3分鐘 · NT$3,000 + NT$9,000</div>
           </div>
         </div>
         <div class="nav-overlay">
@@ -1878,9 +2381,23 @@
 </div>
 
 <script>
+(function initAndroidShellMode() {
+  try {
+    if (typeof AndroidBridge === 'undefined' || AndroidBridge == null) return;
+    document.documentElement.classList.add('android-webapp');
+    if (typeof AndroidBridge.isDebugBuild === 'function' && !AndroidBridge.isDebugBuild()) {
+      document.documentElement.classList.add('android-franchise');
+    }
+  } catch (e) { /* WebView 橋接未注入時略過 */ }
+})();
+
 const screens = [
   { id: 'screen-splash',          label: '啟動頁' },
   { id: 'screen-login',           label: '顧問登入' },
+  { id: 'screen-contact',         label: '聯絡我們 · 申請帳號' },
+  { id: 'screen-contact-done',    label: '申請完成' },
+  { id: 'screen-admin-login',     label: '管理員登入' },
+  { id: 'screen-admin-console',   label: '管理員後台' },
   { id: 'screen-home',            label: '主頁' },
   { id: 'screen-earnings',        label: '獲利明細' },
   { id: 'screen-subject',         label: '受測者資料' },
@@ -1888,8 +2405,13 @@ const screens = [
   { id: 'screen-qr-trial',        label: '付款 · 體驗版 NT$3,000' },
   { id: 'screen-qr-full',         label: '付款 · 完整版 NT$5,000' },
   { id: 'screen-qr-vip',          label: '付款 · VIP版 NT$12,000' },
+  { id: 'screen-qr-up-2000',      label: '加購升級 · 體驗→完整 NT$2,000' },
+  { id: 'screen-qr-up-7000',      label: '加購升級 · 完整→VIP NT$7,000' },
+  { id: 'screen-qr-up-9000',      label: '加購升級 · 體驗→VIP NT$9,000' },
+  { id: 'screen-upgrade-done',    label: '升級成功' },
   { id: 'screen-qr-test',         label: '付款 · NT$1 測試' },
   { id: 'screen-relation-select', label: '關係報告選人' },
+  { id: 'screen-relation-done',   label: '關係報告生成中' },
   { id: 'screen-payment',         label: '購買點數（備用）' },
   { id: 'screen-mbti',            label: 'MBTI 問卷' },
   { id: 'screen-connect',         label: '連接設備' },
@@ -1899,6 +2421,14 @@ const screens = [
   { id: 'screen-history',         label: '歷史紀錄' },
   { id: 'screen-settings',        label: '設定' },
 ];
+
+(function filterFranchiseScreens() {
+  try {
+    if (!document.documentElement.classList.contains('android-franchise')) return;
+    const i = screens.findIndex(s => s.id === 'screen-qr-test');
+    if (i >= 0) screens.splice(i, 1);
+  } catch (e) {}
+})();
 
 let current = 0;
 
@@ -1925,6 +2455,12 @@ function gotoIndex(idx) {
   document.getElementById(screens[current].id).classList.add('active');
   document.querySelectorAll('.screen-dot')[current].classList.add('active');
   document.getElementById('screen-title').textContent = screens[current].label;
+
+  // 進入特定畫面時的初始化 hook
+  const id = screens[current].id;
+  if (id === 'screen-mbti' && typeof _resetMBTI === 'function') {
+    _resetMBTI();
+  }
 }
 
 function navNext() { gotoIndex((current + 1) % screens.length); }
@@ -1944,6 +2480,153 @@ function selectRadio(el) {
   group.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
 }
+
+// ─── MBTI 前測問卷（28 題完整版）──────────────────────────────────────────────
+const _MBTI_QUESTIONS = [
+  // E / I 維度（外向 / 內向）
+  { dim:'EI', text:'在一個社交聚會結束後，你通常感覺...', a:{label:'充電了，精力充沛，想繼續和大家互動', side:'E'}, b:{label:'疲憊了，需要一個人靜一靜才能恢復', side:'I'} },
+  { dim:'EI', text:'週末理想的安排是...', a:{label:'約朋友一起出去走走、聊天', side:'E'}, b:{label:'在家看書、追劇或做自己喜歡的事', side:'I'} },
+  { dim:'EI', text:'在會議中你比較傾向...', a:{label:'邊想邊講，靠互動把想法說清楚', side:'E'}, b:{label:'先在心裡想清楚，再開口發言', side:'I'} },
+  { dim:'EI', text:'認識新朋友時你...', a:{label:'會主動打招呼、開啟話題', side:'E'}, b:{label:'通常等對方先開口', side:'I'} },
+  { dim:'EI', text:'長時間獨處之後，你...', a:{label:'會感到無聊，想找人說話', side:'E'}, b:{label:'感覺充電完成、心情舒適', side:'I'} },
+  { dim:'EI', text:'你比較喜歡的工作環境是...', a:{label:'熱鬧、有很多互動的開放空間', side:'E'}, b:{label:'安靜、能專心思考的個人空間', side:'I'} },
+  { dim:'EI', text:'分享想法時，你會...', a:{label:'樂於和很多人分享', side:'E'}, b:{label:'只跟少數信任的人深聊', side:'I'} },
+
+  // S / N 維度（實感 / 直覺）
+  { dim:'SN', text:'學新東西時你比較相信...', a:{label:'親身經驗與具體事實', side:'S'}, b:{label:'直覺、靈感與整體脈絡', side:'N'} },
+  { dim:'SN', text:'描述一件事情時你習慣...', a:{label:'按時間順序、細節完整地說', side:'S'}, b:{label:'先講重點、寓意，再補細節', side:'N'} },
+  { dim:'SN', text:'你比較欣賞的人是...', a:{label:'務實、能把事情完成的人', side:'S'}, b:{label:'有創意、能想出新點子的人', side:'N'} },
+  { dim:'SN', text:'看小說/電影你比較喜歡...', a:{label:'寫實、貼近生活的故事', side:'S'}, b:{label:'科幻、奇幻、有想像力的世界', side:'N'} },
+  { dim:'SN', text:'解決問題時你會...', a:{label:'先看過去類似案例怎麼處理', side:'S'}, b:{label:'先想有沒有完全不一樣的方法', side:'N'} },
+  { dim:'SN', text:'在工作上你比較關注...', a:{label:'每個步驟與細節是否到位', side:'S'}, b:{label:'整體方向與長期可能性', side:'N'} },
+  { dim:'SN', text:'別人說「就是有這種感覺」時你會...', a:{label:'希望對方提出具體例子', side:'S'}, b:{label:'懂這種感覺，常常自己也有', side:'N'} },
+
+  // T / F 維度（思考 / 情感）
+  { dim:'TF', text:'做重要決定時你比較依靠...', a:{label:'邏輯、客觀利弊分析', side:'T'}, b:{label:'感受與對人的影響', side:'F'} },
+  { dim:'TF', text:'別人來找你訴苦時你...', a:{label:'會試圖幫對方分析、想解法', side:'T'}, b:{label:'會先傾聽、認同他的感受', side:'F'} },
+  { dim:'TF', text:'你比較在意的批評是...', a:{label:'觀點不夠嚴謹', side:'T'}, b:{label:'語氣讓人不舒服', side:'F'} },
+  { dim:'TF', text:'看到團隊起爭執時你會...', a:{label:'就事論事、找到對的決定', side:'T'}, b:{label:'先處理情緒、讓大家好過一點', side:'F'} },
+  { dim:'TF', text:'你被稱讚是「公平」或「溫暖」哪個比較開心？', a:{label:'公平', side:'T'}, b:{label:'溫暖', side:'F'} },
+  { dim:'TF', text:'看到不合理的規定你會...', a:{label:'指出邏輯漏洞，要求改進', side:'T'}, b:{label:'考慮人情、不一定當下說', side:'F'} },
+  { dim:'TF', text:'評估一個方案時你比較看...', a:{label:'對結果是否最佳', side:'T'}, b:{label:'對相關人是否合理', side:'F'} },
+
+  // J / P 維度（判斷 / 知覺）
+  { dim:'JP', text:'面對行程你比較喜歡...', a:{label:'事先排好計畫並照表執行', side:'J'}, b:{label:'保留彈性、看當下狀況決定', side:'P'} },
+  { dim:'JP', text:'桌面/工作環境通常是...', a:{label:'井然有序、東西都有固定位置', side:'J'}, b:{label:'有點亂但自己知道哪裡是哪裡', side:'P'} },
+  { dim:'JP', text:'接到新任務時你會...', a:{label:'先列清單、設定截止日', side:'J'}, b:{label:'先做做看、邊做邊調整', side:'P'} },
+  { dim:'JP', text:'臨時計畫被打亂時你...', a:{label:'會有些不舒服，希望盡快回到計畫', side:'J'}, b:{label:'覺得也好、可能反而有趣', side:'P'} },
+  { dim:'JP', text:'你比較常被形容為...', a:{label:'準時、有條理', side:'J'}, b:{label:'隨性、有彈性', side:'P'} },
+  { dim:'JP', text:'旅行時你偏好...', a:{label:'每天行程都安排好', side:'J'}, b:{label:'只訂機票飯店，其他現場決定', side:'P'} },
+  { dim:'JP', text:'寫報告/做專案你習慣...', a:{label:'分階段、按時完成', side:'J'}, b:{label:'最後衝刺型，靈感來了一次寫完', side:'P'} },
+];
+
+let _mbtiAnswers = []; // 同 index 對應 _MBTI_QUESTIONS：'A' or 'B' or null
+let _mbtiIndex   = 0;
+
+function _resetMBTI() {
+  _mbtiAnswers = new Array(_MBTI_QUESTIONS.length).fill(null);
+  _mbtiIndex   = 0;
+  // 建 dots
+  const dots = document.getElementById('mbti-dots');
+  if (dots) {
+    dots.innerHTML = _MBTI_QUESTIONS.map((_, i) =>
+      `<div class="mbti-dot" data-idx="${i}"></div>`
+    ).join('');
+  }
+  document.getElementById('mbti-step-badge').textContent = '步驟 3/4';
+  renderMBTI();
+}
+
+function renderMBTI() {
+  const total = _MBTI_QUESTIONS.length;
+  const q = _MBTI_QUESTIONS[_mbtiIndex];
+
+  document.getElementById('mbti-progress-label').textContent = `第 ${_mbtiIndex+1} / ${total} 題`;
+  // dots
+  document.querySelectorAll('#mbti-dots .mbti-dot').forEach((d, i) => {
+    d.classList.remove('done', 'active');
+    if (_mbtiAnswers[i] != null) d.classList.add('done');
+    if (i === _mbtiIndex) d.classList.add('active');
+  });
+
+  // 維度徽章
+  const dimColor = {
+    EI: { bg:'#e8f5e9', fg:'#2e7d32', label:'E / I 維度（外向 / 內向）' },
+    SN: { bg:'#e3f2fd', fg:'#1565c0', label:'S / N 維度（實感 / 直覺）' },
+    TF: { bg:'#fff3e0', fg:'#e65100', label:'T / F 維度（思考 / 情感）' },
+    JP: { bg:'#fce4ec', fg:'#c2185b', label:'J / P 維度（判斷 / 知覺）' },
+  }[q.dim];
+  const badge = document.getElementById('mbti-dim-badge');
+  badge.textContent = dimColor.label;
+  badge.style.background = dimColor.bg;
+  badge.style.color = dimColor.fg;
+
+  document.getElementById('mbti-q-num').textContent  = `第 ${_mbtiIndex+1} 題`;
+  document.getElementById('mbti-q-text').textContent = q.text;
+
+  const ans = _mbtiAnswers[_mbtiIndex];
+  document.getElementById('mbti-options').innerHTML = `
+    <div class="q-option ${ans==='A'?'selected':''}" onclick="answerMBTI('A')">
+      <div class="opt-radio">${ans==='A'?'✓':''}</div>
+      ${q.a.label}
+    </div>
+    <div class="q-option ${ans==='B'?'selected':''}" onclick="answerMBTI('B')">
+      <div class="opt-radio">${ans==='B'?'✓':''}</div>
+      ${q.b.label}
+    </div>
+  `;
+
+  document.getElementById('mbti-prev-btn').style.opacity = _mbtiIndex === 0 ? '0.4' : '1';
+  document.getElementById('mbti-prev-btn').style.pointerEvents = _mbtiIndex === 0 ? 'none' : 'auto';
+  document.getElementById('mbti-next-btn').textContent =
+    (_mbtiIndex === total - 1) ? '完成問卷 → 連接設備' : '下一題 →';
+}
+
+function answerMBTI(choice) {
+  _mbtiAnswers[_mbtiIndex] = choice;
+  renderMBTI();
+  // 自動跳下一題
+  setTimeout(() => {
+    if (_mbtiIndex < _MBTI_QUESTIONS.length - 1) {
+      _mbtiIndex++;
+      renderMBTI();
+    }
+  }, 220);
+}
+
+function prevMBTI() {
+  if (_mbtiIndex > 0) { _mbtiIndex--; renderMBTI(); }
+}
+
+function nextMBTI() {
+  if (_mbtiIndex < _MBTI_QUESTIONS.length - 1) {
+    _mbtiIndex++; renderMBTI();
+  } else {
+    // 收集 MBTI 計算結果
+    const score = { E:0,I:0, S:0,N:0, T:0,F:0, J:0,P:0 };
+    _MBTI_QUESTIONS.forEach((q, i) => {
+      const ans = _mbtiAnswers[i];
+      if (ans === 'A') score[q.a.side]++;
+      else if (ans === 'B') score[q.b.side]++;
+    });
+    const mbti = (score.E>=score.I?'E':'I') + (score.S>=score.N?'S':'N') +
+                 (score.T>=score.F?'T':'F') + (score.J>=score.P?'J':'P');
+    console.log('[MBTI 問卷結果]', mbti, score);
+    goto('screen-connect');
+  }
+}
+
+function skipMBTI() {
+  if (!confirm('確定跳過問卷？\n系統將以腦波量測結果直接判讀 MBTI（準確度略低於完整作答）。')) return;
+  goto('screen-connect');
+}
+
+// 進入 MBTI 畫面時自動初始化（透過 hash / goto 觸發）
+const _origGoto_forMBTI = (typeof goto === 'function') ? goto : null;
+document.addEventListener('DOMContentLoaded', () => {
+  // 首次顯示 MBTI 畫面就 reset
+  // 由 goto() 呼叫時也會觸發
+});
 
 function selectMBTI(el) {
   document.querySelectorAll('#screen-mbti .q-option').forEach(o => {
@@ -2052,11 +2735,27 @@ function showPaymentResult(status, qrScreenId) {
   const msg     = document.getElementById("payment-result-msg");
   const btn     = document.getElementById("payment-result-btn");
 
+  // 是否為「加購升級」流程：付款成功不開腦波檢測，直接顯示升級成功
+  const isUpgrade = (qrScreenId || '').startsWith('screen-qr-up-');
+
+  if (status === "paid" && isUpgrade) {
+    icon.textContent  = "🎉";
+    title.textContent = "升級付款成功！";
+    msg.textContent   = "正在生成升級後的新版本報告…";
+    btn.textContent   = "查看升級結果 →";
+    btn.style.display = '';
+    btn.onclick = () => { overlay.style.display = "none"; goto("screen-upgrade-done"); };
+    setTimeout(() => { overlay.style.display = "none"; goto("screen-upgrade-done"); }, 1500);
+    overlay.style.display = "flex";
+    return;
+  }
+
   if (status === "paid") {
     icon.textContent  = "✅";
     title.textContent = "付款成功！";
     msg.textContent   = "正在啟動腦波檢測...";
     btn.textContent   = "開始檢測 →";
+    btn.style.display = '';
 
     // ── 呼叫 Android 原生橋接（App 安裝版）────────────────────────────
     if (window.AndroidBridge &&
@@ -2111,12 +2810,18 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'child_full':  '兒童腦波天賦解碼 · 完整版',
     'child_vip':   '兒童腦波天賦解碼 · VIP版',
     'test_1':      '🧪 NT$1 功能測試',
+    'up_trial_full': '加購升級：體驗版 → 完整版',
+    'up_full_vip':   '加購升級：完整版 → VIP版',
+    'up_trial_vip':  '加購升級：體驗版 → VIP版',
   };
   const titleMap = {
-    'screen-qr-trial': 'qr-trial-title',
-    'screen-qr-full':  'qr-full-title',
-    'screen-qr-vip':   'qr-vip-title',
-    'screen-qr-test':  'qr-test-title',
+    'screen-qr-trial':   'qr-trial-title',
+    'screen-qr-full':    'qr-full-title',
+    'screen-qr-vip':     'qr-vip-title',
+    'screen-qr-test':    'qr-test-title',
+    'screen-qr-up-2000': 'qr-up-2000-title',
+    'screen-qr-up-7000': 'qr-up-7000-title',
+    'screen-qr-up-9000': 'qr-up-9000-title',
   };
   const titleEl = document.getElementById(titleMap[qrScreen]);
   if (titleEl) titleEl.textContent = reportNames[reportKey] || '';
@@ -2129,7 +2834,8 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     const amountMap = {
       'life_trial':3000,'life_full':5000,'life_vip':12000,
       'child_trial':3000,'child_full':5000,'child_vip':12000,
-      'test_1':1
+      'test_1':1,
+      'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000
     };
     const amt = amountMap[reportKey] || 3000;
 
@@ -2142,10 +2848,13 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
 
       // 更新短連結（依目前畫面 id 對應）
       const linkMap = {
-        'screen-qr-trial': { box: 'qr-trial-link-box', a: 'qr-trial-link' },
-        'screen-qr-full':  { box: 'qr-full-link-box',  a: 'qr-full-link'  },
-        'screen-qr-vip':   { box: 'qr-vip-link-box',   a: 'qr-vip-link'   },
-        'screen-qr-test':  { box: 'qr-test-link-box',  a: 'qr-test-link'  },
+        'screen-qr-trial':   { box: 'qr-trial-link-box',   a: 'qr-trial-link' },
+        'screen-qr-full':    { box: 'qr-full-link-box',    a: 'qr-full-link'  },
+        'screen-qr-vip':     { box: 'qr-vip-link-box',     a: 'qr-vip-link'   },
+        'screen-qr-test':    { box: 'qr-test-link-box',    a: 'qr-test-link'  },
+        'screen-qr-up-2000': { box: 'qr-up-2000-link-box', a: 'qr-up-2000-link' },
+        'screen-qr-up-7000': { box: 'qr-up-7000-link-box', a: 'qr-up-7000-link' },
+        'screen-qr-up-9000': { box: 'qr-up-9000-link-box', a: 'qr-up-9000-link' },
       };
       const lm = linkMap[qrScreen];
       if (lm) {
@@ -2168,12 +2877,87 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   }, 180);
 }
 
-// 關係報告選人
-let selectedPersons = [];
+// ─── 加購升級：直接走付款流程，但付款成功後不啟動腦波檢測 ────────────────
+function selectUpgrade(el, reportKey, amount, qrScreen) {
+  // 視覺選取
+  document.querySelectorAll('#screen-reports .report-item').forEach(r => {
+    r.classList.remove('selected');
+    r.style.borderColor = '';
+    r.style.background = '';
+  });
+  el.classList.add('selected');
+  el.style.borderColor = '#FF6B35';
+  el.style.background = '#fff5f2';
+
+  // 重用 selectSingleReport 的金流流程
+  selectSingleReport(el, reportKey, 'NT$' + amount.toLocaleString(), qrScreen);
+}
+
+// ─── 關係報告：合格名單（VIP 含加購升級者）──────────────────────────────────
+// effectiveLevel：'trial' | 'full' | 'vip' | 'vip-upgraded'
+const _vipCustomers = [
+  { id:'p1', name:'陳小明', age:12, avatarColor:'linear-gradient(135deg,#667eea,#764ba2)', level:'vip',          completedAt:'2026/03/03' },
+  { id:'p2', name:'林小花', age:14, avatarColor:'linear-gradient(135deg,#f093fb,#f5576c)', level:'vip',          completedAt:'2026/03/02' },
+  { id:'p3', name:'王小雯', age:38, avatarColor:'linear-gradient(135deg,#43e97b,#38f9d7)', level:'vip-upgraded', completedAt:'2026/02/28', upgradeNote:'加購升級' },
+  { id:'p4', name:'張大偉', age:42, avatarColor:'linear-gradient(135deg,#fa709a,#fee140)', level:'vip',          completedAt:'2026/02/20' },
+];
+
+const _relationConfigs = {
+  parent: { title: '選擇關係人 · 親子', label: '親子腦波共振關係報告', minPersons: 3, color: '#c2185b', emoji: '👨‍👩‍👧' },
+  couple: { title: '選擇關係人 · 夫妻', label: '夫妻腦波共振關係報告', minPersons: 2, color: '#c2185b', emoji: '💑' },
+  lover:  { title: '選擇關係人 · 情侶', label: '情侶腦波共振關係報告', minPersons: 2, color: '#c2185b', emoji: '💕' },
+};
+let _currentRelationType = null;
+let _selectedPersonIds   = [];
+
+function openRelation(type) {
+  _currentRelationType = type;
+  _selectedPersonIds   = [];
+  const cfg = _relationConfigs[type];
+  document.getElementById('relation-select-title').textContent = cfg.title;
+  document.getElementById('relation-hint').innerHTML =
+    `💡 以下為已完成 <b>VIP 版個人報告（含加購升級）</b>的人員，請選擇 <b>${cfg.minPersons} 位${cfg.minPersons===3?' 以上':''}</b>，選定後系統將直接生成「${cfg.label}」，無需重新檢測。`;
+
+  const list = document.getElementById('relation-list');
+  list.innerHTML = '';
+  const eligible = _vipCustomers.filter(p => p.level === 'vip' || p.level === 'vip-upgraded');
+  document.getElementById('relation-count-label').textContent = `可選人員（共 ${eligible.length} 人）`;
+  document.getElementById('relation-empty').style.display = eligible.length === 0 ? 'block' : 'none';
+
+  eligible.forEach(p => {
+    const initial = p.name.charAt(0);
+    const upgradeBadge = p.level === 'vip-upgraded'
+      ? `<span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;font-weight:600;">⬆️ ${p.upgradeNote||'升級'}</span>`
+      : `<span style="background:#fffde7;color:#f9a825;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;font-weight:600;">👑 VIP</span>`;
+    const row = document.createElement('div');
+    row.className = 'relation-person';
+    row.dataset.pid = p.id;
+    row.style.cssText = 'background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;';
+    row.innerHTML = `
+      <div style="width:40px;height:40px;border-radius:50%;background:${p.avatarColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">${initial}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:#1a1a2e;">${p.name}${upgradeBadge}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px;">${p.age}歲 · ${p.completedAt} 完成 VIP</div>
+      </div>
+      <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
+    `;
+    row.onclick = () => togglePerson(row);
+    list.appendChild(row);
+  });
+
+  // 重置已選資訊
+  document.getElementById('relation-selected-info').style.display = 'none';
+  const btn = document.getElementById('relation-submit-btn');
+  btn.style.opacity = '0.4';
+  btn.style.pointerEvents = 'none';
+
+  goto('screen-relation-select');
+}
+
 function togglePerson(el) {
-  const idx = Array.from(document.querySelectorAll('.relation-person')).indexOf(el);
+  const pid = el.dataset.pid;
   const check = el.querySelector('.person-check');
-  const isSelected = el.style.borderColor === 'rgb(194, 24, 91)';
+  const isSelected = _selectedPersonIds.includes(pid);
 
   if (isSelected) {
     el.style.borderColor = 'transparent';
@@ -2181,7 +2965,7 @@ function togglePerson(el) {
     check.textContent = '';
     check.style.background = '';
     check.style.borderColor = '#ddd';
-    selectedPersons = selectedPersons.filter(i => i !== idx);
+    _selectedPersonIds = _selectedPersonIds.filter(x => x !== pid);
   } else {
     el.style.borderColor = '#c2185b';
     el.style.background = '#fce4ec';
@@ -2189,25 +2973,39 @@ function togglePerson(el) {
     check.style.background = '#c2185b';
     check.style.borderColor = '#c2185b';
     check.style.color = 'white';
-    selectedPersons.push(idx);
+    _selectedPersonIds.push(pid);
   }
 
-  const names = ['陳小明', '林小花', '王小雯', '張大偉'];
-  const selectedNames = selectedPersons.map(i => names[i]).join('、');
-  const infoEl = document.getElementById('relation-selected-info');
-  const btnEl  = document.getElementById('relation-submit-btn');
+  const cfg = _relationConfigs[_currentRelationType] || { minPersons: 2 };
+  const selectedNames = _selectedPersonIds
+    .map(id => (_vipCustomers.find(p => p.id === id) || {}).name)
+    .filter(Boolean).join('、');
+  const infoEl  = document.getElementById('relation-selected-info');
+  const btnEl   = document.getElementById('relation-submit-btn');
   const namesEl = document.getElementById('relation-selected-names');
 
-  if (selectedPersons.length >= 2) {
+  if (_selectedPersonIds.length >= cfg.minPersons) {
     infoEl.style.display = 'block';
     namesEl.textContent = selectedNames;
     btnEl.style.opacity = '1';
     btnEl.style.pointerEvents = 'auto';
   } else {
-    infoEl.style.display = 'none';
+    infoEl.style.display = _selectedPersonIds.length > 0 ? 'block' : 'none';
+    namesEl.textContent = selectedNames + `（還差 ${cfg.minPersons - _selectedPersonIds.length} 位）`;
     btnEl.style.opacity = '0.4';
     btnEl.style.pointerEvents = 'none';
   }
+}
+
+function generateRelationReport() {
+  const cfg = _relationConfigs[_currentRelationType];
+  if (!cfg) { goto('screen-home'); return; }
+  const names = _selectedPersonIds
+    .map(id => (_vipCustomers.find(p => p.id === id) || {}).name)
+    .filter(Boolean).join('、');
+  document.getElementById('relation-done-msg').innerHTML =
+    `${cfg.emoji} <b>${cfg.label}</b><br>對象：${names}`;
+  goto('screen-relation-done');
 }
 
 // 開發測試：模擬付款成功
@@ -2226,6 +3024,387 @@ function copyPayLink(anchorId) {
     document.execCommand('copy');
     window.getSelection().removeAllRanges();
   });
+}
+
+// ─── 聯絡我們：前台申請表單（暫存於 localStorage 供後台讀取）────────────────
+const _CONTACT_KEY = 'eeg_account_requests';
+
+function _loadContactRequests() {
+  try { return JSON.parse(localStorage.getItem(_CONTACT_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function _saveContactRequests(arr) {
+  try { localStorage.setItem(_CONTACT_KEY, JSON.stringify(arr)); } catch (e) {}
+}
+
+function onOrgTypeChange() {
+  const sel = document.getElementById('contact-org-type');
+  const other = document.getElementById('contact-org-other');
+  if (!sel || !other) return;
+  other.style.display = (sel.value === '其他') ? 'block' : 'none';
+}
+
+function submitContactRequest() {
+  const name    = (document.getElementById('contact-name').value || '').trim();
+  const phone   = (document.getElementById('contact-phone').value || '').trim();
+  const email   = (document.getElementById('contact-email').value || '').trim();
+  const orgType = (document.getElementById('contact-org-type').value || '').trim();
+  const orgName = (document.getElementById('contact-org').value || '').trim();
+  const orgOth  = (document.getElementById('contact-org-other').value || '').trim();
+  const ref     = (document.getElementById('contact-ref').value || '').trim();
+  const note    = (document.getElementById('contact-note').value || '').trim();
+
+  if (!name || !phone || !email) {
+    alert('請填寫姓名、手機與 Email');
+    return;
+  }
+  if (!orgType) {
+    alert('請選擇所屬單位 / 身份');
+    return;
+  }
+  if (orgType === '其他' && !orgOth) {
+    alert('請說明您的身份');
+    return;
+  }
+
+  const orgFinal = orgType === '其他' ? orgOth : orgType;
+  const req = {
+    id: 'REQ' + Date.now().toString(36).toUpperCase(),
+    name, phone, email,
+    org_type: orgType,
+    org: orgName,
+    role_label: orgFinal,
+    ref, note,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  const arr = _loadContactRequests();
+  arr.unshift(req);
+  _saveContactRequests(arr);
+
+  // 嘗試送一份到後端（若有 API；後端未啟動或 404 都靜默忽略）
+  fetch(`${API_BASE}/contact-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+    .then(r => { if (!r.ok && r.status !== 404) console.warn('contact-requests POST', r.status); })
+    .catch(() => { /* 後端未啟動時忽略 */ });
+
+  // 顯示完成頁與摘要
+  document.getElementById('contact-done-summary').innerHTML =
+    `<div><b>申請編號：</b>${req.id}</div>` +
+    `<div style="margin-top:4px;"><b>姓名：</b>${name}</div>` +
+    `<div><b>手機：</b>${phone}</div>` +
+    `<div><b>Email：</b>${email}</div>` +
+    `<div><b>身份：</b>${orgFinal}${orgName? ' · '+orgName:''}</div>`;
+
+  // 清空欄位
+  ['contact-name','contact-phone','contact-email','contact-org','contact-org-other','contact-ref','contact-note']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('contact-org-type').value = '';
+  document.getElementById('contact-org-other').style.display = 'none';
+
+  goto('screen-contact-done');
+}
+
+// ─── 管理員後台 ─────────────────────────────────────────────────────────────
+let _currentAdminTab = 'pending';
+
+function adminLogin() {
+  const u = (document.getElementById('admin-user').value || '').trim();
+  const p = (document.getElementById('admin-pass').value || '').trim();
+  // demo 用：admin / 任意非空密碼即可
+  if (u !== 'admin' || !p) {
+    alert('帳號或密碼錯誤（demo：帳號 admin）');
+    return;
+  }
+  goto('screen-admin-console');
+  switchAdminTab(_currentAdminTab);
+}
+
+function switchAdminTab(tab) {
+  _currentAdminTab = tab;
+  document.querySelectorAll('.admin-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+
+  const titleMap = {
+    pending:  '帳號審核 · 待審核',
+    approved: '帳號審核 · 已核准',
+    rejected: '帳號審核 · 已拒絕',
+    earnings: '分潤總覽',
+    rules:    '分潤規則',
+  };
+  const titleEl = document.getElementById('admin-console-title');
+  if (titleEl) titleEl.textContent = titleMap[tab] || '管理員後台';
+
+  document.getElementById('admin-pane-account').style.display  = (['pending','approved','rejected'].includes(tab)) ? 'flex' : 'none';
+  document.getElementById('admin-pane-earnings').style.display = (tab === 'earnings') ? 'flex' : 'none';
+  document.getElementById('admin-pane-rules').style.display    = (tab === 'rules')    ? 'flex' : 'none';
+
+  if (['pending','approved','rejected'].includes(tab)) renderAdminList();
+  else if (tab === 'earnings') renderEarningsOverview();
+  else if (tab === 'rules')    renderShareRulesEditor();
+}
+
+function renderAdminList() {
+  const list = document.getElementById('admin-list');
+  if (!list) return;
+  const arr = _loadContactRequests();
+
+  document.getElementById('admin-pending-count').textContent  = arr.filter(r => r.status === 'pending').length;
+  document.getElementById('admin-approved-count').textContent = arr.filter(r => r.status === 'approved').length;
+  document.getElementById('admin-rejected-count').textContent = arr.filter(r => r.status === 'rejected').length;
+
+  const filtered = arr.filter(r => r.status === _currentAdminTab);
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="admin-empty">目前沒有${
+      _currentAdminTab==='pending'?'待審核':_currentAdminTab==='approved'?'已核准':'已拒絕'
+    }的申請</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(r => {
+    const created = new Date(r.createdAt);
+    const dt = `${created.getFullYear()}/${String(created.getMonth()+1).padStart(2,'0')}/${String(created.getDate()).padStart(2,'0')} ${String(created.getHours()).padStart(2,'0')}:${String(created.getMinutes()).padStart(2,'0')}`;
+    const actions = r.status === 'pending'
+      ? `<div class="actions">
+           <button class="admin-btn approve" onclick="adminAction('${r.id}','approved')">✅ 核准並建立帳號</button>
+           <button class="admin-btn reject"  onclick="adminAction('${r.id}','rejected')">拒絕</button>
+         </div>`
+      : `<div class="row" style="margin-top:8px;color:${r.status==='approved'?'#2e7d32':'#c62828'};font-weight:600;">
+           ${r.status==='approved'?'✅ 已核准 · 已寄送帳號至 Email':'❌ 已拒絕'}
+         </div>`;
+    const roleBadge = r.role_label || r.org_type
+      ? `<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;margin-left:6px;">${r.role_label || r.org_type}</span>`
+      : '';
+    return `<div class="admin-card">
+      <div class="name">${r.name}${roleBadge} <span style="font-size:11px;color:#aaa;font-weight:400;">#${r.id}</span></div>
+      <div class="meta">${dt}${r.org? ' · '+r.org:''}</div>
+      <div class="row">📱 ${r.phone}</div>
+      <div class="row">📧 ${r.email}</div>
+      ${r.ref?  `<div class="row">🤝 推薦人：${r.ref}</div>`:''}
+      ${r.note? `<div class="row" style="color:#888;">📝 ${r.note}</div>`:''}
+      ${actions}
+    </div>`;
+  }).join('');
+}
+
+function adminAction(id, status) {
+  const arr = _loadContactRequests();
+  const i = arr.findIndex(r => r.id === id);
+  if (i < 0) return;
+  arr[i].status = status;
+  arr[i].handledAt = new Date().toISOString();
+  _saveContactRequests(arr);
+
+  // 嘗試通知後端
+  fetch(`${API_BASE}/contact-requests/${id}/${status}`, { method: 'POST' })
+    .then(r => { if (!r.ok && r.status !== 404) console.warn('admin action', r.status); })
+    .catch(() => { /* 後端未啟動時忽略 */ });
+
+  if (status === 'approved') {
+    alert(`已核准 ${arr[i].name} 的申請\n預設密碼將寄送至 ${arr[i].email}`);
+  }
+  renderAdminList();
+}
+
+// ─── 分潤規則：身份 × 報告類型（百分比 / 加購升級可改成固定金額）─────────────
+const _SHARE_RULES_KEY = 'eeg_share_rules_v1';
+
+const _ROLES = [
+  { key:'franchise',  label:'加盟商' },
+  { key:'direct',     label:'直營商' },
+  { key:'agent',      label:'代理商' },
+  { key:'project',    label:'專案人員' },
+  { key:'staff',      label:'工作人員' },
+];
+
+const _PRODUCTS = [
+  { key:'life_trial',  label:'人生劇本 · 體驗版',     price:3000 },
+  { key:'life_full',   label:'人生劇本 · 完整版',     price:5000 },
+  { key:'life_vip',    label:'人生劇本 · VIP版',     price:12000 },
+  { key:'child_trial', label:'兒童天賦 · 體驗版',     price:3000 },
+  { key:'child_full',  label:'兒童天賦 · 完整版',     price:5000 },
+  { key:'child_vip',   label:'兒童天賦 · VIP版',     price:12000 },
+  { key:'relation',    label:'關係報告（共振）',       price:8000 },
+  { key:'up_trial_full', label:'加購升級：體驗→完整', price:2000, upgrade:true },
+  { key:'up_full_vip',   label:'加購升級：完整→VIP',  price:7000, upgrade:true },
+  { key:'up_trial_vip',  label:'加購升級：體驗→VIP',  price:9000, upgrade:true },
+];
+
+function _defaultShareRules() {
+  // 預設值：個人/關係 報告以「百分比」；加購升級也預設用百分比，可改固定金額
+  // 起始比例：加盟商 25 / 直營商 20 / 代理商 18 / 專案人員 15 / 工作人員 5
+  const baseByRole = { franchise:25, direct:20, agent:18, project:15, staff:5 };
+  const rules = {};
+  _PRODUCTS.forEach(p => {
+    rules[p.key] = { mode:'pct', byRole:{}, };
+    _ROLES.forEach(r => { rules[p.key].byRole[r.key] = baseByRole[r.key]; });
+  });
+  return rules;
+}
+
+function _loadShareRules() {
+  try {
+    const raw = localStorage.getItem(_SHARE_RULES_KEY);
+    if (!raw) return _defaultShareRules();
+    const parsed = JSON.parse(raw);
+    // 缺欄位時補上預設值
+    const defaults = _defaultShareRules();
+    Object.keys(defaults).forEach(k => {
+      if (!parsed[k]) parsed[k] = defaults[k];
+      if (!parsed[k].byRole) parsed[k].byRole = defaults[k].byRole;
+      _ROLES.forEach(r => {
+        if (typeof parsed[k].byRole[r.key] !== 'number')
+          parsed[k].byRole[r.key] = defaults[k].byRole[r.key];
+      });
+    });
+    return parsed;
+  } catch (e) {
+    return _defaultShareRules();
+  }
+}
+
+function _saveShareRules(obj) {
+  try { localStorage.setItem(_SHARE_RULES_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+
+function resetShareRules() {
+  if (!confirm('確定要回復預設分潤規則嗎？')) return;
+  _saveShareRules(_defaultShareRules());
+  renderShareRulesEditor();
+}
+
+function saveShareRules() {
+  // 從 UI 收集
+  const rules = _loadShareRules();
+  _PRODUCTS.forEach(p => {
+    const modeBtn = document.querySelector(`.rule-mode-toggle[data-prod="${p.key}"] button.active`);
+    const mode = modeBtn ? modeBtn.dataset.mode : 'pct';
+    rules[p.key].mode = mode;
+    _ROLES.forEach(r => {
+      const inp = document.querySelector(`input[data-prod="${p.key}"][data-role="${r.key}"]`);
+      if (inp) {
+        const v = parseFloat(inp.value);
+        rules[p.key].byRole[r.key] = isNaN(v) ? 0 : v;
+      }
+    });
+  });
+  _saveShareRules(rules);
+  alert('✅ 分潤規則已儲存');
+  renderEarningsOverview();
+}
+
+function renderShareRulesEditor() {
+  const rules = _loadShareRules();
+  const wrap = document.getElementById('admin-rules-table');
+  if (!wrap) return;
+  wrap.innerHTML = _PRODUCTS.map(p => {
+    const r = rules[p.key];
+    const isUpgrade = !!p.upgrade;
+    const modeToggle = isUpgrade
+      ? `<div class="rule-mode-toggle" data-prod="${p.key}">
+           <button data-mode="pct"    class="${r.mode==='pct'?'active':''}"   onclick="toggleRuleMode('${p.key}','pct')">% 比例</button>
+           <button data-mode="amount" class="${r.mode==='amount'?'active':''}" onclick="toggleRuleMode('${p.key}','amount')">固定金額</button>
+         </div>`
+      : '';
+    const rows = _ROLES.map(role => {
+      const v = r.byRole[role.key] ?? 0;
+      const suffix = (isUpgrade && r.mode==='amount') ? 'NT$' : '%';
+      return `<div class="rule-row">
+        <span class="rule-role">${role.label}</span>
+        <input type="number" class="rule-input" min="0" step="${suffix==='%'?'0.5':'100'}"
+               data-prod="${p.key}" data-role="${role.key}" value="${v}">
+        <span class="rule-suffix">${suffix}</span>
+      </div>`;
+    }).join('');
+    return `<div class="rule-card">
+      <div class="rule-title">${isUpgrade?'⬆️':'📊'} ${p.label}
+        <span style="font-size:11px;color:#888;font-weight:400;margin-left:auto;">售價 NT$${p.price.toLocaleString()}</span>
+      </div>
+      ${modeToggle}
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function toggleRuleMode(prodKey, mode) {
+  const rules = _loadShareRules();
+  if (!rules[prodKey]) return;
+  rules[prodKey].mode = mode;
+  _saveShareRules(rules);
+  renderShareRulesEditor();
+}
+
+// ─── 分潤總覽：依 demo 訂單 + 規則動態計算 ───────────────────────────────────
+const _DEMO_ORDERS = [
+  { date:'2026/03/03', subject:'陳小明',           product:'life_vip',     consultant:'王小明', role:'franchise' },
+  { date:'2026/03/02', subject:'林小花',           product:'child_full',   consultant:'王小明', role:'franchise' },
+  { date:'2026/03/01', subject:'王小雯·張大偉',    product:'relation',     consultant:'王小明', role:'franchise' },
+  { date:'2026/03/01', subject:'李大明',           product:'life_trial',   consultant:'李婉婷', role:'project'   },
+  { date:'2026/02/28', subject:'王小雯',           product:'up_trial_vip', consultant:'李婉婷', role:'project'   },
+  { date:'2026/02/27', subject:'周大華',           product:'life_full',    consultant:'張企業', role:'direct'    },
+  { date:'2026/02/26', subject:'吳小語',           product:'up_full_vip',  consultant:'張企業', role:'direct'    },
+  { date:'2026/02/25', subject:'陳大同',           product:'child_vip',    consultant:'代理商A', role:'agent'    },
+];
+
+function _calcShare(order, rules) {
+  const prod = _PRODUCTS.find(p => p.key === order.product);
+  if (!prod) return { amount:0, ruleText:'未知' };
+  const r = rules[prod.key];
+  if (!r) return { amount:0, ruleText:'未設定' };
+  const v = r.byRole[order.role] ?? 0;
+  if (prod.upgrade && r.mode === 'amount') {
+    return { amount: v, ruleText: `固定 NT$${v.toLocaleString()}` };
+  }
+  return { amount: Math.round(prod.price * v / 100), ruleText: `${v}% × NT$${prod.price.toLocaleString()}` };
+}
+
+function renderEarningsOverview() {
+  const rules = _loadShareRules();
+  const list  = document.getElementById('admin-earnings-list');
+  if (!list) return;
+
+  let total = 0;
+  const byRole = {};
+  _ROLES.forEach(r => byRole[r.key] = 0);
+
+  const cards = _DEMO_ORDERS.map(o => {
+    const prod = _PRODUCTS.find(p => p.key === o.product) || { label:o.product, price:0 };
+    const calc = _calcShare(o, rules);
+    total += calc.amount;
+    if (byRole[o.role] != null) byRole[o.role] += calc.amount;
+    const roleLabel = (_ROLES.find(r => r.key === o.role) || {}).label || o.role;
+
+    return `<div class="earn-card">
+      <div class="earn-row">
+        <div>
+          <div class="earn-title">${o.subject}</div>
+          <div class="earn-meta">${prod.label} · ${o.date}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="earn-amt">+NT$${calc.amount.toLocaleString()}</div>
+          <div class="earn-share">${calc.ruleText}</div>
+        </div>
+      </div>
+      <div class="earn-tags">
+        <span class="earn-tag" style="background:#e3f2fd;color:#1565c0;">👤 ${o.consultant}</span>
+        <span class="earn-tag" style="background:#fff3e0;color:#e65100;">${roleLabel}</span>
+        ${prod.upgrade ? '<span class="earn-tag" style="background:#fce4ec;color:#c2185b;">⬆️ 加購升級</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('admin-total-earnings').textContent = 'NT$' + total.toLocaleString();
+  document.getElementById('admin-earnings-by-role').innerHTML = _ROLES.map(r => {
+    return `<span style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;">
+      ${r.label}：<b style="color:#90caf9;">NT$${(byRole[r.key]||0).toLocaleString()}</b>
+    </span>`;
+  }).join('');
+
+  list.innerHTML = cards || '<div class="admin-empty">尚無分潤紀錄</div>';
 }
 
 async function simulatePaid(qrScreenId) {

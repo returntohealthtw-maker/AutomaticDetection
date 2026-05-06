@@ -21,6 +21,9 @@ build/
 # 報告 PDF
 後端系統/reports/
 
+# 顧問申請暫存（後台會動態寫入）
+後端系統/contact_requests.json
+
 # IDE
 .idea/
 .vscode/
