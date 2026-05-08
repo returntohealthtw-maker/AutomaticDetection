@@ -3148,10 +3148,27 @@ function switchAdminTab(tab) {
   else if (tab === 'rules')    renderShareRulesEditor();
 }
 
-function renderAdminList() {
+// 從 Railway 後端取所有申請，失敗時回退到 localStorage
+async function _fetchAllRequestsFromBackend() {
+  try {
+    const r = await fetch(`${API_BASE}/contact-requests`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+async function renderAdminList() {
   const list = document.getElementById('admin-list');
   if (!list) return;
-  const arr = _loadContactRequests();
+
+  list.innerHTML = `<div class="admin-empty">載入中…</div>`;
+
+  // 優先從 Railway 後端拿（跨裝置同步），失敗則回退 localStorage
+  let arr = await _fetchAllRequestsFromBackend();
+  const isFromBackend = arr !== null;
+  if (!isFromBackend) arr = _loadContactRequests();
 
   document.getElementById('admin-pending-count').textContent  = arr.filter(r => r.status === 'pending').length;
   document.getElementById('admin-approved-count').textContent = arr.filter(r => r.status === 'approved').length;
@@ -3159,9 +3176,10 @@ function renderAdminList() {
 
   const filtered = arr.filter(r => r.status === _currentAdminTab);
   if (filtered.length === 0) {
+    const offlineHint = isFromBackend ? '' : '<br><span style="color:#c62828;font-size:12px;">⚠️ 後端連線失敗，僅顯示本機暫存資料</span>';
     list.innerHTML = `<div class="admin-empty">目前沒有${
       _currentAdminTab==='pending'?'待審核':_currentAdminTab==='approved'?'已核准':'已拒絕'
-    }的申請</div>`;
+    }的申請${offlineHint}</div>`;
     return;
   }
 
@@ -3191,23 +3209,50 @@ function renderAdminList() {
   }).join('');
 }
 
-function adminAction(id, status) {
+async function adminAction(id, status) {
+  // 1) 先打 Railway 後端（這是真正的資料源）
+  let backendOk = false;
+  let backendData = null;
+  try {
+    const resp = await fetch(`${API_BASE}/contact-requests/${id}/${status}`, { method: 'POST' });
+    if (resp.ok) {
+      backendOk = true;
+      backendData = await resp.json();
+    } else {
+      console.warn('admin action backend', resp.status);
+    }
+  } catch (e) {
+    console.warn('admin action backend offline', e);
+  }
+
+  // 2) 同步更新本機 localStorage（避免後端掛了完全無法操作）
   const arr = _loadContactRequests();
   const i = arr.findIndex(r => r.id === id);
-  if (i < 0) return;
-  arr[i].status = status;
-  arr[i].handledAt = new Date().toISOString();
-  _saveContactRequests(arr);
-
-  // 嘗試通知後端
-  fetch(`${API_BASE}/contact-requests/${id}/${status}`, { method: 'POST' })
-    .then(r => { if (!r.ok && r.status !== 404) console.warn('admin action', r.status); })
-    .catch(() => { /* 後端未啟動時忽略 */ });
-
-  if (status === 'approved') {
-    alert(`已核准 ${arr[i].name} 的申請\n預設密碼將寄送至 ${arr[i].email}`);
+  if (i >= 0) {
+    arr[i].status = status;
+    arr[i].handledAt = new Date().toISOString();
+    if (backendData && backendData.initial_password) {
+      arr[i].initial_password = backendData.initial_password;
+    }
+    _saveContactRequests(arr);
   }
-  renderAdminList();
+
+  // 3) 提示管理員
+  const targetName = (i >= 0 ? arr[i].name : (backendData && backendData.name) || id);
+  if (status === 'approved') {
+    let msg = `已核准 ${targetName} 的申請`;
+    if (backendData && backendData.initial_password) {
+      msg += `\n\n初始密碼：${backendData.initial_password}\n（demo 版請手動以 Email 通知；正式版會自動寄信）`;
+    } else {
+      msg += `\n預設密碼將寄送至申請人 Email`;
+    }
+    if (!backendOk) msg += `\n\n⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）`;
+    alert(msg);
+  } else if (!backendOk) {
+    alert('⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）');
+  }
+
+  await renderAdminList();
 }
 
 // ─── 分潤規則：身份 × 報告類型（百分比 / 加購升級可改成固定金額）─────────────
