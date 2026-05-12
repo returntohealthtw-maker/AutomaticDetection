@@ -1046,8 +1046,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">出生日期 *</label>
-            <input class="form-input" type="date" value="2014-03-15">
-            <div style="font-size:11px;color:#00BCD4;margin-top:4px;">📅 目前年齡：12 歲</div>
+            <input class="form-input" type="date" id="subject-birth-input" value="2014-03-15" oninput="updateSubjectAge()" onchange="updateSubjectAge()">
+            <div id="subject-age-display" style="font-size:11px;color:#00BCD4;margin-top:4px;">📅 目前年齡：12 歲</div>
           </div>
           <div class="form-group">
             <label class="form-label">性別 *</label>
@@ -2461,6 +2461,9 @@ function gotoIndex(idx) {
   if (id === 'screen-mbti' && typeof _resetMBTI === 'function') {
     _resetMBTI();
   }
+  if (id === 'screen-subject' && typeof updateSubjectAge === 'function') {
+    updateSubjectAge();
+  }
 }
 
 function navNext() { gotoIndex((current + 1) % screens.length); }
@@ -2479,6 +2482,43 @@ function selectRadio(el) {
   const group = el.parentElement;
   group.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
+}
+
+// ─── 受測者資料：依出生日期即時計算年齡 ─────────────────────────────────────
+function updateSubjectAge() {
+  const input   = document.getElementById('subject-birth-input');
+  const display = document.getElementById('subject-age-display');
+  if (!input || !display) return;
+
+  const v = (input.value || '').trim();
+  if (!v) {
+    display.textContent = '📅 目前年齡：—（請選擇出生日期）';
+    return;
+  }
+
+  // input[type=date] 回傳 'YYYY-MM-DD'；用拆字串避免時區造成的 off-by-one
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) {
+    display.textContent = '📅 目前年齡：—（日期格式錯誤）';
+    return;
+  }
+  const by = parseInt(m[1], 10);
+  const bm = parseInt(m[2], 10);
+  const bd = parseInt(m[3], 10);
+
+  const now = new Date();
+  const ny = now.getFullYear();
+  const nm = now.getMonth() + 1;
+  const nd = now.getDate();
+
+  let age = ny - by;
+  if (nm < bm || (nm === bm && nd < bd)) age--;
+
+  if (age < 0 || by < 1900 || by > ny) {
+    display.textContent = '📅 目前年齡：—（請選擇有效日期）';
+    return;
+  }
+  display.textContent = `📅 目前年齡：${age} 歲`;
 }
 
 // ─── MBTI 前測問卷（28 題完整版）──────────────────────────────────────────────
