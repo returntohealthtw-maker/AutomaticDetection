@@ -883,6 +883,7 @@
           <button class="admin-tab active" data-tab="pending"   onclick="switchAdminTab('pending')">待審核</button>
           <button class="admin-tab"        data-tab="approved"  onclick="switchAdminTab('approved')">已核准</button>
           <button class="admin-tab"        data-tab="rejected"  onclick="switchAdminTab('rejected')">已拒絕</button>
+          <button class="admin-tab"        data-tab="subjects"  onclick="switchAdminTab('subjects')">受測者</button>
           <button class="admin-tab"        data-tab="earnings"  onclick="switchAdminTab('earnings')">分潤總覽</button>
           <button class="admin-tab"        data-tab="rules"     onclick="switchAdminTab('rules')">分潤規則</button>
         </div>
@@ -926,6 +927,15 @@
               <button class="btn btn-primary btn-sm" style="flex:2;" onclick="saveShareRules()">💾 儲存規則</button>
             </div>
           </div>
+        </div>
+
+        <!-- ── 受測者管理分頁 ───────────────────────────────────── -->
+        <div id="admin-pane-subjects" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#f5f7fa;">
+          <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;">
+            <input id="admin-subject-search" type="text" placeholder="搜尋姓名 / Email / 手機" style="flex:1;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="renderAdminSubjects()">
+            <span id="admin-subject-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
+          </div>
+          <div id="admin-subject-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
         </div>
       </div>
 
@@ -2578,6 +2588,168 @@ function onSelectExistingSubject(sel) {
   if (hint) hint.style.display = 'block';
 }
 
+// ─── 管理員後台：受測者管理（列表 + 編輯 + 刪除）─────────────────────────
+let _adminSubjects = [];           // 完整清單
+let _adminSubjectEditingId = null; // 目前正在編輯的 subject_id
+
+function _escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function renderAdminSubjects() {
+  const list = document.getElementById('admin-subject-list');
+  const cnt  = document.getElementById('admin-subject-count');
+  if (!list) return;
+
+  // 第一次或剛切到這 tab 時抓資料；若使用者僅在搜尋框打字，沿用快取
+  if (!Array.isArray(_adminSubjects) || _adminSubjects.length === 0 || !document.activeElement || document.activeElement.id !== 'admin-subject-search') {
+    list.innerHTML = `<div class="admin-empty">載入中…</div>`;
+    try {
+      const r = await fetch(`${API_BASE}/subjects`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      _adminSubjects = await r.json();
+    } catch (e) {
+      console.warn('載入受測者列表失敗：', e);
+      list.innerHTML = `<div class="admin-empty">⚠️ 載入失敗：${_escapeHtml(e.message)}</div>`;
+      if (cnt) cnt.textContent = '共 0 筆';
+      return;
+    }
+  }
+
+  const q = ((document.getElementById('admin-subject-search')?.value) || '').trim().toLowerCase();
+  const filtered = !q ? _adminSubjects : _adminSubjects.filter(s =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.email || '').toLowerCase().includes(q) ||
+    (s.phone || '').includes(q)
+  );
+
+  if (cnt) cnt.textContent = `共 ${filtered.length} 筆${q ? ` / 全部 ${_adminSubjects.length}` : ''}`;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="admin-empty">${q ? '沒有符合條件的受測者' : '尚無受測者資料'}</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(s => {
+    if (s.subject_id === _adminSubjectEditingId) return _renderSubjectEditCard(s);
+    return _renderSubjectViewCard(s);
+  }).join('');
+}
+
+function _renderSubjectViewCard(s) {
+  const age = _calcAgeStr(s.birth_date);
+  const created = s.created_at ? s.created_at.replace('T', ' ').slice(0, 16) : '';
+  return `<div class="admin-card">
+    <div class="name">${_escapeHtml(s.name)}
+      ${age ? `<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;margin-left:6px;">${age} 歲</span>` : ''}
+      ${s.gender ? `<span style="background:#f3e5f5;color:#6a1b9a;padding:2px 8px;border-radius:8px;font-size:11px;margin-left:4px;">${_escapeHtml(s.gender)}</span>` : ''}
+      <span style="font-size:11px;color:#aaa;font-weight:400;margin-left:6px;">#${s.subject_id}</span>
+    </div>
+    ${s.occupation ? `<div class="meta">💼 ${_escapeHtml(s.occupation)}</div>` : ''}
+    <div class="row">📧 ${_escapeHtml(s.email)}</div>
+    <div class="row">📱 ${_escapeHtml(s.phone)}</div>
+    <div class="row" style="color:#888;">🎂 ${_escapeHtml(s.birth_date)}</div>
+    ${s.medical_history ? `<div class="row" style="color:#c62828;">⚕️ 病史：${_escapeHtml(s.medical_history)}</div>` : ''}
+    ${s.medications ? `<div class="row" style="color:#ef6c00;">💊 藥物：${_escapeHtml(s.medications)}</div>` : ''}
+    <div class="meta" style="color:#bbb;">建立：${created}</div>
+    <div class="actions" style="margin-top:8px;">
+      <button class="admin-btn approve" onclick="adminSubjectEdit(${s.subject_id})">✏️ 編輯</button>
+      <button class="admin-btn reject"  onclick="adminSubjectDelete(${s.subject_id})">🗑️ 刪除</button>
+    </div>
+  </div>`;
+}
+
+function _renderSubjectEditCard(s) {
+  const fid = (k) => `admin-sub-edit-${k}-${s.subject_id}`;
+  return `<div class="admin-card" style="border:2px solid #1565c0;">
+    <div class="name">✏️ 編輯中 #${s.subject_id}</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+      <input id="${fid('name')}"       class="form-input" placeholder="姓名 *"          value="${_escapeHtml(s.name)}">
+      <input id="${fid('email')}"      class="form-input" placeholder="Email *"        value="${_escapeHtml(s.email)}">
+      <input id="${fid('phone')}"      class="form-input" placeholder="手機 *"          value="${_escapeHtml(s.phone)}">
+      <input id="${fid('birth')}"      class="form-input" type="date"                  value="${_escapeHtml(s.birth_date)}">
+      <select id="${fid('gender')}"    class="form-input">
+        <option value="男" ${s.gender==='男'?'selected':''}>男</option>
+        <option value="女" ${s.gender==='女'?'selected':''}>女</option>
+        <option value="其他" ${s.gender==='其他'?'selected':''}>其他</option>
+      </select>
+      <input id="${fid('occupation')}" class="form-input" placeholder="職業 / 稱謂"     value="${_escapeHtml(s.occupation||'')}">
+      <input id="${fid('history')}"    class="form-input" placeholder="有無特殊病史"     value="${_escapeHtml(s.medical_history||'')}">
+      <input id="${fid('meds')}"       class="form-input" placeholder="目前使用藥物"     value="${_escapeHtml(s.medications||'')}">
+    </div>
+    <div class="actions" style="margin-top:10px;">
+      <button class="admin-btn approve" onclick="adminSubjectSave(${s.subject_id})">💾 儲存</button>
+      <button class="admin-btn reject"  onclick="adminSubjectCancelEdit()">取消</button>
+    </div>
+  </div>`;
+}
+
+function adminSubjectEdit(id) {
+  _adminSubjectEditingId = id;
+  renderAdminSubjects();
+}
+
+function adminSubjectCancelEdit() {
+  _adminSubjectEditingId = null;
+  renderAdminSubjects();
+}
+
+async function adminSubjectSave(id) {
+  const fid = (k) => `admin-sub-edit-${k}-${id}`;
+  const get = (k) => (document.getElementById(fid(k))?.value || '').trim();
+  const payload = {
+    name:            get('name'),
+    email:           get('email'),
+    phone:           get('phone'),
+    birth_date:      get('birth'),
+    gender:          get('gender'),
+    occupation:      get('occupation'),
+    medical_history: get('history'),
+    medications:     get('meds'),
+  };
+  if (!payload.name || !payload.email.includes('@') || !payload.phone || !payload.birth_date) {
+    alert('姓名 / Email / 手機 / 出生日期皆為必填');
+    return;
+  }
+  try {
+    const r = await fetch(`${API_BASE}/subjects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      alert(`儲存失敗（${r.status}）：${txt}`);
+      return;
+    }
+    _adminSubjectEditingId = null;
+    _adminSubjects = [];      // 強制重抓
+    await renderAdminSubjects();
+  } catch (e) {
+    alert(`儲存失敗：${e.message}`);
+  }
+}
+
+async function adminSubjectDelete(id) {
+  const s = _adminSubjects.find(x => x.subject_id === id);
+  if (!confirm(`確定要刪除「${s ? s.name : '#'+id}」嗎？此動作無法復原。`)) return;
+  try {
+    const r = await fetch(`${API_BASE}/subjects/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const txt = await r.text();
+      alert(`刪除失敗（${r.status}）：${txt}`);
+      return;
+    }
+    _adminSubjects = _adminSubjects.filter(x => x.subject_id !== id);
+    await renderAdminSubjects();
+  } catch (e) {
+    alert(`刪除失敗：${e.message}`);
+  }
+}
+
 async function submitSubject() {
   const v = _getSubjectFormValues();
 
@@ -3308,6 +3480,7 @@ function switchAdminTab(tab) {
     pending:  '帳號審核 · 待審核',
     approved: '帳號審核 · 已核准',
     rejected: '帳號審核 · 已拒絕',
+    subjects: '受測者管理',
     earnings: '分潤總覽',
     rules:    '分潤規則',
   };
@@ -3315,10 +3488,12 @@ function switchAdminTab(tab) {
   if (titleEl) titleEl.textContent = titleMap[tab] || '管理員後台';
 
   document.getElementById('admin-pane-account').style.display  = (['pending','approved','rejected'].includes(tab)) ? 'flex' : 'none';
+  document.getElementById('admin-pane-subjects').style.display = (tab === 'subjects') ? 'flex' : 'none';
   document.getElementById('admin-pane-earnings').style.display = (tab === 'earnings') ? 'flex' : 'none';
   document.getElementById('admin-pane-rules').style.display    = (tab === 'rules')    ? 'flex' : 'none';
 
   if (['pending','approved','rejected'].includes(tab)) renderAdminList();
+  else if (tab === 'subjects') renderAdminSubjects();
   else if (tab === 'earnings') renderEarningsOverview();
   else if (tab === 'rules')    renderShareRulesEditor();
 }
