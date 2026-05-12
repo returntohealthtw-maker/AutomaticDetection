@@ -18,8 +18,13 @@ import secrets
 from typing import Optional
 from threading import Lock
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core import models as M
+from app.core.database import get_db
+from app.routers.auth import hash_password
 
 router = APIRouter(prefix="/api/v1/contact-requests", tags=["顧問帳號申請"])
 
@@ -98,18 +103,55 @@ def list_requests(status: Optional[str] = None):
 
 
 @router.post("/{req_id}/approved", response_model=ContactRequestOut)
-def approve(req_id: str):
+def approve(req_id: str, db: Session = Depends(get_db)):
     with _lock:
         arr = _load()
         for r in arr:
-            if r.get("id") == req_id:
+            if r.get("id") != req_id:
+                continue
+
+            phone = (r.get("phone") or "").strip().replace("-", "").replace(" ", "")
+            name  = (r.get("name")  or "").strip()
+            email = (r.get("email") or "").strip()
+
+            if not phone or not name or not email:
+                raise HTTPException(status_code=400, detail="申請資料不完整，無法建立帳號")
+
+            # 防止覆蓋既有顧問帳號
+            existing = db.query(M.Consultant).filter(M.Consultant.phone == phone).first()
+            if existing:
+                # 若帳號已存在，僅標記為已核准，不重設密碼
                 r["status"] = "approved"
                 r["handledAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                # 簡易產生 8 碼初始密碼（demo 用，正式版應加密儲存 + 寄信）
-                r["initial_password"] = secrets.token_urlsafe(6)
+                r["consultant_id"] = existing.consultant_id
+                r["initial_password"] = None
+                r["note_admin"] = "該手機已有顧問帳號，僅標記為已核准（未建立新帳號 / 未重設密碼）"
                 _save(arr)
-                # TODO：在此呼叫實際寄信服務（SendGrid/SMTP）
                 return r
+
+            # 產生 8 碼初始密碼（demo 用；正式環境應寄信並要求首次登入立刻修改）
+            initial_pw = secrets.token_urlsafe(6)
+            consultant = M.Consultant(
+                name          = name,
+                phone         = phone,
+                email         = email,
+                password_hash = hash_password(initial_pw),
+                role          = "consultant",
+                org_type      = r.get("org_type") or "",
+                org           = r.get("org") or "",
+                is_active     = 1,
+            )
+            db.add(consultant)
+            db.commit()
+            db.refresh(consultant)
+
+            r["status"] = "approved"
+            r["handledAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            r["initial_password"] = initial_pw
+            r["consultant_id"]    = consultant.consultant_id
+            _save(arr)
+            # TODO：以 Email 寄送 phone + initial_password
+            return r
     raise HTTPException(status_code=404, detail="申請編號不存在")
 
 

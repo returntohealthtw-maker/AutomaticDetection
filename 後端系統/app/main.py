@@ -7,7 +7,7 @@ import urllib.parse
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -54,6 +54,7 @@ app.include_router(companies.router)
 app.include_router(client_view.router)
 app.include_router(contact_requests.router)
 app.include_router(subjects.router)
+app.include_router(auth.router)
 
 
 @app.on_event("startup")

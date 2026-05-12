@@ -757,19 +757,25 @@
           <div class="login-title">顧問登入</div>
           <div class="login-sub">請輸入您的帳號密碼</div>
           <div class="form-group">
-            <label class="form-label">手機</label>
-            <input class="form-input" type="tel" placeholder="09XX-XXX-XXX" value="0912-345-678">
+            <label class="form-label">手機（含區碼，不含 -）</label>
+            <input id="login-phone-input" class="form-input" type="tel" placeholder="例如 0900000001">
           </div>
           <div class="form-group">
             <label class="form-label">密碼</label>
-            <input class="form-input" type="password" placeholder="請輸入密碼" value="••••••••">
+            <input id="login-pass-input" class="form-input" type="password" placeholder="請輸入密碼">
           </div>
           <div style="text-align:right;margin-bottom:20px;">
             <a href="#" style="font-size:13px;color:#2D3561;">忘記密碼？</a>
           </div>
-          <button class="btn btn-primary" onclick="goto('screen-home')">
+          <button class="btn btn-primary" onclick="loginConsultant()">
             登入
           </button>
+          <div data-dev-only style="margin-top:14px;background:#fff3e0;border:1px dashed #ffb300;border-radius:10px;padding:10px 12px;font-size:11px;color:#5d4037;line-height:1.6;">
+            🧪 <b>開發測試帳號</b>（demo 用）：<br>
+            示範顧問　0900000001 / demo123<br>
+            系統管理員 0900000000 / admin123<br>
+            <span style="color:#bf360c;">第一次使用請先在後端跑 POST /api/v1/auth/bootstrap 建好帳號</span>
+          </div>
           <div style="text-align:center;margin-top:20px;">
             <span class="text-muted">首次使用？</span>
             <a href="#" onclick="event.preventDefault();goto('screen-contact');" style="font-size:13px;color:#2D3561;font-weight:600;"> 聯絡我們取得帳號</a>
@@ -857,11 +863,11 @@
         <div style="flex:1;padding:24px 20px;">
           <div class="form-group">
             <label class="form-label">管理員帳號</label>
-            <input id="admin-user" class="form-input" placeholder="admin" value="admin">
+            <input id="admin-user" class="form-input" type="tel" placeholder="管理員手機（例如 0900000000）" value="">
           </div>
           <div class="form-group">
             <label class="form-label">密碼</label>
-            <input id="admin-pass" class="form-input" type="password" placeholder="請輸入密碼" value="••••••">
+            <input id="admin-pass" class="form-input" type="password" placeholder="請輸入密碼" value="">
           </div>
           <button class="btn btn-primary" onclick="adminLogin()">登入後台</button>
           <div style="text-align:center;margin-top:14px;">
@@ -947,11 +953,11 @@
         </div>
         <div class="home-header">
           <div class="home-greeting">👋 您好</div>
-          <div class="home-name">王小明 顧問</div>
+          <div class="home-name" id="home-name-display">— 顧問</div>
           <div class="credits-card">
             <div class="credits-left">
-              <div class="label">目前獲利</div>
-              <div><span class="amount">NT$12,500</span></div>
+              <div class="label" id="home-stat-label">累計建檔受測者</div>
+              <div><span class="amount" id="home-stat-value">— 位</span></div>
             </div>
             <button class="btn-buy" onclick="goto('screen-earnings')">查看細節</button>
           </div>
@@ -969,36 +975,11 @@
             </button>
           </div>
 
-          <div class="section-title">最近的檢測</div>
-
-          <div class="history-item" onclick="goto('screen-results')">
-            <div class="hi-top">
-              <span class="hi-name">陳小明</span>
-              <span class="tag-status tag-done">✅ 完成</span>
+          <div class="section-title" id="home-recent-title">最近的受測者</div>
+          <div id="home-recent-list">
+            <div class="history-item" style="opacity:0.6;">
+              <div class="hi-top"><span class="hi-name">載入中…</span></div>
             </div>
-            <div class="hi-tags">
-              <span class="tag tag-purple">🎭 腦波分析人生劇本 · VIP版</span>
-            </div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">今天 10:30 · 3分鐘</div>
-          </div>
-
-          <div class="history-item">
-            <div class="hi-top">
-              <span class="hi-name">林小花</span>
-              <span class="tag-status" style="background:#e3f2fd;color:#1565c0;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">📊 查看</span>
-            </div>
-            <div class="hi-tags">
-              <span class="tag tag-blue">🌟 兒童腦波天賦解碼 · 完整版</span>
-            </div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">昨天 14:20 · 3分鐘</div>
-          </div>
-
-          <div class="history-item">
-            <div class="hi-top">
-              <span class="hi-name">張大偉</span>
-              <span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">❌ 連線失敗</span>
-            </div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">昨天 09:15 · 未扣點</div>
           </div>
         </div>
 
@@ -2325,16 +2306,17 @@
         <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
           <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px;text-align:center;color:white;">
             <div style="font-size:48px;margin-bottom:8px;">👨‍🏫</div>
-            <div style="font-size:17px;font-weight:700;">王小明 顧問</div>
-            <div style="font-size:12px;opacity:0.7;margin-top:2px;">0912-345-678</div>
-            <div style="margin-top:12px;background:rgba(76,175,80,0.3);padding:8px 20px;border-radius:20px;display:inline-block;">
-              本月獲利 <b style="color:#4CAF50;">NT$12,500</b>
+            <div id="settings-name-display"  style="font-size:17px;font-weight:700;">— 顧問</div>
+            <div id="settings-phone-display" style="font-size:12px;opacity:0.7;margin-top:2px;">—</div>
+            <div id="settings-role-badge" style="margin-top:8px;display:inline-block;background:rgba(255,255,255,0.15);padding:3px 12px;border-radius:14px;font-size:11px;"></div>
+            <div id="settings-stat-pill" style="margin-top:10px;background:rgba(76,175,80,0.3);padding:8px 20px;border-radius:20px;display:inline-block;">
+              累計受測者 <b id="settings-stat-value" style="color:#4CAF50;">— 位</b>
             </div>
           </div>
           <div class="settings-section-label">帳號管理</div>
           <div style="background:white;border-radius:0;">
             <div class="setting-item"><span class="si-icon">👤</span><span class="si-label">個人資料</span><span class="si-arrow">›</span></div>
-            <div class="setting-item"><span class="si-icon">🔑</span><span class="si-label">修改密碼</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openChangePassword()"><span class="si-icon">🔑</span><span class="si-label">修改密碼</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">點數與付款</div>
           <div style="background:white;">
@@ -2357,7 +2339,7 @@
             <div class="setting-item"><span class="si-icon">ℹ️</span><span class="si-label">版本</span><span class="si-value">v1.0.0</span></div>
           </div>
           <div style="padding:16px;">
-            <button class="btn btn-outline" style="color:#c62828;border-color:#c62828;" onclick="goto('screen-login')">登出</button>
+            <button class="btn btn-outline" style="color:#c62828;border-color:#c62828;" onclick="logoutConsultant()">登出</button>
           </div>
         </div>
         <div class="nav-overlay">
@@ -2462,6 +2444,11 @@ screens.forEach((s, i) => {
   list.appendChild(dot);
 });
 
+// 啟動時：若有 token 自動驗證；無 token 跳登入頁
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof _initAuthOnBoot === 'function') _initAuthOnBoot();
+});
+
 
 function goto(id) {
   const idx = screens.findIndex(s => s.id === id);
@@ -2484,6 +2471,112 @@ function gotoIndex(idx) {
   if (id === 'screen-subject') {
     if (typeof updateSubjectAge === 'function') updateSubjectAge();
     if (typeof refreshSubjectsDropdown === 'function') refreshSubjectsDropdown();
+  }
+  if (id === 'screen-home'     && typeof refreshHomeData     === 'function') refreshHomeData();
+  if (id === 'screen-settings' && typeof refreshSettingsData === 'function') refreshSettingsData();
+}
+
+// ─── 首頁 / 設定頁：依登入者動態顯示 ────────────────────────────────────────
+async function refreshHomeData() {
+  const nameEl = document.getElementById('home-name-display');
+  const valEl  = document.getElementById('home-stat-value');
+  const listEl = document.getElementById('home-recent-list');
+
+  const user = _currentUser || _getAuth();
+  if (nameEl) {
+    if (user && user.name) {
+      const role = (user.role === 'admin') ? ' · 管理員' : ' 顧問';
+      nameEl.textContent = `${user.name}${role}`;
+    } else {
+      nameEl.textContent = '— 顧問';
+    }
+  }
+
+  // 抓自己（或全部 admin）的 subjects
+  if (!user || !user.token) {
+    if (valEl) valEl.textContent = '請先登入';
+    if (listEl) listEl.innerHTML = '';
+    return;
+  }
+  try {
+    const r = await apiFetch('/subjects');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const subs = await r.json();
+    if (valEl) valEl.textContent = `${subs.length} 位`;
+
+    if (listEl) {
+      if (subs.length === 0) {
+        listEl.innerHTML = `<div class="history-item" style="text-align:center;color:#888;">
+          尚無受測者，點上方「開始新檢測」建立第一筆 👆
+        </div>`;
+      } else {
+        listEl.innerHTML = subs.slice(0, 6).map(s => {
+          const age = _calcAgeStr(s.birth_date);
+          const created = s.created_at ? s.created_at.replace('T', ' ').slice(5, 16) : '';
+          return `<div class="history-item">
+            <div class="hi-top">
+              <span class="hi-name">${s.name}</span>
+              <span class="tag-status" style="background:#e8f5e9;color:#2e7d32;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">${age||''}歲 ${s.gender||''}</span>
+            </div>
+            ${s.occupation ? `<div class="hi-tags"><span class="tag" style="background:#e3f2fd;color:#1565c0;">💼 ${s.occupation}</span></div>` : ''}
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">建檔 ${created}</div>
+          </div>`;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    if (valEl) valEl.textContent = '—';
+    if (listEl) listEl.innerHTML = `<div class="history-item" style="color:#c62828;">載入失敗：${e.message}</div>`;
+  }
+}
+
+async function refreshSettingsData() {
+  const nameEl  = document.getElementById('settings-name-display');
+  const phoneEl = document.getElementById('settings-phone-display');
+  const roleEl  = document.getElementById('settings-role-badge');
+  const valEl   = document.getElementById('settings-stat-value');
+
+  const user = _currentUser || _getAuth();
+  if (!user) return;
+
+  if (nameEl)  nameEl.textContent  = `${user.name || '—'} ${user.role === 'admin' ? '管理員' : '顧問'}`;
+  if (phoneEl) phoneEl.textContent = user.phone || '—';
+  if (roleEl) {
+    const labels = {
+      admin: '👑 管理員',
+      consultant: (user.org_type || '顧問') + (user.org ? ' · ' + user.org : ''),
+    };
+    roleEl.textContent = labels[user.role] || labels.consultant;
+  }
+
+  try {
+    const r = await apiFetch('/subjects');
+    if (r.ok) {
+      const subs = await r.json();
+      if (valEl) valEl.textContent = `${subs.length} 位`;
+    }
+  } catch (e) { /* 已被 apiFetch 401 處理 */ }
+}
+
+async function openChangePassword() {
+  const oldP = prompt('請輸入舊密碼：');
+  if (!oldP) return;
+  const newP = prompt('請輸入新密碼（至少 6 碼）：');
+  if (!newP) return;
+  if (newP.length < 6) { alert('新密碼至少 6 碼'); return; }
+  try {
+    const r = await apiFetch('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password: oldP, new_password: newP }),
+    });
+    if (r.ok) {
+      alert('密碼已更新，下次登入請使用新密碼');
+    } else {
+      const err = await r.json().catch(() => ({ detail: '修改失敗' }));
+      alert('修改失敗：' + (err.detail || r.status));
+    }
+  } catch (e) {
+    alert('修改失敗：' + e.message);
   }
 }
 
@@ -2546,7 +2639,7 @@ async function refreshSubjectsDropdown() {
   const sel = document.getElementById('subject-existing-select');
   if (!sel) return;
   try {
-    const r = await fetch(`${API_BASE}/subjects`, { cache: 'no-store' });
+    const r = await apiFetch('/subjects');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     _cachedSubjects = await r.json();
   } catch (e) {
@@ -2608,7 +2701,7 @@ async function renderAdminSubjects() {
   if (!Array.isArray(_adminSubjects) || _adminSubjects.length === 0 || !document.activeElement || document.activeElement.id !== 'admin-subject-search') {
     list.innerHTML = `<div class="admin-empty">載入中…</div>`;
     try {
-      const r = await fetch(`${API_BASE}/subjects`, { cache: 'no-store' });
+      const r = await apiFetch('/subjects');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       _adminSubjects = await r.json();
     } catch (e) {
@@ -2715,9 +2808,8 @@ async function adminSubjectSave(id) {
     return;
   }
   try {
-    const r = await fetch(`${API_BASE}/subjects/${id}`, {
+    const r = await apiFetch(`/subjects/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
@@ -2737,7 +2829,7 @@ async function adminSubjectDelete(id) {
   const s = _adminSubjects.find(x => x.subject_id === id);
   if (!confirm(`確定要刪除「${s ? s.name : '#'+id}」嗎？此動作無法復原。`)) return;
   try {
-    const r = await fetch(`${API_BASE}/subjects/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`/subjects/${id}`, { method: 'DELETE' });
     if (!r.ok) {
       const txt = await r.text();
       alert(`刪除失敗（${r.status}）：${txt}`);
@@ -2764,9 +2856,8 @@ async function submitSubject() {
 
   // 寫入後端（後端會做防重複，回傳實際儲存的 row 含 subject_id）
   try {
-    const r = await fetch(`${API_BASE}/subjects`, {
+    const r = await apiFetch('/subjects', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(v),
     });
     if (r.ok) {
@@ -2998,6 +3089,95 @@ const _proto  = _isFile ? 'http' : location.protocol.replace(':', '');
 const _portStr = _port ? `:${_port}` : '';
 const API_BASE    = `${_proto}://${_host}${_portStr}/api/v1`;
 const STATIC_BASE = _isFile ? '' : `${_proto}://${_host}${_portStr}/static-app`;
+
+// ─── 顧問登入：Auth + Token ────────────────────────────────────────────────
+const _AUTH_KEY = 'eeg_auth_v1';
+let _currentUser = null;   // {consultant_id, name, role, ...}
+
+function _getAuth() {
+  try { return JSON.parse(localStorage.getItem(_AUTH_KEY) || 'null'); }
+  catch (e) { return null; }
+}
+function _saveAuth(obj) {
+  try { localStorage.setItem(_AUTH_KEY, JSON.stringify(obj)); } catch (e) {}
+  _currentUser = obj;
+}
+function _clearAuth() {
+  try { localStorage.removeItem(_AUTH_KEY); } catch (e) {}
+  _currentUser = null;
+}
+
+async function apiFetch(path, options = {}) {
+  const auth = _getAuth();
+  const headers = Object.assign(
+    { 'Content-Type': 'application/json' },
+    options.headers || {},
+    auth && auth.token ? { 'Authorization': `Bearer ${auth.token}` } : {}
+  );
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const resp = await fetch(url, Object.assign({}, options, { headers, cache: 'no-store' }));
+  if (resp.status === 401) {
+    // Token 失效 / 未登入：清掉 + 跳回登入頁
+    _clearAuth();
+    if (typeof goto === 'function') goto('screen-login');
+    throw new Error('未登入或登入已逾期');
+  }
+  return resp;
+}
+
+async function loginConsultant() {
+  const phone = (document.getElementById('login-phone-input')?.value || '').trim();
+  const pass  = (document.getElementById('login-pass-input')?.value || '').trim();
+  if (!phone || !pass) { alert('請輸入手機與密碼'); return; }
+
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password: pass }),
+    });
+  } catch (e) {
+    alert('伺服器連線失敗：' + e.message);
+    return;
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: '帳號或密碼錯誤' }));
+    alert(err.detail || '登入失敗');
+    return;
+  }
+  const data = await resp.json();
+  _saveAuth(data);
+
+  // 一般顧問進首頁、admin 也進首頁（要進管理員後台另外走入口）
+  goto('screen-home');
+}
+
+function logoutConsultant() {
+  if (!confirm('確定要登出嗎？')) return;
+  _clearAuth();
+  goto('screen-login');
+}
+
+// 頁面載入時：若有 token 嘗試 /me 取使用者資料；無 token 自動回登入頁
+async function _initAuthOnBoot() {
+  const cached = _getAuth();
+  if (cached && cached.token) {
+    _currentUser = cached;
+    // 用 /me 驗證 token 是否還有效
+    try {
+      const r = await apiFetch('/auth/me');
+      if (r.ok) {
+        const me = await r.json();
+        // 合併最新使用者資料（保留原 token）
+        _saveAuth(Object.assign({}, cached, me));
+      }
+    } catch (e) { /* apiFetch 401 已經自動跳登入頁 */ }
+  } else {
+    // 還沒登入 → 跳登入頁
+    if (typeof goto === 'function') goto('screen-login');
+  }
+}
 let _pollTimer      = null;
 let _currentOrderId = null;
 let _pollCountdown  = 15 * 60;
@@ -3458,14 +3638,33 @@ function submitContactRequest() {
 // ─── 管理員後台 ─────────────────────────────────────────────────────────────
 let _currentAdminTab = 'pending';
 
-function adminLogin() {
+async function adminLogin() {
   const u = (document.getElementById('admin-user').value || '').trim();
   const p = (document.getElementById('admin-pass').value || '').trim();
-  // demo 用：admin / 任意非空密碼即可
-  if (u !== 'admin' || !p) {
-    alert('帳號或密碼錯誤（demo：帳號 admin）');
+  if (!u || !p) { alert('請輸入手機與密碼'); return; }
+
+  // 用 /auth/login 驗證，並要求 role === 'admin'
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: u, password: p }),
+    });
+  } catch (e) {
+    alert('伺服器連線失敗：' + e.message); return;
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: '帳號或密碼錯誤' }));
+    alert(err.detail || '登入失敗');
     return;
   }
+  const data = await resp.json();
+  if (data.role !== 'admin') {
+    alert('此帳號非管理員，無法進入後台');
+    return;
+  }
+  _saveAuth(data);
   goto('screen-admin-console');
   switchAdminTab(_currentAdminTab);
 }
@@ -3501,7 +3700,7 @@ function switchAdminTab(tab) {
 // 從 Railway 後端取所有申請，失敗時回退到 localStorage
 async function _fetchAllRequestsFromBackend() {
   try {
-    const r = await fetch(`${API_BASE}/contact-requests`, { cache: 'no-store' });
+    const r = await apiFetch('/contact-requests');
     if (!r.ok) return null;
     return await r.json();
   } catch (e) {
@@ -3564,7 +3763,7 @@ async function adminAction(id, status) {
   let backendOk = false;
   let backendData = null;
   try {
-    const resp = await fetch(`${API_BASE}/contact-requests/${id}/${status}`, { method: 'POST' });
+    const resp = await apiFetch(`/contact-requests/${id}/${status}`, { method: 'POST' });
     if (resp.ok) {
       backendOk = true;
       backendData = await resp.json();

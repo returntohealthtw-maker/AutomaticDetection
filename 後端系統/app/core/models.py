@@ -106,11 +106,30 @@ class ReportIndex(Base):
     report = relationship("Report", back_populates="indices")
 
 
+class Consultant(Base):
+    """顧問帳號（加盟商 / 直營商 / 工作人員 ... 以及 admin 管理員）"""
+    __tablename__ = "consultants"
+
+    consultant_id   = Column(Integer, primary_key=True, autoincrement=True)
+    name            = Column(String(50),  nullable=False)
+    phone           = Column(String(20),  nullable=False, unique=True, index=True)  # 登入帳號
+    password_hash   = Column(String(128), nullable=False)
+    email           = Column(String(120), nullable=True, index=True)
+    role            = Column(String(20),  default="consultant")  # consultant / admin
+    org_type        = Column(String(50),  nullable=True)   # 加盟商 / 直營商 / 代理商 / 專案人員 / 工作人員 / 其他
+    org             = Column(String(100), nullable=True)   # 單位名稱
+    is_active       = Column(Integer,     default=1)       # 1=啟用 0=停用
+    created_at      = Column(TIMESTAMP,   server_default=func.now())
+    updated_at      = Column(TIMESTAMP,   server_default=func.now(), onupdate=func.now())
+
+
 class Subject(Base):
     """受測者主檔（建檔一次、之後檢測可重複引用）"""
     __tablename__ = "subjects"
 
     subject_id      = Column(Integer, primary_key=True, autoincrement=True)
+    # 由哪位顧問建立。為相容舊資料採用 nullable；正式環境 nullable 的列只有 admin 看得到。
+    consultant_id   = Column(Integer, ForeignKey("consultants.consultant_id", ondelete="SET NULL"), nullable=True, index=True)
     name            = Column(String(50),  nullable=False)
     birth_date      = Column(String(10),  nullable=False)  # YYYY-MM-DD
     gender          = Column(String(10),  nullable=False)  # 男 / 女 / 其他
@@ -124,4 +143,5 @@ class Subject(Base):
 
     __table_args__ = (
         Index("idx_subject_email_name", "email", "name"),
+        Index("idx_subject_consultant", "consultant_id"),
     )
