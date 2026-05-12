@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, Text, Enum, ForeignKey, TIMESTAMP
+from sqlalchemy import Column, Integer, Float, String, Text, Enum, ForeignKey, TIMESTAMP, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -104,3 +104,24 @@ class ReportIndex(Base):
     category     = Column(String(20))
 
     report = relationship("Report", back_populates="indices")
+
+
+class Subject(Base):
+    """受測者主檔（建檔一次、之後檢測可重複引用）"""
+    __tablename__ = "subjects"
+
+    subject_id      = Column(Integer, primary_key=True, autoincrement=True)
+    name            = Column(String(50),  nullable=False)
+    birth_date      = Column(String(10),  nullable=False)  # YYYY-MM-DD
+    gender          = Column(String(10),  nullable=False)  # 男 / 女 / 其他
+    occupation      = Column(String(50),  nullable=True)   # 職業 / 稱謂
+    email           = Column(String(120), nullable=False, index=True)
+    phone           = Column(String(20),  nullable=False, index=True)
+    medical_history = Column(Text,        nullable=True)
+    medications     = Column(Text,        nullable=True)
+    created_at      = Column(TIMESTAMP,   server_default=func.now())
+    updated_at      = Column(TIMESTAMP,   server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_subject_email_name", "email", "name"),
+    )

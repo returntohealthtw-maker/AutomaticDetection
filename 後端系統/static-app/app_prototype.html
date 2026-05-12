@@ -1031,11 +1031,12 @@
               <span>💡</span>
               <span>選擇已有受測者可省略填寫</span>
             </div>
-            <select class="form-select" style="margin-top:8px;">
-              <option>— 選擇已有受測者 —</option>
-              <option>陳小明（12歲，六年級）</option>
-              <option>林小花（14歲，八年級）</option>
+            <select class="form-select" id="subject-existing-select" style="margin-top:8px;" onchange="onSelectExistingSubject(this)">
+              <option value="">— 選擇已有受測者 —</option>
             </select>
+            <div id="subject-existing-hint" style="font-size:11px;color:#1565c0;margin-top:6px;display:none;">
+              ✅ 已自動填入資料，可直接「下一步」或修改後重新儲存
+            </div>
           </div>
 
           <div style="text-align:center;color:#aaa;font-size:13px;margin:10px 0;">— 或填寫新受測者 —</div>
@@ -1045,31 +1046,40 @@
             <input class="form-input" id="subject-name-input" placeholder="請輸入姓名">
           </div>
           <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input class="form-input" type="email" id="subject-email-input" placeholder="example@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">手機 *</label>
+            <input class="form-input" type="tel" id="subject-phone-input" placeholder="09xxxxxxxx">
+          </div>
+          <div class="form-group">
             <label class="form-label">出生日期 *</label>
             <input class="form-input" type="date" id="subject-birth-input" value="2014-03-15" oninput="updateSubjectAge()" onchange="updateSubjectAge()">
             <div id="subject-age-display" style="font-size:11px;color:#00BCD4;margin-top:4px;">📅 目前年齡：12 歲</div>
           </div>
           <div class="form-group">
             <label class="form-label">性別 *</label>
-            <div class="radio-group">
-              <div class="radio-btn selected" onclick="selectRadio(this)">男</div>
-              <div class="radio-btn" onclick="selectRadio(this)">女</div>
-              <div class="radio-btn" onclick="selectRadio(this)">其他</div>
+            <div class="radio-group" id="subject-gender-group">
+              <div class="radio-btn selected" data-gender="男" onclick="selectRadio(this)">男</div>
+              <div class="radio-btn" data-gender="女" onclick="selectRadio(this)">女</div>
+              <div class="radio-btn" data-gender="其他" onclick="selectRadio(this)">其他</div>
             </div>
           </div>
           <div class="form-group">
+            <label class="form-label">職業 / 稱謂</label>
+            <input class="form-input" id="subject-occupation-input" placeholder="例如：學生 / 上班族 / 父親 / 老師">
+          </div>
+          <div class="form-group">
             <label class="form-label">有無特殊病史</label>
-            <input class="form-input" placeholder="請填寫（無則留空）">
+            <input class="form-input" id="subject-history-input" placeholder="請填寫（無則留空）">
           </div>
           <div class="form-group">
             <label class="form-label">目前使用藥物</label>
-            <input class="form-input" placeholder="請填寫（無則留空）">
+            <input class="form-input" id="subject-meds-input" placeholder="請填寫（無則留空）">
           </div>
 
-          <button class="btn btn-primary" onclick="
-            const n = document.getElementById('subject-name-input').value.trim();
-            _currentSubjectName = n || '受測者';
-            goto('screen-reports')">
+          <button class="btn btn-primary" onclick="submitSubject()">
             下一步：選擇報告 →
           </button>
         </div>
@@ -1275,7 +1285,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_3000.png" alt="體驗版 QR Code" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;">
+            <img id="qr-trial-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23f5f5f5'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23999'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="體驗版 QR Code" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;background:#f5f5f5;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動進入下一步，無需手動確認</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1322,7 +1332,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_5000.png" alt="完整版 QR Code" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;">
+            <img id="qr-full-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23f5f5f5'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23999'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="完整版 QR Code" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;background:#f5f5f5;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動進入下一步，無需手動確認</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1367,7 +1377,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_12000.png" alt="VIP版 QR Code" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <img id="qr-vip-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fffbe6'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23b8860b'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="VIP版 QR Code" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;background:#fffbe6;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動進入下一步，無需手動確認</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1416,7 +1426,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_2000.png" alt="升級 QR Code NT$2,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #ffa726;">
+            <img id="qr-up-2000-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fff3e0'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23ef6c00'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="升級 QR Code NT$2,000" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px solid #ffa726;background:#fff3e0;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成新版本報告，無需重新檢測</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1460,7 +1470,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_7000.png" alt="升級 QR Code NT$7,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <img id="qr-up-7000-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fffbe6'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23b8860b'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="升級 QR Code NT$7,000" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;background:#fffbe6;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成 VIP 版報告，無需重新檢測</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1504,7 +1514,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 顧問掃碼付款</div>
-            <img src="/static-app/ecpay/qr_9000.png" alt="升級 QR Code NT$9,000" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <img id="qr-up-9000-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fffbe6'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23b8860b'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="升級 QR Code NT$9,000" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;background:#fffbe6;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動生成 VIP 版報告，無需重新檢測</div>
             <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -1580,7 +1590,7 @@
 
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
             <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 掃碼付款</div>
-            <img src="/static-app/ecpay/qr_1.png" alt="測試 QR Code" style="width:200px;height:200px;border-radius:12px;border:3px dashed #ef9a9a;">
+            <img id="qr-test-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fce4ec'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23c2185b'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="測試 QR Code" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px dashed #ef9a9a;background:#fce4ec;">
             <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後自動啟動腦波檢測</div>
             <div style="background:#fce4ec;border:1px solid #ef9a9a;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#c2185b;text-align:center;">
               ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
@@ -2461,8 +2471,9 @@ function gotoIndex(idx) {
   if (id === 'screen-mbti' && typeof _resetMBTI === 'function') {
     _resetMBTI();
   }
-  if (id === 'screen-subject' && typeof updateSubjectAge === 'function') {
-    updateSubjectAge();
+  if (id === 'screen-subject') {
+    if (typeof updateSubjectAge === 'function') updateSubjectAge();
+    if (typeof refreshSubjectsDropdown === 'function') refreshSubjectsDropdown();
   }
 }
 
@@ -2482,6 +2493,125 @@ function selectRadio(el) {
   const group = el.parentElement;
   group.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
+}
+
+// ─── 受測者主檔：Postgres CRUD + 表單填入 ─────────────────────────────────
+let _currentSubjectId = null;          // 「下一步」儲存後的 subject_id
+let _cachedSubjects   = [];            // 下拉用快取
+
+function _getSubjectFormValues() {
+  const get = (id) => (document.getElementById(id)?.value || '').trim();
+  const genderEl = document.querySelector('#subject-gender-group .radio-btn.selected');
+  return {
+    name:            get('subject-name-input'),
+    email:           get('subject-email-input'),
+    phone:           get('subject-phone-input'),
+    birth_date:      get('subject-birth-input'),
+    gender:          genderEl ? genderEl.dataset.gender || genderEl.textContent.trim() : '男',
+    occupation:      get('subject-occupation-input'),
+    medical_history: get('subject-history-input'),
+    medications:     get('subject-meds-input'),
+  };
+}
+
+function _setSubjectFormValues(s) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('subject-name-input',       s.name);
+  set('subject-email-input',      s.email);
+  set('subject-phone-input',      s.phone);
+  set('subject-birth-input',      s.birth_date);
+  set('subject-occupation-input', s.occupation);
+  set('subject-history-input',    s.medical_history);
+  set('subject-meds-input',       s.medications);
+
+  // 性別 radio
+  document.querySelectorAll('#subject-gender-group .radio-btn').forEach(b => {
+    b.classList.toggle('selected', (b.dataset.gender || b.textContent.trim()) === s.gender);
+  });
+
+  if (typeof updateSubjectAge === 'function') updateSubjectAge();
+}
+
+async function refreshSubjectsDropdown() {
+  const sel = document.getElementById('subject-existing-select');
+  if (!sel) return;
+  try {
+    const r = await fetch(`${API_BASE}/subjects`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _cachedSubjects = await r.json();
+  } catch (e) {
+    console.warn('載入受測者列表失敗：', e);
+    _cachedSubjects = [];
+  }
+  // 重建下拉選項
+  sel.innerHTML = '<option value="">— 選擇已有受測者 —</option>' +
+    _cachedSubjects.map(s => {
+      const age = _calcAgeStr(s.birth_date);
+      const label = `${s.name}${age ? `（${age}歲）` : ''}${s.occupation ? '・' + s.occupation : ''}`;
+      return `<option value="${s.subject_id}">${label}</option>`;
+    }).join('');
+}
+
+function _calcAgeStr(birthDate) {
+  if (!birthDate) return '';
+  const m = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const now = new Date();
+  let age = now.getFullYear() - parseInt(m[1], 10);
+  const bm = parseInt(m[2], 10), bd = parseInt(m[3], 10);
+  if ((now.getMonth() + 1) < bm || ((now.getMonth() + 1) === bm && now.getDate() < bd)) age--;
+  return age >= 0 ? String(age) : '';
+}
+
+function onSelectExistingSubject(sel) {
+  const id = sel.value;
+  const hint = document.getElementById('subject-existing-hint');
+  if (!id) {
+    if (hint) hint.style.display = 'none';
+    _currentSubjectId = null;
+    return;
+  }
+  const s = _cachedSubjects.find(x => String(x.subject_id) === String(id));
+  if (!s) return;
+  _setSubjectFormValues(s);
+  _currentSubjectId = s.subject_id;
+  if (hint) hint.style.display = 'block';
+}
+
+async function submitSubject() {
+  const v = _getSubjectFormValues();
+
+  // 基本驗證
+  if (!v.name)            { alert('請輸入姓名'); return; }
+  if (!v.email || !v.email.includes('@')) { alert('請輸入有效的 Email'); return; }
+  if (!v.phone)           { alert('請輸入手機'); return; }
+  if (!v.birth_date)      { alert('請選擇出生日期'); return; }
+
+  // 全域變數（供後續畫面使用）
+  _currentSubjectName = v.name;
+
+  // 寫入後端（後端會做防重複，回傳實際儲存的 row 含 subject_id）
+  try {
+    const r = await fetch(`${API_BASE}/subjects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(v),
+    });
+    if (r.ok) {
+      const saved = await r.json();
+      _currentSubjectId = saved.subject_id;
+      console.log('[受測者] 已儲存', saved);
+    } else {
+      const err = await r.text();
+      console.warn('[受測者] 儲存失敗', r.status, err);
+      alert('儲存到伺服器失敗，仍可繼續流程，但本筆不會出現在「已有受測者」清單');
+    }
+  } catch (e) {
+    console.warn('[受測者] 後端離線，僅繼續流程', e);
+    alert('伺服器連線失敗，仍可繼續流程，但本筆不會儲存');
+  }
+
+  goto('screen-reports');
 }
 
 // ─── 受測者資料：依出生日期即時計算年齡 ─────────────────────────────────────
@@ -2886,15 +3016,15 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
       const idEls = document.querySelectorAll(".qr-order-id");
       idEls.forEach(el => el.textContent = `訂單號：${order.order_id}`);
 
-      // 更新短連結（依目前畫面 id 對應）
+      // 更新短連結 + 動態 QR Code 圖片（後端產生，對應該訂單）
       const linkMap = {
-        'screen-qr-trial':   { box: 'qr-trial-link-box',   a: 'qr-trial-link' },
-        'screen-qr-full':    { box: 'qr-full-link-box',    a: 'qr-full-link'  },
-        'screen-qr-vip':     { box: 'qr-vip-link-box',     a: 'qr-vip-link'   },
-        'screen-qr-test':    { box: 'qr-test-link-box',    a: 'qr-test-link'  },
-        'screen-qr-up-2000': { box: 'qr-up-2000-link-box', a: 'qr-up-2000-link' },
-        'screen-qr-up-7000': { box: 'qr-up-7000-link-box', a: 'qr-up-7000-link' },
-        'screen-qr-up-9000': { box: 'qr-up-9000-link-box', a: 'qr-up-9000-link' },
+        'screen-qr-trial':   { box: 'qr-trial-link-box',   a: 'qr-trial-link',   img: 'qr-trial-img' },
+        'screen-qr-full':    { box: 'qr-full-link-box',    a: 'qr-full-link',    img: 'qr-full-img'  },
+        'screen-qr-vip':     { box: 'qr-vip-link-box',     a: 'qr-vip-link',     img: 'qr-vip-img'   },
+        'screen-qr-test':    { box: 'qr-test-link-box',    a: 'qr-test-link',    img: 'qr-test-img'  },
+        'screen-qr-up-2000': { box: 'qr-up-2000-link-box', a: 'qr-up-2000-link', img: 'qr-up-2000-img' },
+        'screen-qr-up-7000': { box: 'qr-up-7000-link-box', a: 'qr-up-7000-link', img: 'qr-up-7000-img' },
+        'screen-qr-up-9000': { box: 'qr-up-9000-link-box', a: 'qr-up-9000-link', img: 'qr-up-9000-img' },
       };
       const lm = linkMap[qrScreen];
       if (lm) {
@@ -2905,6 +3035,11 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
           anchor.href = payUrl;
           anchor.textContent = payUrl;
           box.style.display = 'block';
+        }
+        // 動態 QR Code：請後端依訂單編號產生對應的綠界測試付款 QR
+        const imgEl = document.getElementById(lm.img);
+        if (imgEl) {
+          imgEl.src = `${API_BASE}/payments/${order.order_id}/qr?t=${Date.now()}`;
         }
       }
 

@@ -7,7 +7,7 @@ import urllib.parse
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -53,6 +53,7 @@ app.include_router(monitor.router)
 app.include_router(companies.router)
 app.include_router(client_view.router)
 app.include_router(contact_requests.router)
+app.include_router(subjects.router)
 
 
 @app.on_event("startup")
@@ -126,7 +127,7 @@ def pay_ecpay(order_id: str):
     mer_trade_no = order_id[:20]
 
     params = {
-        "MerchantID":        settings.ECPAY_MERCHANT_ID or "2000132",  # 2000132 為綠界測試商家
+        "MerchantID":        settings.ECPAY_MERCHANT_ID or "3002607",  # 3002607 為綠界官方公開測試特店（搭配下方 HashKey/IV）
         "MerchantTradeNo":   mer_trade_no,
         "MerchantTradeDate": trade_date,
         "PaymentType":       "aio",
