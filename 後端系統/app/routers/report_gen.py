@@ -55,11 +55,48 @@ class ChaptersQuery(BaseModel):
 # ─── Endpoints ───────────────────────────────────────────────────────────
 @router.get("/health")
 def health():
-    """檢查 Gemini key 與相關設定狀態"""
+    """檢查 Gemini key 與相關設定狀態（含詳細診斷，但不會洩露金鑰本身）"""
+    import os
+    from app.core.config import settings as _s
+
+    # 1. 直接從環境變數讀
+    env_key = os.environ.get("GEMINI_API_KEY", "")
+    env_key_clean = env_key.strip()
+
+    # 2. 從 pydantic settings 讀
+    settings_key = getattr(_s, "GEMINI_API_KEY", "") or ""
+    settings_key_clean = settings_key.strip()
+
+    # 3. 找出所有名稱包含 GEMINI 的 env var（只顯示名稱、不顯示值）
+    gemini_related_env_names = sorted(
+        name for name in os.environ.keys() if "GEMINI" in name.upper()
+    )
+
+    def _diag(value: str) -> dict:
+        """生出單一字串的診斷資訊（不洩露內容）"""
+        if not value:
+            return {"present": False, "length": 0}
+        return {
+            "present":            True,
+            "length":             len(value),
+            "starts_with":        value[:4] + "..." if len(value) >= 4 else value,
+            "ends_with":          "..." + value[-4:] if len(value) >= 8 else "",
+            "has_leading_space":  value != value.lstrip(),
+            "has_trailing_space": value != value.rstrip(),
+            "has_quotes":         value.startswith(('"', "'")) or value.endswith(('"', "'")),
+            "looks_like_gemini":  value.lstrip("\"' ").startswith("AIza"),
+            "is_placeholder":     value.strip().strip("\"'") == "your-gemini-api-key-here",
+        }
+
     return {
         "gemini_key_set": gemini_client.key_is_set(),
-        "model":          gemini_client.settings.GEMINI_TEXT_MODEL if gemini_client.key_is_set() else None,
+        "model":          _s.GEMINI_TEXT_MODEL if gemini_client.key_is_set() else None,
         "mock_mode":      not gemini_client.key_is_set(),
+        "diagnostics": {
+            "env_var":     _diag(env_key),
+            "settings":    _diag(settings_key),
+            "gemini_env_names_seen_by_python": gemini_related_env_names,
+        },
     }
 
 
