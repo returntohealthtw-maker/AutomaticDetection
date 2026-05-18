@@ -72,6 +72,14 @@ def health():
         name for name in os.environ.keys() if "GEMINI" in name.upper()
     )
 
+    # 4. 列出所有「應該由 Railway 注入」的 env vars 名稱（用來判斷整體注入是否正常）
+    interesting_prefixes = ("GEMINI", "GITHUB", "ECPAY", "DATABASE", "RAILWAY", "RESEND", "PORT", "USE_")
+    railway_visible_names = sorted(
+        name for name in os.environ.keys()
+        if any(name.upper().startswith(p) for p in interesting_prefixes)
+    )
+    total_env_count = len(os.environ)
+
     def _diag(value: str) -> dict:
         """生出單一字串的診斷資訊（不洩露內容）"""
         if not value:
@@ -96,6 +104,8 @@ def health():
             "env_var":     _diag(env_key),
             "settings":    _diag(settings_key),
             "gemini_env_names_seen_by_python": gemini_related_env_names,
+            "railway_injected_env_names":      railway_visible_names,
+            "total_env_var_count":             total_env_count,
         },
     }
 
