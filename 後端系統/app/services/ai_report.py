@@ -1,0 +1,305 @@
+"""
+報告生成核心邏輯
+
+- format_brainwave_data(): 把 EEG 數據格式化成 prompt 用的文字
+- generate_one_section(): 生成單一節（同步、立即回傳）
+- start_full_report(): 啟動背景任務生成完整報告（多節）
+- get_job(): 查詢生成進度
+"""
+from __future__ import annotations
+import json
+import time
+import uuid
+import threading
+import logging
+from pathlib import Path
+from typing import Optional, List, Dict, Any
+
+from .report_chapters import (
+    get_chapters,
+    count_sections,
+    ch_zh,
+    sec_zh,
+)
+from .report_prompts import LIFE_SCRIPT_SYSTEM_PROMPT, build_section_prompt
+from . import gemini_client
+
+logger = logging.getLogger(__name__)
+
+# 報告存放位置
+REPORTS_DIR = Path("generated_reports")
+REPORTS_DIR.mkdir(exist_ok=True)
+
+# 任務記憶體存放
+_jobs: Dict[str, Dict[str, Any]] = {}
+_jobs_lock = threading.Lock()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 資料格式化
+# ──────────────────────────────────────────────────────────────────────────
+def format_brainwave_data(report_json: Dict[str, Any]) -> str:
+    """
+    把 routers/analysis.py 回傳的 report_json 格式化成文字
+    （給 Gemini prompt 使用）
+    """
+    if not report_json:
+        return "（無腦波數據）"
+
+    lines: List[str] = []
+    lines.append(f"  整體分數：{report_json.get('overall_score', 'N/A')}")
+    lines.append(f"  心智顏色：{report_json.get('mind_color_name', 'N/A')}（{report_json.get('mind_color_character', '')}）")
+    lines.append(f"  八卦類型：{report_json.get('bagua_name', 'N/A')}")
+    lines.append(f"  MBTI：{report_json.get('mbti', 'N/A')} {report_json.get('mbti_zh', '')}")
+    lines.append(f"  專注度：{report_json.get('attention_percentage', 'N/A')}%")
+    lines.append(f"  放鬆度：{report_json.get('meditation_percentage', 'N/A')}%")
+    lines.append(f"  身心平衡：{report_json.get('mind_balance', 'N/A')}")
+    lines.append(f"  腦力指數：{report_json.get('mind_energy', 'N/A')}")
+    lines.append(f"  壓力指數：{report_json.get('mind_stress', 'N/A')}")
+    lines.append("  腦波七大指標：")
+    bands = report_json.get("bands", []) or []
+    for b in bands:
+        lines.append(f"    {b.get('name', '')}：{b.get('value', 'N/A')}%")
+    return "\n".join(lines)
+
+
+def _demo_brainwave_data() -> Dict[str, Any]:
+    """測試用的腦波數據（seed=42 跑出的範例）"""
+    return {
+        "overall_score": 53,
+        "mind_color_name": "綠腦人",
+        "mind_color_character": "努力工作的建築師",
+        "bagua_name": "坎",
+        "mbti": "INTP",
+        "mbti_zh": "邏輯學家",
+        "attention_percentage": 87,
+        "meditation_percentage": 60,
+        "mind_balance": 57,
+        "mind_energy": 43,
+        "mind_stress": 51,
+        "bands": [
+            {"name": "Delta 深度休息",   "value": 28},
+            {"name": "Theta 直覺能力",   "value": 66},
+            {"name": "High Alpha 氣血飽滿", "value": 56},
+            {"name": "Low Alpha 內在安定",  "value": 49},
+            {"name": "High Beta 高度專注",  "value": 95},
+            {"name": "Low Beta 邏輯分析",   "value": 100},
+            {"name": "Mid Gamma 觀察環境",  "value": 50},
+            {"name": "Low Gamma 慈悲柔軟",  "value": 50},
+        ],
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 單節生成（同步、立即回傳）
+# ──────────────────────────────────────────────────────────────────────────
+def generate_one_section(
+    chapter_num: int,
+    section_num: int,
+    subject_name: str,
+    report_type: str = "life_script",
+    variant: str = "full",
+    brainwave_data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    生成「第 X 章第 Y 節」的單一節內容，同步回傳。
+    給 demo / 測試使用。
+    """
+    chapters = get_chapters(report_type, variant)
+    chapter = next((c for c in chapters if c["num"] == chapter_num), None)
+    if not chapter:
+        raise ValueError(f"找不到第 {chapter_num} 章")
+    section = next((s for s in chapter["sections"] if s["num"] == section_num), None)
+    if not section:
+        raise ValueError(f"第 {chapter_num} 章找不到第 {section_num} 節")
+
+    bw = brainwave_data or _demo_brainwave_data()
+    bw_str = format_brainwave_data(bw)
+
+    prompt = build_section_prompt(
+        subject_data_str=bw_str,
+        chapter=chapter,
+        section=section,
+        subject_name=subject_name,
+        variant=variant,
+    )
+
+    started_at = time.time()
+    text = gemini_client.generate_text(
+        prompt=prompt,
+        system_instruction=LIFE_SCRIPT_SYSTEM_PROMPT,
+        temperature=0.78,
+        max_output_tokens=4096,
+    )
+    elapsed = round(time.time() - started_at, 1)
+
+    return {
+        "chapter_num": chapter_num,
+        "chapter_title": chapter["title"],
+        "chapter_icon": chapter["icon"],
+        "section_num": section_num,
+        "section_title": section["title"],
+        "subject_name": subject_name,
+        "report_type": report_type,
+        "variant": variant,
+        "text": text,
+        "elapsed_sec": elapsed,
+        "key_used": gemini_client.key_is_set(),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 完整報告（背景任務）
+# ──────────────────────────────────────────────────────────────────────────
+def _run_full_generation(
+    job_id: str,
+    subject_name: str,
+    report_type: str,
+    variant: str,
+    brainwave_data: Dict[str, Any],
+):
+    """背景 thread：依序生成所有節"""
+    job = _jobs[job_id]
+    job["status"] = "running"
+    job["started_at"] = time.time()
+
+    try:
+        chapters = get_chapters(report_type, variant)
+        total = count_sections(chapters)
+        job["total_sections"] = total
+        job["chapters_list"] = [
+            {"num": c["num"], "title": c["title"], "icon": c["icon"]} for c in chapters
+        ]
+
+        bw_str = format_brainwave_data(brainwave_data)
+        completed = 0
+
+        for chapter in chapters:
+            if job.get("cancelled"):
+                break
+            job["current_chapter"] = chapter["title"]
+            job["current_chapter_num"] = chapter["num"]
+
+            for section in chapter["sections"]:
+                if job.get("cancelled"):
+                    break
+                job["current_section"] = (
+                    f"第{ch_zh(chapter['num'])}章・第{sec_zh(section['num'])}節：{section['title']}"
+                )
+                job["current_section_num"] = section["num"]
+
+                prompt = build_section_prompt(
+                    subject_data_str=bw_str,
+                    chapter=chapter,
+                    section=section,
+                    subject_name=subject_name,
+                    variant=variant,
+                )
+
+                try:
+                    text = gemini_client.generate_text(
+                        prompt=prompt,
+                        system_instruction=LIFE_SCRIPT_SYSTEM_PROMPT,
+                        temperature=0.78,
+                        max_output_tokens=4096,
+                    )
+                except Exception as e:
+                    text = f"（此節生成失敗：{type(e).__name__}: {str(e)[:100]}）"
+                    logger.error("section %d_%d 失敗: %s", chapter["num"], section["num"], e)
+
+                key = f"{chapter['num']}_{section['num']}"
+                job["results"][key] = {
+                    "text": text,
+                    "chapter_num": chapter["num"],
+                    "chapter_title": chapter["title"],
+                    "chapter_icon": chapter["icon"],
+                    "section_num": section["num"],
+                    "section_title": section["title"],
+                }
+
+                completed += 1
+                job["completed_sections"] = completed
+                job["progress"] = int(completed / total * 100)
+
+                # 避免 503 burst
+                time.sleep(2)
+
+        # 寫到磁碟
+        try:
+            payload = {
+                "job_id":         job_id,
+                "subject_name":   subject_name,
+                "report_type":    report_type,
+                "variant":        variant,
+                "chapters":       job["chapters_list"],
+                "results":        job["results"],
+                "brainwave_data": brainwave_data,
+                "created_at":     time.time(),
+            }
+            with open(REPORTS_DIR / f"{job_id}.json", "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            job["save_error"] = str(e)
+            logger.error("save report failed: %s", e)
+
+        job["status"] = "completed"
+        job["finished_at"] = time.time()
+
+    except Exception as e:
+        logger.exception("背景任務崩潰")
+        job["status"] = "error"
+        job["error_message"] = f"{type(e).__name__}: {e}"
+
+
+def start_full_report(
+    subject_name: str,
+    report_type: str = "life_script",
+    variant: str = "full",
+    brainwave_data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """
+    啟動完整報告背景生成，立即回傳 job_id
+    """
+    bw = brainwave_data or _demo_brainwave_data()
+
+    job_id = str(uuid.uuid4())
+    chapters = get_chapters(report_type, variant)
+    est = count_sections(chapters)
+
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "job_id":              job_id,
+            "status":              "pending",
+            "progress":            0,
+            "completed_sections":  0,
+            "total_sections":      est,
+            "current_section":     "準備中…",
+            "current_chapter":     "",
+            "current_chapter_num": None,
+            "current_section_num": None,
+            "chapters_list":       [],
+            "results":             {},
+            "subject_name":        subject_name,
+            "report_type":         report_type,
+            "variant":             variant,
+        }
+
+    t = threading.Thread(
+        target=_run_full_generation,
+        args=(job_id, subject_name, report_type, variant, bw),
+        daemon=True,
+    )
+    t.start()
+    return job_id
+
+
+def get_job(job_id: str) -> Optional[Dict[str, Any]]:
+    return _jobs.get(job_id)
+
+
+def cancel_job(job_id: str) -> bool:
+    job = _jobs.get(job_id)
+    if not job:
+        return False
+    job["cancelled"] = True
+    return True

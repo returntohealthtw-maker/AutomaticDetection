@@ -531,6 +531,91 @@
     background:#1a2540; border-radius:10px; padding:12px 14px;
     font-size:13px; line-height:1.85; color:#cfd9ee; letter-spacing:0.3px;
   }
+
+  /* ── 報告生成進度區塊（screen-results）─────────────────────────────── */
+  .rg-progress-card{
+    background:linear-gradient(135deg, rgba(74,144,226,0.18), rgba(106,82,225,0.12));
+    border:1px solid rgba(126,192,255,0.25); border-radius:14px;
+    padding:14px; margin-bottom:12px;
+  }
+  .rg-progress-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:10px;
+  }
+  .rg-progress-title{ font-size:13px; font-weight:700; color:#e3eaf5; }
+  .rg-progress-stat{ font-size:11px; color:#a5b4fc; font-weight:600; }
+  .rg-progress-bar{
+    height:8px; background:#0d1729; border-radius:4px; overflow:hidden; margin-bottom:8px;
+  }
+  .rg-progress-fill{
+    height:100%;
+    background:linear-gradient(90deg,#7ec0ff,#a5b4fc 50%,#ffd166);
+    border-radius:4px; transition:width 0.4s ease;
+  }
+  .rg-progress-current{
+    font-size:12px; color:#cfd9ee; line-height:1.5;
+    background:rgba(0,0,0,0.18); border-radius:8px; padding:8px 10px;
+    margin-top:6px;
+  }
+  .rg-progress-current .rg-spin{
+    display:inline-block; animation:rgSpin 1.2s linear infinite; margin-right:6px;
+  }
+  @keyframes rgSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  .rg-chapter-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .rg-chapter-pill{
+    font-size:10.5px; padding:4px 8px; border-radius:10px;
+    background:rgba(255,255,255,0.05); color:#7d8aa8;
+    border:1px solid rgba(255,255,255,0.05);
+  }
+  .rg-chapter-pill.done{
+    background:rgba(76,175,80,0.18); color:#a5d6a7;
+    border-color:rgba(76,175,80,0.3);
+  }
+  .rg-chapter-pill.current{
+    background:rgba(255,209,102,0.2); color:#ffd166;
+    border-color:rgba(255,209,102,0.4); font-weight:700;
+  }
+
+  /* 測試生成單節結果框 */
+  .rg-test-result{
+    margin-top:10px; padding:14px; border-radius:12px;
+    background:#1a2540; border:1px solid rgba(255,255,255,0.08);
+    font-size:13px; line-height:1.85; color:#cfd9ee; letter-spacing:0.3px;
+    max-height:340px; overflow-y:auto;
+  }
+  .rg-test-meta{
+    font-size:11px; color:#7d8aa8; margin-bottom:8px;
+    padding-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.1);
+  }
+  .rg-test-title{
+    font-size:14px; font-weight:700; color:#ffd166; margin-bottom:8px;
+  }
+  .rg-test-btn{
+    width:100%; padding:11px; border-radius:10px; border:none;
+    background:linear-gradient(135deg,#6B3FA0,#4a148c); color:white;
+    font-size:13px; font-weight:600; cursor:pointer;
+    box-shadow:0 4px 12px rgba(107,63,160,0.3);
+  }
+  .rg-test-btn:disabled{ opacity:0.6; cursor:not-allowed; }
+
+  /* 頂部 email 狀態橫條（生成中 / 已寄送）*/
+  .rg-email-bar{
+    margin-top:12px; border-radius:10px; padding:8px 12px;
+    font-size:12px; display:flex; align-items:center; gap:6px;
+    border:1px solid transparent; transition:all 0.3s;
+  }
+  .rg-email-bar.pending{
+    background:rgba(255,209,102,0.12); border-color:rgba(255,209,102,0.3);
+    color:#ffd166;
+  }
+  .rg-email-bar.done{
+    background:rgba(76,175,80,0.15); border-color:rgba(76,175,80,0.35);
+    color:#a5d6a7;
+  }
+  .rg-email-bar.error{
+    background:rgba(244,67,54,0.15); border-color:rgba(244,67,54,0.35);
+    color:#ef9a9a;
+  }
   .score-section { margin-bottom:16px; }
   .score-item { margin-bottom:12px; }
   .score-item .si-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
@@ -1006,13 +1091,12 @@
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
           <h2>受測者資料</h2>
-          <span class="step-badge">步驟 1/4</span>
+          <span class="step-badge">步驟 1/3</span>
         </div>
         <div class="progress-bar-wrap">
           <div class="progress-steps">
             <div class="progress-step done"></div>
             <div class="progress-step active"></div>
-            <div class="progress-step"></div>
             <div class="progress-step"></div>
           </div>
         </div>
@@ -1082,14 +1166,13 @@
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-subject')">‹</button>
           <h2>選擇報告項目</h2>
-          <span class="step-badge">步驟 2/4</span>
+          <span class="step-badge">步驟 2/3</span>
         </div>
         <div class="progress-bar-wrap">
           <div class="progress-steps">
             <div class="progress-step done"></div>
             <div class="progress-step done"></div>
             <div class="progress-step active"></div>
-            <div class="progress-step"></div>
           </div>
         </div>
 
@@ -1871,7 +1954,7 @@
             </div>
           </div>
 
-          <button class="btn btn-primary" onclick="goto('screen-mbti')">
+          <button class="btn btn-primary" onclick="goto('screen-connect')">
             前往付款（統一金流）→
           </button>
           <div style="text-align:center;margin-top:12px;font-size:11px;color:#aaa;">
@@ -1890,9 +1973,9 @@
         </div>
         <div class="mbti-progress">
           <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;margin-bottom:8px;">
-            <span id="mbti-progress-label">第 1 / 28 題</span>
+            <span id="mbti-progress-label">第 1 / 8 題</span>
             <span style="margin-left:10px;">·</span>
-            <a href="#" onclick="event.preventDefault();skipMBTI();" style="color:#fff;text-decoration:underline;margin-left:8px;font-size:11px;">跳過問卷（僅以腦波判讀）</a>
+            <a href="#" onclick="event.preventDefault();skipMBTI();" style="color:#fff;text-decoration:underline;margin-left:8px;font-size:11px;">跳過問卷（僅以腦波判讀，準確度約 65-70%）</a>
           </div>
           <div class="mbti-dots" id="mbti-dots"></div>
         </div>
@@ -1906,7 +1989,7 @@
           </div>
           <div style="padding:0 16px;">
             <div style="background:#f8f9ff;border-radius:14px;padding:12px 14px;font-size:12px;color:#888;line-height:1.6;">
-              💡 <b>提示：</b>請根據您平時的真實感受作答，沒有對錯之分。問卷答案將與腦波結果結合，提高 MBTI 判斷的準確性。完整問卷約 3-5 分鐘。
+              💡 <b>提示：</b>請根據您平時的真實感受作答，沒有對錯之分。問卷答案將與腦波結果結合，提高 MBTI 判斷的準確性。<b>精簡版約 1 分鐘</b>（8 題，每維度 2 題）。
             </div>
           </div>
         </div>
@@ -1921,13 +2004,12 @@
       <div class="screen" id="screen-connect">
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
         <div class="top-bar">
-          <button class="back-btn" onclick="goto('screen-mbti')">‹</button>
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>連接腦波設備</h2>
-          <span class="step-badge">步驟 4/4</span>
+          <span class="step-badge">步驟 3/3</span>
         </div>
         <div class="progress-bar-wrap">
           <div class="progress-steps">
-            <div class="progress-step done"></div>
             <div class="progress-step done"></div>
             <div class="progress-step done"></div>
             <div class="progress-step active"></div>
@@ -2144,9 +2226,10 @@
               <span class="rt-sep">｜</span>
               <span class="rt-sub">個人整合分析報告</span>
             </div>
-            <div class="result-meta">陳小明 · 2026/03/03 09:41 · 3 分鐘（180 筆）</div>
-            <div style="margin-top:12px;background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.35);border-radius:10px;padding:8px 12px;font-size:12px;color:#a5d6a7;display:flex;align-items:center;gap:6px;">
-              📧 完整報告已寄送至受測者 Email
+            <div class="result-meta" id="result-meta">陳小明 · 2026/03/03 09:41 · 3 分鐘（180 筆）</div>
+            <div id="result-email-bar" class="rg-email-bar pending">
+              <span class="rg-spin">⏳</span>
+              <span id="result-email-text">完整報告產生中，完成後將寄送至受測者 Email...</span>
             </div>
           </div>
 
@@ -2238,9 +2321,38 @@
               </div>
             </div>
 
+            <!-- ── 完整報告 AI 生成進度（背景任務、SSE 即時推送）─────────── -->
+            <div class="rg-progress-card" id="rg-progress-card" style="display:none;">
+              <div class="rg-progress-header">
+                <div class="rg-progress-title">📄 完整報告 AI 生成中</div>
+                <div class="rg-progress-stat" id="rg-progress-stat">0 / 0 節</div>
+              </div>
+              <div class="rg-progress-bar">
+                <div class="rg-progress-fill" id="rg-progress-fill" style="width:0%;"></div>
+              </div>
+              <div class="rg-progress-current" id="rg-progress-current">
+                <span class="rg-spin">⏳</span>
+                <span id="rg-progress-current-text">準備中...</span>
+              </div>
+              <div class="rg-chapter-list" id="rg-chapter-list"></div>
+            </div>
+
+            <!-- ── 開發測試：立即生成單節（給「測試」按鈕用，可保留於正式版）─ -->
+            <div class="report-section" data-dev-only id="rg-test-card">
+              <div class="report-section-title">🧪 AI 報告生成測試</div>
+              <div style="font-size:11px;color:#7d8aa8;margin-bottom:10px;line-height:1.6;">
+                點下按鈕即時用 Gemini 2.5 Pro 生成第 1 章第 1 節，驗證後端生成流程是否正常。
+                約 30~60 秒；無 GEMINI_API_KEY 時回傳 mock 範例。
+              </div>
+              <button class="rg-test-btn" id="rg-test-btn" onclick="testGenerateOneSection()">
+                ▶ 測試生成第一節（第一章 - 第一節）
+              </button>
+              <div id="rg-test-result" class="rg-test-result" style="display:none;"></div>
+            </div>
+
             <div style="display:flex;gap:10px;margin-top:6px;">
               <button class="btn btn-primary" style="flex:2;" onclick="goto('screen-home')">查看完整報告 →</button>
-              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;">下載 PDF</button>
+              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;" onclick="startFullReportGeneration()">▶ 啟動完整生成</button>
             </div>
           </div>
         </div>
@@ -2415,7 +2527,7 @@ const screens = [
   { id: 'screen-relation-select', label: '關係報告選人' },
   { id: 'screen-relation-done',   label: '關係報告生成中' },
   { id: 'screen-payment',         label: '購買點數（備用）' },
-  { id: 'screen-mbti',            label: 'MBTI 問卷' },
+  // { id: 'screen-mbti',         label: 'MBTI 問卷' },   // 2026-05 已移除問卷，純腦波判讀
   { id: 'screen-connect',         label: '連接設備' },
   { id: 'screen-baseline',        label: '靜息基線' },
   { id: 'screen-detect',          label: '檢測進行中' },
@@ -2451,6 +2563,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 function goto(id) {
+  // 2026-05：MBTI 問卷已停用，任何 goto('screen-mbti') 一律重導到「連接腦波設備」
+  if (id === 'screen-mbti') id = 'screen-connect';
   const idx = screens.findIndex(s => s.id === id);
   if (idx >= 0) gotoIndex(idx);
 }
@@ -2461,6 +2575,13 @@ function gotoIndex(idx) {
   current = idx;
   document.getElementById(screens[current].id).classList.add('active');
   document.querySelectorAll('.screen-dot')[current].classList.add('active');
+
+  // 進入「檢測結果」頁時，自動啟動完整報告 AI 生成（背景任務 + SSE 進度）
+  if (screens[current].id === 'screen-results' && !_rgJobId) {
+    if (typeof startFullReportGeneration === 'function') {
+      try { startFullReportGeneration({}); } catch (e) { console.error('啟動報告生成失敗', e); }
+    }
+  }
   document.getElementById('screen-title').textContent = screens[current].label;
 
   // 進入特定畫面時的初始化 hook
@@ -2915,42 +3036,24 @@ function updateSubjectAge() {
 }
 
 // ─── MBTI 前測問卷（28 題完整版）──────────────────────────────────────────────
+// 精簡版：每維度 2 題，共 8 題（含腦波輔助時準確度約 78-82%）
+// 題目挑選原則：行為層次（不易自我欺騙）、區別力強、跨年齡層通用
 const _MBTI_QUESTIONS = [
   // E / I 維度（外向 / 內向）
   { dim:'EI', text:'在一個社交聚會結束後，你通常感覺...', a:{label:'充電了，精力充沛，想繼續和大家互動', side:'E'}, b:{label:'疲憊了，需要一個人靜一靜才能恢復', side:'I'} },
-  { dim:'EI', text:'週末理想的安排是...', a:{label:'約朋友一起出去走走、聊天', side:'E'}, b:{label:'在家看書、追劇或做自己喜歡的事', side:'I'} },
-  { dim:'EI', text:'在會議中你比較傾向...', a:{label:'邊想邊講，靠互動把想法說清楚', side:'E'}, b:{label:'先在心裡想清楚，再開口發言', side:'I'} },
-  { dim:'EI', text:'認識新朋友時你...', a:{label:'會主動打招呼、開啟話題', side:'E'}, b:{label:'通常等對方先開口', side:'I'} },
-  { dim:'EI', text:'長時間獨處之後，你...', a:{label:'會感到無聊，想找人說話', side:'E'}, b:{label:'感覺充電完成、心情舒適', side:'I'} },
   { dim:'EI', text:'你比較喜歡的工作環境是...', a:{label:'熱鬧、有很多互動的開放空間', side:'E'}, b:{label:'安靜、能專心思考的個人空間', side:'I'} },
-  { dim:'EI', text:'分享想法時，你會...', a:{label:'樂於和很多人分享', side:'E'}, b:{label:'只跟少數信任的人深聊', side:'I'} },
 
   // S / N 維度（實感 / 直覺）
   { dim:'SN', text:'學新東西時你比較相信...', a:{label:'親身經驗與具體事實', side:'S'}, b:{label:'直覺、靈感與整體脈絡', side:'N'} },
-  { dim:'SN', text:'描述一件事情時你習慣...', a:{label:'按時間順序、細節完整地說', side:'S'}, b:{label:'先講重點、寓意，再補細節', side:'N'} },
-  { dim:'SN', text:'你比較欣賞的人是...', a:{label:'務實、能把事情完成的人', side:'S'}, b:{label:'有創意、能想出新點子的人', side:'N'} },
-  { dim:'SN', text:'看小說/電影你比較喜歡...', a:{label:'寫實、貼近生活的故事', side:'S'}, b:{label:'科幻、奇幻、有想像力的世界', side:'N'} },
-  { dim:'SN', text:'解決問題時你會...', a:{label:'先看過去類似案例怎麼處理', side:'S'}, b:{label:'先想有沒有完全不一樣的方法', side:'N'} },
-  { dim:'SN', text:'在工作上你比較關注...', a:{label:'每個步驟與細節是否到位', side:'S'}, b:{label:'整體方向與長期可能性', side:'N'} },
-  { dim:'SN', text:'別人說「就是有這種感覺」時你會...', a:{label:'希望對方提出具體例子', side:'S'}, b:{label:'懂這種感覺，常常自己也有', side:'N'} },
+  { dim:'SN', text:'看小說 / 電影你比較喜歡...', a:{label:'寫實、貼近生活的故事', side:'S'}, b:{label:'科幻、奇幻、有想像力的世界', side:'N'} },
 
   // T / F 維度（思考 / 情感）
   { dim:'TF', text:'做重要決定時你比較依靠...', a:{label:'邏輯、客觀利弊分析', side:'T'}, b:{label:'感受與對人的影響', side:'F'} },
-  { dim:'TF', text:'別人來找你訴苦時你...', a:{label:'會試圖幫對方分析、想解法', side:'T'}, b:{label:'會先傾聽、認同他的感受', side:'F'} },
-  { dim:'TF', text:'你比較在意的批評是...', a:{label:'觀點不夠嚴謹', side:'T'}, b:{label:'語氣讓人不舒服', side:'F'} },
-  { dim:'TF', text:'看到團隊起爭執時你會...', a:{label:'就事論事、找到對的決定', side:'T'}, b:{label:'先處理情緒、讓大家好過一點', side:'F'} },
-  { dim:'TF', text:'你被稱讚是「公平」或「溫暖」哪個比較開心？', a:{label:'公平', side:'T'}, b:{label:'溫暖', side:'F'} },
-  { dim:'TF', text:'看到不合理的規定你會...', a:{label:'指出邏輯漏洞，要求改進', side:'T'}, b:{label:'考慮人情、不一定當下說', side:'F'} },
-  { dim:'TF', text:'評估一個方案時你比較看...', a:{label:'對結果是否最佳', side:'T'}, b:{label:'對相關人是否合理', side:'F'} },
+  { dim:'TF', text:'別人來找你訴苦時你會...', a:{label:'試圖幫對方分析、想解法', side:'T'}, b:{label:'先傾聽、認同他的感受', side:'F'} },
 
   // J / P 維度（判斷 / 知覺）
   { dim:'JP', text:'面對行程你比較喜歡...', a:{label:'事先排好計畫並照表執行', side:'J'}, b:{label:'保留彈性、看當下狀況決定', side:'P'} },
-  { dim:'JP', text:'桌面/工作環境通常是...', a:{label:'井然有序、東西都有固定位置', side:'J'}, b:{label:'有點亂但自己知道哪裡是哪裡', side:'P'} },
   { dim:'JP', text:'接到新任務時你會...', a:{label:'先列清單、設定截止日', side:'J'}, b:{label:'先做做看、邊做邊調整', side:'P'} },
-  { dim:'JP', text:'臨時計畫被打亂時你...', a:{label:'會有些不舒服，希望盡快回到計畫', side:'J'}, b:{label:'覺得也好、可能反而有趣', side:'P'} },
-  { dim:'JP', text:'你比較常被形容為...', a:{label:'準時、有條理', side:'J'}, b:{label:'隨性、有彈性', side:'P'} },
-  { dim:'JP', text:'旅行時你偏好...', a:{label:'每天行程都安排好', side:'J'}, b:{label:'只訂機票飯店，其他現場決定', side:'P'} },
-  { dim:'JP', text:'寫報告/做專案你習慣...', a:{label:'分階段、按時完成', side:'J'}, b:{label:'最後衝刺型，靈感來了一次寫完', side:'P'} },
 ];
 
 let _mbtiAnswers = []; // 同 index 對應 _MBTI_QUESTIONS：'A' or 'B' or null
@@ -3178,6 +3281,201 @@ async function _initAuthOnBoot() {
     if (typeof goto === 'function') goto('screen-login');
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// 🧠 AI 報告生成（Gemini）— 整合 services/report_generator
+// ────────────────────────────────────────────────────────────────────────
+let _rgJobId        = null;
+let _rgEventSource  = null;
+let _rgChaptersMap  = {};   // num → {title, icon}
+
+// 測試生成第一節（同步、立即顯示）
+async function testGenerateOneSection() {
+  const btn   = document.getElementById('rg-test-btn');
+  const box   = document.getElementById('rg-test-result');
+  if (!btn || !box) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="rg-spin">⏳</span> 正在用 Gemini 2.5 Pro 生成中（約 30~60 秒）...';
+  box.style.display = 'block';
+  box.innerHTML = '<div style="color:#7d8aa8;text-align:center;padding:20px;">' +
+                    '<span class="rg-spin" style="font-size:24px;">🧠</span><br>' +
+                    '<span style="margin-top:10px;display:inline-block;">AI 正在分析腦波數據並撰寫章節...</span>' +
+                  '</div>';
+
+  const subjectName = _currentSubjectName || '陳小明';
+  try {
+    const resp = await fetch(`${API_BASE}/report-gen/test-section`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chapter_num: 1, section_num: 1,
+        subject_name: subjectName,
+        report_type: 'life_script',
+        variant: 'full',
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const mockBadge = data.key_used
+      ? '<span style="color:#a5d6a7;">✅ 真實 AI 生成</span>'
+      : '<span style="color:#ffd166;">⚠️ Mock 模式（GEMINI_API_KEY 尚未設定）</span>';
+    box.innerHTML =
+      '<div class="rg-test-meta">' +
+        `${mockBadge} · 耗時 ${data.elapsed_sec || '?'} 秒 · ${(data.text || '').length} 字` +
+      '</div>' +
+      `<div class="rg-test-title">${data.chapter_icon || '📖'} 第 ${data.chapter_num} 章「${escapeHtml(data.chapter_title || '')}」 - 第 ${data.section_num} 節「${escapeHtml(data.section_title || '')}」</div>` +
+      `<div style="white-space:pre-wrap;">${escapeHtml(data.text || '(無內容)')}</div>`;
+  } catch (e) {
+    box.innerHTML = `<div style="color:#ef9a9a;padding:20px;text-align:center;">❌ 生成失敗：${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ 重新測試生成第一節';
+  }
+}
+
+// 啟動完整背景生成（48 節 × 30~60 秒 ≈ 30~50 分鐘）
+async function startFullReportGeneration(opts) {
+  opts = opts || {};
+  const card = document.getElementById('rg-progress-card');
+  const emailBar = document.getElementById('result-email-bar');
+  const emailText = document.getElementById('result-email-text');
+  if (!card) return;
+
+  // 顯示進度卡 + 重置 email 橫條為「生成中」
+  card.style.display = 'block';
+  if (emailBar) {
+    emailBar.className = 'rg-email-bar pending';
+    emailBar.querySelector('.rg-spin')?.style.setProperty('display', 'inline-block');
+  }
+  if (emailText) emailText.textContent = '完整報告產生中，完成後將寄送至受測者 Email...';
+
+  try {
+    const resp = await fetch(`${API_BASE}/report-gen/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject_name:   opts.subjectName  || _currentSubjectName || '陳小明',
+        subject_email:  opts.subjectEmail || null,
+        report_type:    opts.reportType   || 'life_script',
+        variant:        opts.variant      || 'full',
+        brainwave_data: opts.brainwaveData|| null,
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _rgJobId = data.job_id;
+    _connectReportSSE(_rgJobId);
+  } catch (e) {
+    console.error('啟動完整生成失敗：', e);
+    if (emailText) emailText.textContent = `❌ 啟動失敗：${e.message}`;
+    if (emailBar) emailBar.className = 'rg-email-bar error';
+  }
+}
+
+function _connectReportSSE(jobId) {
+  if (_rgEventSource) { try { _rgEventSource.close(); } catch(e){} }
+  const url = `${API_BASE}/report-gen/stream/${jobId}`;
+  _rgEventSource = new EventSource(url);
+
+  _rgEventSource.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      if (data.error) { _handleReportError(data.error); return; }
+      _renderReportProgress(data);
+      if (data.status === 'completed') {
+        _handleReportCompleted();
+        _rgEventSource.close();
+      } else if (data.status === 'error') {
+        _handleReportError(data.error_message || '生成失敗');
+        _rgEventSource.close();
+      }
+    } catch (e) { console.error('SSE parse err', e); }
+  };
+  _rgEventSource.onerror = (e) => {
+    console.warn('SSE 連線中斷，改為輪詢備援', e);
+    try { _rgEventSource.close(); } catch (err) {}
+    _rgEventSource = null;
+    _pollReportStatus(jobId);   // SSE 失敗時 fallback 輪詢
+  };
+}
+
+async function _pollReportStatus(jobId) {
+  while (true) {
+    try {
+      const resp = await fetch(`${API_BASE}/report-gen/status/${jobId}`);
+      if (!resp.ok) break;
+      const data = await resp.json();
+      _renderReportProgress(data);
+      if (data.status === 'completed') { _handleReportCompleted(); break; }
+      if (data.status === 'error') { _handleReportError(data.error_message); break; }
+      await new Promise(r => setTimeout(r, 3000));
+    } catch (e) { console.error('poll err', e); break; }
+  }
+}
+
+function _renderReportProgress(d) {
+  const fill = document.getElementById('rg-progress-fill');
+  const stat = document.getElementById('rg-progress-stat');
+  const curText = document.getElementById('rg-progress-current-text');
+  const chList = document.getElementById('rg-chapter-list');
+
+  if (fill) fill.style.width = (d.progress || 0) + '%';
+  if (stat) stat.textContent = `${d.completed_sections || 0} / ${d.total_sections || 0} 節（${d.progress || 0}%）`;
+  if (curText) curText.textContent = d.current_section || '排程中...';
+
+  if (chList && d.chapters_list && d.chapters_list.length) {
+    // 只在第一次填入
+    if (!chList.dataset.populated) {
+      chList.innerHTML = d.chapters_list.map(c =>
+        `<span class="rg-chapter-pill" data-ch="${c.num}">${c.icon || '📖'} 第${c.num}章</span>`
+      ).join('');
+      chList.dataset.populated = '1';
+      d.chapters_list.forEach(c => { _rgChaptersMap[c.num] = c; });
+    }
+    // 更新各章狀態（current_chapter_num 之前 = done、= current、之後 = pending）
+    const curNum = d.current_chapter_num;
+    chList.querySelectorAll('.rg-chapter-pill').forEach(el => {
+      const n = parseInt(el.dataset.ch, 10);
+      el.classList.remove('done', 'current');
+      if (curNum && n < curNum) el.classList.add('done');
+      else if (curNum && n === curNum) el.classList.add('current');
+      else if (d.status === 'completed') el.classList.add('done');
+    });
+  }
+}
+
+function _handleReportCompleted() {
+  const emailBar = document.getElementById('result-email-bar');
+  const emailText = document.getElementById('result-email-text');
+  const curBox = document.getElementById('rg-progress-current');
+  if (emailBar) emailBar.className = 'rg-email-bar done';
+  if (emailText) emailText.textContent = '📧 完整報告已寄送至受測者 Email';
+  // 隱藏轉圈
+  emailBar?.querySelector('.rg-spin')?.style.setProperty('display', 'none');
+  if (curBox) curBox.innerHTML = '<span style="color:#a5d6a7;">✅ 已完成全部章節生成</span>';
+}
+
+function _handleReportError(msg) {
+  const emailBar = document.getElementById('result-email-bar');
+  const emailText = document.getElementById('result-email-text');
+  if (emailBar) emailBar.className = 'rg-email-bar error';
+  if (emailText) emailText.textContent = `❌ 生成失敗：${msg || '未知錯誤'}`;
+}
+
+// HTML escape utility
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let _pollTimer      = null;
 let _currentOrderId = null;
 let _pollCountdown  = 15 * 60;
@@ -3289,9 +3587,9 @@ function showPaymentResult(status, qrScreenId) {
         _currentOrderId     || ''
       );
     } else {
-      // ── 瀏覽器測試 fallback：跳到 MBTI 畫面 ─────────────────────────
-      btn.onclick = () => { overlay.style.display = "none"; goto("screen-mbti"); };
-      setTimeout(() => { overlay.style.display = "none"; goto("screen-mbti"); }, 2000);
+      // ── 瀏覽器測試 fallback：直接跳到「連接腦波設備」（已移除 MBTI 問卷）──
+      btn.onclick = () => { overlay.style.display = "none"; goto("screen-connect"); };
+      setTimeout(() => { overlay.style.display = "none"; goto("screen-connect"); }, 2000);
     }
   } else if (status === "expired") {
     icon.textContent  = "⏰";

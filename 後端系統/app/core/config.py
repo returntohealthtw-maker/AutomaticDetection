@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     ECPAY_HASH_IV:     str = ""
     ECPAY_TEST_MODE:   bool = True   # True = 測試環境，False = 正式環境
 
+    # AI 報告生成（Gemini）
+    GEMINI_API_KEY:       str = ""
+    GEMINI_TEXT_MODEL:    str = "gemini-2.5-pro"        # 章節內文生成
+    GEMINI_EXTRACT_MODEL: str = "gemini-2.5-flash"      # OCR / 簡單任務
+    GEMINI_IMAGE_MODEL:   str = "gemini-2.5-flash-image"  # 插圖生成
+
+    # 報告模板（私有 GitHub repo）
+    GITHUB_PAT: str = ""   # Personal Access Token，能讀私有 BrianaveReportImage repo
+
+    # Resend Email
+    RESEND_API_KEY:   str = ""
+    RESEND_FROM_EMAIL: str = "noreply@onlinereport.com"  # 你的 verified domain
+
     @property
     def get_database_url(self) -> str:
         # 1. Railway / 任何環境注入的 DATABASE_URL
