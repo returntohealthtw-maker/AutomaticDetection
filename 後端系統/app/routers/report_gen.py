@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.services import ai_report as report_generator
 from app.services import gemini_client
+from app.services import email_sender
 from app.services.report_chapters import get_chapters, count_sections
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,12 @@ class TestSectionRequest(BaseModel):
 
 
 class StartRequest(BaseModel):
-    subject_name:   str  = "受測者"
-    report_type:    str  = "life_script"
-    variant:        str  = "full"
-    brainwave_data: Optional[Dict[str, Any]] = None
-    subject_email:  Optional[str] = None  # 將來給 Resend 用
+    subject_name:         str  = "受測者"
+    report_type:          str  = "life_script"
+    variant:              str  = "full"
+    brainwave_data:       Optional[Dict[str, Any]] = None
+    subject_email:        Optional[str] = None       # 完成後自動寄到此 email（None = 不寄）
+    chapters_to_generate: Optional[List[int]] = None  # 只生成這些章節（None = 全部）
 
 
 class ChaptersQuery(BaseModel):
@@ -96,10 +98,16 @@ def health():
             "is_placeholder":     value.strip().strip("\"'") == "your-gemini-api-key-here",
         }
 
+    gmail_user = os.environ.get("GMAIL_USER", "") or _s.GMAIL_USER
     return {
         "gemini_key_set": gemini_client.key_is_set(),
         "model":          _s.GEMINI_TEXT_MODEL if gemini_client.key_is_set() else None,
         "mock_mode":      not gemini_client.key_is_set(),
+        "email": {
+            "configured": email_sender.is_configured(),
+            "gmail_user": gmail_user[:3] + "..." + gmail_user.split("@")[-1] if "@" in gmail_user else "",
+            "from_name":  os.environ.get("GMAIL_FROM_NAME", "") or _s.GMAIL_FROM_NAME,
+        },
         "diagnostics": {
             "env_var":     _diag(env_key),
             "settings":    _diag(settings_key),
@@ -149,12 +157,17 @@ def test_section(req: TestSectionRequest):
 
 @router.post("/start")
 def start_full(req: StartRequest):
-    """啟動完整報告背景生成，立即回 job_id"""
+    """啟動報告背景生成，立即回 job_id。
+    chapters_to_generate=[1] 可以只生成第一章（最快測試模式）。
+    subject_email 有給就在生成完後寄信給受測者。
+    """
     job_id = report_generator.start_full_report(
         subject_name=req.subject_name,
         report_type=req.report_type,
         variant=req.variant,
         brainwave_data=req.brainwave_data,
+        chapters_to_generate=req.chapters_to_generate,
+        subject_email=req.subject_email,
     )
     return {"ok": True, "job_id": job_id}
 
@@ -177,6 +190,10 @@ def status(job_id: str):
         "current_section_num": job.get("current_section_num"),
         "chapters_list":       job.get("chapters_list", []),
         "error_message":       job.get("error_message", ""),
+        "email_status":        job.get("email_status", "skipped"),
+        "email_to":            job.get("email_to", ""),
+        "email_from":          job.get("email_from", ""),
+        "email_error":         job.get("email_error", ""),
     }
 
 
@@ -211,6 +228,9 @@ def stream(job_id: str):
                     "current_section":     job.get("current_section", ""),
                     "current_section_num": job.get("current_section_num"),
                     "chapters_list":       job.get("chapters_list", []),
+                    "email_status":        job.get("email_status", "skipped"),
+                    "email_to":            job.get("email_to", ""),
+                    "email_error":         job.get("email_error", ""),
                 }
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif time.time() - last_ping >= PING_INTERVAL:

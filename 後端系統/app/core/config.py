@@ -41,9 +41,10 @@ class Settings(BaseSettings):
     # 報告模板（私有 GitHub repo）
     GITHUB_PAT: str = ""   # Personal Access Token，能讀私有 BrianaveReportImage repo
 
-    # Resend Email
-    RESEND_API_KEY:   str = ""
-    RESEND_FROM_EMAIL: str = "noreply@onlinereport.com"  # 你的 verified domain
+    # Gmail SMTP（寄送 AI 生成後的報告 email 給受測者）
+    GMAIL_USER:         str = ""   # your.account@gmail.com
+    GMAIL_APP_PASSWORD: str = ""   # 16 字元 App Password（不是 Gmail 密碼）
+    GMAIL_FROM_NAME:    str = "onlineReport 線上腦波分析系統"
 
     @property
     def get_database_url(self) -> str:

@@ -2798,7 +2798,9 @@ function onSelectExistingSubject(sel) {
   const s = _cachedSubjects.find(x => String(x.subject_id) === String(id));
   if (!s) return;
   _setSubjectFormValues(s);
-  _currentSubjectId = s.subject_id;
+  _currentSubjectId    = s.subject_id;
+  _currentSubjectName  = s.name || _currentSubjectName;
+  _currentSubjectEmail = s.email || _currentSubjectEmail;
   if (hint) hint.style.display = 'block';
 }
 
@@ -2973,7 +2975,8 @@ async function submitSubject() {
   if (!v.birth_date)      { alert('請選擇出生日期'); return; }
 
   // 全域變數（供後續畫面使用）
-  _currentSubjectName = v.name;
+  _currentSubjectName  = v.name;
+  _currentSubjectEmail = v.email;
 
   // 寫入後端（後端會做防重複，回傳實際儲存的 row 含 subject_id）
   try {
@@ -3336,32 +3339,56 @@ async function testGenerateOneSection() {
   }
 }
 
-// 啟動完整背景生成（48 節 × 30~60 秒 ≈ 30~50 分鐘）
+// 啟動報告背景生成
+// opts:
+//   subjectName     收件人姓名（預設 _currentSubjectName）
+//   subjectEmail    收件人 email（預設 _currentSubjectEmail；有給就會自動寄信）
+//   reportType      life_script / child / parent_child / marital（預設 life_script）
+//   variant         trial / full / vip（預設 full）
+//   chaptersToGenerate  例 [1] 表示只生成第一章（最快測試）；null = 全部
+//   brainwaveData   EEG 計算後的數值 dict；null = 用 demo 資料
 async function startFullReportGeneration(opts) {
   opts = opts || {};
-  const card = document.getElementById('rg-progress-card');
-  const emailBar = document.getElementById('result-email-bar');
+  const card      = document.getElementById('rg-progress-card');
+  const emailBar  = document.getElementById('result-email-bar');
   const emailText = document.getElementById('result-email-text');
   if (!card) return;
+
+  // 預設行為：測試模式 = 只生成第一章
+  const chaptersToGen = opts.chaptersToGenerate !== undefined
+    ? opts.chaptersToGenerate
+    : (_testMode_chapter1Only ? [1] : null);
+
+  const subjectEmail = opts.subjectEmail !== undefined
+    ? opts.subjectEmail
+    : (_currentSubjectEmail || null);
 
   // 顯示進度卡 + 重置 email 橫條為「生成中」
   card.style.display = 'block';
   if (emailBar) {
     emailBar.className = 'rg-email-bar pending';
-    emailBar.querySelector('.rg-spin')?.style.setProperty('display', 'inline-block');
+    const spin = emailBar.querySelector('.rg-spin');
+    if (spin) spin.style.display = 'inline-block';
   }
-  if (emailText) emailText.textContent = '完整報告產生中，完成後將寄送至受測者 Email...';
+  if (emailText) {
+    if (subjectEmail) {
+      emailText.textContent = `報告產生中，完成後將自動寄送至 ${subjectEmail}...`;
+    } else {
+      emailText.textContent = '報告產生中（未提供 Email，將不寄送）...';
+    }
+  }
 
   try {
     const resp = await fetch(`${API_BASE}/report-gen/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subject_name:   opts.subjectName  || _currentSubjectName || '陳小明',
-        subject_email:  opts.subjectEmail || null,
-        report_type:    opts.reportType   || 'life_script',
-        variant:        opts.variant      || 'full',
-        brainwave_data: opts.brainwaveData|| null,
+        subject_name:         opts.subjectName  || _currentSubjectName || '陳小明',
+        subject_email:        subjectEmail,
+        report_type:          opts.reportType   || _currentReportSubType || 'life_script',
+        variant:              opts.variant      || _currentReportVariant || 'full',
+        chapters_to_generate: chaptersToGen,
+        brainwave_data:       opts.brainwaveData|| null,
       }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -3369,7 +3396,7 @@ async function startFullReportGeneration(opts) {
     _rgJobId = data.job_id;
     _connectReportSSE(_rgJobId);
   } catch (e) {
-    console.error('啟動完整生成失敗：', e);
+    console.error('啟動報告生成失敗：', e);
     if (emailText) emailText.textContent = `❌ 啟動失敗：${e.message}`;
     if (emailBar) emailBar.className = 'rg-email-bar error';
   }
@@ -3447,15 +3474,34 @@ function _renderReportProgress(d) {
   }
 }
 
-function _handleReportCompleted() {
-  const emailBar = document.getElementById('result-email-bar');
+async function _handleReportCompleted() {
+  const emailBar  = document.getElementById('result-email-bar');
   const emailText = document.getElementById('result-email-text');
-  const curBox = document.getElementById('rg-progress-current');
-  if (emailBar) emailBar.className = 'rg-email-bar done';
-  if (emailText) emailText.textContent = '📧 完整報告已寄送至受測者 Email';
-  // 隱藏轉圈
-  emailBar?.querySelector('.rg-spin')?.style.setProperty('display', 'none');
-  if (curBox) curBox.innerHTML = '<span style="color:#a5d6a7;">✅ 已完成全部章節生成</span>';
+  const curBox    = document.getElementById('rg-progress-current');
+  const spin = emailBar?.querySelector('.rg-spin');
+  if (spin) spin.style.display = 'none';
+  if (curBox) curBox.innerHTML = '<span style="color:#a5d6a7;">✅ 已完成章節生成</span>';
+
+  // 從 /status 拿 email 結果
+  try {
+    const r = await fetch(`${API_BASE}/report-gen/status/${_rgJobId}`);
+    const d = await r.json();
+    const es = d.email_status || 'skipped';
+    if (es === 'sent') {
+      if (emailBar) emailBar.className = 'rg-email-bar done';
+      if (emailText) emailText.textContent = `📧 報告已寄送至 ${d.email_to || '受測者 Email'}`;
+    } else if (es === 'failed') {
+      if (emailBar) emailBar.className = 'rg-email-bar error';
+      if (emailText) emailText.textContent = `❌ Email 寄發失敗：${d.email_error || '請檢查 GMAIL 設定'}`;
+    } else {
+      // skipped：未提供 email
+      if (emailBar) emailBar.className = 'rg-email-bar done';
+      if (emailText) emailText.textContent = '✅ 章節生成完成（未提供 Email、未寄送）';
+    }
+  } catch (e) {
+    if (emailBar) emailBar.className = 'rg-email-bar done';
+    if (emailText) emailText.textContent = '✅ 章節生成完成';
+  }
 }
 
 function _handleReportError(msg) {
@@ -3480,7 +3526,12 @@ let _pollTimer      = null;
 let _currentOrderId = null;
 let _pollCountdown  = 15 * 60;
 let _countdownTimer = null;
-let _currentSubjectName = '受測者';
+let _currentSubjectName    = '受測者';
+let _currentSubjectEmail   = '';
+let _currentReportSubType  = 'life_script';   // life_script / child / parent_child / marital
+let _currentReportVariant  = 'full';          // trial / full / vip
+// 若為 true，進入 screen-results 時只生成第一章（NT$1 測試模式）
+let _testMode_chapter1Only = true;
 let _currentReportType  = '';
 
 async function createPaymentOrder(reportType, amount, subjectName) {
@@ -3607,6 +3658,16 @@ function showPaymentResult(status, qrScreenId) {
   overlay.style.display = "flex";
 }
 
+// reportKey → reportType + variant + 是否只生成第一章
+// 用於決定報告生成時要呼叫哪一組章節 + 是否進入測試模式
+function _parseReportKey(key) {
+  if (key === 'test_1')          return { type: 'life_script', variant: 'full', chapter1Only: true  };
+  if (key.startsWith('life_'))   return { type: 'life_script', variant: key.split('_')[1], chapter1Only: false };
+  if (key.startsWith('child_'))  return { type: 'child',       variant: key.split('_')[1], chapter1Only: false };
+  if (key.startsWith('up_'))     return { type: 'life_script', variant: 'vip',  chapter1Only: false };
+  return { type: 'life_script', variant: 'full', chapter1Only: false };
+}
+
 // 選擇個人報告並跳到對應付款畫面
 function selectSingleReport(el, reportKey, price, qrScreen) {
   // 取消所有選擇
@@ -3621,6 +3682,11 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   el.style.background = '#fff5f2';
 
   _currentReportType = reportKey; // 記錄當前報告類型供 AndroidBridge 使用
+  // 同步解析出 AI 生成時要用的 reportType / variant / 測試模式旗標
+  const parsed = _parseReportKey(reportKey);
+  _currentReportSubType  = parsed.type;
+  _currentReportVariant  = parsed.variant;
+  _testMode_chapter1Only = parsed.chapter1Only;
 
   const reportNames = {
     'life_trial':  '腦波分析人生劇本 · 體驗版',

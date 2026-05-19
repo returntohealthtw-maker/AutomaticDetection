@@ -157,14 +157,22 @@ def _run_full_generation(
     report_type: str,
     variant: str,
     brainwave_data: Dict[str, Any],
+    chapters_to_generate: Optional[List[int]] = None,
+    subject_email: Optional[str] = None,
 ):
-    """背景 thread：依序生成所有節"""
+    """背景 thread：依序生成所有節，可選擇只生成特定章節，生成完寄 email"""
+    from . import email_sender  # 避免循環匯入
+
     job = _jobs[job_id]
     job["status"] = "running"
     job["started_at"] = time.time()
 
     try:
         chapters = get_chapters(report_type, variant)
+        # 過濾出指定章節
+        if chapters_to_generate:
+            wanted = set(chapters_to_generate)
+            chapters = [c for c in chapters if c["num"] in wanted]
         total = count_sections(chapters)
         job["total_sections"] = total
         job["chapters_list"] = [
@@ -229,6 +237,7 @@ def _run_full_generation(
             payload = {
                 "job_id":         job_id,
                 "subject_name":   subject_name,
+                "subject_email":  subject_email,
                 "report_type":    report_type,
                 "variant":        variant,
                 "chapters":       job["chapters_list"],
@@ -241,6 +250,46 @@ def _run_full_generation(
         except Exception as e:
             job["save_error"] = str(e)
             logger.error("save report failed: %s", e)
+
+        # ── 寄 Email（若有提供 subject_email）─────────────────────────
+        job["email_status"] = "skipped"
+        if subject_email and not job.get("cancelled"):
+            try:
+                # 把所有生成的節合併成一篇報告內文
+                merged_text_parts = []
+                first_chapter = job["chapters_list"][0] if job["chapters_list"] else None
+                for key, sec in job["results"].items():
+                    merged_text_parts.append(
+                        f"【第{sec['section_num']}節：{sec['section_title']}】\n\n{sec['text']}"
+                    )
+                merged_text = "\n\n\n".join(merged_text_parts)
+
+                ch_title = (
+                    f"第{first_chapter['num']}章：{first_chapter['title']}"
+                    if first_chapter else "AI 分析報告"
+                )
+                ch_icon = (first_chapter or {}).get("icon", "📄")
+
+                email_result = email_sender.send_report_email(
+                    to=subject_email,
+                    subject_name=subject_name,
+                    chapter_title=ch_title,
+                    chapter_text=merged_text,
+                    chapter_icon=ch_icon,
+                )
+                if email_result.get("ok"):
+                    job["email_status"] = "sent"
+                    job["email_to"]     = subject_email
+                    job["email_from"]   = email_result.get("from")
+                    logger.info("✅ Email 寄出 → %s", subject_email)
+                else:
+                    job["email_status"] = "failed"
+                    job["email_error"]  = email_result.get("error", "unknown")
+                    logger.error("❌ Email 失敗：%s", email_result.get("error"))
+            except Exception as e:
+                job["email_status"] = "failed"
+                job["email_error"]  = f"{type(e).__name__}: {e}"
+                logger.exception("email 寄發例外")
 
         job["status"] = "completed"
         job["finished_at"] = time.time()
@@ -256,14 +305,23 @@ def start_full_report(
     report_type: str = "life_script",
     variant: str = "full",
     brainwave_data: Optional[Dict[str, Any]] = None,
+    chapters_to_generate: Optional[List[int]] = None,
+    subject_email: Optional[str] = None,
 ) -> str:
     """
-    啟動完整報告背景生成，立即回傳 job_id
+    啟動報告背景生成，立即回傳 job_id
+
+    Args:
+        chapters_to_generate: 只生成這些章節（如 [1]）。None = 該 variant 全部章節
+        subject_email:        生成完自動寄到此 email（None = 不寄）
     """
     bw = brainwave_data or _demo_brainwave_data()
 
     job_id = str(uuid.uuid4())
     chapters = get_chapters(report_type, variant)
+    if chapters_to_generate:
+        wanted = set(chapters_to_generate)
+        chapters = [c for c in chapters if c["num"] in wanted]
     est = count_sections(chapters)
 
     with _jobs_lock:
@@ -280,13 +338,16 @@ def start_full_report(
             "chapters_list":       [],
             "results":             {},
             "subject_name":        subject_name,
+            "subject_email":       subject_email,
             "report_type":         report_type,
             "variant":             variant,
+            "chapters_to_generate": chapters_to_generate,
+            "email_status":        "pending" if subject_email else "skipped",
         }
 
     t = threading.Thread(
         target=_run_full_generation,
-        args=(job_id, subject_name, report_type, variant, bw),
+        args=(job_id, subject_name, report_type, variant, bw, chapters_to_generate, subject_email),
         daemon=True,
     )
     t.start()
