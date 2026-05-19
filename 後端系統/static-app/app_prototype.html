@@ -2064,8 +2064,8 @@
 
           <div class="card">
             <div class="card-title">受測者</div>
-            <div style="font-size:15px;font-weight:600;">陳小明</div>
-            <div style="font-size:12px;color:#888;margin-top:2px;">12歲 · 選擇報告：MBTI、認知學習、壓力管理（共4點）</div>
+            <div id="connect-subject-name" style="font-size:15px;font-weight:600;">—</div>
+            <div id="connect-subject-meta" style="font-size:12px;color:#888;margin-top:2px;">尚未填寫資料</div>
           </div>
 
           <button class="btn btn-primary" onclick="goto('screen-baseline')">
@@ -2115,29 +2115,29 @@
         <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
           <div class="detect-header">
             <div class="dh-top">
-              <span class="dh-subject">👤 陳小明 · 12歲</span>
-              <span class="dh-status"><span class="live-dot"></span> 採集中</span>
+              <span class="dh-subject" id="detect-subject">👤 —</span>
+              <span class="dh-status"><span class="live-dot"></span> <span id="detect-status-text">採集中</span></span>
             </div>
             <div class="time-display">
-              <div class="time-big" id="detect-time">1:48</div>
+              <div class="time-big" id="detect-time">3:00</div>
               <div class="time-label">剩餘時間</div>
             </div>
             <div class="detect-progress-bar">
-              <div class="detect-progress-fill" id="detect-fill" style="width:40%;"></div>
+              <div class="detect-progress-fill" id="detect-fill" style="width:0%;"></div>
             </div>
-            <div class="detect-progress-label" id="detect-label">已採集 72 / 180 秒</div>
+            <div class="detect-progress-label" id="detect-label">已採集 0 / 180 秒</div>
           </div>
 
           <div class="metrics-grid">
             <div class="metric-card">
               <div class="m-label">注意力</div>
-              <div class="m-value">72</div>
-              <div class="m-bar"><div class="m-fill m-fill-attn"></div></div>
+              <div class="m-value" id="metric-attn-val">—</div>
+              <div class="m-bar"><div class="m-fill m-fill-attn" id="metric-attn-bar" style="width:0%;"></div></div>
             </div>
             <div class="metric-card">
               <div class="m-label">冥想放鬆</div>
-              <div class="m-value">58</div>
-              <div class="m-bar"><div class="m-fill m-fill-medi"></div></div>
+              <div class="m-value" id="metric-medi-val">—</div>
+              <div class="m-bar"><div class="m-fill m-fill-medi" id="metric-medi-bar" style="width:0%;"></div></div>
             </div>
           </div>
 
@@ -2147,37 +2147,37 @@
               <div class="band-item">
                 <div class="band-label" style="color:#607d8b;font-size:10px;">δ</div>
                 <div class="band-bar-wrap">
-                  <div class="band-bar" style="height:20%;background:#607d8b;opacity:0.7;"></div>
+                  <div class="band-bar" id="band-bar-delta" style="height:0%;background:#607d8b;opacity:0.7;"></div>
                 </div>
-                <div class="band-val">低</div>
+                <div class="band-val" id="band-val-delta">—</div>
               </div>
               <div class="band-item">
                 <div class="band-label" style="color:#9c27b0;font-size:10px;">θ</div>
                 <div class="band-bar-wrap">
-                  <div class="band-bar" style="height:40%;background:#9c27b0;"></div>
+                  <div class="band-bar" id="band-bar-theta" style="height:0%;background:#9c27b0;"></div>
                 </div>
-                <div class="band-val">中</div>
+                <div class="band-val" id="band-val-theta">—</div>
               </div>
               <div class="band-item">
                 <div class="band-label" style="color:#4caf50;font-size:10px;">α</div>
                 <div class="band-bar-wrap">
-                  <div class="band-bar" style="height:75%;background:#4caf50;"></div>
+                  <div class="band-bar" id="band-bar-alpha" style="height:0%;background:#4caf50;"></div>
                 </div>
-                <div class="band-val">高</div>
+                <div class="band-val" id="band-val-alpha">—</div>
               </div>
               <div class="band-item">
                 <div class="band-label" style="color:#ff9800;font-size:10px;">β</div>
                 <div class="band-bar-wrap">
-                  <div class="band-bar" style="height:60%;background:#ff9800;"></div>
+                  <div class="band-bar" id="band-bar-beta" style="height:0%;background:#ff9800;"></div>
                 </div>
-                <div class="band-val">中</div>
+                <div class="band-val" id="band-val-beta">—</div>
               </div>
               <div class="band-item">
                 <div class="band-label" style="color:#f44336;font-size:10px;">γ</div>
                 <div class="band-bar-wrap">
-                  <div class="band-bar" style="height:30%;background:#f44336;"></div>
+                  <div class="band-bar" id="band-bar-gamma" style="height:0%;background:#f44336;"></div>
                 </div>
-                <div class="band-val">低</div>
+                <div class="band-val" id="band-val-gamma">—</div>
               </div>
             </div>
           </div>
@@ -2185,24 +2185,22 @@
           <div class="faa-card">
             <div class="fc-label">β/α 比值（E/I 估算指標）</div>
             <div style="display:flex;align-items:baseline;gap:6px;">
-              <span class="fc-val">1.42</span>
-              <span class="fc-hint">外向傾向（β &gt; α）</span>
+              <span class="fc-val" id="faa-ratio">—</span>
+              <span class="fc-hint" id="faa-hint">採集中…</span>
             </div>
             <div style="margin-top:6px;height:4px;background:rgba(0,188,212,0.2);border-radius:2px;">
-              <div style="height:100%;width:59%;background:#00BCD4;border-radius:2px;"></div>
+              <div id="faa-bar" style="height:100%;width:50%;background:#00BCD4;border-radius:2px;transition:width .4s;"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(0,188,212,0.5);margin-top:2px;">
               <span>I（β/α &lt; 1）←</span><span>→ E（β/α &gt; 1）</span>
             </div>
-            <div style="margin-top:5px;font-size:10px;color:rgba(255,255,255,0.35);">Fp1 單通道 · 非 FAA</div>
+            <div style="margin-top:5px;font-size:10px;color:rgba(255,255,255,0.35);" id="faa-source">Fp1 單通道 · 非 FAA</div>
           </div>
 
           <div style="margin:0 16px;background:rgba(255,255,255,0.07);border-radius:14px;padding:12px 14px;border:1px solid rgba(255,255,255,0.08);">
             <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:8px;">即時狀態判讀</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <span style="background:rgba(0,200,83,0.2);color:#00C853;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">🟢 專注良好</span>
-              <span style="background:rgba(255,152,0,0.2);color:#ff9800;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">🟡 壓力中等</span>
-              <span style="background:rgba(0,188,212,0.2);color:#00BCD4;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">💡 Alpha 主導</span>
+            <div id="detect-chips" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <span style="color:rgba(255,255,255,0.4);font-size:12px;">採集開始後顯示…</span>
             </div>
           </div>
         </div>
@@ -2210,7 +2208,7 @@
         <div class="detect-footer">
           <div class="warning">⚠️ 採集完成後才會扣除點數，中途斷線不扣點</div>
           <div class="detect-buttons">
-            <button class="btn-end" onclick="goto('screen-results')">■ 結束採集</button>
+            <button class="btn-end" onclick="_stopEegLiveCapture(); goto('screen-results')">■ 結束採集</button>
           </div>
         </div>
       </div>
@@ -2579,7 +2577,19 @@ function gotoIndex(idx) {
   // 進入「檢測結果」頁時，自動啟動完整報告 AI 生成（背景任務 + SSE 進度）
   if (screens[current].id === 'screen-results' && !_rgJobId) {
     if (typeof startFullReportGeneration === 'function') {
-      try { startFullReportGeneration({}); } catch (e) { console.error('啟動報告生成失敗', e); }
+      try {
+        startFullReportGeneration({
+          brainwaveData: window._lastEegCapture || null,
+        });
+      } catch (e) { console.error('啟動報告生成失敗', e); }
+    }
+    // 把 result-meta 改成這次受測者
+    const meta = document.getElementById('result-meta');
+    if (meta) {
+      const now = new Date();
+      const stamp = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      const ageTxt = (_currentSubjectAge != null) ? ` · ${_currentSubjectAge}歲` : '';
+      meta.textContent = `${_currentSubjectName || '受測者'}${ageTxt} · ${stamp}`;
     }
   }
   document.getElementById('screen-title').textContent = screens[current].label;
@@ -2595,6 +2605,8 @@ function gotoIndex(idx) {
   }
   if (id === 'screen-home'     && typeof refreshHomeData     === 'function') refreshHomeData();
   if (id === 'screen-settings' && typeof refreshSettingsData === 'function') refreshSettingsData();
+  if (id === 'screen-connect'  && typeof _populateConnectScreen === 'function') _populateConnectScreen();
+  if (id === 'screen-detect'   && typeof _startEegLiveCapture   === 'function') _startEegLiveCapture();
 }
 
 // ─── 首頁 / 設定頁：依登入者動態顯示 ────────────────────────────────────────
@@ -2798,9 +2810,12 @@ function onSelectExistingSubject(sel) {
   const s = _cachedSubjects.find(x => String(x.subject_id) === String(id));
   if (!s) return;
   _setSubjectFormValues(s);
-  _currentSubjectId    = s.subject_id;
-  _currentSubjectName  = s.name || _currentSubjectName;
-  _currentSubjectEmail = s.email || _currentSubjectEmail;
+  _currentSubjectId     = s.subject_id;
+  _currentSubjectName   = s.name || _currentSubjectName;
+  _currentSubjectEmail  = s.email || _currentSubjectEmail;
+  _currentSubjectGender = s.gender || '';
+  const ageStr2 = _calcAgeStr(s.birth_date);
+  _currentSubjectAge = ageStr2 ? parseInt(ageStr2, 10) : null;
   if (hint) hint.style.display = 'block';
 }
 
@@ -2975,8 +2990,11 @@ async function submitSubject() {
   if (!v.birth_date)      { alert('請選擇出生日期'); return; }
 
   // 全域變數（供後續畫面使用）
-  _currentSubjectName  = v.name;
-  _currentSubjectEmail = v.email;
+  _currentSubjectName   = v.name;
+  _currentSubjectEmail  = v.email;
+  _currentSubjectGender = v.gender || '';
+  const ageStr = _calcAgeStr(v.birth_date);
+  _currentSubjectAge = ageStr ? parseInt(ageStr, 10) : null;
 
   // 寫入後端（後端會做防重複，回傳實際儲存的 row 含 subject_id）
   try {
@@ -3528,10 +3546,18 @@ let _pollCountdown  = 15 * 60;
 let _countdownTimer = null;
 let _currentSubjectName    = '受測者';
 let _currentSubjectEmail   = '';
+let _currentSubjectAge     = null;            // 數字
+let _currentSubjectGender  = '';              // '男' / '女' / ''
 let _currentReportSubType  = 'life_script';   // life_script / child / parent_child / marital
 let _currentReportVariant  = 'full';          // trial / full / vip
 // 若為 true，進入 screen-results 時只生成第一章（NT$1 測試模式）
 let _testMode_chapter1Only = true;
+// 即時擷取累積值（給結束採集時送回後端用）
+let _eegLiveAccum = null;       // { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] }
+let _eegLiveTimer = null;       // setInterval id
+let _eegLiveStartTs = 0;
+let _eegLiveDurationSec = 180;  // 採集總長度
+let _eegSimState = null;        // 模擬器內部 state
 let _currentReportType  = '';
 
 async function createPaymentOrder(reportType, amount, subjectName) {
@@ -3656,6 +3682,253 @@ function showPaymentResult(status, qrScreenId) {
     btn.onclick       = () => { overlay.style.display = "none"; goto("screen-reports"); };
   }
   overlay.style.display = "flex";
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 「連接腦波設備」畫面：依目前受測者填入姓名/年齡/性別/報告
+// ─────────────────────────────────────────────────────────────────────────
+function _reportKeyToZh(key) {
+  const map = {
+    'life_trial':  '腦波分析人生劇本 · 體驗版',
+    'life_full':   '腦波分析人生劇本 · 完整版',
+    'life_vip':    '腦波分析人生劇本 · VIP版',
+    'child_trial': '兒童腦波天賦解碼 · 體驗版',
+    'child_full':  '兒童腦波天賦解碼 · 完整版',
+    'child_vip':   '兒童腦波天賦解碼 · VIP版',
+    'test_1':      '🧪 NT$1 功能測試（生成第一章 + 寄信）',
+    'up_trial_full': '加購升級：體驗版 → 完整版',
+    'up_full_vip':   '加購升級：完整版 → VIP版',
+    'up_trial_vip':  '加購升級：體驗版 → VIP版',
+  };
+  return map[key] || key || '—';
+}
+
+function _populateConnectScreen() {
+  const nameEl = document.getElementById('connect-subject-name');
+  const metaEl = document.getElementById('connect-subject-meta');
+  if (nameEl) nameEl.textContent = _currentSubjectName || '—';
+  if (metaEl) {
+    const parts = [];
+    if (_currentSubjectAge != null)   parts.push(`${_currentSubjectAge}歲`);
+    if (_currentSubjectGender)        parts.push(_currentSubjectGender);
+    parts.push(`報告：${_reportKeyToZh(_currentReportType)}`);
+    metaEl.textContent = parts.join(' · ');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 「腦波檢測中」畫面：即時數據動畫 + 累積給結束後用
+// 真實 EEG：APK 透過 window.JSBridge.onEegSample(json) 推資料進來
+// 瀏覽器測試：用 _simNextSample() 模擬合理走勢
+// ─────────────────────────────────────────────────────────────────────────
+function _populateDetectHeader() {
+  const sEl = document.getElementById('detect-subject');
+  if (!sEl) return;
+  const ageTxt = (_currentSubjectAge != null) ? ` · ${_currentSubjectAge}歲` : '';
+  sEl.textContent = `👤 ${_currentSubjectName || '受測者'}${ageTxt}`;
+}
+
+function _resetEegLiveUI() {
+  const ids = ['metric-attn-val','metric-medi-val',
+               'band-val-delta','band-val-theta','band-val-alpha','band-val-beta','band-val-gamma',
+               'faa-ratio'];
+  ids.forEach(id => { const e = document.getElementById(id); if (e) e.textContent = '—'; });
+  ['metric-attn-bar','metric-medi-bar'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.style.width = '0%';
+  });
+  ['band-bar-delta','band-bar-theta','band-bar-alpha','band-bar-beta','band-bar-gamma'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.style.height = '0%';
+  });
+  const fill = document.getElementById('detect-fill'); if (fill) fill.style.width = '0%';
+  const lbl  = document.getElementById('detect-label'); if (lbl) lbl.textContent = `已採集 0 / ${_eegLiveDurationSec} 秒`;
+  const tm   = document.getElementById('detect-time'); if (tm) tm.textContent = _formatMs(_eegLiveDurationSec);
+  const chips = document.getElementById('detect-chips');
+  if (chips) chips.innerHTML = '<span style="color:rgba(255,255,255,0.4);font-size:12px;">採集開始後顯示…</span>';
+  const stxt = document.getElementById('detect-status-text'); if (stxt) stxt.textContent = '採集中';
+  const fhint = document.getElementById('faa-hint'); if (fhint) fhint.textContent = '採集中…';
+}
+
+function _formatMs(sec) {
+  if (sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function _startEegLiveCapture() {
+  // 已在跑就不重啟
+  if (_eegLiveTimer) return;
+  _populateDetectHeader();
+  _resetEegLiveUI();
+
+  _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] };
+  _eegLiveStartTs = Date.now();
+  _eegSimState = null;
+
+  // 通知 APK 開始送即時資料（若有橋接）
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.startStreamingEeg === 'function') {
+      window.AndroidBridge.startStreamingEeg();
+    }
+  } catch (e) { /* ignore */ }
+
+  // 250ms 一次：更新時間/進度，並（瀏覽器模式）模擬下一筆
+  _eegLiveTimer = setInterval(() => {
+    const elapsedSec = Math.floor((Date.now() - _eegLiveStartTs) / 1000);
+    const remain = Math.max(0, _eegLiveDurationSec - elapsedSec);
+    const fill   = document.getElementById('detect-fill');
+    const lbl    = document.getElementById('detect-label');
+    const tm     = document.getElementById('detect-time');
+    if (fill) fill.style.width = `${Math.min(100, (elapsedSec / _eegLiveDurationSec) * 100)}%`;
+    if (lbl)  lbl.textContent  = `已採集 ${Math.min(elapsedSec, _eegLiveDurationSec)} / ${_eegLiveDurationSec} 秒`;
+    if (tm)   tm.textContent   = _formatMs(remain);
+
+    // 瀏覽器測試：每 ~1 秒模擬一筆 sample（4 tick 一筆）
+    if (!window.AndroidBridge || typeof window.AndroidBridge.startStreamingEeg !== 'function') {
+      _eegSimTick = (_eegSimTick || 0) + 1;
+      if (_eegSimTick % 4 === 0) {
+        const s = _simNextSample();
+        _ingestEegSample(s);
+      }
+    }
+
+    if (elapsedSec >= _eegLiveDurationSec) {
+      _stopEegLiveCapture();
+      // 採集完成自動跳結果頁
+      const stxt = document.getElementById('detect-status-text');
+      if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
+      setTimeout(() => goto('screen-results'), 600);
+    }
+  }, 250);
+}
+let _eegSimTick = 0;
+
+function _stopEegLiveCapture() {
+  if (_eegLiveTimer) { clearInterval(_eegLiveTimer); _eegLiveTimer = null; }
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopStreamingEeg === 'function') {
+      window.AndroidBridge.stopStreamingEeg();
+    }
+  } catch (e) {}
+
+  // 把累積資料丟到全域，後續 startFullReportGeneration 帶進 brainwave_data
+  if (_eegLiveAccum) {
+    window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
+  }
+}
+
+// 接受 APK 餵進來的單筆 sample（從 native 呼叫 window.JSBridge.onEegSample）
+// 結構建議：{ attn:0-100, medi:0-100, delta, theta, alpha, beta, gamma } (五個 band 為 raw power 或 0-100)
+window.JSBridge = window.JSBridge || {};
+window.JSBridge.onEegSample = function(payload) {
+  try {
+    const obj = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    _ingestEegSample(obj);
+  } catch (e) { console.warn('onEegSample parse error', e); }
+};
+
+function _ingestEegSample(s) {
+  if (!_eegLiveAccum) return;
+  const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  const a = clamp(s.attn);
+  const m = clamp(s.medi);
+  const d = clamp(s.delta);
+  const th= clamp(s.theta);
+  const al= clamp(s.alpha);
+  const be= clamp(s.beta);
+  const ga= clamp(s.gamma);
+
+  _eegLiveAccum.attn.push(a);
+  _eegLiveAccum.medi.push(m);
+  _eegLiveAccum.delta.push(d);
+  _eegLiveAccum.theta.push(th);
+  _eegLiveAccum.alpha.push(al);
+  _eegLiveAccum.beta.push(be);
+  _eegLiveAccum.gamma.push(ga);
+
+  // 更新 UI
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = String(v); };
+  const setW = (id, w) => { const e = document.getElementById(id); if (e) e.style.width  = `${w}%`; };
+  const setH = (id, h) => { const e = document.getElementById(id); if (e) e.style.height = `${h}%`; };
+  const lvl = (v) => v >= 70 ? '高' : v >= 35 ? '中' : '低';
+
+  set('metric-attn-val', a); setW('metric-attn-bar', a);
+  set('metric-medi-val', m); setW('metric-medi-bar', m);
+
+  set('band-val-delta', lvl(d)); setH('band-bar-delta', d);
+  set('band-val-theta', lvl(th));setH('band-bar-theta', th);
+  set('band-val-alpha', lvl(al));setH('band-bar-alpha', al);
+  set('band-val-beta',  lvl(be));setH('band-bar-beta',  be);
+  set('band-val-gamma', lvl(ga));setH('band-bar-gamma', ga);
+
+  // β/α 比值
+  const ratio = al > 0 ? (be / al) : 0;
+  const ratioEl = document.getElementById('faa-ratio');
+  const hintEl  = document.getElementById('faa-hint');
+  const barEl   = document.getElementById('faa-bar');
+  if (ratioEl) ratioEl.textContent = ratio.toFixed(2);
+  if (hintEl)  hintEl.textContent  = ratio >= 1 ? `外向傾向（β > α）` : `內向傾向（β < α）`;
+  if (barEl) {
+    // ratio 0~2 對應 0%~100%
+    const pct = Math.max(0, Math.min(100, ratio * 50));
+    barEl.style.width = `${pct}%`;
+  }
+
+  // 即時狀態判讀 chips
+  const chips = document.getElementById('detect-chips');
+  if (chips) {
+    const tags = [];
+    if (a >= 60) tags.push({txt:'🟢 專注良好',  c:'#00C853', bg:'rgba(0,200,83,0.2)'});
+    else if (a <= 35) tags.push({txt:'🔴 專注偏低', c:'#ef5350', bg:'rgba(239,83,80,0.2)'});
+    if (m >= 60) tags.push({txt:'🟢 放鬆良好',  c:'#00BCD4', bg:'rgba(0,188,212,0.2)'});
+    else if (m <= 35) tags.push({txt:'🟠 偏緊繃',  c:'#ff9800', bg:'rgba(255,152,0,0.2)'});
+    if (al >= Math.max(be, th)) tags.push({txt:'💡 Alpha 主導', c:'#4caf50', bg:'rgba(76,175,80,0.2)'});
+    if (be >  al) tags.push({txt:'⚡ Beta 主導', c:'#ff9800', bg:'rgba(255,152,0,0.2)'});
+    if (th >  al) tags.push({txt:'🌙 Theta 主導', c:'#9c27b0', bg:'rgba(156,39,176,0.2)'});
+    chips.innerHTML = tags.map(t =>
+      `<span style="background:${t.bg};color:${t.c};padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">${t.txt}</span>`
+    ).join('') || '<span style="color:rgba(255,255,255,0.4);font-size:12px;">資料收集中…</span>';
+  }
+}
+
+function _summarizeEegAccum(acc) {
+  const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
+  return {
+    sample_count:        acc.attn.length,
+    attention_percentage: avg(acc.attn),
+    meditation_percentage:avg(acc.medi),
+    bands_avg: {
+      delta: avg(acc.delta),
+      theta: avg(acc.theta),
+      alpha: avg(acc.alpha),
+      beta:  avg(acc.beta),
+      gamma: avg(acc.gamma),
+    },
+  };
+}
+
+// 簡單隨機走勢模擬器（瀏覽器測試用）
+function _simNextSample() {
+  if (!_eegSimState) {
+    _eegSimState = {
+      attn:55, medi:55,
+      delta:35, theta:45, alpha:55, beta:45, gamma:25,
+    };
+  }
+  const step = (cur, lo, hi, drift) => {
+    let v = cur + (Math.random() - 0.5) * drift;
+    if (v < lo) v = lo + Math.random()*4;
+    if (v > hi) v = hi - Math.random()*4;
+    return Math.round(v);
+  };
+  _eegSimState.attn  = step(_eegSimState.attn , 25, 95, 14);
+  _eegSimState.medi  = step(_eegSimState.medi , 25, 95, 12);
+  _eegSimState.delta = step(_eegSimState.delta, 15, 60, 8);
+  _eegSimState.theta = step(_eegSimState.theta, 25, 70, 10);
+  _eegSimState.alpha = step(_eegSimState.alpha, 30, 85, 12);
+  _eegSimState.beta  = step(_eegSimState.beta , 25, 80, 12);
+  _eegSimState.gamma = step(_eegSimState.gamma, 10, 55, 8);
+  return { ..._eegSimState };
 }
 
 // reportKey → reportType + variant + 是否只生成第一章
