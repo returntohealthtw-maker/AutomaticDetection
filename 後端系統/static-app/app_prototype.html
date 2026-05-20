@@ -3413,27 +3413,57 @@ async function startFullReportGeneration(opts) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     if (data.mode === 'external') {
-      // 外部系統處理（不走 SSE）
-      if (data.external_mode === 'redirect') {
-        // 該系統沒有 REST API → 開新分頁讓使用者在外部 UI 完成
-        if (emailBar) emailBar.className = 'rg-email-bar pending';
-        if (emailText) {
-          emailText.innerHTML = `🔗 此報告需在外部系統完成，<a href="${data.redirect_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:600;">點此開啟報告系統 →</a>`;
-        }
-        // 自動開新分頁
-        try { window.open(data.redirect_url, '_blank'); } catch (e) {}
-      } else if (data.result_url) {
-        // marital_rest 或其他直接拿到結果 URL
+      // ── 外部系統處理（不走內部 SSE）─────────────────────────────────
+      const xmode = data.external_mode || '';
+
+      // 1) vite_prefill：成人 / 兒童 — 自動跳轉到 React App，那邊讀 ?auto=1 自動全章生成 + 寄信
+      if (xmode === 'vite_prefill' || xmode === 'redirect') {
         if (emailBar) emailBar.className = 'rg-email-bar done';
         if (emailText) {
-          emailText.innerHTML = `✅ 報告生成完成！<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:600;">下載 PDF →</a>${subjectEmail ? '（已寄送 Email）' : ''}`;
+          emailText.innerHTML = `🤖 報告系統已啟動，<a href="${data.redirect_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">若未自動跳轉請點此 →</a>${subjectEmail ? `<br>完成後將自動寄送至 <b>${subjectEmail}</b>` : ''}`;
         }
-      } else if (data.ok) {
+        // 自動全頁跳轉：在外部 React App 完成自動填表 + 全章生成 + 寄信
+        setTimeout(() => {
+          try { window.location.href = data.redirect_url; }
+          catch (e) { try { window.open(data.redirect_url, '_blank'); } catch (e2) {} }
+        }, 1500);
+        return;
+      }
+
+      // 2) parent_child_rest：HomeAnalysisReport — 已下單 /generate，跳到報告頁
+      if (xmode === 'parent_child_rest') {
+        if (data.result_url) {
+          if (emailBar) emailBar.className = 'rg-email-bar done';
+          if (emailText) {
+            emailText.innerHTML = `🤖 親子報告生成中…<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">點此查看進度 →</a>`;
+          }
+          setTimeout(() => {
+            try { window.location.href = data.result_url; }
+            catch (e) { try { window.open(data.result_url, '_blank'); } catch (e2) {} }
+          }, 1500);
+        } else {
+          if (emailBar) emailBar.className = 'rg-email-bar error';
+          if (emailText) emailText.textContent = `❌ 親子報告下單失敗：${data.error || ''}`;
+        }
+        return;
+      }
+
+      // 3) marital_rest：marital-report 已直接回 PDF，呈現下載連結
+      if (xmode === 'marital_rest' && data.result_url) {
+        if (emailBar) emailBar.className = 'rg-email-bar done';
+        if (emailText) {
+          emailText.innerHTML = `✅ 夫妻報告已生成！<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">下載 PDF →</a>${subjectEmail ? '（已寄送 Email）' : ''}`;
+        }
+        return;
+      }
+
+      // fallback：未知 mode
+      if (data.ok) {
         if (emailBar) emailBar.className = 'rg-email-bar pending';
-        if (emailText) emailText.textContent = `📄 外部報告系統正在生成（job=${data.external_job_id || '?'}）…`;
+        if (emailText) emailText.textContent = `📄 外部報告系統處理中…（mode=${xmode}）`;
       } else {
         if (emailBar) emailBar.className = 'rg-email-bar error';
-        if (emailText) emailText.textContent = `❌ 外部報告失敗：${data.error || ''}`;
+        if (emailText) emailText.textContent = `❌ 外部報告失敗：${data.error || '未知 mode: ' + xmode}`;
       }
       return;
     }
