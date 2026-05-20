@@ -2072,7 +2072,7 @@
             ✅ 連接完成，開始靜息基線採集 →
           </button>
           <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">
-            💡 連線成功且採集完成後才會扣除點數
+            💡 完成腦波採集後即會開始生成報告
           </div>
         </div>
       </div>
@@ -2206,7 +2206,7 @@
         </div>
 
         <div class="detect-footer">
-          <div class="warning">⚠️ 採集完成後才會扣除點數，中途斷線不扣點</div>
+          <div class="warning">⚠️ 採集完成後系統會自動產生報告並寄送 Email</div>
           <div class="detect-buttons">
             <button class="btn-end" onclick="_stopEegLiveCapture(); goto('screen-results')">■ 結束採集</button>
           </div>
@@ -2428,10 +2428,8 @@
             <div class="setting-item"><span class="si-icon">👤</span><span class="si-label">個人資料</span><span class="si-arrow">›</span></div>
             <div class="setting-item" onclick="openChangePassword()"><span class="si-icon">🔑</span><span class="si-label">修改密碼</span><span class="si-arrow">›</span></div>
           </div>
-          <div class="settings-section-label">點數與付款</div>
+          <div class="settings-section-label">交易</div>
           <div style="background:white;">
-            <div class="setting-item" onclick="goto('screen-payment')"><span class="si-icon">💳</span><span class="si-label">購買點數</span><span class="si-arrow">›</span></div>
-            <div class="setting-item"><span class="si-icon">📜</span><span class="si-label">點數異動紀錄</span><span class="si-arrow">›</span></div>
             <div class="setting-item"><span class="si-icon">🧾</span><span class="si-label">付款記錄</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">設備</div>
@@ -2524,7 +2522,8 @@ const screens = [
   { id: 'screen-qr-test',         label: '付款 · NT$1 測試' },
   { id: 'screen-relation-select', label: '關係報告選人' },
   { id: 'screen-relation-done',   label: '關係報告生成中' },
-  { id: 'screen-payment',         label: '購買點數（備用）' },
+  // 點數機制已停用：消費者直接付款，不再從顧問點數扣抵
+  // { id: 'screen-payment',         label: '購買點數（停用）' },
   // { id: 'screen-mbti',         label: 'MBTI 問卷' },   // 2026-05 已移除問卷，純腦波判讀
   { id: 'screen-connect',         label: '連接設備' },
   { id: 'screen-baseline',        label: '靜息基線' },
@@ -3403,6 +3402,8 @@ async function startFullReportGeneration(opts) {
       body: JSON.stringify({
         subject_name:         opts.subjectName  || _currentSubjectName || '陳小明',
         subject_email:        subjectEmail,
+        subject_age:          _currentSubjectAge,
+        subject_gender:       _currentSubjectGender || '',
         report_type:          opts.reportType   || _currentReportSubType || 'life_script',
         variant:              opts.variant      || _currentReportVariant || 'full',
         chapters_to_generate: chaptersToGen,
@@ -3411,6 +3412,21 @@ async function startFullReportGeneration(opts) {
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
+    if (data.mode === 'external') {
+      // 外部系統處理：顯示結果連結，不走 SSE
+      if (emailBar) emailBar.className = 'rg-email-bar done';
+      if (emailText) {
+        if (data.result_url) {
+          emailText.innerHTML = `📄 已交由外部報告系統生成，<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;">查看結果</a>${subjectEmail ? '（並寄送 Email）' : ''}`;
+        } else if (data.ok) {
+          emailText.textContent = `📄 已交由外部報告系統生成（job=${data.external_job_id || '?'}），完成後將寄至 ${subjectEmail || '受測者 Email'}`;
+        } else {
+          if (emailBar) emailBar.className = 'rg-email-bar error';
+          emailText.textContent = `❌ 外部報告系統失敗：${data.error || ''}`;
+        }
+      }
+      return;
+    }
     _rgJobId = data.job_id;
     _connectReportSSE(_rgJobId);
   } catch (e) {
@@ -3814,6 +3830,42 @@ function _stopEegLiveCapture() {
   // 把累積資料丟到全域，後續 startFullReportGeneration 帶進 brainwave_data
   if (_eegLiveAccum) {
     window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
+    // 寫入後端 DB（背景，不擋 UI）
+    _persistEegStats(window._lastEegCapture);
+  }
+}
+
+async function _persistEegStats(stats) {
+  if (!stats || !stats.sample_count) return;
+  try {
+    const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
+    const r = await apiFetch('/eeg/save-stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject_name:          _currentSubjectName || '受測者',
+        subject_birthday:      (document.getElementById('subject-birth-input')||{}).value || '',
+        subject_gender:        _currentSubjectGender || '',
+        subject_age:           _currentSubjectAge,
+        subject_id:            _currentSubjectId,
+        report_type:           reportType,
+        order_id:              _currentOrderId || null,
+        paid_amount:           null,
+        sample_count:          stats.sample_count,
+        attention_percentage:  stats.attention_percentage,
+        meditation_percentage: stats.meditation_percentage,
+        bands_avg:             stats.bands_avg,
+      }),
+    });
+    if (r && r.ok) {
+      const d = await r.json();
+      window._lastEegSessionId = d.session_id;
+      console.log('[EEG] 已寫入 DB session_id=', d.session_id);
+    } else {
+      console.warn('[EEG] save-stats 失敗', r && r.status);
+    }
+  } catch (e) {
+    console.warn('[EEG] save-stats 例外', e);
   }
 }
 

@@ -26,11 +26,23 @@ class Settings(BaseSettings):
 
     USE_SQLITE: bool = False
 
-    # 綠界金流 ECPay
+    # 金流共用：切換目前用哪一家（ecpay / payuni）
+    PAYMENT_PROVIDER: str = "payuni"
+
+    # 綠界金流 ECPay（舊版相容；若 PAYMENT_PROVIDER=ecpay 才會用）
     ECPAY_MERCHANT_ID: str = ""
     ECPAY_HASH_KEY:    str = ""
     ECPAY_HASH_IV:     str = ""
-    ECPAY_TEST_MODE:   bool = True   # True = 測試環境，False = 正式環境
+    ECPAY_TEST_MODE:   bool = True
+
+    # PayUni 統一金流（正式）
+    # 後台索取：MerchantID / HashKey / HashIV
+    PAYUNI_MER_ID:     str = ""
+    PAYUNI_HASH_KEY:   str = ""      # 長度通常 32
+    PAYUNI_HASH_IV:    str = ""      # 長度通常 16
+    PAYUNI_TEST_MODE:  bool = False  # True 用 sandbox，False 走正式環境
+    # 對外可被使用者開的回呼網址（Railway 公開網址）
+    PUBLIC_BASE_URL:   str = ""      # e.g. https://backend-production-xxxx.up.railway.app
 
     # AI 報告生成（Gemini）
     GEMINI_API_KEY:       str = ""
@@ -40,6 +52,15 @@ class Settings(BaseSettings):
 
     # 報告模板（私有 GitHub repo）
     GITHUB_PAT: str = ""   # Personal Access Token，能讀私有 BrianaveReportImage repo
+
+    # ──────────── 外部報告系統 (Orchestrator 呼叫) ────────────
+    # 你已部署的 4 個 GitHub 報告系統公開 URL（Vercel/Railway）
+    # 沒填的就 fallback 到內建 Gemini 章節生成
+    REPORT_URL_LIFE_SCRIPT:  str = ""   # 成人 / 腦波分析人生劇本
+    REPORT_URL_CHILD:        str = ""   # 兒童腦波天賦解碼
+    REPORT_URL_PARENT_CHILD: str = ""   # 親子腦波共振關係報告
+    REPORT_URL_MARITAL:      str = ""   # 夫妻腦波共振關係報告
+    REPORT_REQUEST_TIMEOUT_SEC: int = 900  # 外部生成最多等 15 分鐘
 
     # Gmail SMTP（寄送 AI 生成後的報告 email 給受測者）
     GMAIL_USER:         str = ""   # your.account@gmail.com

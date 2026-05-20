@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from app.services import ai_report as report_generator
 from app.services import gemini_client
 from app.services import email_sender
+from app.services import report_orchestrator
 from app.services.report_chapters import get_chapters, count_sections
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,14 @@ class TestSectionRequest(BaseModel):
 
 class StartRequest(BaseModel):
     subject_name:         str  = "受測者"
+    subject_age:          Optional[int] = None
+    subject_gender:       Optional[str] = ""
     report_type:          str  = "life_script"
     variant:              str  = "full"
     brainwave_data:       Optional[Dict[str, Any]] = None
     subject_email:        Optional[str] = None       # 完成後自動寄到此 email（None = 不寄）
     chapters_to_generate: Optional[List[int]] = None  # 只生成這些章節（None = 全部）
+    use_external:         Optional[bool] = None       # None = 自動判斷（外部設了就用），True/False = 強制
 
 
 class ChaptersQuery(BaseModel):
@@ -108,6 +112,7 @@ def health():
             "gmail_user": gmail_user[:3] + "..." + gmail_user.split("@")[-1] if "@" in gmail_user else "",
             "from_name":  os.environ.get("GMAIL_FROM_NAME", "") or _s.GMAIL_FROM_NAME,
         },
+        "external_reports": report_orchestrator.diag(),
         "diagnostics": {
             "env_var":     _diag(env_key),
             "settings":    _diag(settings_key),
@@ -157,10 +162,40 @@ def test_section(req: TestSectionRequest):
 
 @router.post("/start")
 def start_full(req: StartRequest):
-    """啟動報告背景生成，立即回 job_id。
-    chapters_to_generate=[1] 可以只生成第一章（最快測試模式）。
-    subject_email 有給就在生成完後寄信給受測者。
+    """啟動報告生成（自動依 report_type 路由到外部系統或內建 Gemini）
+
+    優先序：
+      1. use_external=True  → 一定用外部
+      2. use_external=False → 一定用內建 Gemini
+      3. None（預設）       → 若外部 URL 有設就走外部；否則走內建
     """
+    use_ext = req.use_external
+    if use_ext is None:
+        use_ext = report_orchestrator.is_external_available(req.report_type)
+
+    if use_ext:
+        result = report_orchestrator.trigger_external_report(
+            report_type=req.report_type,
+            subject_name=req.subject_name,
+            subject_email=req.subject_email or "",
+            subject_age=req.subject_age,
+            subject_gender=req.subject_gender or "",
+            variant=req.variant,
+            chapters_to_generate=req.chapters_to_generate,
+            brainwave_data=req.brainwave_data,
+        )
+        return {
+            "ok":              result.get("ok", False),
+            "mode":            "external",
+            "report_type":     req.report_type,
+            "external_url":    result.get("external_url"),
+            "external_job_id": result.get("external_job_id"),
+            "status_url":      result.get("status_url"),
+            "result_url":      result.get("result_url"),
+            "error":           result.get("error"),
+        }
+
+    # 內建 Gemini fallback
     job_id = report_generator.start_full_report(
         subject_name=req.subject_name,
         report_type=req.report_type,
@@ -169,7 +204,7 @@ def start_full(req: StartRequest):
         chapters_to_generate=req.chapters_to_generate,
         subject_email=req.subject_email,
     )
-    return {"ok": True, "job_id": job_id}
+    return {"ok": True, "mode": "internal", "job_id": job_id}
 
 
 @router.get("/status/{job_id}")

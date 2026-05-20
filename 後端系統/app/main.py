@@ -7,7 +7,7 @@ import urllib.parse
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -57,6 +57,7 @@ app.include_router(subjects.router)
 app.include_router(auth.router)
 app.include_router(analysis.router)
 app.include_router(report_gen.router)
+app.include_router(eeg.router)
 
 
 @app.on_event("startup")
@@ -184,13 +185,82 @@ def pay_ecpay(order_id: str):
 
 
 
+@app.get("/pay/payuni/{order_id}")
+def pay_payuni(order_id: str):
+    """
+    顧客掃描 PayUni QR Code 後開啟此頁面，自動 POST 到 PayUni 付款導頁
+    """
+    from fastapi.responses import HTMLResponse
+    from app.routers.payments import _payment_store
+    from app.services import payuni
+    from app.core.config import settings
+
+    order = _payment_store.get(order_id)
+    if not order:
+        return HTMLResponse("<h2>訂單不存在或已過期</h2>", status_code=404)
+
+    base = settings.PUBLIC_BASE_URL or os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    if base and not base.startswith("http"):
+        base = f"https://{base}"
+    base = base.rstrip("/")
+    notify_url = f"{base}/api/v1/payments/payuni/notify"
+    return_url = f"{base}/api/v1/payments/payuni/return/{order_id}"
+
+    try:
+        form = payuni.build_create_form(
+            order_id     = order_id[:20],
+            amount       = int(order["amount"]),
+            product_desc = order["trade_desc"],
+            buyer_email  = order.get("notify_email", ""),
+            return_url   = return_url,
+            notify_url   = notify_url,
+            customer_url = return_url,
+        )
+    except Exception as e:
+        return HTMLResponse(f"<h2>PayUni 初始化失敗</h2><pre>{e}</pre>", status_code=500)
+
+    fields_html = "\n".join(
+        f'    <input type="hidden" name="{k}" value="{v}">'
+        for k, v in form["fields"].items()
+    )
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>跳轉至 PayUni 統一金流付款頁...</title>
+  <style>
+    body{{margin:0;display:flex;justify-content:center;align-items:center;
+         min-height:100vh;background:#f5f7fa;
+         font-family:'Microsoft JhengHei',sans-serif;text-align:center;}}
+    .msg{{color:#555;font-size:16px;}}
+    .spin{{font-size:36px;animation:spin 1s linear infinite;display:block;margin-bottom:16px;}}
+    @keyframes spin{{from{{transform:rotate(0deg)}}to{{transform:rotate(360deg)}}}}
+  </style>
+</head>
+<body>
+  <div>
+    <span class="spin">⏳</span>
+    <div class="msg">正在跳轉至統一金流付款頁，請稍候...</div>
+    <form id="f" method="POST" action="{form['url']}">
+{fields_html}
+    </form>
+  </div>
+  <script>document.getElementById('f').submit();</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
 @app.get("/pay/{order_id}")
 def pay_page(order_id: str):
     """付款短連結頁面（舊連結相容，顯示 QR Code）"""
     from fastapi.responses import HTMLResponse
     import urllib.parse as _up
     base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
-    pay_url = f"https://{base}/pay/ecpay/{order_id}" if base else f"/pay/ecpay/{order_id}"
+    from app.routers.payments import _provider
+    provider = _provider()
+    pay_url = f"https://{base}/pay/{provider}/{order_id}" if base else f"/pay/{provider}/{order_id}"
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>

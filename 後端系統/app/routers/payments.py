@@ -1,20 +1,13 @@
 """
-綠界金流 ECPay 付款模組
+金流模組（同時支援 ECPay 綠界、PayUni 統一金流）
 
-流程：
-  1. POST /payments/create    → Android 建立訂單，取得 QR Code 圖片 URL
-  2. GET  /pay/ecpay/{id}     → 顧客掃描 QR Code 後，瀏覽器跳轉到此頁，自動 POST 到綠界
-  3. POST /payments/notify    → 綠界付款完成 Webhook（綠界伺服器呼叫）
-  4. GET  /payments/{id}/status → Android 輪詢付款狀態
-
-Hash Key / Hash IV 設定位置：
-  Railway → 專案 → backend service → Variables
-  新增三個變數：ECPAY_MERCHANT_ID / ECPAY_HASH_KEY / ECPAY_HASH_IV
+切換用：環境變數 PAYMENT_PROVIDER = "ecpay" / "payuni"
 """
 import hashlib
 import time
 import urllib.parse
 import io
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -23,8 +16,18 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.services import payuni
 
 router = APIRouter(prefix="/api/v1/payments", tags=["付款"])
+
+
+def _provider() -> str:
+    p = (settings.PAYMENT_PROVIDER or "ecpay").lower()
+    return p if p in ("ecpay", "payuni") else "ecpay"
+
+
+def _pay_path(order_id: str) -> str:
+    return f"/pay/{_provider()}/{order_id}"
 
 # 記憶體暫存訂單（多機部署時改用 Redis）
 _payment_store: dict[str, dict] = {}
@@ -142,7 +145,7 @@ async def create_payment(req: CreatePaymentRequest):
     desc = report_labels.get(req.report_type, "腦波報告")
     order_id = _generate_order_id()
     base = _backend_base()
-    pay_url = f"{base}/pay/ecpay/{order_id}"
+    pay_url = f"{base}{_pay_path(order_id)}"
 
     _payment_store[order_id] = {
         "order_id":     order_id,
@@ -176,7 +179,7 @@ def get_qr_image(order_id: str):
         raise HTTPException(status_code=404, detail="訂單不存在")
 
     base = _backend_base()
-    pay_url = f"{base}/pay/ecpay/{order_id}"
+    pay_url = f"{base}{_pay_path(order_id)}"
     png = _generate_qr_bytes(pay_url)
 
     if not png:
@@ -315,11 +318,110 @@ async def ecpay_return(order_id: str, request: Request):
     return HTMLResponse(html)
 
 
+# ─── PayUni 統一金流 ─────────────────────────────────────────────────────────
+
+@router.post("/payuni/notify")
+async def payuni_notify(request: Request):
+    """
+    PayUni 付款完成 Webhook（PayUni 伺服器主動 POST 過來）
+
+    在 PayUni 商家後台「商家設定 → 系統參數設定」填：
+      通知網址  https://你的後端網域/api/v1/payments/payuni/notify
+    """
+    form = await request.form()
+    enc  = form.get("EncryptInfo", "")
+    hsh  = form.get("HashInfo", "")
+    print(f"[PayUni Notify] EncryptInfo={enc[:32]}... HashInfo={hsh[:16]}...")
+
+    result = payuni.decrypt_callback(enc, hsh)
+    if not result.get("ok"):
+        print(f"[PayUni Notify] 解密/驗章失敗：{result.get('error')}")
+        return "FAIL"
+
+    data = result["data"]
+    order_id = data.get("MerTradeNo") or data.get("MerchantOrderNo") or ""
+    success  = result.get("success") or (data.get("TradeStatus") in ("1", "SUCCESS"))
+    print(f"[PayUni Notify] 訂單 {order_id} success={success}")
+
+    if success:
+        order = _payment_store.get(order_id)
+        if order and order["status"] == "pending":
+            order["status"]  = "paid"
+            order["paid_at"] = int(time.time())
+            order["paid_via"] = "payuni"
+            print(f"[PayUni Notify] 訂單 {order_id} 已標記付款成功")
+
+    return "SUCCESS"
+
+
+@router.api_route("/payuni/return/{order_id}", methods=["GET", "POST"])
+async def payuni_return(order_id: str, request: Request):
+    """
+    顧客付款完成後跳轉回來的頁面
+    """
+    # GET 用 query string、POST 用 form
+    enc, hsh = "", ""
+    if request.method == "POST":
+        form = await request.form()
+        enc = form.get("EncryptInfo", "")
+        hsh = form.get("HashInfo", "")
+    else:
+        enc = request.query_params.get("EncryptInfo", "")
+        hsh = request.query_params.get("HashInfo", "")
+
+    if enc and hsh:
+        result = payuni.decrypt_callback(enc, hsh)
+        if result.get("ok") and result.get("success"):
+            data = result["data"]
+            real_no = data.get("MerTradeNo") or data.get("MerchantOrderNo") or order_id
+            order = _payment_store.get(real_no)
+            if order and order["status"] == "pending":
+                order["status"]  = "paid"
+                order["paid_at"] = int(time.time())
+                order["paid_via"] = "payuni"
+                print(f"[PayUni Return] 訂單 {real_no} 已立即確認")
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>付款完成</title>
+<style>body{{margin:0;display:flex;justify-content:center;align-items:center;
+min-height:100vh;background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;text-align:center;}}
+.card{{background:white;border-radius:20px;padding:36px 28px;
+box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:340px;width:90%;}}
+.icon{{font-size:56px;margin-bottom:12px;}}
+h2{{color:#1a1a2e;font-size:20px;margin:0 0 8px;}}
+p{{color:#666;font-size:14px;line-height:1.6;}}
+.hint{{background:#e8f5e9;border-radius:10px;padding:12px;margin-top:16px;
+font-size:13px;color:#2e7d32;}}</style></head>
+<body><div class="card">
+<div class="icon">✅</div><h2>付款完成！</h2><p>請返回 App 或關閉此頁面。</p>
+<div class="hint">📱 系統正在確認付款，<br>App 將在 <strong>3 秒內自動跳轉</strong>至腦波檢測頁面。</div>
+<p style="color:#aaa;font-size:12px;margin-top:16px;">訂單：{order_id}</p>
+</div></body></html>"""
+    return HTMLResponse(html)
+
+
+@router.get("/diag")
+def payment_diag():
+    """商業上線前驗 provider 設定是否正確"""
+    out = {
+        "provider":  _provider(),
+        "public_url_base": settings.PUBLIC_BASE_URL or os.environ.get("RAILWAY_PUBLIC_DOMAIN", ""),
+        "ecpay": {
+            "merchant_id_set": bool(settings.ECPAY_MERCHANT_ID),
+            "test_mode": settings.ECPAY_TEST_MODE,
+        },
+        "payuni": payuni.diag(),
+    }
+    return out
+
+
 # ─── 測試用：手動模擬付款成功 ─────────────────────────────────────────────────
 
 @router.post("/simulate-paid/{order_id}")
 def simulate_paid(order_id: str):
-    """【僅限開發測試】模擬綠界通知付款成功"""
+    """【僅限開發測試】模擬通知付款成功"""
     order = _payment_store.get(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="訂單不存在")
