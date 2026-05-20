@@ -69,6 +69,7 @@ class StartRequest(BaseModel):
     subject_email:        Optional[str] = None       # 完成後自動寄到此 email（None = 不寄）
     chapters_to_generate: Optional[List[int]] = None  # 只生成這些章節（None = 全部）
     use_external:         Optional[bool] = None       # None = 自動判斷（外部設了就用），True/False = 強制
+    session_id:           Optional[int] = None        # 從 /eeg/save-stats 拿到的 session_id，外部完成後可 callback
 
 
 class ChaptersQuery(BaseModel):
@@ -201,6 +202,7 @@ def start_full(req: StartRequest):
             variant=req.variant,
             chapters_to_generate=req.chapters_to_generate,
             brainwave_data=req.brainwave_data,
+            extra={"session_id": req.session_id},  # 給外部 React App 在 callback /reports/record 時帶上
         )
         return {
             "ok":              result.get("ok", False),

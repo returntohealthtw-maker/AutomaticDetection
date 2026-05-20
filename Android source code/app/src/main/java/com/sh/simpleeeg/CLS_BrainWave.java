@@ -54,8 +54,10 @@ public class CLS_BrainWave
     }
     //===================================================
     public void Connect(Activity _activity){
-        if(!clsEeg.bConnect(_activity))
-            m_Callback.Do(S.BluetoothClosed, 0);
+        if(!clsEeg.bConnect(_activity)) {
+            if (m_Callback != null)
+                m_Callback.Do(S.BluetoothClosed, 0);
+        }
     }
     //===================================================
     private class ThreadProcess extends Thread

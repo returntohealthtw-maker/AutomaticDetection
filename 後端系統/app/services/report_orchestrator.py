@@ -254,6 +254,8 @@ def _call_vite_prefill(
     subject_email:  str,
     brainwave_data: Optional[Dict[str, Any]],
     variant:        str = "full",
+    session_id:     Optional[int] = None,
+    api_base:       str = "",
 ) -> Dict[str, Any]:
     """
     回傳一個帶 query string 的 URL，前端打開後 React 會：
@@ -267,11 +269,14 @@ def _call_vite_prefill(
     from urllib.parse import urlencode
     ba = (brainwave_data or {}).get("bands_avg") or {}
     # 7 大指標 (0-100) — React 端 BrainwaveData 結構
+    # api_base + session_id 讓 React 在完成後可以 callback 主後端的 /reports/record
     params = {
         "auto":       "1",
         "name":       subject_name or "",
         "email":      subject_email or "",
         "variant":    variant,
+        "api_base":   api_base or "",
+        "session_id": str(session_id or ""),
         # 腦波 7 大指標：模擬從單通道 alpha/beta/gamma 推 high/low
         "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
         "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
@@ -362,6 +367,8 @@ def trigger_external_report(
         subject_email=subject_email,
         brainwave_data=brainwave_data,
         variant=variant,
+        session_id=(extra or {}).get("session_id"),
+        api_base=(extra or {}).get("api_base") or settings.PUBLIC_BASE_URL,
     )
 
 
