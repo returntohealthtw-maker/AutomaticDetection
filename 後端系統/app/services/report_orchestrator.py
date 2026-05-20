@@ -40,10 +40,10 @@ DEFAULT_URLS = {
 
 # 每家系統的 API 模式
 SYSTEM_MODES = {
-    "life_script":  "redirect",   # 沒 REST API；開連結讓使用者在外部 UI 操作
-    "child":        "redirect",
-    "parent_child": "redirect",
-    "marital":      "marital_rest",  # 真實 REST API
+    "life_script":  "vite_prefill",      # 開連結 + URL 帶 query string 讓 React 自動填表執行
+    "child":        "vite_prefill",
+    "parent_child": "parent_child_rest", # HomeAnalysisReport 自帶 /generate
+    "marital":      "marital_rest",      # 真實 REST API
 }
 
 
@@ -176,21 +176,122 @@ def _call_marital(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# 模式 2：redirect（沒 REST，回網址讓前端開新分頁）
+# 模式 2：parent_child_rest（HomeAnalysisReport — 自帶 /generate）
 # ──────────────────────────────────────────────────────────────────────
-def _call_redirect(base: str, subject_name: str, brainwave_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _call_parent_child(
+    base:            str,
+    family_name:     str,
+    members:         List[Dict[str, Any]],
+    image_mode:      str = "none",   # none / illustrated
+    selected_sections: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
-    回傳 redirect_url 給前端，前端開新分頁讓使用者在外部 UI 完成
-    （未來在那 3 個系統加 deep-link 支援，可在這邊把 brainwave_data 編入 query string）
+    members format (HomeAnalysisReport schema):
+      [{ "role": "dad"|"mom"|"child1"|"child2",
+         "role_zh": "爸爸"|"媽媽"|"孩子1"|"孩子2",
+         "name": "王俊宏",
+         "present": True,
+         "data": {
+            "concentration_pct": 87,
+            "relaxation_pct":    60,
+            "metrics": { "Delta": 28, "Theta": 66, "High α": 56, "Low α": 49,
+                         "High β": 95, "Low β":100, "High γ": 50, "Low γ": 50 }
+         }}, ...]
     """
+    body = {
+        "family_name":       family_name,
+        "members":           members,
+        "image_mode":        image_mode,
+        "selected_sections": selected_sections,
+    }
+    try:
+        with httpx.Client(timeout=60.0) as cli:
+            r = cli.post(f"{base}/generate", json=body)
+        if r.status_code >= 400:
+            return {"ok": False, "mode": "parent_child_rest",
+                    "error": f"HTTP {r.status_code}: {r.text[:200]}"}
+        data = r.json()
+        job_id = data.get("job_id")
+        if not job_id:
+            return {"ok": False, "mode": "parent_child_rest", "error": f"無 job_id: {data}"}
+        return {
+            "ok":          True,
+            "mode":        "parent_child_rest",
+            "external_url": base,
+            "job_id":      job_id,
+            "status_url":  f"{base}/status/{job_id}",
+            "stream_url":  f"{base}/stream/{job_id}",
+            "result_url":  f"{base}/report/{job_id}",
+        }
+    except httpx.TimeoutException:
+        return {"ok": False, "mode": "parent_child_rest", "error": "親子系統逾時"}
+    except Exception as e:
+        return {"ok": False, "mode": "parent_child_rest", "error": f"{type(e).__name__}: {e}"}
+
+
+def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
+    """把 AutomaticDetection 的 bands_avg 轉成 HomeAnalysisReport metrics 結構"""
+    def cap(v): return max(0, min(100, int(v)))
+    ba = (bw or {}).get("bands_avg") or {}
+    return {
+        "Delta":  cap(ba.get("delta", 50)),
+        "Theta":  cap(ba.get("theta", 50)),
+        "High α": cap(ba.get("alpha", 50) * 1.1),
+        "Low α":  cap(ba.get("alpha", 50) * 0.9),
+        "High β": cap(ba.get("beta",  50) * 1.1),
+        "Low β":  cap(ba.get("beta",  50) * 0.9),
+        "High γ": cap(ba.get("gamma", 50) * 1.1),
+        "Low γ":  cap(ba.get("gamma", 50) * 0.9),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# 模式 3：vite_prefill（成人/兒童 — 帶 query string 讓 React 自動執行）
+# ──────────────────────────────────────────────────────────────────────
+def _call_vite_prefill(
+    base:           str,
+    subject_name:   str,
+    subject_email:  str,
+    brainwave_data: Optional[Dict[str, Any]],
+    variant:        str = "full",
+) -> Dict[str, Any]:
+    """
+    回傳一個帶 query string 的 URL，前端打開後 React 會：
+      1. 從 query 解出資料，自動填入表單  
+      2. 自動 click 「單筆生成」→ 進入工作站
+      3. 自動逐節生成（48 sub-sections）
+      4. 生成完自動寄信到 ?email=...
+      5. 結束後顯示「✅ 已寄送」
+    需在成人/兒童 repo 的 App.tsx 內加 auto-run 支援
+    """
+    from urllib.parse import urlencode
+    ba = (brainwave_data or {}).get("bands_avg") or {}
+    # 7 大指標 (0-100) — React 端 BrainwaveData 結構
+    params = {
+        "auto":       "1",
+        "name":       subject_name or "",
+        "email":      subject_email or "",
+        "variant":    variant,
+        # 腦波 7 大指標：模擬從單通道 alpha/beta/gamma 推 high/low
+        "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
+        "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
+        "theta":      int(ba.get("theta", 50)),
+        "highAlpha":  int(min(100, ba.get("alpha", 50) * 1.1)),
+        "lowAlpha":   int(max(0,   ba.get("alpha", 50) * 0.9)),
+        "highBeta":   int(min(100, ba.get("beta",  50) * 1.1)),
+        "lowBeta":    int(max(0,   ba.get("beta",  50) * 0.9)),
+        "highGamma":  int(min(100, ba.get("gamma", 50) * 1.1)),
+        "lowGamma":   int(max(0,   ba.get("gamma", 50) * 0.9)),
+    }
+    qs = urlencode(params)
+    redirect_url = f"{base}/?{qs}"
     return {
         "ok":           True,
-        "mode":         "redirect",
+        "mode":         "vite_prefill",
         "external_url": base,
-        "redirect_url": base + "/",
-        "note":         "此報告類型外部系統尚無 REST API，已開連結讓您在該系統內完成生成",
+        "redirect_url": redirect_url,
+        "note":         "已開啟自動模式，React 前端會自動填表並生成（瀏覽器需保持開啟）",
         "subject_name": subject_name,
-        "has_data":     bool(brainwave_data),
     }
 
 
@@ -213,9 +314,9 @@ def trigger_external_report(
     if not base:
         return {"ok": False, "error": f"找不到 {report_type} 的對應 URL"}
 
-    mode = SYSTEM_MODES.get(report_type, "redirect")
+    mode = SYSTEM_MODES.get(report_type, "vite_prefill")
 
-    # marital 需要兩個人，從 extra 拿 husband/wife
+    # 夫妻：需要兩個人，從 extra 拿 husband/wife
     if mode == "marital_rest":
         e = extra or {}
         husband = e.get("husband") or {
@@ -232,8 +333,36 @@ def trigger_external_report(
         }
         return _call_marital(base, husband, wife, meta=e)
 
-    # 其他 3 個都走 redirect
-    return _call_redirect(base, subject_name, brainwave_data)
+    # 親子：需要 4 個家庭成員（dad, mom, child1, child2）
+    if mode == "parent_child_rest":
+        e = extra or {}
+        family_name = e.get("family_name") or f"{subject_name}家"
+        # 預設只有「孩子」一人，可由 extra 給完整 4 人
+        members = e.get("members") or [
+            {"role": "dad",    "role_zh": "爸爸", "name": e.get("dad_name", ""), "present": False, "data": None},
+            {"role": "mom",    "role_zh": "媽媽", "name": e.get("mom_name", ""), "present": False, "data": None},
+            {"role": "child1", "role_zh": "孩子1", "name": subject_name, "present": True,
+             "data": {"concentration_pct": int((brainwave_data or {}).get("attention_percentage", 50)),
+                      "relaxation_pct":    int((brainwave_data or {}).get("meditation_percentage", 50)),
+                      "metrics":           _bw_to_metrics(brainwave_data or {})}},
+            {"role": "child2", "role_zh": "孩子2", "name": e.get("child2_name", ""), "present": False, "data": None},
+        ]
+        return _call_parent_child(
+            base=base,
+            family_name=family_name,
+            members=members,
+            image_mode=e.get("image_mode", "none"),
+            selected_sections=e.get("selected_sections"),
+        )
+
+    # 成人/兒童：URL prefill 模式
+    return _call_vite_prefill(
+        base=base,
+        subject_name=subject_name,
+        subject_email=subject_email,
+        brainwave_data=brainwave_data,
+        variant=variant,
+    )
 
 
 def diag() -> Dict[str, Any]:
