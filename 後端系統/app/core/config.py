@@ -54,12 +54,11 @@ class Settings(BaseSettings):
     GITHUB_PAT: str = ""   # Personal Access Token，能讀私有 BrianaveReportImage repo
 
     # ──────────── 外部報告系統 (Orchestrator 呼叫) ────────────
-    # 你已部署的 4 個 GitHub 報告系統公開 URL（Vercel/Railway）
-    # 沒填的就 fallback 到內建 Gemini 章節生成
-    REPORT_URL_LIFE_SCRIPT:  str = ""   # 成人 / 腦波分析人生劇本
-    REPORT_URL_CHILD:        str = ""   # 兒童腦波天賦解碼
-    REPORT_URL_PARENT_CHILD: str = ""   # 親子腦波共振關係報告
-    REPORT_URL_MARITAL:      str = ""   # 夫妻腦波共振關係報告
+    # 預設指向已部署的 4 個系統；要換成自訂網址用 Railway env vars 覆蓋
+    REPORT_URL_LIFE_SCRIPT:  str = "https://brianave-report-image.vercel.app"
+    REPORT_URL_CHILD:        str = "https://brianwave-child.vercel.app"
+    REPORT_URL_PARENT_CHILD: str = "https://web-production-f1aec.up.railway.app"
+    REPORT_URL_MARITAL:      str = "https://web-production-2c7d43.up.railway.app"
     REPORT_REQUEST_TIMEOUT_SEC: int = 900  # 外部生成最多等 15 分鐘
 
     # Gmail SMTP（寄送 AI 生成後的報告 email 給受測者）

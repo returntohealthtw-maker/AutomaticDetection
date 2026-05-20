@@ -16,8 +16,10 @@ import time
 import logging
 from typing import Optional, List, Dict, Any
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from app.services import ai_report as report_generator
@@ -29,6 +31,22 @@ from app.services.report_chapters import get_chapters, count_sections
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/report-gen", tags=["report-gen"])
+
+REPORTS_DIR = Path("reports")
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@router.get("/pdf/{job_id}")
+def get_pdf(job_id: str):
+    """下載外部報告系統生成並存好的 PDF"""
+    # 防 path traversal
+    if "/" in job_id or "\\" in job_id or ".." in job_id:
+        raise HTTPException(400, "非法 job_id")
+    path = REPORTS_DIR / f"{job_id}.pdf"
+    if not path.exists():
+        raise HTTPException(404, "找不到報告檔案")
+    return FileResponse(str(path), media_type="application/pdf",
+                        filename=f"{job_id}.pdf")
 
 
 # ─── Pydantic Schemas ────────────────────────────────────────────────────
@@ -187,11 +205,14 @@ def start_full(req: StartRequest):
         return {
             "ok":              result.get("ok", False),
             "mode":            "external",
+            "external_mode":   result.get("mode"),         # marital_rest / redirect
             "report_type":     req.report_type,
             "external_url":    result.get("external_url"),
-            "external_job_id": result.get("external_job_id"),
+            "external_job_id": result.get("external_job_id") or result.get("job_id"),
             "status_url":      result.get("status_url"),
             "result_url":      result.get("result_url"),
+            "redirect_url":    result.get("redirect_url"),  # for redirect mode
+            "note":            result.get("note"),
             "error":           result.get("error"),
         }
 

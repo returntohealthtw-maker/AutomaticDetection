@@ -3413,17 +3413,27 @@ async function startFullReportGeneration(opts) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     if (data.mode === 'external') {
-      // 外部系統處理：顯示結果連結，不走 SSE
-      if (emailBar) emailBar.className = 'rg-email-bar done';
-      if (emailText) {
-        if (data.result_url) {
-          emailText.innerHTML = `📄 已交由外部報告系統生成，<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;">查看結果</a>${subjectEmail ? '（並寄送 Email）' : ''}`;
-        } else if (data.ok) {
-          emailText.textContent = `📄 已交由外部報告系統生成（job=${data.external_job_id || '?'}），完成後將寄至 ${subjectEmail || '受測者 Email'}`;
-        } else {
-          if (emailBar) emailBar.className = 'rg-email-bar error';
-          emailText.textContent = `❌ 外部報告系統失敗：${data.error || ''}`;
+      // 外部系統處理（不走 SSE）
+      if (data.external_mode === 'redirect') {
+        // 該系統沒有 REST API → 開新分頁讓使用者在外部 UI 完成
+        if (emailBar) emailBar.className = 'rg-email-bar pending';
+        if (emailText) {
+          emailText.innerHTML = `🔗 此報告需在外部系統完成，<a href="${data.redirect_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:600;">點此開啟報告系統 →</a>`;
         }
+        // 自動開新分頁
+        try { window.open(data.redirect_url, '_blank'); } catch (e) {}
+      } else if (data.result_url) {
+        // marital_rest 或其他直接拿到結果 URL
+        if (emailBar) emailBar.className = 'rg-email-bar done';
+        if (emailText) {
+          emailText.innerHTML = `✅ 報告生成完成！<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:600;">下載 PDF →</a>${subjectEmail ? '（已寄送 Email）' : ''}`;
+        }
+      } else if (data.ok) {
+        if (emailBar) emailBar.className = 'rg-email-bar pending';
+        if (emailText) emailText.textContent = `📄 外部報告系統正在生成（job=${data.external_job_id || '?'}）…`;
+      } else {
+        if (emailBar) emailBar.className = 'rg-email-bar error';
+        if (emailText) emailText.textContent = `❌ 外部報告失敗：${data.error || ''}`;
       }
       return;
     }
