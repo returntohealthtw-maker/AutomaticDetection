@@ -23,7 +23,7 @@ from app.routers.auth import require_user
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
 # 部署版本標記（每次 commit 改一次即可確認最新程式上線）
-BUILD_VERSION = "planc-v6-4variant-cjk-font"
+BUILD_VERSION = "planc-v7-pdf-diag"
 
 
 @router.get("/diag/full")
@@ -37,6 +37,41 @@ def diag_full() -> dict:
         "vercel_email_proxy": email_sender._vercel_email_proxy(),
         "ingest_secret_set": bool(os.environ.get("REPORTS_INGEST_SECRET")),
     }
+
+
+@router.get("/diag/pdf")
+def diag_pdf() -> dict:
+    """直接呼叫 render_report_pdf 跑一個極小 sample，回傳完整 traceback。"""
+    import traceback, tempfile
+    from app.services import pdf_builder
+    out_path = os.path.join(tempfile.gettempdir(), "_diag_test.pdf")
+    try:
+        sample = {
+            "1_1": {
+                "chapter_num": 1, "section_num": 1,
+                "section_title": "測試節", "text": "這是測試。Hello world.",
+            }
+        }
+        chapters = [{"num": 1, "title": "測試章", "icon": "📄"}]
+        result = pdf_builder.render_report_pdf(
+            out_path=out_path,
+            subject_name="測試者",
+            report_type="life_script",
+            variant="trial",
+            chapters_list=chapters,
+            results=sample,
+            brainwave_data={"attention_percentage": 70},
+        )
+        size = os.path.getsize(result)
+        return {"ok": True, "size_bytes": size, "font_path": pdf_builder._find_cjk_font()}
+    except Exception as e:
+        return {
+            "ok": False,
+            "font_path": pdf_builder._find_cjk_font(),
+            "error_type": type(e).__name__,
+            "error_msg": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
