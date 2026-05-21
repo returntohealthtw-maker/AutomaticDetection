@@ -50,3 +50,7 @@ desktop.ini
 
 # ngrok
 ngrok.exe
+
+# Local-only review/test files
+_reports_review/
+測試報告.pdf
