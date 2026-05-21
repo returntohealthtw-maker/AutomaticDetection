@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 # ── 設定 ─────────────────────────────────────────────────────────────
 def _max_concurrent() -> int:
     try:
-        return max(1, int(os.environ.get("HEADLESS_MAX_CONCURRENT", "3")))
+        return max(1, int(os.environ.get("HEADLESS_MAX_CONCURRENT", "1")))
     except ValueError:
-        return 3
+        return 1
 
 
 def _timeout_sec() -> int:
@@ -210,6 +210,12 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         "--disable-setuid-sandbox",
                         "--disable-dev-shm-usage",
                         "--disable-gpu",
+                        "--no-zygote",
+                        "--disable-extensions",
+                        "--disable-background-networking",
+                        "--disable-background-timer-throttling",
+                        "--disable-renderer-backgrounding",
+                        "--js-flags=--max-old-space-size=3072",
                     ],
                 )
                 ctx = await browser.new_context(
