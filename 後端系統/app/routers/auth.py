@@ -209,6 +209,39 @@ def change_password(
     return {"ok": True}
 
 
+@router.get("/consultants")
+def list_consultants(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    取得所有顧問帳號清單（admin 才能用）。
+    用於後台「顧問清單」分頁，方便清點 DB 內實際存在的帳號。
+    回傳不含 password_hash。
+    """
+    require_admin(authorization, db)
+    rows = (
+        db.query(M.Consultant)
+        .order_by(M.Consultant.consultant_id.asc())
+        .all()
+    )
+    return [
+        {
+            "consultant_id": r.consultant_id,
+            "name":          r.name,
+            "phone":         r.phone,
+            "email":         r.email or "",
+            "role":          r.role or "consultant",
+            "org_type":      r.org_type or "",
+            "org":           r.org or "",
+            "is_active":     int(r.is_active or 0),
+            "created_at":    r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else None,
+            "updated_at":    r.updated_at.strftime("%Y-%m-%d %H:%M:%S") if r.updated_at else None,
+        }
+        for r in rows
+    ]
+
+
 @router.post("/bootstrap")
 def bootstrap(db: Session = Depends(get_db)):
     """

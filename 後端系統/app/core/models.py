@@ -123,6 +123,33 @@ class Consultant(Base):
     updated_at      = Column(TIMESTAMP,   server_default=func.now(), onupdate=func.now())
 
 
+class ContactRequest(Base):
+    """顧問帳號申請（待管理員審核）
+
+    取代原本以 backend/contact_requests.json 儲存的方案。
+    放進 DB 後即可在 Railway 重新部署、容器重啟之後仍保留資料。
+    """
+    __tablename__ = "contact_requests"
+
+    # 沿用前端／舊版產生的 REQxxxxx 字串 ID
+    id              = Column(String(40),  primary_key=True)
+    name            = Column(String(50),  nullable=False)
+    phone           = Column(String(20),  nullable=False, index=True)
+    email           = Column(String(120), nullable=False)
+    org_type        = Column(String(50),  nullable=True)
+    org             = Column(String(100), nullable=True)
+    role_label      = Column(String(100), nullable=True)
+    ref             = Column(String(100), nullable=True)
+    note            = Column(Text,        nullable=True)
+    status          = Column(String(20),  default="pending", index=True)  # pending / approved / rejected
+    note_admin      = Column(Text,        nullable=True)
+    # 核准後產生的顧問帳號 ID。consultants 被刪時不要連帶把申請紀錄刪掉，所以用 SET NULL
+    consultant_id   = Column(Integer, ForeignKey("consultants.consultant_id", ondelete="SET NULL"), nullable=True)
+    initial_password= Column(String(50),  nullable=True)  # demo 暫存；正式環境應 email 寄出後立即清空
+    created_at      = Column(TIMESTAMP,   server_default=func.now())
+    handled_at      = Column(TIMESTAMP,   nullable=True)
+
+
 class Subject(Base):
     """受測者主檔（建檔一次、之後檢測可重複引用）"""
     __tablename__ = "subjects"

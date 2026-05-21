@@ -1,22 +1,24 @@
 """
 顧問帳號申請 / 管理員審核
 
-簡易實作：以 JSON 檔案儲存於 backend/contact_requests.json
-（多機部署時改用資料庫）。
+⚠️ 重要：本模組從 v2 開始把資料存進 PostgreSQL `contact_requests` 表，
+不再使用 backend/contact_requests.json 本地檔（Railway 重新部署會清空）。
 
 API：
-  POST  /api/v1/contact-requests                     新增申請
+  POST  /api/v1/contact-requests                     新增申請（公開）
   GET   /api/v1/contact-requests                     列出全部
   GET   /api/v1/contact-requests?status=pending      依狀態過濾
-  POST  /api/v1/contact-requests/{id}/approved       核准（會回傳預設密碼）
+  POST  /api/v1/contact-requests/{id}/approved       核准（回傳預設密碼）
   POST  /api/v1/contact-requests/{id}/rejected       拒絕
+
+  POST  /api/v1/contact-requests/_migrate-from-json  [一次性] 把舊 JSON 檔匯入 DB
 """
 import os
 import json
 import time
 import secrets
 from typing import Optional
-from threading import Lock
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -28,26 +30,11 @@ from app.routers.auth import hash_password
 
 router = APIRouter(prefix="/api/v1/contact-requests", tags=["顧問帳號申請"])
 
-# ─── 儲存位置 ────────────────────────────────────────────────────────────────
+
+# ─── 舊 JSON 檔路徑（僅 migrate-from-json 使用） ─────────────────────────────
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _DATA_DIR = os.path.dirname(os.path.dirname(_THIS_DIR))  # backend/
-_DATA_FILE = os.path.join(_DATA_DIR, "contact_requests.json")
-_lock = Lock()
-
-
-def _load() -> list[dict]:
-    if not os.path.exists(_DATA_FILE):
-        return []
-    try:
-        with open(_DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _save(arr: list[dict]) -> None:
-    with open(_DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(arr, f, ensure_ascii=False, indent=2)
+_LEGACY_JSON = os.path.join(_DATA_DIR, "contact_requests.json")
 
 
 # ─── 資料模型 ────────────────────────────────────────────────────────────────
@@ -64,105 +51,197 @@ class ContactRequestIn(BaseModel):
     note: Optional[str] = ""
 
 
-class ContactRequestOut(ContactRequestIn):
-    status: str = "pending"          # pending / approved / rejected
-    createdAt: str
-    handledAt: Optional[str] = None
-    initial_password: Optional[str] = None
+# ─── helpers ────────────────────────────────────────────────────────────────
+
+def _fmt_ts(ts) -> Optional[str]:
+    """把 TIMESTAMP / datetime 轉成 ISO-like 字串（沿用舊版格式 `%Y-%m-%dT%H:%M:%S`）"""
+    if ts is None:
+        return None
+    if isinstance(ts, datetime):
+        return ts.strftime("%Y-%m-%dT%H:%M:%S")
+    return str(ts)
+
+
+def _to_dict(row: M.ContactRequest) -> dict:
+    """把 DB row 轉成跟舊版 JSON 一樣的回傳格式（前端不用改）"""
+    return {
+        "id":               row.id,
+        "name":             row.name or "",
+        "phone":            row.phone or "",
+        "email":            row.email or "",
+        "org_type":         row.org_type or "",
+        "org":              row.org or "",
+        "role_label":       row.role_label or "",
+        "ref":              row.ref or "",
+        "note":             row.note or "",
+        "status":           row.status or "pending",
+        "createdAt":        _fmt_ts(row.created_at),
+        "handledAt":        _fmt_ts(row.handled_at),
+        "initial_password": row.initial_password,
+        "consultant_id":    row.consultant_id,
+        "note_admin":       row.note_admin,
+    }
+
+
+def _new_req_id() -> str:
+    return "REQ" + format(int(time.time() * 1000), "X")
 
 
 # ─── API 端點 ────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=ContactRequestOut)
-def create_request(req: ContactRequestIn):
-    with _lock:
-        arr = _load()
-        rid = req.id or ("REQ" + format(int(time.time() * 1000), "X"))
-        # 防重複 id
-        if any(r.get("id") == rid for r in arr):
-            rid = rid + secrets.token_hex(2).upper()
-        item = {
-            **req.model_dump(),
-            "id": rid,
-            "status": "pending",
-            "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "handledAt": None,
-            "initial_password": None,
-        }
-        arr.insert(0, item)
-        _save(arr)
-        return item
+@router.post("")
+def create_request(req: ContactRequestIn, db: Session = Depends(get_db)):
+    rid = (req.id or "").strip() or _new_req_id()
+    # 防重複 id
+    if db.query(M.ContactRequest).filter(M.ContactRequest.id == rid).first():
+        rid = rid + secrets.token_hex(2).upper()
+
+    row = M.ContactRequest(
+        id          = rid,
+        name        = req.name or "",
+        phone       = req.phone or "",
+        email       = req.email or "",
+        org_type    = req.org_type or "",
+        org         = req.org or "",
+        role_label  = req.role_label or "",
+        ref         = req.ref or "",
+        note        = req.note or "",
+        status      = "pending",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _to_dict(row)
 
 
 @router.get("")
-def list_requests(status: Optional[str] = None):
-    arr = _load()
+def list_requests(status: Optional[str] = None, db: Session = Depends(get_db)):
+    q = db.query(M.ContactRequest)
     if status:
-        arr = [r for r in arr if r.get("status") == status]
-    return arr
+        q = q.filter(M.ContactRequest.status == status)
+    q = q.order_by(M.ContactRequest.created_at.desc())
+    return [_to_dict(r) for r in q.all()]
 
 
-@router.post("/{req_id}/approved", response_model=ContactRequestOut)
+@router.post("/{req_id}/approved")
 def approve(req_id: str, db: Session = Depends(get_db)):
-    with _lock:
-        arr = _load()
-        for r in arr:
-            if r.get("id") != req_id:
-                continue
+    row = db.query(M.ContactRequest).filter(M.ContactRequest.id == req_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="申請編號不存在")
 
-            phone = (r.get("phone") or "").strip().replace("-", "").replace(" ", "")
-            name  = (r.get("name")  or "").strip()
-            email = (r.get("email") or "").strip()
+    phone = (row.phone or "").strip().replace("-", "").replace(" ", "")
+    name  = (row.name  or "").strip()
+    email = (row.email or "").strip()
 
-            if not phone or not name or not email:
-                raise HTTPException(status_code=400, detail="申請資料不完整，無法建立帳號")
+    if not phone or not name or not email:
+        raise HTTPException(status_code=400, detail="申請資料不完整，無法建立帳號")
 
-            # 防止覆蓋既有顧問帳號
-            existing = db.query(M.Consultant).filter(M.Consultant.phone == phone).first()
-            if existing:
-                # 若帳號已存在，僅標記為已核准，不重設密碼
-                r["status"] = "approved"
-                r["handledAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                r["consultant_id"] = existing.consultant_id
-                r["initial_password"] = None
-                r["note_admin"] = "該手機已有顧問帳號，僅標記為已核准（未建立新帳號 / 未重設密碼）"
-                _save(arr)
-                return r
+    # 防止覆蓋既有顧問帳號
+    existing = db.query(M.Consultant).filter(M.Consultant.phone == phone).first()
+    if existing:
+        row.status            = "approved"
+        row.handled_at        = datetime.utcnow()
+        row.consultant_id     = existing.consultant_id
+        row.initial_password  = None
+        row.note_admin        = "該手機已有顧問帳號，僅標記為已核准（未建立新帳號 / 未重設密碼）"
+        db.commit()
+        db.refresh(row)
+        return _to_dict(row)
 
-            # 產生 8 碼初始密碼（demo 用；正式環境應寄信並要求首次登入立刻修改）
-            initial_pw = secrets.token_urlsafe(6)
-            consultant = M.Consultant(
-                name          = name,
-                phone         = phone,
-                email         = email,
-                password_hash = hash_password(initial_pw),
-                role          = "consultant",
-                org_type      = r.get("org_type") or "",
-                org           = r.get("org") or "",
-                is_active     = 1,
-            )
-            db.add(consultant)
-            db.commit()
-            db.refresh(consultant)
+    # 產生 8 碼初始密碼（demo 用；正式環境應寄信並要求首次登入立刻修改）
+    initial_pw = secrets.token_urlsafe(6)
+    consultant = M.Consultant(
+        name          = name,
+        phone         = phone,
+        email         = email,
+        password_hash = hash_password(initial_pw),
+        role          = "consultant",
+        org_type      = row.org_type or "",
+        org           = row.org or "",
+        is_active     = 1,
+    )
+    db.add(consultant)
+    db.flush()  # 取得 consultant_id
 
-            r["status"] = "approved"
-            r["handledAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-            r["initial_password"] = initial_pw
-            r["consultant_id"]    = consultant.consultant_id
-            _save(arr)
-            # TODO：以 Email 寄送 phone + initial_password
-            return r
-    raise HTTPException(status_code=404, detail="申請編號不存在")
+    row.status            = "approved"
+    row.handled_at        = datetime.utcnow()
+    row.consultant_id     = consultant.consultant_id
+    row.initial_password  = initial_pw
+    db.commit()
+    db.refresh(row)
+    # TODO：以 Email 寄送 phone + initial_password
+    return _to_dict(row)
 
 
-@router.post("/{req_id}/rejected", response_model=ContactRequestOut)
-def reject(req_id: str):
-    with _lock:
-        arr = _load()
-        for r in arr:
-            if r.get("id") == req_id:
-                r["status"] = "rejected"
-                r["handledAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                _save(arr)
-                return r
-    raise HTTPException(status_code=404, detail="申請編號不存在")
+@router.post("/{req_id}/rejected")
+def reject(req_id: str, db: Session = Depends(get_db)):
+    row = db.query(M.ContactRequest).filter(M.ContactRequest.id == req_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="申請編號不存在")
+    row.status     = "rejected"
+    row.handled_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _to_dict(row)
+
+
+# ─── 一次性匯入舊版 JSON（若還存在）─────────────────────────────────────────
+
+@router.post("/_migrate-from-json")
+def migrate_from_json(db: Session = Depends(get_db)):
+    """
+    把 backend/contact_requests.json 一次性匯入 DB。
+
+    - 若 JSON 檔不存在 → 回 {migrated: 0, reason: "no legacy json file"}
+    - 已存在於 DB（同 id）→ 跳過、不覆蓋
+    - 匯入成功後保留 JSON 檔（自行決定要不要刪掉）
+    """
+    if not os.path.exists(_LEGACY_JSON):
+        return {"ok": True, "migrated": 0, "skipped": 0, "reason": "no legacy json file"}
+
+    try:
+        with open(_LEGACY_JSON, "r", encoding="utf-8") as f:
+            arr = json.load(f) or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"無法解析 JSON：{e}")
+
+    migrated = 0
+    skipped  = 0
+    for r in arr:
+        rid = (r.get("id") or "").strip()
+        if not rid:
+            continue
+        if db.query(M.ContactRequest).filter(M.ContactRequest.id == rid).first():
+            skipped += 1
+            continue
+
+        # 解析時間字串（舊版用 strftime("%Y-%m-%dT%H:%M:%S")）
+        def _parse(ts):
+            if not ts:
+                return None
+            try:
+                return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                return None
+
+        row = M.ContactRequest(
+            id               = rid,
+            name             = r.get("name") or "",
+            phone            = r.get("phone") or "",
+            email            = r.get("email") or "",
+            org_type         = r.get("org_type") or "",
+            org              = r.get("org") or "",
+            role_label       = r.get("role_label") or "",
+            ref              = r.get("ref") or "",
+            note             = r.get("note") or "",
+            status           = r.get("status") or "pending",
+            note_admin       = r.get("note_admin") or None,
+            consultant_id    = r.get("consultant_id"),
+            initial_password = r.get("initial_password"),
+            created_at       = _parse(r.get("createdAt")),
+            handled_at       = _parse(r.get("handledAt")),
+        )
+        db.add(row)
+        migrated += 1
+    db.commit()
+    return {"ok": True, "migrated": migrated, "skipped": skipped}
