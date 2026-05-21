@@ -324,12 +324,28 @@ def send_consultant_welcome_email(
         "— onlineReport 線上腦波分析系統"
     )
 
+    # 1) 先試 Railway 直連 Gmail SMTP
     result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)
     if result.get("ok"):
-        logger.info("✅ 顧問歡迎信寄送成功 → %s", to)
-    else:
-        logger.error("❌ 顧問歡迎信寄送失敗: %s", result.get("error"))
-    return result
+        logger.info("✅ 顧問歡迎信寄送成功（SMTP）→ %s", to)
+        return result
+
+    # 2) Railway 偶爾擋 SMTP（"Network is unreachable" 等）→ 改打 Vercel proxy 繞道
+    logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy raw", result.get("error"))
+    proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject_line, html=html)
+    if proxy_result.get("ok"):
+        logger.info("✅ 顧問歡迎信寄送成功（Vercel proxy）→ %s", to)
+        return proxy_result
+
+    logger.error(
+        "❌ 顧問歡迎信兩種方式都失敗: smtp=%s, proxy=%s",
+        result.get("error"), proxy_result.get("error"),
+    )
+    return {
+        "ok":    False,
+        "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}",
+        "to":    to,
+    }
 
 
 def _vercel_email_proxy() -> str:
@@ -359,6 +375,38 @@ def send_via_vercel_proxy(to: str, name: str, pdf_url: str) -> dict:
             return {"ok": False, "error": f"vercel_proxy HTTP {r.status_code}: {r.text[:200]}", "to": to, "via": "vercel_proxy"}
     except Exception as e:
         return {"ok": False, "error": f"vercel_proxy {type(e).__name__}: {e}", "to": to, "via": "vercel_proxy"}
+
+
+def send_via_vercel_proxy_raw(to: str, subject: str, html: str) -> dict:
+    """走 Vercel /api/sendEmail 的 raw 模式，寄任意 HTML email。
+    Railway 直連 Gmail SMTP 被擋（Network is unreachable）時繞道用。
+    Vercel app 還是用同一個 Gmail SMTP 設定寄出，差別只是經由 Vercel 出站。
+    """
+    import httpx
+    url = f"{_vercel_email_proxy()}/api/sendEmail"
+    try:
+        with httpx.Client(timeout=30) as client:
+            r = client.post(url, json={
+                "mode":    "raw",
+                "to":      to,
+                "subject": subject,
+                "html":    html,
+            })
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("success"):
+                    logger.info("✅ Vercel email proxy（raw）寄發成功: %s, method=%s", to, data.get("method"))
+                    return {"ok": True, "from": "vercel_proxy_raw", "to": to, "via": f"vercel_proxy_raw[{data.get('method','?')}]"}
+                else:
+                    return {"ok": False, "error": data.get("error", "vercel_proxy unknown"), "to": to, "via": "vercel_proxy_raw"}
+            # 試著解析 JSON 錯誤，否則回原文
+            try:
+                err = r.json().get("error") or r.json().get("detail") or r.text[:200]
+            except Exception:
+                err = r.text[:200]
+            return {"ok": False, "error": f"vercel_proxy_raw HTTP {r.status_code}: {err}", "to": to, "via": "vercel_proxy_raw"}
+    except Exception as e:
+        return {"ok": False, "error": f"vercel_proxy_raw {type(e).__name__}: {e}", "to": to, "via": "vercel_proxy_raw"}
 
 
 def send_report_link_email(
