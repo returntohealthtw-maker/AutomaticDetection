@@ -150,6 +150,43 @@ class ContactRequest(Base):
     handled_at      = Column(TIMESTAMP,   nullable=True)
 
 
+class ReportGenerationEvent(Base):
+    """外部 React App（成人/兒童）回報的「報告生成事件」
+
+    每次「按下生成」會產生一個 correlation_id，整條時間線（章節 1 開始 → 章節 1 完成
+    → 章節 2 開始 → ... → PDF 渲染 → GCS 上傳 → 寄信 / 入 queue → 完成）都以同一個
+    correlation_id 寫入此表。
+
+    後台「報告生成監看」分頁依 correlation_id 分組，顯示每筆報告的即時進度條 + 錯誤日誌。
+    """
+    __tablename__ = "report_generation_events"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    correlation_id  = Column(String(64), nullable=False, index=True)  # UUID（前端生成）
+    session_id      = Column(Integer, ForeignKey("sessions.session_id", ondelete="SET NULL"),
+                              nullable=True, index=True)
+    report_type     = Column(String(20),  default="life_script", index=True)  # life_script/child/parent_child/marital
+    variant         = Column(String(20),  default="full")                     # trial/full/vip
+    subject_name    = Column(String(50),  nullable=True)
+    subject_email   = Column(String(200), nullable=True)
+    source          = Column(String(50),  nullable=True)                      # 哪個外部系統
+    # 進度 phase：
+    #   started / chapter_start / chapter_done / chapter_failed / chapter_retry
+    #   pdf_render / gcs_upload / email_sent / queue / done / failed
+    phase           = Column(String(30),  nullable=False, index=True)
+    chapter_num     = Column(Integer,     nullable=True)   # 1-12
+    section_id      = Column(String(10),  nullable=True)   # 如 '1-1', '2-3'
+    duration_ms     = Column(Integer,     nullable=True)   # 該步驟耗時
+    error_message   = Column(Text,        nullable=True)
+    payload_json    = Column(Text,        nullable=True)   # 其他 metadata
+    created_at      = Column(TIMESTAMP,   server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("idx_rge_corr_id_ctime", "correlation_id", "created_at"),
+        Index("idx_rge_type_ctime",    "report_type", "created_at"),
+    )
+
+
 class Subject(Base):
     """受測者主檔（建檔一次、之後檢測可重複引用）"""
     __tablename__ = "subjects"

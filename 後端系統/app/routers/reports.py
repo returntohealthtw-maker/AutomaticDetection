@@ -308,3 +308,211 @@ def diag() -> dict:
         "ingest_secret_len": len(secret),
         "note": "未設定時 /record 端點開放任何來源 POST（僅開發用）；正式環境請設定。",
     }
+
+
+# ─── 報告生成事件監看 ────────────────────────────────────────────────────────
+#
+# 設計：外部 React App（成人 / 兒童）每跑完一個章節或關鍵步驟，就 POST 一筆事件
+# 過來，後台分頁讀取後可即時看到「現在生成到第 5 章」「上傳 GCS 中」「失敗在第 7 章」
+# 等狀態，並提供完整的錯誤訊息與耗時。
+#
+# 事件 phase：
+#   started        ── 按下「生成」當下
+#   chapter_start  ── 第 N 章 / 子章節開始呼叫 Gemini
+#   chapter_done   ── 該章節結束
+#   chapter_failed ── 該章節呼叫失敗
+#   chapter_retry  ── 該章節重試
+#   pdf_render     ── 開始渲染 PDF
+#   gcs_upload     ── 上傳 GCS
+#   email_sent     ── 自動寄信成功
+#   queue          ── 進入待審核佇列（B 流程）
+#   done           ── 全部完成
+#   failed         ── 整筆失敗
+# ────────────────────────────────────────────────────────────────────────────
+
+class ReportEventIn(BaseModel):
+    correlation_id: str
+    session_id:    Optional[int] = None
+    report_type:   str = "life_script"
+    variant:       str = "full"
+    subject_name:  Optional[str] = None
+    subject_email: Optional[str] = None
+    source:        Optional[str] = None
+    phase:         str
+    chapter_num:   Optional[int] = None
+    section_id:    Optional[str] = None
+    duration_ms:   Optional[int] = None
+    error_message: Optional[str] = None
+    payload:       Optional[dict] = None
+
+
+@router.post("/events")
+def post_report_event(
+    payload: ReportEventIn,
+    authorization: Optional[str] = Header(None),
+    x_ingest_secret: Optional[str] = Header(None, alias="X-Ingest-Secret"),
+    db: Session = Depends(get_db),
+):
+    """外部 React App callback：寫入單一生成事件
+    可被頻繁呼叫（每章節 1-2 筆），所以盡量輕量。
+    """
+    _verify_ingest_secret(authorization, x_ingest_secret)
+
+    import json as _json
+    payload_json = _json.dumps(payload.payload, ensure_ascii=False) if payload.payload else None
+
+    ev = M.ReportGenerationEvent(
+        correlation_id  = payload.correlation_id[:64],
+        session_id      = payload.session_id,
+        report_type     = payload.report_type[:20] if payload.report_type else "life_script",
+        variant         = payload.variant[:20] if payload.variant else "full",
+        subject_name    = payload.subject_name,
+        subject_email   = payload.subject_email,
+        source          = payload.source,
+        phase           = payload.phase[:30],
+        chapter_num     = payload.chapter_num,
+        section_id      = payload.section_id[:10] if payload.section_id else None,
+        duration_ms     = payload.duration_ms,
+        error_message   = payload.error_message,
+        payload_json    = payload_json,
+    )
+    db.add(ev)
+    db.commit()
+    return {"ok": True, "id": ev.id}
+
+
+@router.get("/events/sessions")
+def list_event_sessions(
+    limit: int = Query(50, le=200),
+    report_type: Optional[str] = Query(None, description="life_script/child/parent_child/marital"),
+    only_failed: bool = Query(False),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """列出最近 N 個生成「會話」（依 correlation_id 分組）
+    每組顯示最新狀態：first_phase 時間 / last_phase / 是否完成 / 是否失敗 / 章節進度
+    """
+    require_user(authorization, db)
+
+    # 找出最近的 correlation_id（依最新事件時間排序）
+    sub = (
+        db.query(
+            M.ReportGenerationEvent.correlation_id.label("cid"),
+            func.max(M.ReportGenerationEvent.created_at).label("last_at"),
+            func.min(M.ReportGenerationEvent.created_at).label("first_at"),
+            func.max(M.ReportGenerationEvent.id).label("max_id"),
+            func.count(M.ReportGenerationEvent.id).label("event_count"),
+        )
+        .group_by(M.ReportGenerationEvent.correlation_id)
+    )
+    if report_type:
+        sub = sub.filter(M.ReportGenerationEvent.report_type == report_type)
+
+    rows = sub.order_by(func.max(M.ReportGenerationEvent.id).desc()).limit(limit).all()
+
+    out: list[dict] = []
+    for r in rows:
+        cid = r.cid
+        # 拿這個 cid 的所有事件，找首事件 + 末事件 + 是否失敗 + 章節數
+        evs = (
+            db.query(M.ReportGenerationEvent)
+            .filter(M.ReportGenerationEvent.correlation_id == cid)
+            .order_by(M.ReportGenerationEvent.id.asc())
+            .all()
+        )
+        if not evs:
+            continue
+        first_ev = evs[0]
+        last_ev  = evs[-1]
+        failed_evs = [e for e in evs if e.phase in ("failed", "chapter_failed")]
+        chapter_done = max((e.chapter_num or 0) for e in evs if e.phase == "chapter_done") if any(e.phase == "chapter_done" for e in evs) else 0
+        chapter_total = max((e.chapter_num or 0) for e in evs) if evs else 0
+
+        # 已完成的判定
+        is_done   = any(e.phase == "done" for e in evs)
+        is_failed = any(e.phase == "failed" for e in evs)
+        is_emailed = any(e.phase == "email_sent" for e in evs)
+        is_queued  = any(e.phase == "queue" for e in evs)
+
+        item = {
+            "correlation_id":  cid,
+            "report_type":     first_ev.report_type,
+            "variant":         first_ev.variant,
+            "subject_name":    first_ev.subject_name,
+            "subject_email":   first_ev.subject_email,
+            "source":          first_ev.source,
+            "session_id":      first_ev.session_id,
+            "first_at":        first_ev.created_at.isoformat() if first_ev.created_at else None,
+            "last_at":         last_ev.created_at.isoformat()  if last_ev.created_at  else None,
+            "last_phase":      last_ev.phase,
+            "event_count":     len(evs),
+            "chapter_done":    chapter_done,
+            "chapter_max":     chapter_total,
+            "is_done":         is_done,
+            "is_failed":       is_failed,
+            "is_emailed":      is_emailed,
+            "is_queued":       is_queued,
+            "failed_count":    len(failed_evs),
+            "last_error":      (failed_evs[-1].error_message if failed_evs else None),
+        }
+        if not only_failed or (is_failed or failed_evs):
+            out.append(item)
+
+    return {"ok": True, "count": len(out), "sessions": out}
+
+
+@router.get("/events/{correlation_id}")
+def get_report_event_timeline(
+    correlation_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """單一 correlation_id 的完整事件時間線（後台「展開」用）"""
+    require_user(authorization, db)
+
+    rows = (
+        db.query(M.ReportGenerationEvent)
+        .filter(M.ReportGenerationEvent.correlation_id == correlation_id)
+        .order_by(M.ReportGenerationEvent.id.asc())
+        .all()
+    )
+    if not rows:
+        raise HTTPException(404, f"找不到 correlation_id={correlation_id}")
+
+    import json as _json
+    return {
+        "ok": True,
+        "correlation_id": correlation_id,
+        "events": [
+            {
+                "id":            r.id,
+                "phase":         r.phase,
+                "chapter_num":   r.chapter_num,
+                "section_id":    r.section_id,
+                "duration_ms":   r.duration_ms,
+                "error_message": r.error_message,
+                "payload":       (_json.loads(r.payload_json) if r.payload_json else None),
+                "created_at":    r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.delete("/events/{correlation_id}")
+def delete_report_event(
+    correlation_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """刪除一筆 correlation_id 的所有事件（管理員清理用）"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "需 admin 權限")
+    n = (
+        db.query(M.ReportGenerationEvent)
+        .filter(M.ReportGenerationEvent.correlation_id == correlation_id)
+        .delete()
+    )
+    db.commit()
+    return {"ok": True, "deleted": n}

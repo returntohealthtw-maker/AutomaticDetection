@@ -1058,6 +1058,7 @@
           <button class="admin-tab"        data-tab="earnings"  onclick="switchAdminTab('earnings')">分潤總覽</button>
           <button class="admin-tab"        data-tab="rules"     onclick="switchAdminTab('rules')">分潤規則</button>
           <button class="admin-tab"        data-tab="reports"   onclick="switchAdminTab('reports')">📁 報告管理</button>
+          <button class="admin-tab"        data-tab="monitor"   onclick="switchAdminTab('monitor')">🔍 生成監看</button>
         </div>
 
         <!-- ── 帳號審核分頁 ─────────────────────────────────────── -->
@@ -1128,6 +1129,28 @@
             <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminReports()">🔄 重新載入</button>
           </div>
           <div id="admin-report-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
+        </div>
+
+        <!-- ── 生成監看分頁（即時報告生成進度 + 錯誤日誌）─────────── -->
+        <div id="admin-pane-monitor" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#0a1426;color:#e0e6f0;">
+          <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="monitor-filter-type" style="padding:6px 10px;border:none;border-radius:6px;font-size:12px;background:#1c2942;color:#e0e6f0;" onchange="renderAdminMonitor()">
+              <option value="">全部報告類型</option>
+              <option value="life_script">成人腦波分析</option>
+              <option value="child">兒童腦波分析</option>
+              <option value="parent_child">親子報告</option>
+              <option value="marital">夫妻報告</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="monitor-filter-failed" onchange="renderAdminMonitor()"> 只看失敗
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="monitor-autorefresh" checked onchange="_toggleMonitorAutorefresh()"> 自動更新 (5s)
+            </label>
+            <span id="monitor-status" style="font-size:11px;opacity:0.7;flex:1;text-align:right;"></span>
+            <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminMonitor()">🔄 立即更新</button>
+          </div>
+          <div id="admin-monitor-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
         </div>
       </div>
 
@@ -4715,6 +4738,7 @@ function switchAdminTab(tab) {
     earnings:    '分潤總覽',
     rules:       '分潤規則',
     reports:     '報告管理 · 雲端 PDF',
+    monitor:     '報告生成監看 · 即時進度與錯誤日誌',
   };
   const titleEl = document.getElementById('admin-console-title');
   if (titleEl) titleEl.textContent = titleMap[tab] || '管理員後台';
@@ -4725,6 +4749,11 @@ function switchAdminTab(tab) {
   document.getElementById('admin-pane-earnings').style.display    = (tab === 'earnings')    ? 'flex' : 'none';
   document.getElementById('admin-pane-rules').style.display       = (tab === 'rules')       ? 'flex' : 'none';
   document.getElementById('admin-pane-reports').style.display     = (tab === 'reports')     ? 'flex' : 'none';
+  const monitorEl = document.getElementById('admin-pane-monitor');
+  if (monitorEl) monitorEl.style.display = (tab === 'monitor') ? 'flex' : 'none';
+
+  // 離開監看分頁時停止自動更新
+  if (tab !== 'monitor' && _monitorTimer) { clearInterval(_monitorTimer); _monitorTimer = null; }
 
   if (['pending','approved','rejected'].includes(tab)) renderAdminList();
   else if (tab === 'consultants') renderAdminConsultants();
@@ -4732,6 +4761,7 @@ function switchAdminTab(tab) {
   else if (tab === 'earnings') renderEarningsOverview();
   else if (tab === 'rules')    renderShareRulesEditor();
   else if (tab === 'reports')  renderAdminReports();
+  else if (tab === 'monitor')  { renderAdminMonitor(); _toggleMonitorAutorefresh(); }
 }
 
 // ─── 顧問清單：從 /api/v1/auth/consultants 取 DB 內所有顧問帳號 ──────────────
@@ -4875,6 +4905,188 @@ async function deleteConsultant(cid, name, phone) {
     showToast(`❌ 連線失敗：${e.message}`, 'error');
   }
   await renderAdminConsultants();
+}
+
+// ─── 報告生成監看：從 /api/v1/reports/events/sessions 取即時進度 ──────────
+let _monitorTimer = null;
+let _monitorExpanded = {}; // correlation_id → bool（展開狀態）
+
+function _toggleMonitorAutorefresh() {
+  const cb = document.getElementById('monitor-autorefresh');
+  if (_monitorTimer) { clearInterval(_monitorTimer); _monitorTimer = null; }
+  if (cb && cb.checked && _currentAdminTab === 'monitor') {
+    _monitorTimer = setInterval(() => { renderAdminMonitor(true); }, 5000);
+  }
+}
+
+async function renderAdminMonitor(isAutoRefresh) {
+  const listEl   = document.getElementById('admin-monitor-list');
+  const statusEl = document.getElementById('monitor-status');
+  if (!listEl) return;
+
+  const typeFilter   = document.getElementById('monitor-filter-type')?.value || '';
+  const onlyFailed   = document.getElementById('monitor-filter-failed')?.checked || false;
+
+  if (!isAutoRefresh) {
+    listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#90a3c2;">📂 載入中...</div>';
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('limit', '50');
+    if (typeFilter) params.set('report_type', typeFilter);
+    if (onlyFailed) params.set('only_failed', '1');
+    const r = await apiFetch(`/reports/events/sessions?${params.toString()}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const sessions = data.sessions || [];
+
+    if (statusEl) statusEl.textContent = `共 ${sessions.length} 筆 · 更新於 ${new Date().toLocaleTimeString('zh-TW')}`;
+
+    if (!sessions.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#90a3c2;">目前沒有生成紀錄</div>';
+      return;
+    }
+
+    listEl.innerHTML = sessions.map(s => _renderMonitorSessionCard(s)).join('');
+    // 重新綁定已展開的 timeline
+    Object.keys(_monitorExpanded).forEach(cid => {
+      if (_monitorExpanded[cid]) _loadMonitorTimeline(cid);
+    });
+  } catch (e) {
+    if (!isAutoRefresh) {
+      listEl.innerHTML = `<div style="text-align:center;padding:30px;color:#ff8a80;">❌ 載入失敗：${e.message}</div>`;
+    }
+    if (statusEl) statusEl.textContent = `更新失敗：${e.message}`;
+  }
+}
+
+function _renderMonitorSessionCard(s) {
+  // 狀態色
+  let badge = '';
+  let badgeBg = '';
+  if (s.is_failed)        { badge = '❌ 失敗'; badgeBg = '#c62828'; }
+  else if (s.is_emailed)  { badge = '✉️ 已寄信'; badgeBg = '#2e7d32'; }
+  else if (s.is_queued)   { badge = '🕓 待審核'; badgeBg = '#f57c00'; }
+  else if (s.is_done)     { badge = '✅ 完成'; badgeBg = '#1565c0'; }
+  else                    { badge = `⚙️ ${s.last_phase}`; badgeBg = '#37474f'; }
+
+  // 進度條（章節進度）
+  const progressPct = s.chapter_max ? Math.round((s.chapter_done / Math.max(s.chapter_max, 12)) * 100) : 0;
+  const progressColor = s.is_failed ? '#ef5350' : (s.is_done ? '#66bb6a' : '#42a5f5');
+
+  // 報告類型中文
+  const typeMap = {
+    life_script:  '成人腦波分析',
+    child:        '兒童腦波分析',
+    parent_child: '親子報告',
+    marital:      '夫妻報告',
+  };
+  const typeLabel = typeMap[s.report_type] || s.report_type;
+
+  // 已完成 N 章
+  const chapterInfo = s.is_done ? `12 章全部完成`
+                    : (s.chapter_done > 0 ? `章節 ${s.chapter_done} / 12 完成` : '尚未開始章節');
+
+  // 耗時（first_at ~ last_at）
+  let duration = '';
+  if (s.first_at && s.last_at) {
+    const ms = new Date(s.last_at).getTime() - new Date(s.first_at).getTime();
+    const sec = Math.round(ms / 1000);
+    duration = sec < 60 ? `${sec} 秒` : `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`;
+  }
+
+  const cid = s.correlation_id;
+  const expanded = !!_monitorExpanded[cid];
+
+  return `
+    <div style="background:#142037;border:1px solid #1f2f4e;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="background:${badgeBg};color:white;font-size:11px;padding:3px 8px;border-radius:6px;font-weight:700;">${badge}</span>
+            <span style="font-weight:700;color:#cfe1ff;font-size:14px;">${s.subject_name || '(無姓名)'}</span>
+            <span style="color:#7da3d6;font-size:11px;">${typeLabel} · ${s.variant}</span>
+          </div>
+          <div style="font-size:11px;color:#8aa1c4;margin-top:6px;">
+            ${s.subject_email ? `📧 ${s.subject_email}` : ''}
+            ${s.subject_email && s.session_id ? ' · ' : ''}
+            ${s.session_id ? `🧠 session #${s.session_id}` : ''}
+          </div>
+          <div style="font-size:11px;color:#8aa1c4;margin-top:3px;">
+            ${chapterInfo}${duration ? ` · 耗時 ${duration}` : ''}${s.event_count ? ` · ${s.event_count} 事件` : ''}
+          </div>
+          ${s.last_error ? `<div style="background:#3a1212;border:1px solid #6a2828;color:#ffb3a8;font-size:11px;padding:6px 8px;border-radius:6px;margin-top:6px;word-break:break-all;">⚠️ ${_escapeHtml(s.last_error)}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button onclick="_toggleMonitorTimeline('${cid}')" style="background:#1976d2;color:white;border:none;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;">${expanded ? '收合' : '時間線'}</button>
+        </div>
+      </div>
+      <div style="background:#0a1426;border-radius:6px;height:6px;overflow:hidden;margin-top:8px;">
+        <div style="width:${progressPct}%;height:100%;background:${progressColor};transition:width 0.3s;"></div>
+      </div>
+      <div id="monitor-timeline-${cid}" style="display:${expanded ? 'block' : 'none'};margin-top:10px;background:#0a1426;border-radius:8px;padding:8px 10px;font-family:monospace;font-size:10.5px;max-height:240px;overflow-y:auto;"></div>
+      <div style="font-size:9.5px;color:#5a7297;margin-top:6px;font-family:monospace;">${cid}</div>
+    </div>
+  `;
+}
+
+function _escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => (
+    { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]
+  ));
+}
+
+function _toggleMonitorTimeline(cid) {
+  _monitorExpanded[cid] = !_monitorExpanded[cid];
+  const el = document.getElementById(`monitor-timeline-${cid}`);
+  if (!el) return;
+  el.style.display = _monitorExpanded[cid] ? 'block' : 'none';
+  if (_monitorExpanded[cid]) {
+    _loadMonitorTimeline(cid);
+  }
+  // 重繪「時間線」按鈕字
+  renderAdminMonitor(true);
+}
+
+async function _loadMonitorTimeline(cid) {
+  const el = document.getElementById(`monitor-timeline-${cid}`);
+  if (!el) return;
+  if (!el.innerHTML || el.innerHTML.includes('載入')) {
+    el.innerHTML = '<span style="color:#8aa1c4;">載入時間線...</span>';
+  }
+  try {
+    const r = await apiFetch(`/reports/events/${encodeURIComponent(cid)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const events = data.events || [];
+    if (!events.length) { el.innerHTML = '<span style="color:#8aa1c4;">沒有事件</span>'; return; }
+
+    const phaseColors = {
+      started:        '#90caf9',
+      chapter_start:  '#80cbc4',
+      chapter_done:   '#a5d6a7',
+      chapter_failed: '#ef9a9a',
+      chapter_retry:  '#ffcc80',
+      pdf_render:     '#ce93d8',
+      gcs_upload:     '#81d4fa',
+      email_sent:     '#a5d6a7',
+      queue:          '#ffb74d',
+      done:           '#69f0ae',
+      failed:         '#ff5252',
+    };
+
+    el.innerHTML = events.map(e => {
+      const color = phaseColors[e.phase] || '#bbbbbb';
+      const ts = e.created_at ? new Date(e.created_at).toLocaleTimeString('zh-TW') : '';
+      const ms = e.duration_ms ? ` <span style="color:#bbb;">(${e.duration_ms} ms)</span>` : '';
+      const sec = e.section_id ? ` [${e.section_id}]` : (e.chapter_num ? ` [ch ${e.chapter_num}]` : '');
+      const err = e.error_message ? `<div style="color:#ffb3a8;background:#3a1212;border:1px solid #6a2828;padding:4px 6px;border-radius:4px;margin:4px 0 4px 12px;word-break:break-all;">${_escapeHtml(e.error_message)}</div>` : '';
+      return `<div style="padding:2px 0;"><span style="color:#5a7297;">${ts}</span> <span style="color:${color};font-weight:700;">${e.phase}</span>${sec}${ms}</div>${err}`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#ff8a80;">載入失敗：${e.message}</span>`;
+  }
 }
 
 // ─── 報告管理：從 /api/v1/reports/list 取所有報告（含 GCS URL）──────────────
