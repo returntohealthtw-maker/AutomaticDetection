@@ -159,6 +159,16 @@ def list_requests(status: Optional[str] = None, db: Session = Depends(get_db)):
 
 @router.post("/{req_id}/approved")
 def approve(req_id: str, db: Session = Depends(get_db)):
+    """
+    核准申請。
+
+    行為（v3 變更，避免「dup_phone 不寄信」造成名單不同步）：
+      • 手機尚無顧問 → 建立新顧問 + 寄歡迎信
+      • 手機已有顧問 → 「重設密碼 + 更新 email / name / 啟用 + 寄歡迎信」
+        （核准 = 一定會給對方一組可用密碼 + 寄信，行為簡單可預期）
+
+    若不想覆蓋既有帳號，請先用「拒絕」處理該申請，或先刪除既有顧問。
+    """
     row = db.query(M.ContactRequest).filter(M.ContactRequest.id == req_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="申請編號不存在")
@@ -170,37 +180,41 @@ def approve(req_id: str, db: Session = Depends(get_db)):
     if not phone or not name or not email:
         raise HTTPException(status_code=400, detail="申請資料不完整，無法建立帳號")
 
-    # 防止覆蓋既有顧問帳號
+    initial_pw = secrets.token_urlsafe(6)
+
     existing = db.query(M.Consultant).filter(M.Consultant.phone == phone).first()
     if existing:
-        row.status            = "approved"
-        row.handled_at        = datetime.utcnow()
-        row.consultant_id     = existing.consultant_id
-        row.initial_password  = None
-        row.note_admin        = "該手機已有顧問帳號，僅標記為已核准（未建立新帳號 / 未重設密碼）"
-        db.commit()
-        db.refresh(row)
-        return _to_dict(row)
-
-    # 產生 8 碼初始密碼（demo 用；正式環境應寄信並要求首次登入立刻修改）
-    initial_pw = secrets.token_urlsafe(6)
-    consultant = M.Consultant(
-        name          = name,
-        phone         = phone,
-        email         = email,
-        password_hash = hash_password(initial_pw),
-        role          = "consultant",
-        org_type      = row.org_type or "",
-        org           = row.org or "",
-        is_active     = 1,
-    )
-    db.add(consultant)
-    db.flush()  # 取得 consultant_id
+        # ★ v3：不再跳過，改成「重設密碼 + 同步申請最新資料 + 重新啟用」
+        existing.password_hash = hash_password(initial_pw)
+        existing.email         = email or existing.email
+        existing.name          = name or existing.name
+        if (row.org_type or "").strip():
+            existing.org_type = row.org_type
+        if (row.org or "").strip():
+            existing.org = row.org
+        existing.is_active = 1
+        consultant = existing
+        note = f"既有顧問 #{existing.consultant_id}：已重設密碼、同步申請資料、重新啟用"
+    else:
+        consultant = M.Consultant(
+            name          = name,
+            phone         = phone,
+            email         = email,
+            password_hash = hash_password(initial_pw),
+            role          = "consultant",
+            org_type      = row.org_type or "",
+            org           = row.org or "",
+            is_active     = 1,
+        )
+        db.add(consultant)
+        db.flush()  # 取得 consultant_id
+        note = f"建立新顧問 #{consultant.consultant_id}"
 
     row.status            = "approved"
     row.handled_at        = datetime.utcnow()
     row.consultant_id     = consultant.consultant_id
     row.initial_password  = initial_pw
+    row.note_admin        = note
     db.commit()
     db.refresh(row)
 
