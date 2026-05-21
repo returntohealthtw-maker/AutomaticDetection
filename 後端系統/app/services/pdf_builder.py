@@ -64,11 +64,19 @@ def _find_cjk_font() -> Optional[str]:
     return None
 
 
-_CJK_FONT_NAME = "ReportCJK"
-_FONT_REGISTERED = False
+_CJK_FONT_NAME      = "ReportCJK"
+_CJK_FONT_NAME_BOLD = "ReportCJK-Bold"
+_CJK_FONT_NAME_IT   = "ReportCJK-It"
+_CJK_FONT_NAME_BI   = "ReportCJK-BoldIt"
+_FONT_REGISTERED    = False
 
 
 def _ensure_font_registered():
+    """reportlab Paragraph 在 layout 時會嘗試解析 bold/italic 變體，
+    即使我們的 style 沒用粗斜體，內部仍要求 family 必須有四個變體註冊；
+    為了避免「Can't map determine family/bold/italic」的錯，
+    我們用同一個 TTF 註冊四次（不同字型名），再以 registerFontFamily 串起來。
+    """
     global _FONT_REGISTERED
     if _FONT_REGISTERED:
         return
@@ -77,16 +85,18 @@ def _ensure_font_registered():
         from reportlab.pdfbase.ttfonts import TTFont
         path = _find_cjk_font()
         if path:
-            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path))
-            # 註冊 family 對映，讓 <b>、<i>、<b><i> 都能 fallback 到同一個檔（reportlab 才不會炸）
+            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME,      path))
+            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME_BOLD, path))
+            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME_IT,   path))
+            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME_BI,   path))
             pdfmetrics.registerFontFamily(
                 _CJK_FONT_NAME,
-                normal=_CJK_FONT_NAME,
-                bold=_CJK_FONT_NAME,
-                italic=_CJK_FONT_NAME,
-                boldItalic=_CJK_FONT_NAME,
+                normal     = _CJK_FONT_NAME,
+                bold       = _CJK_FONT_NAME_BOLD,
+                italic     = _CJK_FONT_NAME_IT,
+                boldItalic = _CJK_FONT_NAME_BI,
             )
-            logger.info("PDF 字型已註冊：%s", path)
+            logger.info("✅ PDF 字型（4變體）已註冊：%s", path)
         else:
             logger.warning("找不到 CJK 字型，中文可能顯示為方塊")
         _FONT_REGISTERED = True
