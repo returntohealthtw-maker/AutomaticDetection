@@ -355,7 +355,14 @@ async def payuni_notify(request: Request):
 
 
 async def _handle_payuni_return(request: Request, order_id_from_path: str = "") -> HTMLResponse:
-    """共用邏輯：處理 PayUni return 的 POST/GET，order_id 可從路徑或 form 取得"""
+    """共用邏輯：處理 PayUni return 的 POST/GET，order_id 可從路徑或 form 取得
+
+    結果分四種：
+      paid_ok=True            付款成功（綠勾）
+      result_kind='cancel'    使用者沒帶資料回來 → 「您似乎沒完成付款」（藍色資訊）
+      result_kind='fail'      PayUni 回報付款失敗（橘色警告）
+      result_kind='sign_err'  HashKey/IV 設錯 → 真正的系統問題（紅色錯誤，內部除錯用）
+    """
     enc, hsh = "", ""
     form_data = {}
     if request.method == "POST":
@@ -367,9 +374,10 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
         enc = request.query_params.get("EncryptInfo", "")
         hsh = request.query_params.get("HashInfo", "")
 
-    real_no = order_id_from_path or ""
-    paid_ok = False
-    err_msg = ""
+    real_no    = order_id_from_path or ""
+    paid_ok    = False
+    result_kind = "cancel"   # 預設：沒帶資料 = 使用者取消
+    err_detail  = ""         # 給開發者看的詳細訊息（會印 log）
 
     if enc and hsh:
         result = payuni.decrypt_callback(enc, hsh)
@@ -385,51 +393,98 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
                     paid_ok = True
                     print(f"[PayUni Return] 訂單 {real_no} 已立即確認付款成功")
                 elif order:
-                    # 已經是 paid（可能 webhook 先到了）
+                    # webhook 先到、訂單已是 paid
                     paid_ok = (order["status"] == "paid")
                 else:
-                    err_msg = f"訂單 {real_no} 不在伺服器記憶體中，但 PayUni 回報已付款（後端可能重啟過）"
-                    print(f"[PayUni Return] {err_msg}")
+                    result_kind = "fail"
+                    err_detail = f"訂單 {real_no} 已從 PayUni 回報付款，但伺服器找不到（可能後端重啟，記憶體訂單已清）"
+                    print(f"[PayUni Return] {err_detail}")
             else:
-                err_msg = "PayUni 回報付款失敗或取消"
-                print(f"[PayUni Return] {err_msg}：data={data}")
+                result_kind = "fail"
+                err_detail = f"PayUni 回報付款未成功：data={data}"
+                print(f"[PayUni Return] {err_detail}")
         else:
-            err_msg = f"PayUni 簽章驗證失敗：{result.get('error')}"
-            print(f"[PayUni Return] {err_msg}")
+            result_kind = "sign_err"
+            err_detail = f"PayUni 簽章驗證失敗：{result.get('error')}（檢查 PAYUNI_HASH_KEY / PAYUNI_HASH_IV 是否與後台一致）"
+            print(f"[PayUni Return] {err_detail}")
     else:
-        # 沒帶任何資料就被導回（例如使用者按了上一頁），不視為錯誤
-        print(f"[PayUni Return] 收到無 EncryptInfo/HashInfo 的請求，order={real_no}，form_keys={list(form_data.keys())}")
+        # 沒帶 EncryptInfo/HashInfo = 使用者按取消或瀏覽器返回
+        result_kind = "cancel"
+        print(f"[PayUni Return] 使用者取消／返回（無 EncryptInfo），order={real_no}，form_keys={list(form_data.keys())}, query_keys={list(request.query_params.keys())}")
 
-    show_id = real_no or "(未知)"
+    show_id = real_no or "(尚未建立)"
     if paid_ok:
-        icon, title, msg, hint = "✅", "付款完成！", "請返回 App 或關閉此頁面。", "📱 系統正在確認付款，<br>App 將在 <strong>3 秒內自動跳轉</strong>至腦波檢測頁面。"
-    else:
-        icon, title = "ℹ️", "已從付款頁返回"
-        msg  = (err_msg or "未收到付款結果，請確認是否完成付款。")
-        hint = "💡 若您已成功付款，請稍候幾秒，App 會自動確認。"
+        icon  = "✅"
+        bg    = "#43a047"   # 綠
+        title = "付款完成！"
+        msg   = "我們已收到您的付款，請返回 App。"
+        hint  = "📱 App 將在 <strong>3 秒內</strong>自動偵測並進入腦波檢測頁面。"
+        hint_bg = "#e8f5e9"; hint_color = "#1b5e20"
+    elif result_kind == "cancel":
+        icon  = "ℹ️"
+        bg    = "#1976d2"   # 藍
+        title = "尚未完成付款"
+        msg   = "您似乎取消了付款或返回了上一頁。"
+        hint  = "💡 如需付款，請回到 App 點「📲 立即付款」重新前往。<br>如果剛剛已成功付款，3 秒內 App 會自動偵測，可以直接返回。"
+        hint_bg = "#e3f2fd"; hint_color = "#0d47a1"
+    elif result_kind == "fail":
+        icon  = "⚠️"
+        bg    = "#f57c00"   # 橘
+        title = "付款未成功"
+        msg   = "金流系統回報這筆交易未完成（可能是卡片驗證失敗或金額不符）。"
+        hint  = "💡 您可以回到 App，重新建立訂單再試一次。如果款項已被扣除，請聯絡客服協助退款。"
+        hint_bg = "#fff3e0"; hint_color = "#e65100"
+    else:  # sign_err
+        icon  = "🛠"
+        bg    = "#d32f2f"   # 紅
+        title = "系統設定問題"
+        msg   = "後端與金流的安全簽章驗證對不上，這不是您的問題，請聯絡管理員。"
+        hint  = "💡 (技術細節給管理員) 請至 Railway 確認 PAYUNI_HASH_KEY / PAYUNI_HASH_IV 是否與 PayUni 後台「商家設定」頁完全一致（注意大小寫與空白）。"
+        hint_bg = "#ffebee"; hint_color = "#b71c1c"
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
 <title>{title}</title>
-<style>body{{margin:0;display:flex;justify-content:center;align-items:center;
-min-height:100vh;background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;text-align:center;padding:20px;}}
-.card{{background:white;border-radius:20px;padding:36px 28px;
-box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:360px;width:100%;}}
-.icon{{font-size:56px;margin-bottom:12px;}}
-h2{{color:#1a1a2e;font-size:20px;margin:0 0 8px;}}
-p{{color:#666;font-size:14px;line-height:1.6;}}
-.hint{{background:#e8f5e9;border-radius:10px;padding:12px;margin-top:16px;
-font-size:13px;color:#2e7d32;line-height:1.6;}}
-a.btn{{display:block;background:#667eea;color:white;text-decoration:none;
-border-radius:12px;padding:13px;font-size:14px;font-weight:600;margin-top:16px;}}
-</style></head>
-<body><div class="card">
-<div class="icon">{icon}</div><h2>{title}</h2><p>{msg}</p>
-<div class="hint">{hint}</div>
-<a class="btn" href="/app">📱 返回 App</a>
-<p style="color:#aaa;font-size:12px;margin-top:16px;">訂單：{show_id}</p>
-</div></body></html>"""
+<style>
+  :root {{ color-scheme: light; }}
+  html, body {{
+    background-color: #f5f7fa !important;
+    color: #333;
+  }}
+  body{{margin:0;display:flex;justify-content:center;align-items:center;
+       min-height:100vh;font-family:'Microsoft JhengHei','Helvetica',sans-serif;
+       text-align:center;padding:20px;}}
+  .card{{background:white !important;color:#1a1a2e;border-radius:20px;padding:32px 24px;
+         box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:360px;width:100%;
+         border-top:6px solid {bg};}}
+  .icon{{font-size:56px;margin-bottom:8px;}}
+  h2{{color:#1a1a2e !important;font-size:20px;margin:8px 0;}}
+  p{{color:#555 !important;font-size:14px;line-height:1.7;margin:8px 0;}}
+  .hint{{background:{hint_bg} !important;color:{hint_color} !important;
+         border-radius:10px;padding:12px 14px;margin-top:16px;
+         font-size:13px;line-height:1.7;text-align:left;}}
+  a.btn{{display:block;background:{bg} !important;color:white !important;text-decoration:none;
+         border-radius:12px;padding:14px;font-size:15px;font-weight:600;margin-top:16px;
+         box-shadow:0 4px 14px rgba(0,0,0,0.15);}}
+  .oid{{color:#aaa;font-size:11px;margin-top:14px;font-family:monospace;}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">{icon}</div>
+  <h2>{title}</h2>
+  <p>{msg}</p>
+  <div class="hint">{hint}</div>
+  <a class="btn" href="/app">📱 返回 App</a>
+  <div class="oid">訂單編號：{show_id}</div>
+</div>
+</body>
+</html>"""
     return HTMLResponse(html)
 
 

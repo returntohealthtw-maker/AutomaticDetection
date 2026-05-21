@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.21.3"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.21.4"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 2
@@ -79,26 +79,35 @@ app.include_router(reports.router)
 
 
 def _friendly_error_html(title: str, message: str, hint: str = "") -> str:
-    """通用的友善錯誤頁面 HTML（手機/平板開到 404 看了不會慌）"""
+    """通用的友善錯誤頁面 HTML（手機/平板開到 404 看了不會慌）
+
+    使用 color-scheme: light only 強制套用淺色配色，
+    避免在使用者開啟系統深色模式時，整張卡片被瀏覽器染黑造成視覺錯亂。
+    """
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light">
   <title>{title}</title>
   <style>
+    :root {{ color-scheme: light; }}
+    html, body {{ background-color: #667eea !important; color: #333; }}
     body{{margin:0;display:flex;justify-content:center;align-items:center;
-         min-height:100vh;background:linear-gradient(135deg,#667eea,#764ba2);
-         font-family:'Microsoft JhengHei',sans-serif;padding:20px;}}
-    .card{{background:white;border-radius:24px;padding:36px 28px;
+         min-height:100vh;background:linear-gradient(135deg,#667eea,#764ba2) !important;
+         font-family:'Microsoft JhengHei','Helvetica',sans-serif;padding:20px;}}
+    .card{{background:white !important;color:#1a1a2e;border-radius:24px;padding:36px 28px;
            box-shadow:0 12px 48px rgba(0,0,0,0.25);max-width:380px;width:100%;text-align:center;}}
     .icon{{font-size:64px;margin-bottom:12px;}}
-    h2{{color:#1a1a2e;font-size:22px;margin:0 0 10px;}}
-    p{{color:#555;font-size:15px;line-height:1.7;margin:6px 0;}}
-    .hint{{background:#fff8e1;border-left:4px solid #ffb300;
+    h2{{color:#1a1a2e !important;font-size:22px;margin:0 0 10px;}}
+    p{{color:#555 !important;font-size:15px;line-height:1.7;margin:6px 0;}}
+    .hint{{background:#fff8e1 !important;color:#7a4f00 !important;
+           border-left:4px solid #ffb300;
            text-align:left;border-radius:10px;padding:12px 14px;margin-top:18px;
-           font-size:13px;color:#7a4f00;line-height:1.6;}}
-    a.btn{{display:block;background:#667eea;color:white;text-decoration:none;
+           font-size:13px;line-height:1.6;}}
+    a.btn{{display:block;background:#667eea !important;color:white !important;text-decoration:none;
            border-radius:12px;padding:14px;font-size:15px;font-weight:600;
            margin-top:18px;box-shadow:0 4px 14px rgba(102,126,234,0.4);}}
   </style>
