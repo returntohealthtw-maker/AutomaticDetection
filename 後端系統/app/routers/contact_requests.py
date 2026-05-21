@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core import models as M
 from app.core.database import get_db
 from app.routers.auth import hash_password
+from app.services.email_sender import send_consultant_welcome_email, is_configured as email_is_configured
 
 router = APIRouter(prefix="/api/v1/contact-requests", tags=["顧問帳號申請"])
 
@@ -85,6 +86,37 @@ def _to_dict(row: M.ContactRequest) -> dict:
 
 def _new_req_id() -> str:
     return "REQ" + format(int(time.time() * 1000), "X")
+
+
+def _send_welcome(row: M.ContactRequest) -> dict:
+    """
+    寄發顧問歡迎信。回傳 dict 給前端顯示「寄信成功 / 失敗」。
+    失敗時也會把錯誤訊息記到 row.note_admin，方便管理員看。
+    """
+    if not row.initial_password:
+        return {"ok": False, "error": "initial_password 為空，無法寄送"}
+    if not email_is_configured():
+        msg = "GMAIL_USER / GMAIL_APP_PASSWORD 未設定（請至 Railway Variables）"
+        row.note_admin = (row.note_admin or "") + f" [email skipped: {msg}]"
+        return {"ok": False, "error": msg}
+
+    try:
+        result = send_consultant_welcome_email(
+            to               = row.email or "",
+            name             = row.name or "",
+            phone            = row.phone or "",
+            initial_password = row.initial_password,
+            org_type         = row.org_type or "",
+            org              = row.org or "",
+        )
+    except Exception as e:
+        result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    if result.get("ok"):
+        row.note_admin = (row.note_admin or "") + f" [email sent to {row.email}]"
+    else:
+        row.note_admin = (row.note_admin or "") + f" [email failed: {result.get('error')}]"
+    return result
 
 
 # ─── API 端點 ────────────────────────────────────────────────────────────────
@@ -169,8 +201,15 @@ def approve(req_id: str, db: Session = Depends(get_db)):
     row.initial_password  = initial_pw
     db.commit()
     db.refresh(row)
-    # TODO：以 Email 寄送 phone + initial_password
-    return _to_dict(row)
+
+    # ─── 寄發歡迎信（含帳號 + 初始密碼） ───────────────────────────────────
+    email_status = _send_welcome(row)
+    db.commit()           # 把 _send_welcome 寫到 row.note_admin 的結果存進 DB
+    db.refresh(row)
+
+    out = _to_dict(row)
+    out["email_status"] = email_status
+    return out
 
 
 @router.post("/{req_id}/rejected")
@@ -183,6 +222,26 @@ def reject(req_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(row)
     return _to_dict(row)
+
+
+# ─── 重新寄送歡迎信（給寄信失敗、或申請人沒收到的情況）─────────────────────
+@router.post("/{req_id}/resend-welcome-email")
+def resend_welcome_email(req_id: str, db: Session = Depends(get_db)):
+    row = db.query(M.ContactRequest).filter(M.ContactRequest.id == req_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="申請編號不存在")
+    if row.status != "approved":
+        raise HTTPException(status_code=400, detail="此申請尚未核准，無法寄送歡迎信")
+    if not row.initial_password:
+        raise HTTPException(
+            status_code=400,
+            detail="初始密碼已被使用者修改或清除，請改用密碼重設流程",
+        )
+
+    email_status = _send_welcome(row)
+    db.commit()
+    db.refresh(row)
+    return {"email_status": email_status, "request": _to_dict(row)}
 
 
 # ─── 一次性匯入舊版 JSON（若還存在）─────────────────────────────────────────

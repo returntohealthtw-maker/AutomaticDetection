@@ -219,6 +219,119 @@ def send_report_email(
     return result
 
 
+def send_consultant_welcome_email(
+    to: str,
+    name: str,
+    phone: str,
+    initial_password: str,
+    org_type: str = "",
+    org: str = "",
+    login_url: Optional[str] = None,
+) -> dict:
+    """
+    寄發「新顧問帳號開通」歡迎信。
+    內容包含：登入手機（帳號）、初始密碼、登入連結、密碼修改提示。
+    """
+    subject_line = "🎉 您的 onlineReport 顧問帳號已開通 - 請查收登入資訊"
+
+    if not login_url:
+        base = (os.environ.get("PUBLIC_BASE_URL", "") or
+                os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")).rstrip("/")
+        if base and not base.startswith("http"):
+            base = "https://" + base
+        login_url = (base + "/app") if base else ""
+
+    cta_html = ""
+    if login_url:
+        cta_html = (
+            f'<div style="text-align:center;margin:32px 0 8px;">'
+            f'<a href="{login_url}" style="display:inline-block;padding:14px 36px;'
+            f'background:#4a90e2;color:white;text-decoration:none;'
+            f'border-radius:10px;font-weight:600;font-size:16px;'
+            f'box-shadow:0 4px 12px rgba(74,144,226,0.3);">🔐 立即登入</a>'
+            f'</div>'
+        )
+
+    org_info_html = ""
+    if org_type or org:
+        org_info_html = (
+            f'<tr><td style="padding:8px 14px;color:#666;width:80px;">身份</td>'
+            f'<td style="padding:8px 14px;font-weight:600;">{org_type or "-"}</td></tr>'
+            f'<tr><td style="padding:8px 14px;color:#666;">單位</td>'
+            f'<td style="padding:8px 14px;font-weight:600;">{org or "-"}</td></tr>'
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{subject_line}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:'PingFang TC','Microsoft JhengHei','Helvetica Neue',sans-serif;color:#333;">
+  <div style="max-width:680px;margin:0 auto;background:white;">
+    <div style="background:linear-gradient(135deg,#2D3561,#4a90e2);padding:36px 32px;color:white;">
+      <div style="font-size:13px;opacity:0.85;letter-spacing:2px;">onlineReport · 線上腦波分析系統</div>
+      <div style="font-size:24px;font-weight:700;margin-top:12px;line-height:1.4;">{name} 您好，您的顧問帳號已開通 🎉</div>
+      <div style="font-size:14px;opacity:0.95;margin-top:10px;">管理員已核准您的申請，以下為登入資訊</div>
+    </div>
+    <div style="padding:36px 32px;font-size:15px;line-height:1.85;color:#222;">
+      <p>請使用以下資訊登入 onlineReport 顧問端：</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px;background:#f8fafd;border-radius:10px;overflow:hidden;font-size:14px;">
+        <tr><td style="padding:8px 14px;color:#666;width:80px;">姓名</td>
+            <td style="padding:8px 14px;font-weight:600;">{name}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">登入帳號</td>
+            <td style="padding:8px 14px;font-weight:600;font-family:monospace;">{phone}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">初始密碼</td>
+            <td style="padding:8px 14px;font-weight:700;color:#c62828;font-family:monospace;font-size:16px;">{initial_password}</td></tr>
+        {org_info_html}
+      </table>
+
+      {cta_html}
+
+      <div style="margin-top:24px;padding:16px 20px;background:#fff8e1;border-left:4px solid #ffb300;border-radius:6px;font-size:13px;line-height:1.7;color:#5d4037;">
+        <b>⚠️ 安全提醒</b><br>
+        為保護您的帳號安全，請於首次登入後立即至「<b>帳號設定 → 修改密碼</b>」變更為您自己的密碼。<br>
+        請勿將初始密碼透露給他人，本系統不會主動詢問您的密碼。
+      </div>
+
+      <div style="margin-top:20px;font-size:13px;color:#666;line-height:1.7;">
+        如有任何問題，請與管理員聯繫。<br>
+        歡迎加入 onlineReport，期待與您一起為客戶提供專業的腦波分析服務！
+      </div>
+    </div>
+    <div style="background:#f5f7fa;padding:24px 32px;text-align:center;color:#888;font-size:12px;line-height:1.6;border-top:1px solid #eee;">
+      此 Email 由 onlineReport 線上腦波分析系統自動寄發<br>
+      若您並未申請顧問帳號，請忽略此封信件
+    </div>
+  </div>
+</body>
+</html>"""
+
+    plain = (
+        f"{name} 您好：\n\n"
+        f"管理員已核准您的 onlineReport 顧問帳號申請，以下為登入資訊：\n\n"
+        f"  登入帳號（手機）：{phone}\n"
+        f"  初始密碼：{initial_password}\n"
+    )
+    if org_type or org:
+        plain += f"  身份：{org_type or '-'}\n  單位：{org or '-'}\n"
+    if login_url:
+        plain += f"\n登入連結：{login_url}\n"
+    plain += (
+        "\n⚠️ 安全提醒：請於首次登入後立即修改密碼。\n"
+        "如有任何問題，請與管理員聯繫。\n\n"
+        "— onlineReport 線上腦波分析系統"
+    )
+
+    result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)
+    if result.get("ok"):
+        logger.info("✅ 顧問歡迎信寄送成功 → %s", to)
+    else:
+        logger.error("❌ 顧問歡迎信寄送失敗: %s", result.get("error"))
+    return result
+
+
 def _vercel_email_proxy() -> str:
     """指向其中一個已部署的 Vercel app 的 /api/sendEmail。
     Railway 擋了 outbound SMTP 時用 Vercel 代寄，因為 Vercel 沒擋。

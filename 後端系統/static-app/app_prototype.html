@@ -4838,14 +4838,33 @@ async function renderAdminList() {
   list.innerHTML = filtered.map(r => {
     const created = new Date(r.createdAt);
     const dt = `${created.getFullYear()}/${String(created.getMonth()+1).padStart(2,'0')}/${String(created.getDate()).padStart(2,'0')} ${String(created.getHours()).padStart(2,'0')}:${String(created.getMinutes()).padStart(2,'0')}`;
-    const actions = r.status === 'pending'
-      ? `<div class="actions">
+    let actions;
+    if (r.status === 'pending') {
+      actions = `<div class="actions">
            <button class="admin-btn approve" onclick="adminAction('${r.id}','approved')">✅ 核准並建立帳號</button>
            <button class="admin-btn reject"  onclick="adminAction('${r.id}','rejected')">拒絕</button>
-         </div>`
-      : `<div class="row" style="margin-top:8px;color:${r.status==='approved'?'#2e7d32':'#c62828'};font-weight:600;">
-           ${r.status==='approved'?'✅ 已核准 · 已寄送帳號至 Email':'❌ 已拒絕'}
          </div>`;
+    } else if (r.status === 'approved') {
+      const noteAdmin = (r.note_admin || '');
+      const lastSent  = (noteAdmin.match(/\[email sent to [^\]]+\]/g) || []).slice(-1)[0] || '';
+      const lastFail  = (noteAdmin.match(/\[email (failed|skipped):[^\]]+\]/g) || []).slice(-1)[0] || '';
+      let emailLine;
+      if (lastFail && (!lastSent || noteAdmin.lastIndexOf(lastFail) > noteAdmin.lastIndexOf(lastSent))) {
+        emailLine = `<div class="row" style="margin-top:8px;color:#c62828;font-weight:600;">⚠️ 寄信失敗：${lastFail.replace(/^\[email (failed|skipped):\s*/,'').replace(/\]$/,'')}</div>`;
+      } else if (lastSent) {
+        emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准 · 已寄送帳號至 Email</div>`;
+      } else {
+        emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准</div>`;
+      }
+      const resendBtn = r.initial_password
+        ? `<div class="actions" style="margin-top:8px;">
+             <button class="admin-btn" style="background:#1976d2;color:white;" onclick="resendWelcomeEmail('${r.id}')">📧 重新寄送歡迎信</button>
+           </div>`
+        : `<div class="row" style="margin-top:4px;color:#888;font-size:11px;">（初始密碼已被使用者修改，無法重新寄送）</div>`;
+      actions = emailLine + resendBtn;
+    } else {
+      actions = `<div class="row" style="margin-top:8px;color:#c62828;font-weight:600;">❌ 已拒絕</div>`;
+    }
     const roleBadge = r.role_label || r.org_type
       ? `<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;margin-left:6px;">${r.role_label || r.org_type}</span>`
       : '';
@@ -4893,8 +4912,20 @@ async function adminAction(id, status) {
   const targetName = (i >= 0 ? arr[i].name : (backendData && backendData.name) || id);
   if (status === 'approved') {
     let msg = `已核准 ${targetName} 的申請`;
-    if (backendData && backendData.initial_password) {
-      msg += `\n\n初始密碼：${backendData.initial_password}\n（demo 版請手動以 Email 通知；正式版會自動寄信）`;
+    const targetEmail = (i >= 0 ? arr[i].email : (backendData && backendData.email) || '');
+    const es = backendData && backendData.email_status;
+    if (es && es.ok) {
+      msg += `\n\n✅ 帳號 + 初始密碼已寄送至：\n${targetEmail}`;
+      if (backendData.initial_password) {
+        msg += `\n\n（管理員備份用）初始密碼：${backendData.initial_password}`;
+      }
+    } else if (es && !es.ok) {
+      msg += `\n\n⚠️ 寄信失敗：${es.error || '未知錯誤'}`;
+      if (backendData.initial_password) {
+        msg += `\n\n初始密碼：${backendData.initial_password}\n請手動以其他方式告知申請人，並至 Railway 設定 GMAIL_USER / GMAIL_APP_PASSWORD 後重新寄送`;
+      }
+    } else if (backendData && backendData.initial_password) {
+      msg += `\n\n初始密碼：${backendData.initial_password}\n（請手動以 Email 通知申請人）`;
     } else {
       msg += `\n預設密碼將寄送至申請人 Email`;
     }
@@ -4904,6 +4935,28 @@ async function adminAction(id, status) {
     alert('⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）');
   }
 
+  await renderAdminList();
+}
+
+async function resendWelcomeEmail(id) {
+  if (!confirm('重新寄送歡迎信給此申請人？')) return;
+  try {
+    const resp = await apiFetch(`/contact-requests/${id}/resend-welcome-email`, { method: 'POST' });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      alert(`❌ 寄送失敗：${(data && data.detail) || `HTTP ${resp.status}`}`);
+      return;
+    }
+    const es = data && data.email_status;
+    const to = data && data.request && data.request.email;
+    if (es && es.ok) {
+      alert(`✅ 已重新寄送至 ${to}`);
+    } else {
+      alert(`⚠️ 寄信仍失敗：${(es && es.error) || '未知錯誤'}\n\n（請至 Railway 設定 GMAIL_USER / GMAIL_APP_PASSWORD，或檢查申請人 Email 是否正確）`);
+    }
+  } catch (e) {
+    alert(`❌ 連線失敗：${e.message}`);
+  }
   await renderAdminList();
 }
 
