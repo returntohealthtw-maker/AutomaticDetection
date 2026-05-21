@@ -219,6 +219,35 @@ def send_report_email(
     return result
 
 
+def _vercel_email_proxy() -> str:
+    """指向其中一個已部署的 Vercel app 的 /api/sendEmail。
+    Railway 擋了 outbound SMTP 時用 Vercel 代寄，因為 Vercel 沒擋。
+    """
+    return (os.environ.get("VERCEL_EMAIL_PROXY", "") or
+            "https://brianwave-child.vercel.app").rstrip("/")
+
+
+def send_via_vercel_proxy(to: str, name: str, pdf_url: str) -> dict:
+    """走 Vercel /api/sendEmail（避開 Railway SMTP 封鎖）。
+    Vercel app 已驗證可寄信，這裡只是當 HTTP proxy 用。
+    """
+    import httpx
+    url = f"{_vercel_email_proxy()}/api/sendEmail"
+    try:
+        with httpx.Client(timeout=30) as client:
+            r = client.post(url, json={"to": to, "name": name, "pdfUrl": pdf_url})
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("success"):
+                    logger.info("✅ Vercel email proxy 寄發成功: %s", to)
+                    return {"ok": True, "from": "vercel_proxy", "to": to, "via": "vercel_proxy"}
+                else:
+                    return {"ok": False, "error": data.get("error", "vercel_proxy unknown"), "to": to, "via": "vercel_proxy"}
+            return {"ok": False, "error": f"vercel_proxy HTTP {r.status_code}: {r.text[:200]}", "to": to, "via": "vercel_proxy"}
+    except Exception as e:
+        return {"ok": False, "error": f"vercel_proxy {type(e).__name__}: {e}", "to": to, "via": "vercel_proxy"}
+
+
 def send_report_link_email(
     to: str,
     subject_name: str,
@@ -228,6 +257,10 @@ def send_report_link_email(
 ) -> dict:
     """
     寄一封「報告生成完成 + 下載連結」的 Email（不含全文，PDF 在 GCS）。
+
+    傳送策略：
+    1. 先用本地 Gmail SMTP（465 SSL → 587 TLS）
+    2. 失敗時 fallback 到 Vercel proxy（避開 Railway 雲商擋 SMTP 的問題）
     """
     subject_line = f"📄 您的腦波分析報告已產生：{report_title} - onlineReport"
 
@@ -282,7 +315,16 @@ def send_report_link_email(
     )
     result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)
     if result.get("ok"):
-        logger.info("✅ 報告連結 email 寄發成功 → %s", to)
-    else:
-        logger.error("❌ 報告連結 email 寄發失敗: %s", result.get("error"))
-    return result
+        logger.info("✅ 報告連結 email 寄發成功（SMTP）→ %s", to)
+        return result
+
+    # SMTP 失敗 → fallback Vercel proxy
+    logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy", result.get("error"))
+    proxy_result = send_via_vercel_proxy(to=to, name=subject_name, pdf_url=pdf_url)
+    if proxy_result.get("ok"):
+        logger.info("✅ 報告連結 email 寄發成功（Vercel proxy）→ %s", to)
+        return proxy_result
+
+    logger.error("❌ Email 兩種方式都失敗: smtp=%s, proxy=%s",
+                 result.get("error"), proxy_result.get("error"))
+    return {"ok": False, "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}", "to": to}

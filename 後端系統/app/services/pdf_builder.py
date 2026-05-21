@@ -78,6 +78,14 @@ def _ensure_font_registered():
         path = _find_cjk_font()
         if path:
             pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path))
+            # 註冊 family 對映，讓 <b>、<i>、<b><i> 都能 fallback 到同一個檔（reportlab 才不會炸）
+            pdfmetrics.registerFontFamily(
+                _CJK_FONT_NAME,
+                normal=_CJK_FONT_NAME,
+                bold=_CJK_FONT_NAME,
+                italic=_CJK_FONT_NAME,
+                boldItalic=_CJK_FONT_NAME,
+            )
             logger.info("PDF 字型已註冊：%s", path)
         else:
             logger.warning("找不到 CJK 字型，中文可能顯示為方塊")
