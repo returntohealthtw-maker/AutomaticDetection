@@ -71,6 +71,13 @@ public class WebAppActivity extends Activity {
             android.util.Log.e("WebAppActivity", "BrainWave connect", t);
         }
 
+        // 啟動時自動檢查 APK 是否有新版（背景執行，不阻塞主畫面）
+        try {
+            AppUpdater.checkForUpdate(this, false);
+        } catch (Throwable t) {
+            android.util.Log.w("WebAppActivity", "checkForUpdate", t);
+        }
+
         // 建立 Layout
         RelativeLayout root = new RelativeLayout(this);
         root.setBackgroundColor(0xFF1a1a2e);

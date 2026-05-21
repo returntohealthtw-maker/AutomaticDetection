@@ -8,7 +8,19 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.21.1"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.21.2"  # 每次改 HTML/JS 都更新這個
+
+# Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
+APK_LATEST_VERSION_CODE = 2
+APK_LATEST_VERSION_NAME = "1.0.1"
+APK_DOWNLOAD_PATH       = "/static-app/apk/onlineReport-latest.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
+APK_RELEASE_NOTES = (
+    "v1.0.1 更新內容：\n"
+    "・修正點報告無法付款問題\n"
+    "・新增「立即付款」大按鈕，免掃 QR Code 也能付\n"
+    "・WebView 自動載入最新前端版本\n"
+    "・新增 App 自動更新功能"
+)
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
@@ -194,15 +206,41 @@ def prototype_app():
 
 
 @app.get("/api/v1/app/version")
-def app_version():
-    """供 Android WebView 啟動時查詢，比對是否要重整 / 顯示更新提示"""
+def app_version(request: Request):
+    from app.core.config import settings
+    """
+    Android App 啟動時呼叫，用來：
+    1. 顯示前端版本（HTML 變更 → 自動更新無需動作）
+    2. 比對 APK versionCode → 若有新版會跳「立即更新」對話框
+
+    要發新 APK 時：
+       a) 在 Android Studio bump versionCode → 編 release APK
+       b) 把 APK 放到 後端系統/static-app/apk/onlineReport-latest.apk
+       c) main.py 把 APK_LATEST_VERSION_CODE bump 上去
+       d) git push → Railway 自動部署 → 加盟商開 App 自動收到更新提示
+    """
+    # 動態組出對外可用的下載 URL
+    base = (settings.PUBLIC_BASE_URL
+            or os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+            or str(request.base_url).rstrip("/"))
+    if base and not base.startswith("http"):
+        base = f"https://{base}"
+    apk_url = f"{base.rstrip('/')}{APK_DOWNLOAD_PATH}" if base else ""
+
+    # 確認 APK 檔案實際存在（不存在就不公告，避免下載 404）
+    apk_exists = False
+    if _STATIC_APP_DIR:
+        apk_local = os.path.join(_STATIC_APP_DIR, "apk", "onlineReport-latest.apk")
+        apk_exists = os.path.exists(apk_local)
+
     return {
-        "html_version":   APP_HTML_VERSION,
-        "server_time":    int(time.time()),
-        "min_apk_version": 1,           # 之後 APK 真的破壞性升級時改
-        "latest_apk_version": 1,
-        "apk_download_url": "",         # 之後做 APK 自動下載再填
-        "release_notes":  "前端可線上更新；改完後端部署即可，免重灌 APK",
+        "html_version":        APP_HTML_VERSION,
+        "server_time":         int(time.time()),
+        "min_apk_version":     1,
+        "latest_apk_version":  APK_LATEST_VERSION_CODE if apk_exists else 1,
+        "latest_apk_version_name": APK_LATEST_VERSION_NAME,
+        "apk_download_url":    apk_url if apk_exists else "",
+        "release_notes":       APK_RELEASE_NOTES,
     }
 
 @app.get("/pay/ecpay/{order_id}")

@@ -17,6 +17,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- 自動更新 APK 需要：下載 + 詢問使用者安裝 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
@@ -61,5 +64,16 @@
             android:name=".main" android:exported="true">
             <!-- 已移除 LAUNCHER，不再顯示在桌面 -->
         </activity>
+
+        <!-- 自動更新：把下載到 app cache 的 APK 用 FileProvider 分享給系統安裝程式 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.sh.simpleeeg.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

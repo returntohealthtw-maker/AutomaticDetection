@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 自動更新下載的 APK 暫存在 app cache 目錄，透過 FileProvider 提供給系統安裝器 -->
+    <cache-path name="apk_cache" path="apk/" />
+    <external-cache-path name="ext_apk_cache" path="apk/" />
+    <files-path name="apk_files" path="apk/" />
+</paths>
