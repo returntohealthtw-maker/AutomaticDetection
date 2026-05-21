@@ -23,7 +23,7 @@ from app.routers.auth import require_user
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
 # 部署版本標記（每次 commit 改一次即可確認最新程式上線）
-BUILD_VERSION = "planc-v10-ttc-subfont"
+BUILD_VERSION = "planc-v11-multi-subfont-probe"
 
 
 @router.get("/diag/full")
@@ -41,16 +41,45 @@ def diag_full() -> dict:
 
 @router.get("/diag/fontmap")
 def diag_fontmap() -> dict:
-    """直接看 reportlab 內部的 _ps2tt_map 是不是有 reportcjk"""
-    from app.services import pdf_builder
-    pdf_builder._ensure_font_registered()  # 確保 addMapping 已執行
+    """直接看 reportlab 內部的 _ps2tt_map 是不是有 reportcjk，
+    並嘗試手動註冊以捕捉真實例外。"""
+    import glob, traceback
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.fonts import addMapping
     from reportlab.lib import fonts as rlfonts
-    return {
+    from app.services import pdf_builder
+
+    out: dict = {
         "font_path": pdf_builder._find_cjk_font(),
-        "_FONT_REGISTERED": pdf_builder._FONT_REGISTERED,
-        "ps2tt_map_keys": sorted(list(rlfonts._ps2tt_map.keys())),
-        "ps2tt_lookup_reportcjk": rlfonts._ps2tt_map.get("reportcjk"),
+        "fonts_dir_listing": sorted(glob.glob("/usr/share/fonts/**/*.ttc", recursive=True) +
+                                    glob.glob("/usr/share/fonts/**/*.ttf", recursive=True) +
+                                    glob.glob("/usr/share/fonts/**/*.otf", recursive=True))[:30],
     }
+
+    # 嘗試逐一註冊看哪個成功
+    candidates = []
+    fp = pdf_builder._find_cjk_font()
+    if fp:
+        candidates.append((fp, 0))
+        if fp.lower().endswith(".ttc"):
+            for i in range(1, 8):
+                candidates.append((fp, i))
+    out["registration_attempts"] = []
+    for (p, si) in candidates:
+        try:
+            name = f"diag_si{si}"
+            pdfmetrics.registerFont(TTFont(name, p, subfontIndex=si))
+            out["registration_attempts"].append({"path": p, "subfontIndex": si, "ok": True, "name": name})
+        except Exception as e:
+            out["registration_attempts"].append({"path": p, "subfontIndex": si, "ok": False,
+                                                  "err": f"{type(e).__name__}: {e}"})
+
+    pdf_builder._ensure_font_registered()
+    out["_FONT_REGISTERED"] = pdf_builder._FONT_REGISTERED
+    out["ps2tt_map_keys"]   = sorted(list(rlfonts._ps2tt_map.keys()))
+    out["ps2tt_lookup_reportcjk"] = rlfonts._ps2tt_map.get("reportcjk")
+    return out
 
 
 @router.get("/diag/pdf")
