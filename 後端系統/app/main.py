@@ -295,8 +295,8 @@ def pay_page(order_id: str):
       <p id="qr-err" style="display:none;color:#e57373;font-size:12px;">QR Code 載入失敗，請直接點下方連結</p>
     </div>
     <div class="hint">使用手機掃描 QR Code，或點下方按鈕前往付款</div>
-    <a class="btn" href="{pay_url}">💳 前往綠界付款頁</a>
-    <div class="footer">🔒 由綠界科技提供安全金流服務</div>
+    <a class="btn" href="{pay_url}">💳 前往統一付款頁</a>
+    <div class="footer">🔒 由統一金流 PayUni 提供安全付款服務</div>
   </div>
 </body>
 </html>"""
