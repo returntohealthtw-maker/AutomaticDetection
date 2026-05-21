@@ -5123,8 +5123,13 @@ function _filterAdminReports() {
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">沒有符合的報告</div>';
     return;
   }
-  listEl.innerHTML = rows.map(r => `
-    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+  listEl.innerHTML = rows.map(r => {
+    const pendingSend = !r.email_sent && r.pdf_url;
+    const sendBtn = pendingSend
+      ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
+      : '';
+    return `
+    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${pendingSend ? 'border-left:4px solid #ff9800;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;color:#1a3a6e;font-size:14px;">${r.subject_name || '(未知)'} <span style="color:#888;font-weight:400;font-size:11px;">#${r.report_id}</span></div>
@@ -5135,14 +5140,51 @@ function _filterAdminReports() {
           </div>
           <div style="font-size:10px;color:#999;margin-top:3px;">
             ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
-            ${r.email_sent ? ' · <span style="color:#4CAF50;">✉️ 已寄信</span>' : ' · <span style="color:#ff9800;">未寄信</span>'}
+            ${r.email_sent ? ' · <span style="color:#4CAF50;">✉️ 已寄信</span>' : ' · <span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>'}
           </div>
         </div>
-        <a href="${r.pdf_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;flex-shrink:0;">下載</a>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <a href="${r.pdf_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;text-align:center;">${pendingSend ? '🔍 預覽 PDF' : '下載'}</a>
+          ${sendBtn}
+        </div>
       </div>
       <div style="font-size:10px;color:#aaa;margin-top:6px;word-break:break-all;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;">${r.pdf_url}</div>
     </div>
-  `).join('');
+  `; }).join('');
+}
+
+async function _adminSendReportEmail(reportId) {
+  const cached = _adminReportsCache.find(r => r.report_id === reportId);
+  if (!cached) {
+    alert('找不到此報告');
+    return;
+  }
+  if (!cached.subject_email) {
+    const newEmail = prompt('此報告未填收件 Email，請輸入要寄送的 Email：');
+    if (!newEmail || !newEmail.includes('@')) return;
+    cached.subject_email = newEmail;
+  }
+  const confirmMsg = `確定寄送報告 #${reportId} 給 ${cached.subject_email}？\n\n受測者：${cached.subject_name || '(未知)'}\n類型：${cached.report_kind || '?'}\n\n點選「確定」前請先在新分頁開啟 PDF 預覽內容無誤。`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const r = await apiFetch(`/reports/${reportId}/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notify_email: cached.subject_email }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`❌ 寄信失敗：${err.detail || err.error || r.status}`);
+      return;
+    }
+    const data = await r.json();
+    alert(`✅ 已寄送至 ${data.sent_to}（method=${data.method || '?'}）`);
+    // 重新載入列表
+    renderAdminReports();
+  } catch (e) {
+    alert(`❌ 寄信例外：${e.message}`);
+  }
 }
 
 // 從 Railway 後端取所有申請，失敗時回退到 localStorage

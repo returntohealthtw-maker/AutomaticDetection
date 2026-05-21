@@ -148,6 +148,9 @@ class RecordReportIn(BaseModel):
     variant:       str = "full"           # trial / full / vip
     pdf_url:       str                    # GCS 或 Blob 公開連結
     source:        str = ""               # 哪個外部系統回報的
+    # 1 = 由 admin 後台手動觸發寄信（先入 pending）
+    # 0 = 外部系統已自行寄信（傳統行為，預設）
+    pending_send:  int = 0
 
 
 class ReportOut(BaseModel):
@@ -204,14 +207,16 @@ def record_report(
     if payload.session_id:
         rep = db.query(M.Report).filter(M.Report.session_id == payload.session_id).first()
 
+    # pending_send=1 表示外部系統尚未寄信，留給後台手動觸發
+    email_sent_value = 0 if payload.pending_send else 1
+
     if rep is None:
-        # 沒有 session：建一筆孤兒紀錄，把 subject_name + email 塞到 client_summary
         rep = M.Report(
             session_id     = payload.session_id,
             status         = "completed",
             pdf_url        = payload.pdf_url,
             notify_email   = payload.subject_email or None,
-            email_sent     = 1,
+            email_sent     = email_sent_value,
             talent_report_kind = f"{payload.report_type}_{payload.variant}",
             client_summary = f'{{"subject_name":"{payload.subject_name}","source":"{payload.source}"}}',
             completed_at   = func.now(),
@@ -221,7 +226,9 @@ def record_report(
         rep.pdf_url = payload.pdf_url
         rep.status = "completed"
         rep.notify_email = payload.subject_email or rep.notify_email
-        rep.email_sent = 1
+        # 只有當外部系統已寄信時才覆寫 email_sent；pending_send 不要清掉既有狀態
+        if not payload.pending_send:
+            rep.email_sent = 1
         rep.talent_report_kind = f"{payload.report_type}_{payload.variant}"
         rep.completed_at = func.now()
 
@@ -497,6 +504,76 @@ def get_report_event_timeline(
             for r in rows
         ],
     }
+
+
+class SendEmailIn(BaseModel):
+    notify_email: Optional[str] = None  # 若不傳，用 Report.notify_email
+    custom_message: Optional[str] = None  # 預留：自訂訊息
+
+
+@router.post("/{report_id}/send-email")
+def admin_send_report_email(
+    report_id: int,
+    body: SendEmailIn,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員後台「預覽 + 寄信」按鈕觸發。
+    把 GCS 報告連結寄到 notify_email，並標記 email_sent=1。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "需 admin 權限")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+    if not rep.pdf_url:
+        raise HTTPException(400, "此報告尚未上傳 GCS（pdf_url 為空），無法寄信")
+
+    to = (body.notify_email or rep.notify_email or "").strip()
+    if not to or "@" not in to:
+        raise HTTPException(400, "收件 email 不存在或格式錯誤，請在報告管理頁先補上 email")
+
+    # 從 talent_report_kind 推斷報告類型
+    kind = (rep.talent_report_kind or "life_script_full")
+    type_label_map = {
+        "life_script":  "成人腦波分析報告",
+        "child":        "兒童腦波分析報告",
+        "parent_child": "親子腦波報告",
+        "marital":      "夫妻腦波報告",
+    }
+    base = kind.split("_")[0] if "_" in kind else "life_script"
+    title = type_label_map.get(kind.split("_")[0] if "_" in kind else "life_script", "腦波分析報告")
+    # 嘗試從 client_summary 取受測者姓名
+    subject_name = ""
+    try:
+        import json as _json
+        if rep.client_summary:
+            cs = _json.loads(rep.client_summary)
+            subject_name = cs.get("subject_name", "")
+    except Exception:
+        pass
+    if not subject_name and rep.session_id:
+        sess = db.query(M.Session).filter(M.Session.session_id == rep.session_id).first()
+        if sess:
+            subject_name = sess.subject_name or ""
+
+    from app.services import email_sender
+    result = email_sender.send_report_link_email(
+        to            = to,
+        subject_name  = subject_name or "您",
+        report_title  = title,
+        pdf_url       = rep.pdf_url,
+    )
+
+    if result.get("ok"):
+        rep.email_sent = 1
+        rep.notify_email = to
+        db.commit()
+        return {"ok": True, "report_id": report_id, "sent_to": to, "method": result.get("method", "")}
+    else:
+        raise HTTPException(502, f"寄信失敗：{result.get('error') or result}")
 
 
 @router.delete("/events/{correlation_id}")
