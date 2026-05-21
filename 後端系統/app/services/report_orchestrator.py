@@ -361,6 +361,12 @@ def trigger_external_report(
         )
 
     # 成人/兒童：URL prefill 模式
+    # api_base 三層 fallback：extra 指定 > settings.PUBLIC_BASE_URL > RAILWAY_PUBLIC_DOMAIN
+    api_base = (extra or {}).get("api_base") or settings.PUBLIC_BASE_URL
+    if not api_base:
+        rd = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+        if rd:
+            api_base = rd if rd.startswith("http") else f"https://{rd}"
     return _call_vite_prefill(
         base=base,
         subject_name=subject_name,
@@ -368,7 +374,7 @@ def trigger_external_report(
         brainwave_data=brainwave_data,
         variant=variant,
         session_id=(extra or {}).get("session_id"),
-        api_base=(extra or {}).get("api_base") or settings.PUBLIC_BASE_URL,
+        api_base=api_base,
     )
 
 

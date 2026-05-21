@@ -3382,6 +3382,16 @@ async function startFullReportGeneration(opts) {
   const emailText = document.getElementById('result-email-text');
   if (!card) return;
 
+  // 等 EEG 統計寫入 DB 取得 session_id（最多 3 秒），這樣外部 React App 才能 callback /reports/record
+  if (window._lastEegPersistPromise && !window._lastEegSessionId) {
+    try {
+      await Promise.race([
+        window._lastEegPersistPromise,
+        new Promise(res => setTimeout(res, 3000)),
+      ]);
+    } catch (e) { /* 忽略：session_id 可選 */ }
+  }
+
   // 預設行為：測試模式 = 只生成第一章
   const chaptersToGen = opts.chaptersToGenerate !== undefined
     ? opts.chaptersToGenerate
@@ -3887,38 +3897,48 @@ function _stopEegLiveCapture() {
   }
 }
 
-async function _persistEegStats(stats) {
-  if (!stats || !stats.sample_count) return;
-  try {
-    const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
-    const r = await apiFetch('/eeg/save-stats', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subject_name:          _currentSubjectName || '受測者',
-        subject_birthday:      (document.getElementById('subject-birth-input')||{}).value || '',
-        subject_gender:        _currentSubjectGender || '',
-        subject_age:           _currentSubjectAge,
-        subject_id:            _currentSubjectId,
-        report_type:           reportType,
-        order_id:              _currentOrderId || null,
-        paid_amount:           null,
-        sample_count:          stats.sample_count,
-        attention_percentage:  stats.attention_percentage,
-        meditation_percentage: stats.meditation_percentage,
-        bands_avg:             stats.bands_avg,
-      }),
-    });
-    if (r && r.ok) {
-      const d = await r.json();
-      window._lastEegSessionId = d.session_id;
-      console.log('[EEG] 已寫入 DB session_id=', d.session_id);
-    } else {
-      console.warn('[EEG] save-stats 失敗', r && r.status);
-    }
-  } catch (e) {
-    console.warn('[EEG] save-stats 例外', e);
+window._lastEegPersistPromise = null;
+function _persistEegStats(stats) {
+  if (!stats || !stats.sample_count) {
+    window._lastEegPersistPromise = Promise.resolve(null);
+    return window._lastEegPersistPromise;
   }
+  window._lastEegPersistPromise = (async () => {
+    try {
+      const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
+      const r = await apiFetch('/eeg/save-stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject_name:          _currentSubjectName || '受測者',
+          subject_birthday:      (document.getElementById('subject-birth-input')||{}).value || '',
+          subject_gender:        _currentSubjectGender || '',
+          subject_age:           _currentSubjectAge,
+          subject_id:            _currentSubjectId,
+          report_type:           reportType,
+          order_id:              _currentOrderId || null,
+          paid_amount:           null,
+          sample_count:          stats.sample_count,
+          attention_percentage:  stats.attention_percentage,
+          meditation_percentage: stats.meditation_percentage,
+          bands_avg:             stats.bands_avg,
+        }),
+      });
+      if (r && r.ok) {
+        const d = await r.json();
+        window._lastEegSessionId = d.session_id;
+        console.log('[EEG] 已寫入 DB session_id=', d.session_id);
+        return d.session_id;
+      } else {
+        console.warn('[EEG] save-stats 失敗', r && r.status);
+        return null;
+      }
+    } catch (e) {
+      console.warn('[EEG] save-stats 例外', e);
+      return null;
+    }
+  })();
+  return window._lastEegPersistPromise;
 }
 
 // 接受 APK 餵進來的單筆 sample（從 native 呼叫 window.JSBridge.onEegSample）
