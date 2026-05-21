@@ -111,6 +111,30 @@ def _phone_normalize(p: str) -> str:
     )
 
 
+def _has_pending_initial_password(db: Session, consultant_id: int) -> bool:
+    """
+    判斷使用者是否仍使用「申請審核時系統發的初始密碼」。
+    判斷依據：contact_requests 表內，consultant_id 對應的列上還留有 initial_password。
+    /auth/change-password 成功會清掉這欄；此時這個函式就會回 False。
+
+    用途：登入後決定要不要強制彈出「修改密碼」對話框。
+    （admin / demo 帳號是用 bootstrap 建的，沒有對應的 ContactRequest，
+      所以回 False，不會被打擾。）
+    """
+    if not consultant_id:
+        return False
+    return (
+        db.query(M.ContactRequest)
+        .filter(
+            M.ContactRequest.consultant_id == consultant_id,
+            M.ContactRequest.initial_password.isnot(None),
+            M.ContactRequest.initial_password != "",
+        )
+        .first()
+        is not None
+    )
+
+
 def require_user(authorization: Optional[str], db: Session) -> M.Consultant:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="未登入")
@@ -165,14 +189,15 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_token({"cid": user.consultant_id, "role": user.role})
     return {
-        "token":         token,
-        "consultant_id": user.consultant_id,
-        "name":          user.name,
-        "role":          user.role,
-        "org_type":      user.org_type or "",
-        "org":           user.org or "",
-        "email":         user.email or "",
-        "phone":         user.phone,
+        "token":                token,
+        "consultant_id":        user.consultant_id,
+        "name":                 user.name,
+        "role":                 user.role,
+        "org_type":             user.org_type or "",
+        "org":                  user.org or "",
+        "email":                user.email or "",
+        "phone":                user.phone,
+        "must_change_password": _has_pending_initial_password(db, user.consultant_id),
     }
 
 
@@ -183,13 +208,14 @@ def me(
 ):
     user = require_user(authorization, db)
     return {
-        "consultant_id": user.consultant_id,
-        "name":          user.name,
-        "role":          user.role,
-        "org_type":      user.org_type or "",
-        "org":           user.org or "",
-        "email":         user.email or "",
-        "phone":         user.phone,
+        "consultant_id":        user.consultant_id,
+        "name":                 user.name,
+        "role":                 user.role,
+        "org_type":             user.org_type or "",
+        "org":                  user.org or "",
+        "email":                user.email or "",
+        "phone":                user.phone,
+        "must_change_password": _has_pending_initial_password(db, user.consultant_id),
     }
 
 
@@ -204,7 +230,17 @@ def change_password(
         raise HTTPException(status_code=400, detail="舊密碼錯誤")
     if len(req.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密碼至少 6 碼")
+    if req.new_password == req.old_password:
+        raise HTTPException(status_code=400, detail="新密碼不可與舊密碼相同")
     user.password_hash = hash_password(req.new_password)
+
+    # 清掉 ContactRequest.initial_password，避免「重新寄送歡迎信」把舊密碼又寄出去
+    # 也讓下次登入時 must_change_password 回 false（不再彈出對話框）
+    db.query(M.ContactRequest).filter(
+        M.ContactRequest.consultant_id == user.consultant_id,
+        M.ContactRequest.initial_password.isnot(None),
+    ).update({"initial_password": None}, synchronize_session=False)
+
     db.commit()
     return {"ok": True}
 

@@ -106,6 +106,61 @@
   .pwd-toggle:active { background:#e8eaf0; }
   .pwd-toggle.is-visible { color:#00BCD4; }
   .pwd-toggle:focus-visible { outline:2px solid #00BCD4; outline-offset:1px; }
+
+  /* ─── 修改密碼 Modal ─── */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(15,23,42,0.55);
+    display:none; align-items:center; justify-content:center;
+    z-index:9999; padding:20px; backdrop-filter:blur(2px);
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-card {
+    background:white; border-radius:16px; width:100%; max-width:380px;
+    box-shadow:0 24px 48px rgba(15,23,42,0.25);
+    overflow:hidden; animation:modalIn 0.22s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity:0; transform:translateY(10px) scale(0.97); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  .modal-header {
+    padding:20px 22px 14px; background:linear-gradient(135deg,#2D3561,#4a90e2);
+    color:white;
+  }
+  .modal-header .modal-title { font-size:18px; font-weight:700; }
+  .modal-header .modal-sub   { font-size:12px; opacity:0.9; margin-top:4px; }
+  .modal-body  { padding:20px 22px 8px; }
+  .modal-body .form-row { margin-bottom:14px; }
+  .modal-body .form-label { font-size:12px; color:#666; margin-bottom:6px; font-weight:600; }
+  .modal-error {
+    background:#ffebee; color:#c62828; border-left:3px solid #c62828;
+    padding:10px 12px; border-radius:8px; font-size:12px; margin-bottom:14px;
+    display:none; line-height:1.5;
+  }
+  .modal-error.show { display:block; }
+  .modal-actions {
+    display:flex; gap:8px; padding:14px 22px 20px;
+  }
+  .modal-actions .btn { flex:1; }
+
+  /* ─── Toast 通知 ─── */
+  .toast-container {
+    position:fixed; top:calc(env(safe-area-inset-top,0) + 14px); left:50%;
+    transform:translateX(-50%); z-index:10000; pointer-events:none;
+    display:flex; flex-direction:column; gap:8px; align-items:center;
+  }
+  .toast {
+    background:#0d1729; color:white; padding:10px 18px; border-radius:10px;
+    font-size:13px; font-weight:600; box-shadow:0 8px 20px rgba(0,0,0,0.25);
+    max-width:90vw; animation:toastIn 0.25s ease-out;
+    pointer-events:auto; cursor:default;
+  }
+  .toast.ok    { background:#2e7d32; }
+  .toast.warn  { background:#ef6c00; }
+  .toast.error { background:#c62828; }
+  .toast.fade-out { animation:toastOut 0.3s ease-in forwards; }
+  @keyframes toastIn  { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes toastOut { to   { opacity:0; transform:translateY(-10px); } }
   .form-select {
     width:100%; padding:11px 14px; border:1.5px solid #e8eaf0;
     border-radius:10px; font-size:14px; color:#1a1a2e; outline:none; background:white;
@@ -2737,27 +2792,7 @@ async function refreshSettingsData() {
   } catch (e) { /* 已被 apiFetch 401 處理 */ }
 }
 
-async function openChangePassword() {
-  const oldP = prompt('請輸入舊密碼：');
-  if (!oldP) return;
-  const newP = prompt('請輸入新密碼（至少 6 碼）：');
-  if (!newP) return;
-  if (newP.length < 6) { alert('新密碼至少 6 碼'); return; }
-  try {
-    const r = await apiFetch('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ old_password: oldP, new_password: newP }),
-    });
-    if (r.ok) {
-      alert('密碼已更新，下次登入請使用新密碼');
-    } else {
-      const err = await r.json().catch(() => ({ detail: '修改失敗' }));
-      alert('修改失敗：' + (err.detail || r.status));
-    }
-  } catch (e) {
-    alert('修改失敗：' + e.message);
-  }
-}
+// openChangePassword 由頁底 modal 區的 script 覆寫成 modal 版本（避免使用 prompt() 體驗差）
 
 function navNext() { gotoIndex((current + 1) % screens.length); }
 function navPrev() { gotoIndex((current - 1 + screens.length) % screens.length); }
@@ -3447,6 +3482,11 @@ async function loginConsultant() {
 
   // 一般顧問進首頁、admin 也進首頁（要進管理員後台另外走入口）
   goto('screen-home');
+
+  // 若後端標記仍使用「初始密碼」，強制彈出修改密碼對話框
+  if (typeof _maybePromptInitialPwdChange === 'function') {
+    _maybePromptInitialPwdChange();
+  }
 }
 
 function logoutConsultant() {
@@ -3467,6 +3507,10 @@ async function _initAuthOnBoot() {
         const me = await r.json();
         // 合併最新使用者資料（保留原 token）
         _saveAuth(Object.assign({}, cached, me));
+        // 若仍使用初始密碼，提示立即修改（重新整理頁面時也會觸發）
+        if (typeof _maybePromptInitialPwdChange === 'function') {
+          _maybePromptInitialPwdChange();
+        }
       }
     } catch (e) { /* apiFetch 401 已經自動跳登入頁 */ }
   } else {
@@ -5198,6 +5242,175 @@ function fitPhone() {
 
 window.addEventListener('resize', fitPhone);
 fitPhone();
+</script>
+
+<!-- ═════════════════ 修改密碼 Modal（共用） ═════════════════ -->
+<div id="change-pwd-modal" class="modal-overlay" role="dialog" aria-labelledby="change-pwd-title" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div id="change-pwd-title" class="modal-title">🔑 修改密碼</div>
+      <div id="change-pwd-sub"   class="modal-sub">為保護您的帳號安全，請設定新的個人密碼</div>
+    </div>
+    <div class="modal-body">
+      <div id="change-pwd-error" class="modal-error"></div>
+
+      <div class="form-row">
+        <div class="form-label">舊密碼（首次登入請輸入 Email 收到的初始密碼）</div>
+        <div class="password-wrap">
+          <input id="cp-old"     type="password" class="form-input" autocomplete="current-password" placeholder="舊密碼">
+          <button type="button"  class="pwd-toggle" aria-label="顯示密碼" title="顯示/隱藏密碼" onclick="togglePwdVisibility('cp-old', this)">👁</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-label">新密碼（至少 6 碼）</div>
+        <div class="password-wrap">
+          <input id="cp-new"     type="password" class="form-input" autocomplete="new-password" placeholder="新密碼">
+          <button type="button"  class="pwd-toggle" aria-label="顯示密碼" title="顯示/隱藏密碼" onclick="togglePwdVisibility('cp-new', this)">👁</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-label">再次確認新密碼</div>
+        <div class="password-wrap">
+          <input id="cp-new2"    type="password" class="form-input" autocomplete="new-password" placeholder="再輸入一次新密碼">
+          <button type="button"  class="pwd-toggle" aria-label="顯示密碼" title="顯示/隱藏密碼" onclick="togglePwdVisibility('cp-new2', this)">👁</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="cp-cancel-btn" class="btn btn-secondary" type="button" onclick="closeChangePasswordModal()">稍後再說</button>
+      <button id="cp-submit-btn" class="btn btn-primary"   type="button" onclick="submitChangePassword()">修改密碼</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════ Toast 通知容器 ═════════════════ -->
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+<script>
+// ────────────────────────────────────────────────────────────────────────
+// Toast：簡易訊息提示（top center，自動消失）
+// ────────────────────────────────────────────────────────────────────────
+function showToast(message, type = 'ok', durationMs = 3500) {
+  const cont = document.getElementById('toast-container');
+  if (!cont) { console.log('[toast]', message); return; }
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = message;
+  cont.appendChild(t);
+  setTimeout(() => {
+    t.classList.add('fade-out');
+    setTimeout(() => t.remove(), 320);
+  }, durationMs);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 修改密碼 Modal：開啟 / 關閉 / 提交
+// ────────────────────────────────────────────────────────────────────────
+let _cpForceMode = false;  // 首次登入強制模式：「稍後再說」按鈕改成提示意味
+
+function openChangePasswordModal({ force = false, hint = '' } = {}) {
+  const m = document.getElementById('change-pwd-modal');
+  if (!m) return;
+  _cpForceMode = !!force;
+
+  const subEl = document.getElementById('change-pwd-sub');
+  if (subEl) {
+    subEl.textContent = hint || (force
+      ? '⚠️ 首次登入請立即修改密碼，避免他人使用您的初始密碼登入'
+      : '為保護您的帳號安全，請設定新的個人密碼'
+    );
+  }
+
+  const cancelBtn = document.getElementById('cp-cancel-btn');
+  if (cancelBtn) cancelBtn.textContent = force ? '稍後再說（不建議）' : '取消';
+
+  ['cp-old','cp-new','cp-new2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.type = 'password'; }
+  });
+  document.querySelectorAll('#change-pwd-modal .pwd-toggle').forEach(b => {
+    b.classList.remove('is-visible');
+    b.textContent = '👁';
+    b.setAttribute('aria-label','顯示密碼');
+  });
+  _showCpError('');
+
+  m.classList.add('show');
+  m.setAttribute('aria-hidden','false');
+  setTimeout(() => document.getElementById('cp-old')?.focus(), 50);
+}
+
+function closeChangePasswordModal() {
+  if (_cpForceMode) {
+    if (!confirm('您目前仍使用初始密碼，建議立刻修改。\n確定要稍後再改嗎？')) return;
+    showToast('提醒：您仍使用初始密碼，請儘快至「設定 → 修改密碼」變更', 'warn', 5000);
+  }
+  const m = document.getElementById('change-pwd-modal');
+  if (!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden','true');
+  _cpForceMode = false;
+}
+
+function _showCpError(msg) {
+  const el = document.getElementById('change-pwd-error');
+  if (!el) return;
+  if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+async function submitChangePassword() {
+  const oldP  = (document.getElementById('cp-old')?.value  || '').trim();
+  const newP  = (document.getElementById('cp-new')?.value  || '').trim();
+  const newP2 = (document.getElementById('cp-new2')?.value || '').trim();
+
+  if (!oldP)              return _showCpError('請輸入舊密碼');
+  if (!newP || !newP2)    return _showCpError('請輸入兩次新密碼');
+  if (newP.length < 6)    return _showCpError('新密碼至少 6 碼');
+  if (newP !== newP2)     return _showCpError('兩次輸入的新密碼不一致');
+  if (newP === oldP)      return _showCpError('新密碼不可與舊密碼相同');
+
+  const submitBtn = document.getElementById('cp-submit-btn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '修改中…'; }
+
+  try {
+    const r = await apiFetch('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password: oldP, new_password: newP }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: `HTTP ${r.status}` }));
+      _showCpError(err.detail || '修改失敗');
+      return;
+    }
+    _cpForceMode = false;
+    closeChangePasswordModal();
+    showToast('✅ 密碼已更新，下次登入請使用新密碼', 'ok', 4000);
+    // 把本地 cache 的 must_change_password 清掉
+    try {
+      const cached = _getAuth();
+      if (cached) { cached.must_change_password = false; _saveAuth(cached); }
+    } catch (e) {}
+  } catch (e) {
+    _showCpError('連線失敗：' + e.message);
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '修改密碼'; }
+  }
+}
+
+// 取代舊版用 prompt() 的 openChangePassword
+window.openChangePassword = function() { openChangePasswordModal({ force: false }); };
+
+// 登入完成後自動檢查是否仍使用初始密碼，是的話強制彈窗
+function _maybePromptInitialPwdChange() {
+  const cached = (typeof _getAuth === 'function') ? _getAuth() : null;
+  if (cached && cached.must_change_password) {
+    setTimeout(() => openChangePasswordModal({ force: true }), 400);
+  }
+}
 </script>
 </body>
 </html>
