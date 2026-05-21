@@ -998,6 +998,7 @@
           <button class="admin-tab active" data-tab="pending"   onclick="switchAdminTab('pending')">待審核</button>
           <button class="admin-tab"        data-tab="approved"  onclick="switchAdminTab('approved')">已核准</button>
           <button class="admin-tab"        data-tab="rejected"  onclick="switchAdminTab('rejected')">已拒絕</button>
+          <button class="admin-tab"        data-tab="consultants" onclick="switchAdminTab('consultants')">👥 顧問清單</button>
           <button class="admin-tab"        data-tab="subjects"  onclick="switchAdminTab('subjects')">受測者</button>
           <button class="admin-tab"        data-tab="earnings"  onclick="switchAdminTab('earnings')">分潤總覽</button>
           <button class="admin-tab"        data-tab="rules"     onclick="switchAdminTab('rules')">分潤規則</button>
@@ -1052,6 +1053,16 @@
             <span id="admin-subject-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
           </div>
           <div id="admin-subject-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
+        </div>
+
+        <!-- ── 顧問清單分頁（從 DB consultants 表讀）───────────── -->
+        <div id="admin-pane-consultants" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#f5f7fa;">
+          <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;">
+            <input id="admin-consultant-search" type="text" placeholder="搜尋姓名 / 手機 / Email / 單位" style="flex:1;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminConsultants()">
+            <span id="admin-consultant-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
+            <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminConsultants()">🔄 重新載入</button>
+          </div>
+          <div id="admin-consultant-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
         </div>
 
         <!-- ── 報告管理分頁（所有已生成報告 + GCS 連結）─────────── -->
@@ -4626,28 +4637,111 @@ function switchAdminTab(tab) {
   });
 
   const titleMap = {
-    pending:  '帳號審核 · 待審核',
-    approved: '帳號審核 · 已核准',
-    rejected: '帳號審核 · 已拒絕',
-    subjects: '受測者管理',
-    earnings: '分潤總覽',
-    rules:    '分潤規則',
-    reports:  '報告管理 · 雲端 PDF',
+    pending:     '帳號審核 · 待審核',
+    approved:    '帳號審核 · 已核准',
+    rejected:    '帳號審核 · 已拒絕',
+    consultants: '顧問清單（DB）',
+    subjects:    '受測者管理',
+    earnings:    '分潤總覽',
+    rules:       '分潤規則',
+    reports:     '報告管理 · 雲端 PDF',
   };
   const titleEl = document.getElementById('admin-console-title');
   if (titleEl) titleEl.textContent = titleMap[tab] || '管理員後台';
 
-  document.getElementById('admin-pane-account').style.display  = (['pending','approved','rejected'].includes(tab)) ? 'flex' : 'none';
-  document.getElementById('admin-pane-subjects').style.display = (tab === 'subjects') ? 'flex' : 'none';
-  document.getElementById('admin-pane-earnings').style.display = (tab === 'earnings') ? 'flex' : 'none';
-  document.getElementById('admin-pane-rules').style.display    = (tab === 'rules')    ? 'flex' : 'none';
-  document.getElementById('admin-pane-reports').style.display  = (tab === 'reports')  ? 'flex' : 'none';
+  document.getElementById('admin-pane-account').style.display     = (['pending','approved','rejected'].includes(tab)) ? 'flex' : 'none';
+  document.getElementById('admin-pane-consultants').style.display = (tab === 'consultants') ? 'flex' : 'none';
+  document.getElementById('admin-pane-subjects').style.display    = (tab === 'subjects')    ? 'flex' : 'none';
+  document.getElementById('admin-pane-earnings').style.display    = (tab === 'earnings')    ? 'flex' : 'none';
+  document.getElementById('admin-pane-rules').style.display       = (tab === 'rules')       ? 'flex' : 'none';
+  document.getElementById('admin-pane-reports').style.display     = (tab === 'reports')     ? 'flex' : 'none';
 
   if (['pending','approved','rejected'].includes(tab)) renderAdminList();
+  else if (tab === 'consultants') renderAdminConsultants();
   else if (tab === 'subjects') renderAdminSubjects();
   else if (tab === 'earnings') renderEarningsOverview();
   else if (tab === 'rules')    renderShareRulesEditor();
   else if (tab === 'reports')  renderAdminReports();
+}
+
+// ─── 顧問清單：從 /api/v1/auth/consultants 取 DB 內所有顧問帳號 ──────────────
+let _adminConsultantsCache = [];
+async function renderAdminConsultants() {
+  const listEl  = document.getElementById('admin-consultant-list');
+  const countEl = document.getElementById('admin-consultant-count');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">👥 載入中...</div>';
+
+  try {
+    const r = await apiFetch('/auth/consultants');
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); if (j && j.detail) msg = j.detail; } catch(e) {}
+      throw new Error(msg);
+    }
+    _adminConsultantsCache = await r.json();
+    _filterAdminConsultants();
+    if (countEl) countEl.textContent = `共 ${_adminConsultantsCache.length} 筆`;
+  } catch (e) {
+    listEl.innerHTML = `<div style="text-align:center;padding:30px;color:#c00;">❌ 載入失敗：${e.message}</div>`;
+  }
+}
+
+function _filterAdminConsultants() {
+  const listEl = document.getElementById('admin-consultant-list');
+  const countEl = document.getElementById('admin-consultant-count');
+  if (!listEl) return;
+  const q = (document.getElementById('admin-consultant-search')?.value || '').toLowerCase().trim();
+  const rows = q
+    ? _adminConsultantsCache.filter(r =>
+        (r.name  || '').toLowerCase().includes(q) ||
+        (r.phone || '').toLowerCase().includes(q) ||
+        (r.email || '').toLowerCase().includes(q) ||
+        (r.org   || '').toLowerCase().includes(q) ||
+        (r.org_type || '').toLowerCase().includes(q)
+      )
+    : _adminConsultantsCache;
+  if (countEl) countEl.textContent = `共 ${rows.length} 筆${q ? ` / 全部 ${_adminConsultantsCache.length}` : ''}`;
+  if (!rows.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">沒有符合的顧問</div>';
+    return;
+  }
+
+  const roleBadge = (r) => {
+    if (r.role === 'admin')  return '<span style="background:#5e35b1;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">ADMIN</span>';
+    return '<span style="background:#1976d2;color:white;font-size:10px;padding:2px 6px;border-radius:4px;">顧問</span>';
+  };
+  const orgTypeBadge = (t) => {
+    if (!t) return '';
+    const colors = { '加盟商':'#ff9800', '直營商':'#4caf50', '代理商':'#00acc1', '工作人員':'#607d8b', '專案人員':'#9c27b0', '其他':'#9e9e9e' };
+    const c = colors[t] || '#9e9e9e';
+    return `<span style="background:${c};color:white;font-size:10px;padding:2px 6px;border-radius:4px;">${t}</span>`;
+  };
+  const activeBadge = (a) =>
+    a ? '<span style="color:#4caf50;font-size:11px;">✅ 啟用</span>'
+      : '<span style="color:#c00;font-size:11px;">⛔ 停用</span>';
+
+  listEl.innerHTML = rows.map(r => `
+    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+        <div style="font-weight:700;color:#1a3a6e;font-size:15px;">
+          ${r.name || '(未命名)'} <span style="color:#888;font-weight:400;font-size:11px;">#${r.consultant_id}</span>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          ${roleBadge(r)}
+          ${orgTypeBadge(r.org_type)}
+        </div>
+      </div>
+      <div style="font-size:12px;color:#444;line-height:1.7;">
+        📱 ${r.phone || '-'}<br>
+        📧 ${r.email || '<span style="color:#bbb;">(無)</span>'}<br>
+        🏢 ${r.org || '<span style="color:#bbb;">(未填單位)</span>'}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:#888;">
+        <span>${activeBadge(r.is_active)} · 建立於 ${r.created_at || '-'}</span>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ─── 報告管理：從 /api/v1/reports/list 取所有報告（含 GCS URL）──────────────
