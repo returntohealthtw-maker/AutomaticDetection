@@ -274,24 +274,17 @@ def sync_status(db: Session = Depends(get_db)):
     )
 
     items = []
-    orphan_count = 0
+    counts = {"linked": 0, "orphan_null": 0, "orphan_deleted": 0, "dup_phone": 0}
     for r in rows:
         is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
         if r.consultant_id is None:
-            if is_dup:
-                state = "dup_phone"
-            else:
-                state = "orphan_null"
-                orphan_count += 1
+            state = "dup_phone" if is_dup else "orphan_null"
         else:
             c = db.query(M.Consultant).filter(
                 M.Consultant.consultant_id == r.consultant_id
             ).first()
-            if c:
-                state = "linked"
-            else:
-                state = "orphan_deleted"
-                orphan_count += 1
+            state = "linked" if c else "orphan_deleted"
+        counts[state] = counts.get(state, 0) + 1
         items.append({
             "id":            r.id,
             "name":          r.name or "",
@@ -302,20 +295,31 @@ def sync_status(db: Session = Depends(get_db)):
 
     return {
         "approved_total": len(rows),
-        "orphans":        orphan_count,
+        "orphans":        counts["orphan_null"] + counts["orphan_deleted"],
+        "dup_phone":      counts["dup_phone"],
+        "linked":         counts["linked"],
+        "unmatched":      counts["orphan_null"] + counts["orphan_deleted"] + counts["dup_phone"],
+        "counts":         counts,
         "items":          items,
     }
 
 
 @router.post("/_purge-orphans")
-def purge_orphans(db: Session = Depends(get_db)):
+def purge_orphans(
+    include_dup: int = 1,
+    db: Session = Depends(get_db),
+):
     """
-    一次性清理所有「孤兒申請」：
-      - status='approved' 但 consultant_id 為 NULL 且 note_admin 沒寫
-        「該手機已有顧問帳號」（亦即不是 dup_phone 的情況）
-      - status='approved' 且 consultant_id 不為 NULL 但對應顧問已不存在
+    一次性清理「已核准但不對應任何 active 顧問」的申請：
 
-    用於：之前刪除顧問時還沒 cascade，留下的 orphan 申請。
+    一定會刪：
+      - orphan_null    （consultant_id=NULL 且非 dup_phone）
+      - orphan_deleted （consultant_id 不為 NULL 但對應顧問已不存在）
+
+    預設也會刪（讓兩個名單真正同步）：
+      - dup_phone（同手機已有帳號，本次未建新顧問）
+
+    若要保留 dup_phone 歷史紀錄，請傳 ?include_dup=0
     """
     rows = (
         db.query(M.ContactRequest)
@@ -323,11 +327,19 @@ def purge_orphans(db: Session = Depends(get_db)):
         .all()
     )
     deleted_ids = []
+    breakdown = {"orphan_null": 0, "orphan_deleted": 0, "dup_phone": 0}
+
     for r in rows:
         is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
         if r.consultant_id is None:
-            if not is_dup:
+            if is_dup:
+                if include_dup == 1:
+                    deleted_ids.append(r.id)
+                    breakdown["dup_phone"] += 1
+                    db.delete(r)
+            else:
                 deleted_ids.append(r.id)
+                breakdown["orphan_null"] += 1
                 db.delete(r)
             continue
         c = db.query(M.Consultant).filter(
@@ -335,9 +347,15 @@ def purge_orphans(db: Session = Depends(get_db)):
         ).first()
         if not c:
             deleted_ids.append(r.id)
+            breakdown["orphan_deleted"] += 1
             db.delete(r)
     db.commit()
-    return {"ok": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids}
+    return {
+        "ok":            True,
+        "deleted_count": len(deleted_ids),
+        "deleted_ids":   deleted_ids,
+        "breakdown":     breakdown,
+    }
 
 
 # ─── 一次性匯入舊版 JSON（若還存在）─────────────────────────────────────────
