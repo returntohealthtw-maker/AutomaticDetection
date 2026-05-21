@@ -23,7 +23,7 @@ from app.routers.auth import require_user
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
 # 部署版本標記（每次 commit 改一次即可確認最新程式上線）
-BUILD_VERSION = "planc-v8-addMapping"
+BUILD_VERSION = "planc-v9-fontmap-diag"
 
 
 @router.get("/diag/full")
@@ -36,6 +36,20 @@ def diag_full() -> dict:
         "gcs": gcs,
         "vercel_email_proxy": email_sender._vercel_email_proxy(),
         "ingest_secret_set": bool(os.environ.get("REPORTS_INGEST_SECRET")),
+    }
+
+
+@router.get("/diag/fontmap")
+def diag_fontmap() -> dict:
+    """直接看 reportlab 內部的 _ps2tt_map 是不是有 reportcjk"""
+    from app.services import pdf_builder
+    pdf_builder._ensure_font_registered()  # 確保 addMapping 已執行
+    from reportlab.lib import fonts as rlfonts
+    return {
+        "font_path": pdf_builder._find_cjk_font(),
+        "_FONT_REGISTERED": pdf_builder._FONT_REGISTERED,
+        "ps2tt_map_keys": sorted(list(rlfonts._ps2tt_map.keys())),
+        "ps2tt_lookup_reportcjk": rlfonts._ps2tt_map.get("reportcjk"),
     }
 
 
