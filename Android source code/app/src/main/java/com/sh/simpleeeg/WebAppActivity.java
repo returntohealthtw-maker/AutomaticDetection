@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,6 +14,7 @@ import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
@@ -102,7 +104,19 @@ public class WebAppActivity extends Activity {
 
         setContentView(root);
         setupWebView();
-        webView.loadUrl(APP_URL);
+
+        // 每次啟動 App 都清掉 WebView 快取，確保拿到最新前端版本
+        // （加盟商不用重灌 APK，就能拿到最新的網頁邏輯／報告版型）
+        try {
+            webView.clearCache(true);
+            webView.clearHistory();
+            CookieManager.getInstance().removeAllCookies(null);
+        } catch (Throwable t) {
+            android.util.Log.w("WebAppActivity", "clearCache failed", t);
+        }
+
+        // 啟動載入時加上時間戳 query 強制破壞中介快取
+        webView.loadUrl(APP_URL + "?t=" + System.currentTimeMillis());
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -111,7 +125,8 @@ public class WebAppActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // 改用 LOAD_NO_CACHE：每次都向 server 拉最新 HTML/JS，達到「網頁自動更新」
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setBuiltInZoomControls(false);
@@ -232,6 +247,35 @@ public class WebAppActivity extends Activity {
         @JavascriptInterface
         public boolean isDebugBuild() {
             return BuildConfig.DEBUG;
+        }
+
+        /**
+         * 點「立即付款」時 HTML 會呼叫這個方法。
+         * 我們用系統瀏覽器（Chrome）開付款頁，避免在 WebView 內遇到
+         * 第三方金流頁面（PayUni / ECPay）相容性問題。
+         * 付款完成後使用者回到 App，輪詢機制會立即偵測到 paid 狀態。
+         */
+        @JavascriptInterface
+        public void openPayUrl(final String url) {
+            if (url == null || url.isEmpty()) return;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Throwable t) {
+                    android.util.Log.e("WebAppActivity", "openPayUrl", t);
+                }
+            });
+        }
+
+        /** 顯示版本資訊（debug 用） */
+        @JavascriptInterface
+        public String getAppInfo() {
+            try {
+                return "versionName=" + BuildConfig.VERSION_NAME
+                     + ";versionCode=" + BuildConfig.VERSION_CODE;
+            } catch (Throwable t) { return ""; }
         }
     }
 

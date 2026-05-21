@@ -1,9 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import os
 import urllib.parse
+import time
+
+APP_HTML_VERSION = "2026.05.21.1"  # 每次改 HTML/JS 都更新這個
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
@@ -61,6 +66,82 @@ app.include_router(eeg.router)
 app.include_router(reports.router)
 
 
+def _friendly_error_html(title: str, message: str, hint: str = "") -> str:
+    """通用的友善錯誤頁面 HTML（手機/平板開到 404 看了不會慌）"""
+    return f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body{{margin:0;display:flex;justify-content:center;align-items:center;
+         min-height:100vh;background:linear-gradient(135deg,#667eea,#764ba2);
+         font-family:'Microsoft JhengHei',sans-serif;padding:20px;}}
+    .card{{background:white;border-radius:24px;padding:36px 28px;
+           box-shadow:0 12px 48px rgba(0,0,0,0.25);max-width:380px;width:100%;text-align:center;}}
+    .icon{{font-size:64px;margin-bottom:12px;}}
+    h2{{color:#1a1a2e;font-size:22px;margin:0 0 10px;}}
+    p{{color:#555;font-size:15px;line-height:1.7;margin:6px 0;}}
+    .hint{{background:#fff8e1;border-left:4px solid #ffb300;
+           text-align:left;border-radius:10px;padding:12px 14px;margin-top:18px;
+           font-size:13px;color:#7a4f00;line-height:1.6;}}
+    a.btn{{display:block;background:#667eea;color:white;text-decoration:none;
+           border-radius:12px;padding:14px;font-size:15px;font-weight:600;
+           margin-top:18px;box-shadow:0 4px 14px rgba(102,126,234,0.4);}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚠️</div>
+    <h2>{title}</h2>
+    <p>{message}</p>
+    {f'<div class="hint">{hint}</div>' if hint else ''}
+    <a class="btn" href="/app">📱 返回 App 重新開始</a>
+  </div>
+</body>
+</html>"""
+
+
+def _order_not_found_html(order_id: str) -> str:
+    return _friendly_error_html(
+        title="訂單已過期",
+        message=f"訂單 <code>{order_id}</code> 不存在或已逾時，可能是 15 分鐘內沒完成付款。",
+        hint="💡 請回到 App 重新選擇報告類型，會自動建立新訂單。",
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exc_handler(request: Request, exc: StarletteHTTPException):
+    """全域 404/HTTP 例外：
+    - API 路徑（/api/、/healthz、/health、/reports）走原本 JSON 回應
+    - 其他（手機 WebView / 瀏覽器路徑）改回友善 HTML 頁面
+    """
+    accept = request.headers.get("accept", "")
+    path   = request.url.path
+    is_api = (
+        path.startswith("/api/")
+        or path.startswith("/healthz")
+        or path.startswith("/health")
+        or path.startswith("/reports/")
+        or path.startswith("/static-app/")
+        or "application/json" in accept
+    )
+    if is_api:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    if exc.status_code == 404:
+        html = _friendly_error_html(
+            title="找不到此頁面",
+            message=f"路徑 <code>{path}</code> 不存在。",
+            hint="💡 您可能掃到舊版 QR Code 或舊連結。請回到 App 重新建立訂單。",
+        )
+        return HTMLResponse(html, status_code=404)
+    return HTMLResponse(_friendly_error_html(
+        title=f"錯誤 {exc.status_code}",
+        message=str(exc.detail or "發生未預期的錯誤"),
+    ), status_code=exc.status_code)
+
+
 @app.on_event("startup")
 async def startup():
     """
@@ -91,17 +172,38 @@ def dashboard():
     """即時監控儀表板"""
     return FileResponse("dashboard.html")
 
-@app.get("/app", response_class=FileResponse)
+@app.get("/app")
 def prototype_app():
-    """前端 App 原型（手機瀏覽器測試用）"""
+    """前端 App 原型（手機瀏覽器/Android WebView 共用）
+
+    回傳時加上 no-cache 標頭，確保 WebView 每次都拿到最新 HTML
+    （加盟商手機上的 App 因此無需重灌就能取得最新版面/邏輯）
+    """
     if not _STATIC_APP_DIR:
-        from fastapi.responses import JSONResponse
         return JSONResponse({"error": "static-app directory not found", "checked": _CANDIDATES}, status_code=500)
     proto_path = os.path.join(_STATIC_APP_DIR, "app_prototype.html")
     if not os.path.exists(proto_path):
-        from fastapi.responses import JSONResponse
         return JSONResponse({"error": f"app_prototype.html not found at {proto_path}"}, status_code=500)
-    return FileResponse(proto_path, media_type="text/html")
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma":        "no-cache",
+        "Expires":       "0",
+        "X-App-Version": APP_HTML_VERSION,
+    }
+    return FileResponse(proto_path, media_type="text/html", headers=headers)
+
+
+@app.get("/api/v1/app/version")
+def app_version():
+    """供 Android WebView 啟動時查詢，比對是否要重整 / 顯示更新提示"""
+    return {
+        "html_version":   APP_HTML_VERSION,
+        "server_time":    int(time.time()),
+        "min_apk_version": 1,           # 之後 APK 真的破壞性升級時改
+        "latest_apk_version": 1,
+        "apk_download_url": "",         # 之後做 APK 自動下載再填
+        "release_notes":  "前端可線上更新；改完後端部署即可，免重灌 APK",
+    }
 
 @app.get("/pay/ecpay/{order_id}")
 def pay_ecpay(order_id: str):
@@ -117,7 +219,7 @@ def pay_ecpay(order_id: str):
 
     order = _payment_store.get(order_id)
     if not order:
-        return HTMLResponse("<h2>訂單不存在或已過期</h2>", status_code=404)
+        return HTMLResponse(_order_not_found_html(order_id), status_code=404)
 
     base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
     if base:
@@ -198,7 +300,7 @@ def pay_payuni(order_id: str):
 
     order = _payment_store.get(order_id)
     if not order:
-        return HTMLResponse("<h2>訂單不存在或已過期</h2>", status_code=404)
+        return HTMLResponse(_order_not_found_html(order_id), status_code=404)
 
     base = settings.PUBLIC_BASE_URL or os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
     if base and not base.startswith("http"):

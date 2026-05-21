@@ -4379,7 +4379,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
       };
       const lm = linkMap[qrScreen];
       if (lm) {
-        const payUrl = `${location.origin}/pay/${order.order_id}`;
+        const payUrl = order.pay_url || `${location.origin}/pay/${order.order_id}`;
         const box = document.getElementById(lm.box);
         const anchor = document.getElementById(lm.a);
         if (box && anchor) {
@@ -4392,6 +4392,32 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
         if (imgEl) {
           imgEl.src = `${API_BASE}/payments/${order.order_id}/qr?t=${Date.now()}`;
         }
+
+        // ➜ 動態插入「📲 立即付款」大按鈕（裝在 QR 圖那張卡片裡，QR 下方）
+        try {
+          const imgParent = imgEl ? imgEl.parentNode : null;
+          if (imgParent) {
+            let btn = imgParent.querySelector('.pay-now-btn');
+            if (!btn) {
+              btn = document.createElement('button');
+              btn.className = 'pay-now-btn';
+              btn.style.cssText = 'width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(102,126,234,0.45);margin-top:4px;';
+              imgParent.insertBefore(btn, imgParent.querySelector('.qr-order-id') || null);
+            }
+            btn.textContent = '📲 立即付款（在本機開啟付款頁）';
+            btn.onclick = function () {
+              try {
+                if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openPayUrl) {
+                  AndroidBridge.openPayUrl(payUrl);
+                } else {
+                  window.open(payUrl, '_blank') || (location.href = payUrl);
+                }
+              } catch (e) {
+                location.href = payUrl;
+              }
+            };
+          }
+        } catch (e) { console.warn('插入立即付款按鈕失敗', e); }
       }
 
       // 啟動輪詢
@@ -5411,6 +5437,26 @@ function _maybePromptInitialPwdChange() {
     setTimeout(() => openChangePasswordModal({ force: true }), 400);
   }
 }
+
+// ─── 版本顯示 & 自動更新檢查 ──────────────────────────────────────────────
+// 後端 /app 端點已設 no-cache header，每次開啟 App 都會拉到最新 HTML。
+// 這裡再追加一層：抓 /api/v1/app/version 比對版本號，顯示在角落供加盟商確認。
+(async function showAppVersion() {
+  try {
+    const tag = document.createElement('div');
+    tag.id = 'app-version-tag';
+    tag.style.cssText = 'position:fixed;right:6px;bottom:6px;z-index:9999;background:rgba(0,0,0,0.45);color:#fff;font-size:10px;padding:3px 8px;border-radius:10px;font-family:monospace;pointer-events:none;';
+    tag.textContent = 'v -.-.-';
+    document.body.appendChild(tag);
+
+    const r = await fetch(`${API_BASE}/app/version`, { cache: 'no-store' });
+    if (r.ok) {
+      const v = await r.json();
+      tag.textContent = `v${v.html_version || '?'}`;
+      window._appVersion = v;
+    }
+  } catch (e) { /* 沒網路也不影響使用 */ }
+})();
 </script>
 </body>
 </html>
