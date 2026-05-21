@@ -4791,8 +4791,26 @@ function _filterAdminConsultants() {
     a ? '<span style="color:#4caf50;font-size:11px;">✅ 啟用</span>'
       : '<span style="color:#c00;font-size:11px;">⛔ 停用</span>';
 
-  listEl.innerHTML = rows.map(r => `
-    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+  const me = (typeof _getAuth === 'function') ? _getAuth() : null;
+  const myCid = me ? me.consultant_id : null;
+
+  listEl.innerHTML = rows.map(r => {
+    const isSelf = r.consultant_id === myCid;
+    let actions;
+    if (isSelf) {
+      actions = `<span style="font-size:11px;color:#888;">（自己，不可操作）</span>`;
+    } else {
+      const toggleLabel = r.is_active ? '⏸️ 停用' : '▶️ 啟用';
+      const toggleBg    = r.is_active ? '#ef6c00' : '#4caf50';
+      actions = `
+        <button class="admin-btn" style="background:${toggleBg};color:white;font-size:11px;padding:5px 10px;"
+                onclick="toggleConsultantActive(${r.consultant_id}, '${(r.name || '').replace(/'/g,'')}')">${toggleLabel}</button>
+        <button class="admin-btn" style="background:#c62828;color:white;font-size:11px;padding:5px 10px;"
+                onclick="deleteConsultant(${r.consultant_id}, '${(r.name || '').replace(/'/g,'')}', '${(r.phone || '').replace(/'/g,'')}')">🗑️ 刪除</button>
+      `;
+    }
+    return `
+    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${r.is_active ? '' : 'opacity:0.55;'}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
         <div style="font-weight:700;color:#1a3a6e;font-size:15px;">
           ${r.name || '(未命名)'} <span style="color:#888;font-weight:400;font-size:11px;">#${r.consultant_id}</span>
@@ -4807,11 +4825,56 @@ function _filterAdminConsultants() {
         📧 ${r.email || '<span style="color:#bbb;">(無)</span>'}<br>
         🏢 ${r.org || '<span style="color:#bbb;">(未填單位)</span>'}
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:#888;">
-        <span>${activeBadge(r.is_active)} · 建立於 ${r.created_at || '-'}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:#888;">${activeBadge(r.is_active)} · 建立於 ${r.created_at || '-'}</span>
+        <div style="display:flex;gap:6px;flex-shrink:0;">${actions}</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+// ─── 停用 / 啟用顧問帳號 ──────────────────────────────────────────────────────
+async function toggleConsultantActive(cid, name) {
+  if (!confirm(`要切換「${name}」的啟用狀態嗎？\n（停用後該帳號將無法登入，但資料保留可隨時再啟用）`)) return;
+  try {
+    const r = await apiFetch(`/auth/consultants/${cid}/toggle-active`, { method: 'PATCH' });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      showToast(`❌ ${(data && data.detail) || `HTTP ${r.status}`}`, 'error', 4500);
+      return;
+    }
+    const verb = data && data.action === 'disabled' ? '已停用' : '已啟用';
+    showToast(`✅ ${name} ${verb}`, 'ok');
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+  await renderAdminConsultants();
+}
+
+// ─── 永久刪除顧問帳號 ────────────────────────────────────────────────────────
+async function deleteConsultant(cid, name, phone) {
+  // 第一道：基本確認
+  if (!confirm(`⚠️ 確定要「永久刪除」這個顧問帳號嗎？\n\n  姓名：${name}\n  手機：${phone}\n  ID：#${cid}\n\n相關資料處理：\n  • 該顧問建立的受測者紀錄 → 變成「無歸屬」（資料保留）\n  • 對應的申請紀錄 → consultant_id 清空（紀錄保留）\n  • 顧問本身的列 → 永久刪除\n\n此操作無法復原！`)) return;
+  // 第二道：要求輸入手機號做最終確認
+  const typed = prompt(`為避免誤刪，請輸入此帳號的手機號碼「${phone}」確認刪除：`);
+  if (typed === null) return;
+  if (typed.trim() !== phone) {
+    showToast(`❌ 輸入的手機號不一致，已取消`, 'warn', 4000);
+    return;
+  }
+  try {
+    const r = await apiFetch(`/auth/consultants/${cid}?confirm=1`, { method: 'DELETE' });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      showToast(`❌ 刪除失敗：${(data && data.detail) || `HTTP ${r.status}`}`, 'error', 5000);
+      return;
+    }
+    showToast(`✅ ${name} 已永久刪除`, 'ok', 4000);
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+  await renderAdminConsultants();
 }
 
 // ─── 報告管理：從 /api/v1/reports/list 取所有報告（含 GCS URL）──────────────

@@ -17,7 +17,7 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -276,6 +276,104 @@ def list_consultants(
         }
         for r in rows
     ]
+
+
+def _count_active_admins(db: Session) -> int:
+    return (
+        db.query(M.Consultant)
+        .filter(M.Consultant.role == "admin", M.Consultant.is_active == 1)
+        .count()
+    )
+
+
+@router.patch("/consultants/{cid}/toggle-active")
+def toggle_consultant_active(
+    cid: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    停用 / 啟用顧問帳號（admin only）。
+    is_active 1 ↔ 0 切換。停用後該手機無法登入。
+
+    安全限制：
+      - 不可停用自己（避免管理員把自己鎖住）
+      - 不可停用「最後一個 active admin」（避免後台失控）
+    """
+    admin_user = require_admin(authorization, db)
+    target = db.query(M.Consultant).filter(M.Consultant.consultant_id == cid).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="顧問帳號不存在")
+    if target.consultant_id == admin_user.consultant_id:
+        raise HTTPException(status_code=400, detail="不可停用自己的帳號")
+
+    new_active = 0 if (target.is_active or 0) == 1 else 1
+    if new_active == 0 and target.role == "admin":
+        # 將要停用的是 admin → 確認還有別的 active admin
+        if _count_active_admins(db) <= 1:
+            raise HTTPException(status_code=400, detail="不可停用最後一個 active 管理員")
+
+    target.is_active = new_active
+    db.commit()
+    db.refresh(target)
+    return {
+        "ok":            True,
+        "consultant_id": target.consultant_id,
+        "name":          target.name,
+        "is_active":     int(target.is_active or 0),
+        "action":        "enabled" if new_active == 1 else "disabled",
+    }
+
+
+@router.delete("/consultants/{cid}")
+def delete_consultant(
+    cid: int,
+    confirm: int = Query(0, description="必須帶 ?confirm=1 才會真的刪除"),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    永久刪除顧問帳號（admin only，不可逆）。
+
+    關聯資料處理（已在 FK 設成 ON DELETE SET NULL）：
+      - subjects.consultant_id   → NULL（受測者紀錄保留，只是失去歸屬）
+      - contact_requests.consultant_id → NULL（申請紀錄保留，consultant_id 變 NULL）
+
+    安全限制：
+      - 必須帶 ?confirm=1（防誤觸）
+      - 不可刪除自己
+      - 不可刪除最後一個 active admin
+    """
+    admin_user = require_admin(authorization, db)
+    if confirm != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="未確認刪除，請於 URL 加上 ?confirm=1",
+        )
+    target = db.query(M.Consultant).filter(M.Consultant.consultant_id == cid).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="顧問帳號不存在")
+    if target.consultant_id == admin_user.consultant_id:
+        raise HTTPException(status_code=400, detail="不可刪除自己的帳號")
+
+    # 即將刪掉的是最後一個 active admin → 拒絕
+    if target.role == "admin" and int(target.is_active or 0) == 1:
+        if _count_active_admins(db) <= 1:
+            raise HTTPException(status_code=400, detail="不可刪除最後一個 active 管理員")
+
+    snapshot = {
+        "consultant_id": target.consultant_id,
+        "name":          target.name,
+        "phone":         target.phone,
+        "email":         target.email or "",
+        "role":          target.role or "consultant",
+        "org_type":      target.org_type or "",
+        "org":           target.org or "",
+    }
+
+    db.delete(target)
+    db.commit()
+    return {"ok": True, "deleted": snapshot}
 
 
 @router.post("/bootstrap")
