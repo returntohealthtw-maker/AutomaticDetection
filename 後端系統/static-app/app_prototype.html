@@ -91,6 +91,21 @@
     transition:border-color 0.2s; background:white;
   }
   .form-input:focus { border-color:#00BCD4; }
+  /* 密碼欄位 + 顯示/隱藏切換按鈕 */
+  .password-wrap { position:relative; }
+  .password-wrap > .form-input { padding-right:44px; }
+  .pwd-toggle {
+    position:absolute; top:50%; right:6px; transform:translateY(-50%);
+    width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+    background:transparent; border:none; cursor:pointer; padding:0;
+    font-size:18px; line-height:1; color:#9aa0ac; border-radius:8px;
+    user-select:none; -webkit-tap-highlight-color:transparent;
+    transition:background-color 0.15s, color 0.15s;
+  }
+  .pwd-toggle:hover  { background:#f3f4f8; color:#555; }
+  .pwd-toggle:active { background:#e8eaf0; }
+  .pwd-toggle.is-visible { color:#00BCD4; }
+  .pwd-toggle:focus-visible { outline:2px solid #00BCD4; outline-offset:1px; }
   .form-select {
     width:100%; padding:11px 14px; border:1.5px solid #e8eaf0;
     border-radius:10px; font-size:14px; color:#1a1a2e; outline:none; background:white;
@@ -847,7 +862,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">密碼</label>
-            <input id="login-pass-input" class="form-input" type="password" placeholder="請輸入密碼">
+            <div class="password-wrap">
+              <input id="login-pass-input" class="form-input" type="password" placeholder="請輸入密碼" autocomplete="current-password">
+              <button type="button" class="pwd-toggle" aria-label="顯示密碼" title="顯示/隱藏密碼"
+                      onclick="togglePwdVisibility('login-pass-input', this)">👁</button>
+            </div>
           </div>
           <div style="text-align:right;margin-bottom:20px;">
             <a href="#" style="font-size:13px;color:#2D3561;">忘記密碼？</a>
@@ -859,6 +878,7 @@
             🧪 <b>開發測試帳號</b>（demo 用）：<br>
             示範顧問　0900000001 / demo123<br>
             系統管理員 0900000000 / admin123<br>
+            <span style="color:#bf360c;">⚠️ 輸入時請切到「半形 / 英數」鍵盤，不要用全形（注音 / 倉頡 IME 預設會輸入全形數字）</span><br>
             <span style="color:#bf360c;">第一次使用請先在後端跑 POST /api/v1/auth/bootstrap 建好帳號</span>
           </div>
           <div style="text-align:center;margin-top:20px;">
@@ -952,7 +972,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">密碼</label>
-            <input id="admin-pass" class="form-input" type="password" placeholder="請輸入密碼" value="">
+            <div class="password-wrap">
+              <input id="admin-pass" class="form-input" type="password" placeholder="請輸入密碼" value="" autocomplete="current-password">
+              <button type="button" class="pwd-toggle" aria-label="顯示密碼" title="顯示/隱藏密碼"
+                      onclick="togglePwdVisibility('admin-pass', this)">👁</button>
+            </div>
           </div>
           <button class="btn btn-primary" onclick="adminLogin()">登入後台</button>
           <div style="text-align:center;margin-top:14px;">
@@ -1220,7 +1244,7 @@
               <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">成人</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="report-item" onclick="selectSingleReport(this,'life_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
+              <div class="report-item" data-report-key="life_trial" data-trial-only="1" onclick="selectSingleReport(this,'life_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">✨</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">體驗版</div>
@@ -1228,7 +1252,7 @@
                 </div>
                 <div class="report-price" style="color:#FF6B35;">NT$3,000</div>
               </div>
-              <div class="report-item" onclick="selectSingleReport(this,'life_full','NT$5,000','screen-qr-full')" style="margin:0;">
+              <div class="report-item" data-report-key="life_full" onclick="selectSingleReport(this,'life_full','NT$5,000','screen-qr-full')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">⭐</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">完整版</div>
@@ -1236,7 +1260,7 @@
                 </div>
                 <div class="report-price" style="color:#FF6B35;">NT$5,000</div>
               </div>
-              <div class="report-item" onclick="selectSingleReport(this,'life_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
+              <div class="report-item" data-report-key="life_vip" onclick="selectSingleReport(this,'life_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">👑</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">VIP版 <span style="background:#FFD700;color:#5d4e00;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">最完整</span></div>
@@ -1254,7 +1278,7 @@
               <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">兒童</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="report-item" onclick="selectSingleReport(this,'child_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
+              <div class="report-item" data-report-key="child_trial" data-trial-only="1" onclick="selectSingleReport(this,'child_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">✨</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">體驗版</div>
@@ -1262,7 +1286,7 @@
                 </div>
                 <div class="report-price" style="color:#FF6B35;">NT$3,000</div>
               </div>
-              <div class="report-item" onclick="selectSingleReport(this,'child_full','NT$5,000','screen-qr-full')" style="margin:0;">
+              <div class="report-item" data-report-key="child_full" onclick="selectSingleReport(this,'child_full','NT$5,000','screen-qr-full')" style="margin:0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">⭐</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">完整版</div>
@@ -1270,7 +1294,7 @@
                 </div>
                 <div class="report-price" style="color:#FF6B35;">NT$5,000</div>
               </div>
-              <div class="report-item" onclick="selectSingleReport(this,'child_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
+              <div class="report-item" data-report-key="child_vip" onclick="selectSingleReport(this,'child_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
                 <div class="report-icon" style="font-size:20px;width:32px;">👑</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">VIP版 <span style="background:#FFD700;color:#5d4e00;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">最完整</span></div>
@@ -1289,7 +1313,7 @@
           <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:1px solid #ffe0b2;">
             <div style="font-size:12px;color:#888;margin-bottom:10px;">💡 使用既有腦波資料升級報告版本，付款完成後直接生成新報告</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="report-item" onclick="selectUpgrade(this,'up_trial_full',2000,'screen-qr-up-2000')" style="margin:0;border-color:#ffcc80;">
+              <div class="report-item" data-report-key="up_trial_full" data-trial-only="1" onclick="selectUpgrade(this,'up_trial_full',2000,'screen-qr-up-2000')" style="margin:0;border-color:#ffcc80;">
                 <div class="report-icon" style="font-size:20px;width:32px;">⬆️</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">體驗版 → 完整版</div>
@@ -1297,7 +1321,7 @@
                 </div>
                 <div class="report-price" style="color:#e65100;">NT$2,000</div>
               </div>
-              <div class="report-item" onclick="selectUpgrade(this,'up_full_vip',7000,'screen-qr-up-7000')" style="margin:0;border-color:#ffcc80;">
+              <div class="report-item" data-report-key="up_full_vip" onclick="selectUpgrade(this,'up_full_vip',7000,'screen-qr-up-7000')" style="margin:0;border-color:#ffcc80;">
                 <div class="report-icon" style="font-size:20px;width:32px;">👑</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">完整版 → VIP版</div>
@@ -1305,7 +1329,7 @@
                 </div>
                 <div class="report-price" style="color:#e65100;">NT$7,000</div>
               </div>
-              <div class="report-item" onclick="selectUpgrade(this,'up_trial_vip',9000,'screen-qr-up-9000')" style="margin:0;border-color:#ffcc80;">
+              <div class="report-item" data-report-key="up_trial_vip" data-trial-only="1" onclick="selectUpgrade(this,'up_trial_vip',9000,'screen-qr-up-9000')" style="margin:0;border-color:#ffcc80;">
                 <div class="report-icon" style="font-size:20px;width:32px;">🚀</div>
                 <div class="report-info">
                   <div class="name" style="font-size:13px;">體驗版 → VIP版</div>
@@ -1364,7 +1388,7 @@
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;text-align:center;">
             <div style="font-size:13px;color:#888;margin-bottom:4px;">選擇方案</div>
             <div style="font-size:18px;font-weight:700;color:#1a1a2e;" id="qr-trial-title">腦波分析人生劇本 · 體驗版</div>
-            <div style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$3,000</div>
+            <div class="qr-amount-display" data-default-amount="3000" style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$3,000</div>
             <div style="font-size:12px;color:#888;">顧問代為付款，受測者以現金支付顧問</div>
           </div>
 
@@ -1396,7 +1420,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-trial')">
             🧪 開發測試：模擬付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1411,7 +1435,7 @@
           <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;text-align:center;">
             <div style="font-size:13px;color:#888;margin-bottom:4px;">選擇方案</div>
             <div style="font-size:18px;font-weight:700;color:#1a1a2e;" id="qr-full-title">腦波分析人生劇本 · 完整版</div>
-            <div style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$5,000</div>
+            <div class="qr-amount-display" data-default-amount="5000" style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$5,000</div>
             <div style="font-size:12px;color:#888;">顧問代為付款，受測者以現金支付顧問</div>
           </div>
 
@@ -1441,7 +1465,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-full')">
             🧪 開發測試：模擬付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1456,7 +1480,7 @@
           <div style="background:linear-gradient(135deg,#5d4037,#8d6e63);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
             <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:4px;">選擇方案</div>
             <div style="font-size:18px;font-weight:700;color:white;" id="qr-vip-title">腦波分析人生劇本 · VIP版</div>
-            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$12,000</div>
+            <div class="qr-amount-display" data-default-amount="12000" style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$12,000</div>
             <div style="font-size:12px;color:rgba(255,255,255,0.7);">👑 VIP 專屬服務 · 最完整報告</div>
           </div>
 
@@ -1486,7 +1510,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
             🧪 開發測試：模擬付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1505,7 +1529,7 @@
           <div style="background:linear-gradient(135deg,#ef6c00,#ffa726);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(239,108,0,0.25);width:100%;text-align:center;">
             <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">⬆️ 加購升級（免重新檢測）</div>
             <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-2000-title">體驗版 → 完整版</div>
-            <div style="font-size:32px;font-weight:800;color:#fff;margin:8px 0;">NT$2,000</div>
+            <div class="qr-amount-display" data-default-amount="2000" style="font-size:32px;font-weight:800;color:#fff;margin:8px 0;">NT$2,000</div>
             <div style="font-size:12px;color:rgba(255,255,255,0.85);">補差價升級，付款後直接生成完整版報告</div>
           </div>
 
@@ -1534,7 +1558,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-2000')">
             🧪 開發測試：模擬升級付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1549,7 +1573,7 @@
           <div style="background:linear-gradient(135deg,#5d4037,#bf8f48);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
             <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">👑 加購升級（免重新檢測）</div>
             <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-7000-title">完整版 → VIP版</div>
-            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$7,000</div>
+            <div class="qr-amount-display" data-default-amount="7000" style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$7,000</div>
             <div style="font-size:12px;color:rgba(255,255,255,0.85);">補差價升級為 VIP 全方位報告</div>
           </div>
 
@@ -1578,7 +1602,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-7000')">
             🧪 開發測試：模擬升級付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1593,7 +1617,7 @@
           <div style="background:linear-gradient(135deg,#bf360c,#ffb300);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(191,54,12,0.3);width:100%;text-align:center;">
             <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">🚀 加購升級（免重新檢測）</div>
             <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-9000-title">體驗版 → VIP版</div>
-            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$9,000</div>
+            <div class="qr-amount-display" data-default-amount="9000" style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$9,000</div>
             <div style="font-size:12px;color:rgba(255,255,255,0.85);">一次升級到 VIP，享最完整解析</div>
           </div>
 
@@ -1622,7 +1646,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-9000')">
             🧪 開發測試：模擬升級付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1698,7 +1722,7 @@
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fce4ec;color:#c2185b;border:1px solid #ef9a9a;font-size:13px;" onclick="simulatePaid('screen-qr-test')">
             🧪 開發測試：模擬付款成功
           </button>
-          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由綠界科技提供安全金流服務</div>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
       </div>
 
@@ -1969,7 +1993,7 @@
             前往付款（統一金流）→
           </button>
           <div style="text-align:center;margin-top:12px;font-size:11px;color:#aaa;">
-            🔒 由綠界科技提供安全金流服務
+            🔒 由統一金流 PayUni 提供安全付款服務
           </div>
         </div>
       </div>
@@ -2617,6 +2641,7 @@ function gotoIndex(idx) {
   if (id === 'screen-settings' && typeof refreshSettingsData === 'function') refreshSettingsData();
   if (id === 'screen-connect'  && typeof _populateConnectScreen === 'function') _populateConnectScreen();
   if (id === 'screen-detect'   && typeof _startEegLiveCapture   === 'function') _startEegLiveCapture();
+  if (id === 'screen-reports'  && typeof _applyRolePricing      === 'function') _applyRolePricing();
 }
 
 // ─── 首頁 / 設定頁：依登入者動態顯示 ────────────────────────────────────────
@@ -3228,6 +3253,126 @@ const STATIC_BASE = _isFile ? '' : `${_proto}://${_host}${_portStr}/static-app`;
 const _AUTH_KEY = 'eeg_auth_v1';
 let _currentUser = null;   // {consultant_id, name, role, ...}
 
+// ─── 報告定價：依顧問所屬「加盟商 / 直營商」差異化 ─────────────────────────
+// `direct`（直營商）：不賣體驗版、不賣體驗→升級項；完整版／VIP／完整→VIP 都比加盟商便宜。
+// 其餘 org_type（代理商／專案人員／工作人員／其他／admin）視為加盟商定價。
+// 統一只在 _currentUser.org_type === '直營商' 時切到直營商版面。
+const REPORT_PRICING = {
+  franchise: {
+    life_trial:    { amount: 3000,  display: 'NT$3,000',  qrScreen: 'screen-qr-trial'   },
+    life_full:     { amount: 5000,  display: 'NT$5,000',  qrScreen: 'screen-qr-full'    },
+    life_vip:      { amount: 12000, display: 'NT$12,000', qrScreen: 'screen-qr-vip'     },
+    child_trial:   { amount: 3000,  display: 'NT$3,000',  qrScreen: 'screen-qr-trial'   },
+    child_full:    { amount: 5000,  display: 'NT$5,000',  qrScreen: 'screen-qr-full'    },
+    child_vip:     { amount: 12000, display: 'NT$12,000', qrScreen: 'screen-qr-vip'     },
+    up_trial_full: { amount: 2000,  display: 'NT$2,000',  qrScreen: 'screen-qr-up-2000' },
+    up_full_vip:   { amount: 7000,  display: 'NT$7,000',  qrScreen: 'screen-qr-up-7000' },
+    up_trial_vip:  { amount: 9000,  display: 'NT$9,000',  qrScreen: 'screen-qr-up-9000' },
+    test_1:        { amount: 1,     display: 'NT$1',      qrScreen: 'screen-qr-test'    },
+  },
+  // 直營商：刪體驗版＋體驗→升級項；完整／VIP／完整→VIP 改新價
+  direct: {
+    life_full:     { amount: 4800,  display: 'NT$4,800',  qrScreen: 'screen-qr-full'    },
+    life_vip:      { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
+    child_full:    { amount: 4800,  display: 'NT$4,800',  qrScreen: 'screen-qr-full'    },
+    child_vip:     { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
+    up_full_vip:   { amount: 4000,  display: 'NT$4,000',  qrScreen: 'screen-qr-up-7000' },
+    test_1:        { amount: 1,     display: 'NT$1',      qrScreen: 'screen-qr-test'    },
+  },
+};
+
+function _currentRole() {
+  const ot = (_currentUser && _currentUser.org_type) || '';
+  return ot === '直營商' ? 'direct' : 'franchise';
+}
+
+// 取得某個 reportKey 對當前使用者的價格 / 顯示文字 / QR 畫面 ID。
+// 找不到代表「此角色不賣這個方案」（例如直營商沒有體驗版），回 null。
+function getReportPricing(reportKey) {
+  const role = _currentRole();
+  return (REPORT_PRICING[role] || {})[reportKey] || null;
+}
+
+// 進入 screen-reports 時：依角色隱藏不賣的項目、改寫剩下項目的顯示價與 onclick。
+function _applyRolePricing() {
+  const role = _currentRole();
+  const screen = document.getElementById('screen-reports');
+  if (!screen) return;
+  screen.setAttribute('data-current-role', role);
+
+  // 1) 體驗版相關卡片：直營商不賣，全部隱藏；加盟商照常顯示。
+  screen.querySelectorAll('[data-trial-only="1"]').forEach(el => {
+    el.style.display = (role === 'direct') ? 'none' : '';
+  });
+
+  // 2) 對剩下顯示的卡片：依角色更新顯示價格 + onclick 帶的價格參數
+  screen.querySelectorAll('[data-report-key]').forEach(el => {
+    const key = el.getAttribute('data-report-key');
+    const cfg = getReportPricing(key);
+    if (!cfg) {
+      // 此角色不賣這個方案：保險再隱藏一次
+      el.style.display = 'none';
+      return;
+    }
+    // 更新 .report-price 文字
+    const priceEl = el.querySelector('.report-price');
+    if (priceEl) priceEl.textContent = cfg.display;
+
+    // 重新組 onclick（區分一般 vs 加購升級兩種呼叫簽名）
+    if (key.startsWith('up_')) {
+      el.setAttribute(
+        'onclick',
+        `selectUpgrade(this,'${key}',${cfg.amount},'${cfg.qrScreen}')`,
+      );
+    } else {
+      el.setAttribute(
+        'onclick',
+        `selectSingleReport(this,'${key}','${cfg.display}','${cfg.qrScreen}')`,
+      );
+    }
+  });
+}
+
+// 密碼欄顯示/隱藏切換：給「眼睛」按鈕用。
+// 預設 type=password 看不到字 → 點一下變 type=text 看得到 → 再點回 password。
+function togglePwdVisibility(inputId, btnEl) {
+  const inp = document.getElementById(inputId);
+  if (!inp || !btnEl) return;
+  const showing = inp.type === 'text';
+  if (showing) {
+    inp.type = 'password';
+    btnEl.textContent = '👁';
+    btnEl.classList.remove('is-visible');
+    btnEl.setAttribute('aria-label', '顯示密碼');
+  } else {
+    inp.type = 'text';
+    btnEl.textContent = '🙈';
+    btnEl.classList.add('is-visible');
+    btnEl.setAttribute('aria-label', '隱藏密碼');
+  }
+  // 切換完讓焦點回到輸入框，並把游標移到字串尾端，方便繼續輸入。
+  try {
+    const v = inp.value;
+    inp.focus({ preventScroll: true });
+    inp.setSelectionRange(v.length, v.length);
+  } catch (e) { /* 某些瀏覽器在 type=number 等情境會丟錯，忽略 */ }
+}
+
+// 全形 ASCII（U+FF01 ~ U+FF5E）→ 半形；全形空格 U+3000 / nbsp U+00A0 → 一般空格。
+// 中文輸入法狀態下輸入的「０９００」、「ｄｅｍｏ１２３」看起來和半形一樣，
+// 但 Unicode code point 完全不同，會導致帳號／密碼比對失敗。
+function _toHalfWidth(s) {
+  if (!s) return '';
+  let out = '';
+  for (const ch of s) {
+    const c = ch.charCodeAt(0);
+    if (c >= 0xFF01 && c <= 0xFF5E)      out += String.fromCharCode(c - 0xFEE0);
+    else if (c === 0x3000 || c === 0x00A0) out += ' ';
+    else                                   out += ch;
+  }
+  return out;
+}
+
 function _getAuth() {
   try { return JSON.parse(localStorage.getItem(_AUTH_KEY) || 'null'); }
   catch (e) { return null; }
@@ -3260,9 +3405,15 @@ async function apiFetch(path, options = {}) {
 }
 
 async function loginConsultant() {
-  const phone = (document.getElementById('login-phone-input')?.value || '').trim();
-  const pass  = (document.getElementById('login-pass-input')?.value || '').trim();
+  const phoneRaw = (document.getElementById('login-phone-input')?.value || '').trim();
+  const passRaw  = (document.getElementById('login-pass-input')?.value || '').trim();
+  const phone = _toHalfWidth(phoneRaw).replace(/[\s-]/g, '');
+  const pass  = _toHalfWidth(passRaw);
   if (!phone || !pass) { alert('請輸入手機與密碼'); return; }
+
+  if (phone !== phoneRaw || pass !== passRaw) {
+    console.warn('[login] 偵測到全形字元，已自動轉成半形再送出。建議下次輸入時關閉中文輸入法。');
+  }
 
   let resp;
   try {
@@ -4134,14 +4285,25 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   setTimeout(async () => {
     goto(qrScreen);
 
-    // 金額對照
-    const amountMap = {
+    // 金額：優先使用角色定價表（加盟商 vs 直營商不同），找不到才走加盟商預設值
+    const cfg = (typeof getReportPricing === 'function') ? getReportPricing(reportKey) : null;
+    const fallbackMap = {
       'life_trial':3000,'life_full':5000,'life_vip':12000,
       'child_trial':3000,'child_full':5000,'child_vip':12000,
       'test_1':1,
       'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000
     };
-    const amt = amountMap[reportKey] || 3000;
+    const amt = (cfg && typeof cfg.amount === 'number') ? cfg.amount : (fallbackMap[reportKey] || 3000);
+
+    // QR 畫面上的「NT$XX」金額顯示：依角色不同要動態更新（直營商完整版要顯示 NT$4,800 而非 NT$5,000）
+    try {
+      const qrScreenEl = document.getElementById(qrScreen);
+      if (qrScreenEl) {
+        qrScreenEl.querySelectorAll('.qr-amount-display').forEach(el => {
+          el.textContent = 'NT$' + amt.toLocaleString();
+        });
+      }
+    } catch (e) { /* 不影響主流程 */ }
 
     const order = await createPaymentOrder(reportKey, amt, _currentSubjectName);
     if (order && order.order_id) {
@@ -4170,7 +4332,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
           anchor.textContent = payUrl;
           box.style.display = 'block';
         }
-        // 動態 QR Code：請後端依訂單編號產生對應的綠界測試付款 QR
+        // 動態 QR Code：請後端依訂單編號產生對應的統一金流付款 QR
         const imgEl = document.getElementById(lm.img);
         if (imgEl) {
           imgEl.src = `${API_BASE}/payments/${order.order_id}/qr?t=${Date.now()}`;
@@ -4421,9 +4583,15 @@ function submitContactRequest() {
 let _currentAdminTab = 'pending';
 
 async function adminLogin() {
-  const u = (document.getElementById('admin-user').value || '').trim();
-  const p = (document.getElementById('admin-pass').value || '').trim();
+  const uRaw = (document.getElementById('admin-user').value || '').trim();
+  const pRaw = (document.getElementById('admin-pass').value || '').trim();
+  const u = _toHalfWidth(uRaw).replace(/[\s-]/g, '');
+  const p = _toHalfWidth(pRaw);
   if (!u || !p) { alert('請輸入手機與密碼'); return; }
+
+  if (u !== uRaw || p !== pRaw) {
+    console.warn('[adminLogin] 偵測到全形字元，已自動轉成半形再送出。建議下次輸入時關閉中文輸入法。');
+  }
 
   // 用 /auth/login 驗證，並要求 role === 'admin'
   let resp;
