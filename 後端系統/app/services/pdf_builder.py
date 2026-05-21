@@ -86,20 +86,20 @@ def _ensure_font_registered():
         from reportlab.lib.fonts import addMapping
         path = _find_cjk_font()
         if path:
-            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path))
-            # 關鍵：reportlab Paragraph 在 layout 時呼叫 ps2tt(style.fontName)
-            # 從 _ps2tt_map（lowercase family）查 normal/bold/italic
-            # addMapping() 是唯一會 populate 該 map 的 API
-            # 參數：(family, bold:int, italic:int, pdfFontName)
+            # .ttc 是 TrueType Collection（含多個子字型）→ 必須指定 subfontIndex
+            # .ttf 不需要（subfontIndex=0 預設）
+            kwargs = {"subfontIndex": 0} if path.lower().endswith(".ttc") else {}
+            pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, path, **kwargs))
             family = _CJK_FONT_NAME.lower()
             addMapping(family, 0, 0, _CJK_FONT_NAME)
             addMapping(family, 0, 1, _CJK_FONT_NAME)
             addMapping(family, 1, 0, _CJK_FONT_NAME)
             addMapping(family, 1, 1, _CJK_FONT_NAME)
-            logger.info("✅ PDF 字型已註冊 + addMapping：%s → %s", _CJK_FONT_NAME, path)
+            logger.info("✅ PDF 字型已註冊 + addMapping：%s → %s (kwargs=%s)", _CJK_FONT_NAME, path, kwargs)
+            _FONT_REGISTERED = True
         else:
             logger.warning("找不到 CJK 字型，中文可能顯示為方塊")
-        _FONT_REGISTERED = True
+            _FONT_REGISTERED = True  # 已試過，下次別再 retry
     except Exception as e:
         logger.exception("註冊字型失敗：%s", e)
 
