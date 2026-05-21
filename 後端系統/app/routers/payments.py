@@ -354,52 +354,96 @@ async def payuni_notify(request: Request):
     return "SUCCESS"
 
 
-@router.api_route("/payuni/return/{order_id}", methods=["GET", "POST"])
-async def payuni_return(order_id: str, request: Request):
-    """
-    顧客付款完成後跳轉回來的頁面
-    """
-    # GET 用 query string、POST 用 form
+async def _handle_payuni_return(request: Request, order_id_from_path: str = "") -> HTMLResponse:
+    """共用邏輯：處理 PayUni return 的 POST/GET，order_id 可從路徑或 form 取得"""
     enc, hsh = "", ""
+    form_data = {}
     if request.method == "POST":
         form = await request.form()
+        form_data = dict(form)
         enc = form.get("EncryptInfo", "")
         hsh = form.get("HashInfo", "")
     else:
         enc = request.query_params.get("EncryptInfo", "")
         hsh = request.query_params.get("HashInfo", "")
 
+    real_no = order_id_from_path or ""
+    paid_ok = False
+    err_msg = ""
+
     if enc and hsh:
         result = payuni.decrypt_callback(enc, hsh)
-        if result.get("ok") and result.get("success"):
+        if result.get("ok"):
             data = result["data"]
-            real_no = data.get("MerTradeNo") or data.get("MerchantOrderNo") or order_id
-            order = _payment_store.get(real_no)
-            if order and order["status"] == "pending":
-                order["status"]  = "paid"
-                order["paid_at"] = int(time.time())
-                order["paid_via"] = "payuni"
-                print(f"[PayUni Return] 訂單 {real_no} 已立即確認")
+            real_no = data.get("MerTradeNo") or data.get("MerchantOrderNo") or real_no
+            if result.get("success"):
+                order = _payment_store.get(real_no)
+                if order and order["status"] == "pending":
+                    order["status"]  = "paid"
+                    order["paid_at"] = int(time.time())
+                    order["paid_via"] = "payuni"
+                    paid_ok = True
+                    print(f"[PayUni Return] 訂單 {real_no} 已立即確認付款成功")
+                elif order:
+                    # 已經是 paid（可能 webhook 先到了）
+                    paid_ok = (order["status"] == "paid")
+                else:
+                    err_msg = f"訂單 {real_no} 不在伺服器記憶體中，但 PayUni 回報已付款（後端可能重啟過）"
+                    print(f"[PayUni Return] {err_msg}")
+            else:
+                err_msg = "PayUni 回報付款失敗或取消"
+                print(f"[PayUni Return] {err_msg}：data={data}")
+        else:
+            err_msg = f"PayUni 簽章驗證失敗：{result.get('error')}"
+            print(f"[PayUni Return] {err_msg}")
+    else:
+        # 沒帶任何資料就被導回（例如使用者按了上一頁），不視為錯誤
+        print(f"[PayUni Return] 收到無 EncryptInfo/HashInfo 的請求，order={real_no}，form_keys={list(form_data.keys())}")
+
+    show_id = real_no or "(未知)"
+    if paid_ok:
+        icon, title, msg, hint = "✅", "付款完成！", "請返回 App 或關閉此頁面。", "📱 系統正在確認付款，<br>App 將在 <strong>3 秒內自動跳轉</strong>至腦波檢測頁面。"
+    else:
+        icon, title = "ℹ️", "已從付款頁返回"
+        msg  = (err_msg or "未收到付款結果，請確認是否完成付款。")
+        hint = "💡 若您已成功付款，請稍候幾秒，App 會自動確認。"
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>付款完成</title>
+<title>{title}</title>
 <style>body{{margin:0;display:flex;justify-content:center;align-items:center;
-min-height:100vh;background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;text-align:center;}}
+min-height:100vh;background:#f5f7fa;font-family:'Microsoft JhengHei',sans-serif;text-align:center;padding:20px;}}
 .card{{background:white;border-radius:20px;padding:36px 28px;
-box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:340px;width:90%;}}
+box-shadow:0 8px 32px rgba(0,0,0,0.12);max-width:360px;width:100%;}}
 .icon{{font-size:56px;margin-bottom:12px;}}
 h2{{color:#1a1a2e;font-size:20px;margin:0 0 8px;}}
 p{{color:#666;font-size:14px;line-height:1.6;}}
 .hint{{background:#e8f5e9;border-radius:10px;padding:12px;margin-top:16px;
-font-size:13px;color:#2e7d32;}}</style></head>
+font-size:13px;color:#2e7d32;line-height:1.6;}}
+a.btn{{display:block;background:#667eea;color:white;text-decoration:none;
+border-radius:12px;padding:13px;font-size:14px;font-weight:600;margin-top:16px;}}
+</style></head>
 <body><div class="card">
-<div class="icon">✅</div><h2>付款完成！</h2><p>請返回 App 或關閉此頁面。</p>
-<div class="hint">📱 系統正在確認付款，<br>App 將在 <strong>3 秒內自動跳轉</strong>至腦波檢測頁面。</div>
-<p style="color:#aaa;font-size:12px;margin-top:16px;">訂單：{order_id}</p>
+<div class="icon">{icon}</div><h2>{title}</h2><p>{msg}</p>
+<div class="hint">{hint}</div>
+<a class="btn" href="/app">📱 返回 App</a>
+<p style="color:#aaa;font-size:12px;margin-top:16px;">訂單：{show_id}</p>
 </div></body></html>"""
     return HTMLResponse(html)
+
+
+@router.api_route("/payuni/return/{order_id}", methods=["GET", "POST"])
+async def payuni_return(order_id: str, request: Request):
+    """顧客付款完成後跳轉回來的頁面（含 order_id 版本）"""
+    return await _handle_payuni_return(request, order_id_from_path=order_id)
+
+
+@router.api_route("/payuni/return", methods=["GET", "POST"])
+async def payuni_return_no_id(request: Request):
+    """PayUni 在某些情境下會把 ReturnURL 截掉 order_id 後 POST 回來，
+    我們從 EncryptInfo 解出 MerTradeNo 也能正確處理。"""
+    return await _handle_payuni_return(request, order_id_from_path="")
 
 
 @router.get("/diag")

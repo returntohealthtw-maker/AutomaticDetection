@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.21.2"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.21.3"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 2
@@ -126,26 +126,28 @@ def _order_not_found_html(order_id: str) -> str:
 @app.exception_handler(StarletteHTTPException)
 async def http_exc_handler(request: Request, exc: StarletteHTTPException):
     """全域 404/HTTP 例外：
-    - API 路徑（/api/、/healthz、/health、/reports）走原本 JSON 回應
-    - 其他（手機 WebView / 瀏覽器路徑）改回友善 HTML 頁面
+    - 「明確要 JSON 的客戶端」（App/前端 fetch API，Accept 有 application/json
+      但沒 text/html）→ 回原本 JSON 格式
+    - 其他（手機瀏覽器、PayUni 跳轉、Android WebView 等）→ 友善 HTML 頁面
+      ⚠️ 這非常重要：PayUni 付款完跳轉回我們時若打到 404，使用者本來會看到
+         22 bytes 的 {"detail":"Not Found"}，現在會看到「返回 App」按鈕的友善頁面
     """
     accept = request.headers.get("accept", "")
     path   = request.url.path
-    is_api = (
+    wants_json = "application/json" in accept and "text/html" not in accept
+    is_api_only_path = (
         path.startswith("/api/")
-        or path.startswith("/healthz")
-        or path.startswith("/health")
-        or path.startswith("/reports/")
-        or path.startswith("/static-app/")
-        or "application/json" in accept
-    )
-    if is_api:
+        and not path.startswith("/api/v1/payments/")  # 付款相關回應要被使用者看到
+    ) or path.startswith("/healthz") or path.startswith("/health") or path.startswith("/reports/")
+
+    if wants_json or is_api_only_path:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
     if exc.status_code == 404:
         html = _friendly_error_html(
             title="找不到此頁面",
             message=f"路徑 <code>{path}</code> 不存在。",
-            hint="💡 您可能掃到舊版 QR Code 或舊連結。請回到 App 重新建立訂單。",
+            hint="💡 您可能掃到舊版 QR Code 或舊連結。請回到 App 重新建立訂單；若您剛完成付款，請直接回 App，3 秒內會自動確認。",
         )
         return HTMLResponse(html, status_code=404)
     return HTMLResponse(_friendly_error_html(
