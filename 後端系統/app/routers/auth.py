@@ -329,15 +329,21 @@ def toggle_consultant_active(
 def delete_consultant(
     cid: int,
     confirm: int = Query(0, description="必須帶 ?confirm=1 才會真的刪除"),
+    purge_requests: int = Query(
+        1,
+        description="1=同時刪除對應的申請紀錄（預設，避免名單不同步）/ 0=保留申請紀錄成孤兒",
+    ),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     永久刪除顧問帳號（admin only，不可逆）。
 
-    關聯資料處理（已在 FK 設成 ON DELETE SET NULL）：
-      - subjects.consultant_id   → NULL（受測者紀錄保留，只是失去歸屬）
-      - contact_requests.consultant_id → NULL（申請紀錄保留，consultant_id 變 NULL）
+    關聯資料處理：
+      - subjects.consultant_id → NULL（受測者紀錄保留，只是失去歸屬）
+      - contact_requests       → 預設「同時刪除」(purge_requests=1)，
+                                 避免「顧問清單」與「已核准名單」不同步。
+                                 若想保留申請歷史，請傳 ?purge_requests=0。
 
     安全限制：
       - 必須帶 ?confirm=1（防誤觸）
@@ -356,7 +362,6 @@ def delete_consultant(
     if target.consultant_id == admin_user.consultant_id:
         raise HTTPException(status_code=400, detail="不可刪除自己的帳號")
 
-    # 即將刪掉的是最後一個 active admin → 拒絕
     if target.role == "admin" and int(target.is_active or 0) == 1:
         if _count_active_admins(db) <= 1:
             raise HTTPException(status_code=400, detail="不可刪除最後一個 active 管理員")
@@ -371,9 +376,25 @@ def delete_consultant(
         "org":           target.org or "",
     }
 
+    purged_request_ids: list = []
+    if purge_requests == 1:
+        related = (
+            db.query(M.ContactRequest)
+            .filter(M.ContactRequest.consultant_id == target.consultant_id)
+            .all()
+        )
+        for r in related:
+            purged_request_ids.append(r.id)
+            db.delete(r)
+
     db.delete(target)
     db.commit()
-    return {"ok": True, "deleted": snapshot}
+    return {
+        "ok":                   True,
+        "deleted":              snapshot,
+        "purged_request_ids":   purged_request_ids,
+        "purged_request_count": len(purged_request_ids),
+    }
 
 
 @router.post("/bootstrap")

@@ -4944,6 +4944,17 @@ async function _fetchAllRequestsFromBackend() {
   }
 }
 
+// 從後端拿同步狀態（每張卡片該顯示「✅ 顧問存在 / ⚠️ 顧問已刪除 / ℹ️ 同手機已有帳號」）
+async function _fetchSyncStatus() {
+  try {
+    const r = await apiFetch('/contact-requests/_sync-status');
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
 async function renderAdminList() {
   const list = document.getElementById('admin-list');
   if (!list) return;
@@ -4954,6 +4965,17 @@ async function renderAdminList() {
   let arr = await _fetchAllRequestsFromBackend();
   const isFromBackend = arr !== null;
   if (!isFromBackend) arr = _loadContactRequests();
+
+  // 並行抓「同步狀態」（用來標示孤兒），失敗就忽略
+  let syncMap = {};
+  let orphanCount = 0;
+  if (isFromBackend && _currentAdminTab === 'approved') {
+    const sync = await _fetchSyncStatus();
+    if (sync && sync.items) {
+      sync.items.forEach(x => { syncMap[x.id] = x.state; });
+      orphanCount = sync.orphans || 0;
+    }
+  }
 
   document.getElementById('admin-pending-count').textContent  = arr.filter(r => r.status === 'pending').length;
   document.getElementById('admin-approved-count').textContent = arr.filter(r => r.status === 'approved').length;
@@ -4966,6 +4988,18 @@ async function renderAdminList() {
       _currentAdminTab==='pending'?'待審核':_currentAdminTab==='approved'?'已核准':'已拒絕'
     }的申請${offlineHint}</div>`;
     return;
+  }
+
+  // 已核准分頁、且有孤兒 → 在最上方顯示「清理孤兒申請」按鈕
+  let cleanupBar = '';
+  if (_currentAdminTab === 'approved' && orphanCount > 0) {
+    cleanupBar = `
+      <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:13px;color:#e65100;">
+          ⚠️ 偵測到 <b>${orphanCount}</b> 筆「孤兒申請」(對應的顧問帳號已被刪除)
+        </div>
+        <button class="admin-btn" style="background:#ef6c00;color:white;font-size:12px;padding:6px 12px;" onclick="purgeOrphanRequests()">🧹 一鍵清理</button>
+      </div>`;
   }
 
   list.innerHTML = filtered.map(r => {
@@ -4989,12 +5023,31 @@ async function renderAdminList() {
       } else {
         emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准</div>`;
       }
-      const resendBtn = r.initial_password
+
+      // 顧問帳號同步狀態
+      const state = syncMap[r.id];
+      let syncLine = '';
+      if (state === 'orphan_deleted' || state === 'orphan_null') {
+        syncLine = `<div class="row" style="margin-top:6px;color:#e65100;font-weight:600;background:#fff3e0;padding:6px 10px;border-radius:8px;">⚠️ 顧問帳號已刪除 · 此為孤兒申請紀錄</div>`;
+      } else if (state === 'dup_phone') {
+        syncLine = `<div class="row" style="margin-top:6px;color:#1565c0;font-weight:600;background:#e3f2fd;padding:6px 10px;border-radius:8px;">ℹ️ 同手機原本已有顧問帳號 #${r.consultant_id || '?'} · 未建立新帳號 / 未寄信</div>`;
+      } else if (state === 'linked' && r.consultant_id) {
+        syncLine = `<div class="row" style="margin-top:6px;color:#2e7d32;font-size:11px;">🔗 對應顧問 #${r.consultant_id}</div>`;
+      }
+
+      const isOrphan = (state === 'orphan_deleted' || state === 'orphan_null');
+      const isDup    = (state === 'dup_phone');
+      const resendBtn = (r.initial_password && !isOrphan && !isDup)
         ? `<div class="actions" style="margin-top:8px;">
              <button class="admin-btn" style="background:#1976d2;color:white;" onclick="resendWelcomeEmail('${r.id}')">📧 重新寄送歡迎信</button>
            </div>`
-        : `<div class="row" style="margin-top:4px;color:#888;font-size:11px;">（初始密碼已被使用者修改，無法重新寄送）</div>`;
-      actions = emailLine + resendBtn;
+        : (isOrphan
+            ? `<div class="actions" style="margin-top:8px;">
+                 <button class="admin-btn" style="background:#c62828;color:white;font-size:12px;" onclick="deleteOrphanRequest('${r.id}','${(r.name||'').replace(/'/g,'')}')">🗑️ 刪除此筆孤兒</button>
+               </div>`
+            : `<div class="row" style="margin-top:4px;color:#888;font-size:11px;">${isDup ? '' : '（初始密碼已被使用者修改，無法重新寄送）'}</div>`
+          );
+      actions = emailLine + syncLine + resendBtn;
     } else {
       actions = `<div class="row" style="margin-top:8px;color:#c62828;font-weight:600;">❌ 已拒絕</div>`;
     }
@@ -5011,6 +5064,47 @@ async function renderAdminList() {
       ${actions}
     </div>`;
   }).join('');
+
+  if (cleanupBar) list.innerHTML = cleanupBar + list.innerHTML;
+}
+
+// ─── 一鍵清理孤兒申請 ─────────────────────────────────────────────────────────
+async function purgeOrphanRequests() {
+  if (!confirm('將永久刪除所有「孤兒申請」（對應的顧問已被刪除、或同手機已有帳號的重複申請）。\n\n相關資料：申請紀錄會整筆刪除（不可復原），但顧問本體不受影響。\n\n確定要繼續嗎？')) return;
+  try {
+    const r = await apiFetch('/contact-requests/_purge-orphans', { method: 'POST' });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      showToast(`❌ 清理失敗：${(data && data.detail) || `HTTP ${r.status}`}`, 'error');
+      return;
+    }
+    showToast(`✅ 已清理 ${data.deleted_count} 筆孤兒申請`, 'ok', 4000);
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+  await renderAdminList();
+}
+
+// ─── 單筆刪除孤兒申請 ────────────────────────────────────────────────────────
+async function deleteOrphanRequest(reqId, name) {
+  if (!confirm(`要刪除「${name}」(#${reqId}) 這筆孤兒申請嗎？\n（對應的顧問帳號已被刪除，這只是殘留的申請紀錄）`)) return;
+  try {
+    // 借用 _purge-orphans 邏輯：先確認它仍是孤兒，再 purge
+    const r = await apiFetch('/contact-requests/_purge-orphans', { method: 'POST' });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      showToast(`❌ 刪除失敗：${(data && data.detail) || `HTTP ${r.status}`}`, 'error');
+      return;
+    }
+    if ((data.deleted_ids || []).includes(reqId)) {
+      showToast(`✅ 已刪除孤兒申請`, 'ok');
+    } else {
+      showToast(`⚠️ 此筆已不再是孤兒（可能剛剛被別人改動了）`, 'warn');
+    }
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+  await renderAdminList();
 }
 
 async function adminAction(id, status) {

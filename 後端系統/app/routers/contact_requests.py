@@ -24,6 +24,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from sqlalchemy import or_
+
 from app.core import models as M
 from app.core.database import get_db
 from app.routers.auth import hash_password
@@ -242,6 +244,100 @@ def resend_welcome_email(req_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(row)
     return {"email_status": email_status, "request": _to_dict(row)}
+
+
+# ─── 同步檢查 / 清理孤兒申請 ──────────────────────────────────────────────────
+
+@router.get("/_sync-status")
+def sync_status(db: Session = Depends(get_db)):
+    """
+    回傳「申請紀錄 vs 顧問帳號」的同步狀態，給管理員 UI 顯示用。
+
+    每筆已核准的申請，會標記它對應的 consultant 是否還存在：
+      - linked        ：有 consultant_id 而且查得到對應顧問
+      - orphan_deleted：有 consultant_id 但對應顧問已被刪除（FK 已被 SET NULL）
+      - orphan_null   ：consultant_id 為 NULL（FK 被 SET NULL 後的狀態）
+      - dup_phone     ：原本就因為同手機已有帳號，未建立新顧問（這是正常情況）
+
+    回傳：
+      {
+        approved_total: int,
+        orphans:        int,   # orphan_deleted + orphan_null 加總
+        items:          [...]  # 每筆狀態
+      }
+    """
+    rows = (
+        db.query(M.ContactRequest)
+        .filter(M.ContactRequest.status == "approved")
+        .order_by(M.ContactRequest.created_at.desc())
+        .all()
+    )
+
+    items = []
+    orphan_count = 0
+    for r in rows:
+        is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
+        if r.consultant_id is None:
+            if is_dup:
+                state = "dup_phone"
+            else:
+                state = "orphan_null"
+                orphan_count += 1
+        else:
+            c = db.query(M.Consultant).filter(
+                M.Consultant.consultant_id == r.consultant_id
+            ).first()
+            if c:
+                state = "linked"
+            else:
+                state = "orphan_deleted"
+                orphan_count += 1
+        items.append({
+            "id":            r.id,
+            "name":          r.name or "",
+            "phone":         r.phone or "",
+            "consultant_id": r.consultant_id,
+            "state":         state,
+        })
+
+    return {
+        "approved_total": len(rows),
+        "orphans":        orphan_count,
+        "items":          items,
+    }
+
+
+@router.post("/_purge-orphans")
+def purge_orphans(db: Session = Depends(get_db)):
+    """
+    一次性清理所有「孤兒申請」：
+      - status='approved' 但 consultant_id 為 NULL 且 note_admin 沒寫
+        「該手機已有顧問帳號」（亦即不是 dup_phone 的情況）
+      - status='approved' 且 consultant_id 不為 NULL 但對應顧問已不存在
+
+    用於：之前刪除顧問時還沒 cascade，留下的 orphan 申請。
+    """
+    rows = (
+        db.query(M.ContactRequest)
+        .filter(M.ContactRequest.status == "approved")
+        .all()
+    )
+    deleted_ids = []
+    for r in rows:
+        is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
+        if r.consultant_id is None:
+            if not is_dup:
+                deleted_ids.append(r.id)
+                db.delete(r)
+            continue
+        c = db.query(M.Consultant).filter(
+            M.Consultant.consultant_id == r.consultant_id
+        ).first()
+        if not c:
+            deleted_ids.append(r.id)
+            db.delete(r)
+    db.commit()
+    return {"ok": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids}
 
 
 # ─── 一次性匯入舊版 JSON（若還存在）─────────────────────────────────────────
