@@ -22,6 +22,22 @@ from app.routers.auth import require_user
 
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
+# 部署版本標記（每次 commit 改一次即可確認最新程式上線）
+BUILD_VERSION = "planc-v3-fontfamily-vercelproxy"
+
+
+@router.get("/diag/full")
+def diag_full() -> dict:
+    """檢查 GCS、Email Proxy、部署版本（無 secret 也回傳，安全）"""
+    from app.services import gcs_uploader, email_sender
+    gcs = gcs_uploader.diag()
+    return {
+        "build_version": BUILD_VERSION,
+        "gcs": gcs,
+        "vercel_email_proxy": email_sender._vercel_email_proxy(),
+        "ingest_secret_set": bool(os.environ.get("REPORTS_INGEST_SECRET")),
+    }
+
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
 
