@@ -48,9 +48,9 @@ def _max_concurrent() -> int:
 
 def _timeout_sec() -> int:
     try:
-        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "1500")))
+        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "2700")))  # 預設 45 分鐘
     except ValueError:
-        return 1500
+        return 2700
 
 
 # ── 模組級狀態（單一 event loop 跨 thread 共用）──────────────────────
