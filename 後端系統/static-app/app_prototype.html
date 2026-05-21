@@ -5007,12 +5007,14 @@ async function renderAdminList() {
   // 已核准分頁、且有「不對應顧問的申請」→ 顯示同步狀態列 + 清理按鈕
   let cleanupBar = '';
   if (_currentAdminTab === 'approved' && syncSummary && syncSummary.unmatched > 0) {
-    const orphans = syncSummary.orphans || 0;
-    const dup     = syncSummary.dup_phone || 0;
-    const linked  = syncSummary.linked || 0;
-    const parts   = [];
-    if (orphans > 0) parts.push(`<b style="color:#e65100;">${orphans}</b> 筆孤兒（顧問已刪）`);
-    if (dup > 0)     parts.push(`<b style="color:#1565c0;">${dup}</b> 筆重複（同手機已有帳號）`);
+    const orphans    = syncSummary.orphans || 0;
+    const dup        = syncSummary.dup_phone || 0;
+    const dupLinked  = syncSummary.dup_linked || 0;
+    const linked     = syncSummary.linked || 0;
+    const parts      = [];
+    if (orphans > 0)   parts.push(`<b style="color:#e65100;">${orphans}</b> 筆孤兒（顧問已刪）`);
+    if (dup > 0)       parts.push(`<b style="color:#1565c0;">${dup}</b> 筆重複（同手機已有帳號）`);
+    if (dupLinked > 0) parts.push(`<b style="color:#7b1fa2;">${dupLinked}</b> 筆舊紀錄（同顧問被新申請取代）`);
     cleanupBar = `
       <div style="background:#fff8e1;border:1px solid #ffc107;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div style="font-size:13px;color:#5d4037;line-height:1.6;">
@@ -5067,16 +5069,22 @@ async function renderAdminList() {
         syncLine = `<div class="row" style="margin-top:6px;color:#e65100;font-weight:600;background:#fff3e0;padding:6px 10px;border-radius:8px;">⚠️ 顧問帳號已刪除 · 此為孤兒申請紀錄</div>`;
       } else if (state === 'dup_phone') {
         syncLine = `<div class="row" style="margin-top:6px;color:#1565c0;font-weight:600;background:#e3f2fd;padding:6px 10px;border-radius:8px;">ℹ️ 同手機原本已有顧問帳號 #${r.consultant_id || '?'} · 未建立新帳號 / 未寄信</div>`;
+      } else if (state === 'dup_linked') {
+        syncLine = `<div class="row" style="margin-top:6px;color:#7b1fa2;font-weight:600;background:#f3e5f5;padding:6px 10px;border-radius:8px;">🔁 此筆已被新申請取代 · 對應顧問 #${r.consultant_id} 已用更新的申請覆蓋</div>`;
       } else if (state === 'linked' && r.consultant_id) {
         syncLine = `<div class="row" style="margin-top:6px;color:#2e7d32;font-size:11px;">🔗 對應顧問 #${r.consultant_id}</div>`;
       }
 
-      const isOrphan = (state === 'orphan_deleted' || state === 'orphan_null');
-      const isDup    = (state === 'dup_phone');
-      const isUnmatched = isOrphan || isDup;
+      const isOrphan     = (state === 'orphan_deleted' || state === 'orphan_null');
+      const isDupPhone   = (state === 'dup_phone');
+      const isDupLinked  = (state === 'dup_linked');
+      const isUnmatched  = isOrphan || isDupPhone || isDupLinked;
       let actionRow;
       if (isUnmatched) {
-        const label = isOrphan ? '🗑️ 刪除此筆孤兒' : '🗑️ 刪除此筆重複申請';
+        const label =
+          isOrphan    ? '🗑️ 刪除此筆孤兒'
+          : isDupPhone ? '🗑️ 刪除此筆重複申請'
+          : '🗑️ 刪除此筆舊紀錄';
         actionRow = `<div class="actions" style="margin-top:8px;">
              <button class="admin-btn" style="background:#c62828;color:white;font-size:12px;" onclick="deleteOrphanRequest('${r.id}','${(r.name||'').replace(/'/g,'')}')">${label}</button>
            </div>`;
@@ -5110,13 +5118,13 @@ async function renderAdminList() {
 
 // ─── 一鍵清理「不對應任何顧問」的申請 ────────────────────────────────────────
 async function purgeOrphanRequests() {
-  const msg = `將永久刪除所有「不對應顧問帳號」的已核准申請：
+  const msg = `將永久刪除所有「不該顯示在已核准名單」的舊紀錄：
 
   • 孤兒申請（顧問已被刪除）
-  • 重複申請（同手機已有顧問帳號，當初未建新帳號）
+  • 重複申請（同手機已有顧問，當初未建新帳號）
+  • 舊紀錄（同顧問的多筆申請，只保留最新一筆）
 
 ⚠️ 申請紀錄會整筆刪除（不可復原），但顧問本體完全不受影響。
-（若要保留重複申請的歷史，請通知工程師改用 ?include_dup=0）
 
 確定要繼續嗎？`;
   if (!confirm(msg)) return;
@@ -5131,7 +5139,8 @@ async function purgeOrphanRequests() {
     const parts = [];
     if (b.orphan_null)    parts.push(`${b.orphan_null} 孤兒(NULL)`);
     if (b.orphan_deleted) parts.push(`${b.orphan_deleted} 孤兒(已刪)`);
-    if (b.dup_phone)      parts.push(`${b.dup_phone} 重複`);
+    if (b.dup_phone)      parts.push(`${b.dup_phone} 重複手機`);
+    if (b.dup_linked)     parts.push(`${b.dup_linked} 舊紀錄`);
     const detail = parts.length ? `（${parts.join(' + ')}）` : '';
     showToast(`✅ 已清理 ${data.deleted_count} 筆${detail}`, 'ok', 4500);
   } catch (e) {

@@ -215,6 +215,24 @@ def approve(req_id: str, db: Session = Depends(get_db)):
     row.consultant_id     = consultant.consultant_id
     row.initial_password  = initial_pw
     row.note_admin        = note
+    db.flush()
+
+    # ─── 清掉「指向同一顧問的舊已核准申請 row」───────────────────────────
+    # 同一個顧問可能因為改名 / 重新申請有多筆申請紀錄，
+    # 核准最新一筆後就把舊的清掉，避免「已核准」名單跟「顧問清單」筆數不同步。
+    superseded = (
+        db.query(M.ContactRequest)
+        .filter(
+            M.ContactRequest.consultant_id == consultant.consultant_id,
+            M.ContactRequest.id != row.id,
+            M.ContactRequest.status == "approved",
+        )
+        .all()
+    )
+    superseded_ids = [s.id for s in superseded]
+    for s in superseded:
+        db.delete(s)
+
     db.commit()
     db.refresh(row)
 
@@ -224,7 +242,8 @@ def approve(req_id: str, db: Session = Depends(get_db)):
     db.refresh(row)
 
     out = _to_dict(row)
-    out["email_status"] = email_status
+    out["email_status"]   = email_status
+    out["superseded_ids"] = superseded_ids
     return out
 
 
@@ -287,8 +306,27 @@ def sync_status(db: Session = Depends(get_db)):
         .all()
     )
 
+    # 先計算每個 consultant_id 對應到的最新已核准申請（依 handled_at 或 created_at）
+    latest_by_cid: dict = {}
+    for r in rows:
+        if r.consultant_id is None:
+            continue
+        sort_key = r.handled_at or r.created_at
+        prev = latest_by_cid.get(r.consultant_id)
+        if (
+            prev is None
+            or (sort_key and (prev[1] is None or sort_key > prev[1]))
+        ):
+            latest_by_cid[r.consultant_id] = (r.id, sort_key)
+
     items = []
-    counts = {"linked": 0, "orphan_null": 0, "orphan_deleted": 0, "dup_phone": 0}
+    counts = {
+        "linked":         0,
+        "orphan_null":    0,
+        "orphan_deleted": 0,
+        "dup_phone":      0,
+        "dup_linked":     0,
+    }
     for r in rows:
         is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
         if r.consultant_id is None:
@@ -297,7 +335,13 @@ def sync_status(db: Session = Depends(get_db)):
             c = db.query(M.Consultant).filter(
                 M.Consultant.consultant_id == r.consultant_id
             ).first()
-            state = "linked" if c else "orphan_deleted"
+            if not c:
+                state = "orphan_deleted"
+            else:
+                # 同一個 consultant_id 可能有多筆已核准申請，只有最新那筆算 linked，
+                # 其餘都是 dup_linked（被新申請取代的舊紀錄）
+                latest_id = latest_by_cid.get(r.consultant_id, (None, None))[0]
+                state = "linked" if r.id == latest_id else "dup_linked"
         counts[state] = counts.get(state, 0) + 1
         items.append({
             "id":            r.id,
@@ -307,12 +351,19 @@ def sync_status(db: Session = Depends(get_db)):
             "state":         state,
         })
 
+    unmatched_total = (
+        counts["orphan_null"]
+        + counts["orphan_deleted"]
+        + counts["dup_phone"]
+        + counts["dup_linked"]
+    )
     return {
         "approved_total": len(rows),
         "orphans":        counts["orphan_null"] + counts["orphan_deleted"],
         "dup_phone":      counts["dup_phone"],
+        "dup_linked":     counts["dup_linked"],
         "linked":         counts["linked"],
-        "unmatched":      counts["orphan_null"] + counts["orphan_deleted"] + counts["dup_phone"],
+        "unmatched":      unmatched_total,
         "counts":         counts,
         "items":          items,
     }
@@ -324,11 +375,12 @@ def purge_orphans(
     db: Session = Depends(get_db),
 ):
     """
-    一次性清理「已核准但不對應任何 active 顧問」的申請：
+    一次性清理「已核准但不該顯示的」申請：
 
     一定會刪：
       - orphan_null    （consultant_id=NULL 且非 dup_phone）
       - orphan_deleted （consultant_id 不為 NULL 但對應顧問已不存在）
+      - dup_linked     （同一個顧問有多筆已核准申請，只保留最新一筆）
 
     預設也會刪（讓兩個名單真正同步）：
       - dup_phone（同手機已有帳號，本次未建新顧問）
@@ -340,8 +392,24 @@ def purge_orphans(
         .filter(M.ContactRequest.status == "approved")
         .all()
     )
+
+    # 同 sync_status 邏輯：算出每個 consultant 最新的 row.id
+    latest_by_cid: dict = {}
+    for r in rows:
+        if r.consultant_id is None:
+            continue
+        sort_key = r.handled_at or r.created_at
+        prev = latest_by_cid.get(r.consultant_id)
+        if prev is None or (sort_key and (prev[1] is None or sort_key > prev[1])):
+            latest_by_cid[r.consultant_id] = (r.id, sort_key)
+
     deleted_ids = []
-    breakdown = {"orphan_null": 0, "orphan_deleted": 0, "dup_phone": 0}
+    breakdown = {
+        "orphan_null":    0,
+        "orphan_deleted": 0,
+        "dup_phone":      0,
+        "dup_linked":     0,
+    }
 
     for r in rows:
         is_dup = (r.note_admin or "").find("該手機已有顧問帳號") >= 0
@@ -362,6 +430,13 @@ def purge_orphans(
         if not c:
             deleted_ids.append(r.id)
             breakdown["orphan_deleted"] += 1
+            db.delete(r)
+            continue
+        # 同 consultant 但不是最新那筆 → 視為被取代
+        latest_id = latest_by_cid.get(r.consultant_id, (None, None))[0]
+        if r.id != latest_id:
+            deleted_ids.append(r.id)
+            breakdown["dup_linked"] += 1
             db.delete(r)
     db.commit()
     return {
