@@ -81,8 +81,34 @@ def verify_token(token: str) -> Optional[dict]:
 
 # ─── 取得目前使用者 ───────────────────────────────────────────────────────────
 
+def _to_halfwidth(s: str) -> str:
+    """
+    將全形 ASCII 字元（U+FF01 ~ U+FF5E）轉成對應的半形（U+0021 ~ U+007E），
+    並把「全形空格 U+3000 / 不換行空格 U+00A0」也視為一般空格。
+    用來避免使用者在中文輸入法下打出全形數字／字母（看起來一樣、實際不同碼點）
+    而導致比對失敗。
+    """
+    if not s:
+        return ""
+    out = []
+    for ch in s:
+        code = ord(ch)
+        if 0xFF01 <= code <= 0xFF5E:
+            out.append(chr(code - 0xFEE0))
+        elif ch in ("\u3000", "\u00A0"):
+            out.append(" ")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def _phone_normalize(p: str) -> str:
-    return (p or "").strip().replace("-", "").replace(" ", "")
+    return (
+        _to_halfwidth(p or "")
+        .strip()
+        .replace("-", "")
+        .replace(" ", "")
+    )
 
 
 def require_user(authorization: Optional[str], db: Session) -> M.Consultant:
@@ -126,12 +152,15 @@ class ChangePasswordRequest(BaseModel):
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     phone = _phone_normalize(req.phone)
+    # 密碼也順手把全形 ASCII 轉半形，避免使用者在中文輸入法下打出
+    # `ｄｅｍｏ１２３` 卻一直登不進去（與肉眼看到的 demo123 不同碼點）。
+    password = _to_halfwidth(req.password or "")
     user = (
         db.query(M.Consultant)
         .filter(M.Consultant.phone == phone, M.Consultant.is_active == 1)
         .first()
     )
-    if not user or not verify_password(req.password, user.password_hash):
+    if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
 
     token = create_token({"cid": user.consultant_id, "role": user.role})
@@ -184,8 +213,9 @@ def change_password(
 def bootstrap(db: Session = Depends(get_db)):
     """
     一次性初始化：當 consultants 表為空時，建立：
-      ① admin 帳號  → 手機 0900000000 / 密碼 admin123
-      ② demo 顧問   → 手機 0900000001 / 密碼 demo123 / 名字 示範顧問
+      ① admin 帳號     → 手機 0900000000 / 密碼 admin123
+      ② demo 加盟商顧問 → 手機 0900000001 / 密碼 demo123   / 名字 示範顧問   / org_type 加盟商
+      ③ demo 直營商顧問 → 手機 0900000002 / 密碼 direct123 / 名字 示範直營商 / org_type 直營商
     用過一次後（表內有資料）就拒絕呼叫，避免被惡意覆蓋。
     """
     count = db.query(M.Consultant).count()
@@ -202,23 +232,68 @@ def bootstrap(db: Session = Depends(get_db)):
         org           = "總公司",
         is_active     = 1,
     )
-    demo = M.Consultant(
+    demo_franchise = M.Consultant(
         name          = "示範顧問",
         phone         = "0900000001",
         password_hash = hash_password("demo123"),
         email         = "demo@example.com",
         role          = "consultant",
         org_type      = "加盟商",
-        org           = "示範分店",
+        org           = "示範加盟店",
         is_active     = 1,
     )
-    db.add_all([admin, demo])
+    demo_direct = M.Consultant(
+        name          = "示範直營商",
+        phone         = "0900000002",
+        password_hash = hash_password("direct123"),
+        email         = "direct@example.com",
+        role          = "consultant",
+        org_type      = "直營商",
+        org           = "示範直營店",
+        is_active     = 1,
+    )
+    db.add_all([admin, demo_franchise, demo_direct])
     db.commit()
     return {
         "ok": True,
         "created": [
-            {"name": "系統管理員", "phone": "0900000000", "password": "admin123", "role": "admin"},
-            {"name": "示範顧問",   "phone": "0900000001", "password": "demo123",  "role": "consultant"},
+            {"name": "系統管理員",   "phone": "0900000000", "password": "admin123",  "role": "admin",      "org_type": "工作人員"},
+            {"name": "示範顧問",     "phone": "0900000001", "password": "demo123",   "role": "consultant", "org_type": "加盟商"},
+            {"name": "示範直營商",   "phone": "0900000002", "password": "direct123", "role": "consultant", "org_type": "直營商"},
         ],
         "hint": "請立即登入並使用 /change-password 修改密碼",
+    }
+
+
+@router.post("/bootstrap-direct-demo")
+def bootstrap_direct_demo(db: Session = Depends(get_db)):
+    """
+    補建直營商 demo 帳號（給已經 bootstrap 過、但還沒有直營商帳號的舊資料庫用）。
+    只在直營商帳號不存在時才會新增；已存在就回 409。
+    """
+    exists = (
+        db.query(M.Consultant)
+        .filter(M.Consultant.phone == "0900000002")
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail="直營商 demo 帳號已存在")
+    demo_direct = M.Consultant(
+        name          = "示範直營商",
+        phone         = "0900000002",
+        password_hash = hash_password("direct123"),
+        email         = "direct@example.com",
+        role          = "consultant",
+        org_type      = "直營商",
+        org           = "示範直營店",
+        is_active     = 1,
+    )
+    db.add(demo_direct)
+    db.commit()
+    return {
+        "ok": True,
+        "created": {
+            "name": "示範直營商", "phone": "0900000002",
+            "password": "direct123", "org_type": "直營商",
+        },
     }
