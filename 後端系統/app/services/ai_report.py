@@ -283,12 +283,12 @@ def _run_full_generation(
                     job["pdf_url"] = pdf_url
                     logger.info("✅ PDF 已上傳 GCS → %s", object_name)
                 else:
-                    # GCS 沒設好的 fallback：給本地下載連結
+                    # GCS 沒設好 → 用主後端的下載端點
                     job["pdf_status"] = "local_only"
                     base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
                     if base and not base.startswith("http"):
                         base = f"https://{base}"
-                    pdf_url = f"{base}/reports/{os.path.basename(pdf_local)}" if base else None
+                    pdf_url = f"{base}/api/v1/report-gen/download/{job_id}.pdf" if base else None
                     job["pdf_url"] = pdf_url
                     logger.warning("⚠ GCS 未設好，使用本地連結：%s", pdf_url)
 

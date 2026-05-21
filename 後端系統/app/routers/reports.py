@@ -23,7 +23,7 @@ from app.routers.auth import require_user
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
 # 部署版本標記（每次 commit 改一次即可確認最新程式上線）
-BUILD_VERSION = "planc-v12-wqy-truetype"
+BUILD_VERSION = "planc-v13-local-download"
 
 
 @router.get("/diag/full")

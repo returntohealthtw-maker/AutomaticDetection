@@ -234,6 +234,18 @@ def start_full(req: StartRequest):
     return {"ok": True, "mode": "internal", "job_id": job_id}
 
 
+@router.get("/download/{job_id}.pdf")
+def download_pdf(job_id: str):
+    """下載已生成的 PDF（local fallback：當 GCS 未設或上傳失敗時用）"""
+    from fastapi.responses import FileResponse
+    import os
+    path = f"generated_reports/{job_id}.pdf"
+    if not os.path.isfile(path):
+        raise HTTPException(404, "PDF 不存在或仍在生成中")
+    return FileResponse(path, media_type="application/pdf",
+                        filename=f"{job_id}.pdf")
+
+
 @router.get("/status/{job_id}")
 def status(job_id: str):
     """輪詢進度（fallback when SSE 不可用）"""
