@@ -36,7 +36,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587   # TLS
+SMTP_PORT_TLS = 587   # STARTTLS
+SMTP_PORT_SSL = 465   # SSL (Railway 常擋 587，這個比較通)
 
 
 def _env(name: str, fallback: str = "") -> str:
@@ -103,18 +104,40 @@ def send_email(
     msg.attach(MIMEText(html, "html", "utf-8"))
 
     context = ssl.create_default_context()
-    try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=25) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=context)
-            smtp.ehlo()
-            smtp.login(user, pwd)
-            smtp.send_message(msg)
-        return {"ok": True, "from": user, "to": to}
-    except smtplib.SMTPAuthenticationError as e:
-        return {"ok": False, "error": f"Gmail 認證失敗（請確認用 App Password，不是 Gmail 密碼）: {e}", "from": user, "to": to}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}", "from": user, "to": to}
+    last_err = None
+
+    # 先試 465 SSL（Railway/某些雲商擋 587）
+    for attempt_label, attempt_fn in (
+        ("465_ssl", lambda: _send_via_ssl(msg, user, pwd, context)),
+        ("587_tls", lambda: _send_via_tls(msg, user, pwd, context)),
+    ):
+        try:
+            attempt_fn()
+            return {"ok": True, "from": user, "to": to, "via": attempt_label}
+        except smtplib.SMTPAuthenticationError as e:
+            return {"ok": False, "error": f"Gmail 認證失敗（請確認用 App Password，不是 Gmail 密碼）: {e}", "from": user, "to": to, "via": attempt_label}
+        except Exception as e:
+            last_err = (attempt_label, e)
+            logger.warning("SMTP %s 失敗：%s（嘗試下一個 port）", attempt_label, e)
+
+    via, e = last_err if last_err else ("none", Exception("沒有可用 SMTP port"))
+    return {"ok": False, "error": f"{type(e).__name__}: {e}", "from": user, "to": to, "via": via}
+
+
+def _send_via_ssl(msg, user, pwd, context):
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL, context=context, timeout=25) as smtp:
+        smtp.ehlo()
+        smtp.login(user, pwd)
+        smtp.send_message(msg)
+
+
+def _send_via_tls(msg, user, pwd, context):
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT_TLS, timeout=25) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=context)
+        smtp.ehlo()
+        smtp.login(user, pwd)
+        smtp.send_message(msg)
 
 
 # ─────────────────────────────────────────────────────────────────────

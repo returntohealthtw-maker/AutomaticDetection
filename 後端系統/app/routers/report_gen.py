@@ -256,6 +256,13 @@ def status(job_id: str):
         "email_to":            job.get("email_to", ""),
         "email_from":          job.get("email_from", ""),
         "email_error":         job.get("email_error", ""),
+        # 方案 C 新增：PDF/GCS 狀態
+        "pdf_status":          job.get("pdf_status", "pending"),
+        "pdf_url":             job.get("pdf_url"),
+        "pdf_error":           job.get("pdf_error", ""),
+        "subject_email":       job.get("subject_email", ""),
+        "subject_name":        job.get("subject_name", ""),
+        "session_id":          job.get("session_id"),
     }
 
 
