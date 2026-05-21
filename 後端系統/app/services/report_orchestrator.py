@@ -62,13 +62,13 @@ def _url_for(report_type: str) -> Optional[str]:
 
 def is_external_available(report_type: str) -> bool:
     """是否預設用外部系統。
-    - life_script / child：False（改用主後端內建 Gemini + reportlab PDF + GCS + email）
-      因為外部 Vercel React App 需要使用者保持瀏覽器開啟 10-20 分鐘，UX 不可商業化。
-      呼叫端若強制要 external，可顯式傳 use_external=True 仍可走外部。
-    - parent_child / marital：本來就是 server-side REST，仍走外部。
+    全部都走外部 — Vercel React App 已內建 ?auto=1 完整自動模式
+    （Gemini → 原設計 PDF → GCS → email → 回呼 /reports/record）。
+
+    為了 UX（使用者不應看到 Vercel UI 也不應被迫保持瀏覽器開啟），
+    我們會在主後端用 Playwright headless Chromium 在背景啟動 Vercel 頁面，
+    使用者完全感覺不到。
     """
-    if report_type in ("life_script", "child"):
-        return False
     return _url_for(report_type) is not None
 
 
@@ -264,20 +264,51 @@ def _call_vite_prefill(
     variant:        str = "full",
     session_id:     Optional[int] = None,
     api_base:       str = "",
+    report_type:    str = "life_script",
 ) -> Dict[str, Any]:
     """
-    回傳一個帶 query string 的 URL，前端打開後 React 會：
-      1. 從 query 解出資料，自動填入表單  
-      2. 自動 click 「單筆生成」→ 進入工作站
-      3. 自動逐節生成（48 sub-sections）
-      4. 生成完自動寄信到 ?email=...
-      5. 結束後顯示「✅ 已寄送」
-    需在成人/兒童 repo 的 App.tsx 內加 auto-run 支援
+    在主後端用 Playwright Chromium 在背景打開 Vercel React App，
+    讓 Vercel App 內建的 ?auto=1 流程跑完：
+      1. URL 自動填表
+      2. Gemini 生成全部章節
+      3. jsPDF 渲染（保留你的原設計）
+      4. 上傳 GCS
+      5. /api/sendEmail 寄信
+      6. POST /api/v1/reports/record 回呼主後端
+    使用者完全看不到 Vercel UI，也可隨時關閉 APP。
+
+    Fallback：若 Playwright 不可用（例如 Dockerfile 還沒加 Chromium），
+    退回原本的 redirect 模式（前端開新分頁）。
     """
+    from . import headless_renderer
+
+    if headless_renderer.is_available():
+        result = headless_renderer.start_headless_job(
+            report_type=report_type,
+            vercel_base=base,
+            subject_name=subject_name,
+            subject_email=subject_email,
+            brainwave_data=brainwave_data,
+            variant=variant,
+            session_id=session_id,
+            api_base=api_base,
+        )
+        if result.get("ok"):
+            return {
+                "ok":            True,
+                "mode":          "headless",           # 給前端判斷用
+                "external_url":  base,
+                "job_id":        result["job_id"],
+                "vercel_url":    result["vercel_url"],  # debug 用
+                "note":          "報告正在主後端背景生成，使用者可關閉 APP",
+                "subject_name":  subject_name,
+            }
+        # is_available=True 但啟動失敗 → 也 fallback
+        logger.warning("headless 啟動失敗（會 fallback redirect）：%s", result.get("error"))
+
+    # Fallback：原本的 vite_prefill（讓使用者瀏覽器自己跑）
     from urllib.parse import urlencode
     ba = (brainwave_data or {}).get("bands_avg") or {}
-    # 7 大指標 (0-100) — React 端 BrainwaveData 結構
-    # api_base + session_id 讓 React 在完成後可以 callback 主後端的 /reports/record
     params = {
         "auto":       "1",
         "name":       subject_name or "",
@@ -285,7 +316,6 @@ def _call_vite_prefill(
         "variant":    variant,
         "api_base":   api_base or "",
         "session_id": str(session_id or ""),
-        # 腦波 7 大指標：模擬從單通道 alpha/beta/gamma 推 high/low
         "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
         "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
         "theta":      int(ba.get("theta", 50)),
@@ -300,10 +330,10 @@ def _call_vite_prefill(
     redirect_url = f"{base}/?{qs}"
     return {
         "ok":           True,
-        "mode":         "vite_prefill",
+        "mode":         "vite_prefill",   # ⚠️ 前端需保持瀏覽器開啟（fallback 才會走到）
         "external_url": base,
         "redirect_url": redirect_url,
-        "note":         "已開啟自動模式，React 前端會自動填表並生成（瀏覽器需保持開啟）",
+        "note":         "Playwright 未啟用，需在瀏覽器保持開啟 → 已 fallback 至 redirect 模式",
         "subject_name": subject_name,
     }
 
@@ -383,6 +413,7 @@ def trigger_external_report(
         variant=variant,
         session_id=(extra or {}).get("session_id"),
         api_base=api_base,
+        report_type=report_type,
     )
 
 

@@ -23,20 +23,41 @@ from app.routers.auth import require_user
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
 # 部署版本標記（每次 commit 改一次即可確認最新程式上線）
-BUILD_VERSION = "planc-v13-local-download"
+BUILD_VERSION = "planc-v14-headless-playwright"
 
 
 @router.get("/diag/full")
 def diag_full() -> dict:
-    """檢查 GCS、Email Proxy、部署版本（無 secret 也回傳，安全）"""
-    from app.services import gcs_uploader, email_sender
+    """檢查 GCS、Email Proxy、Headless renderer、部署版本"""
+    from app.services import gcs_uploader, email_sender, headless_renderer
     gcs = gcs_uploader.diag()
     return {
         "build_version": BUILD_VERSION,
         "gcs": gcs,
         "vercel_email_proxy": email_sender._vercel_email_proxy(),
         "ingest_secret_set": bool(os.environ.get("REPORTS_INGEST_SECRET")),
+        "headless": headless_renderer.diag(),
     }
+
+
+@router.get("/headless/jobs")
+def list_headless_jobs() -> dict:
+    """列出所有 headless 任務（管理員觀察用）"""
+    from app.services import headless_renderer
+    return {
+        "jobs": headless_renderer.list_jobs(),
+        "active_count": sum(1 for j in headless_renderer.list_jobs() if j.get("status") == "running"),
+    }
+
+
+@router.get("/headless/job/{job_id}")
+def get_headless_job(job_id: str) -> dict:
+    """單一 headless 任務狀態"""
+    from app.services import headless_renderer
+    j = headless_renderer.get_job(job_id)
+    if not j:
+        raise HTTPException(404, "找不到 headless job")
+    return j
 
 
 @router.get("/diag/fontmap")

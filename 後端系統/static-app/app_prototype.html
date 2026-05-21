@@ -3438,13 +3438,26 @@ async function startFullReportGeneration(opts) {
       // ── 外部系統處理（不走內部 SSE）─────────────────────────────────
       const xmode = data.external_mode || '';
 
-      // 1) vite_prefill：成人 / 兒童 — 自動跳轉到 React App，那邊讀 ?auto=1 自動全章生成 + 寄信
+      // 1) headless：主後端用 Playwright 在背景跑 Vercel React App，使用者完全感覺不到
+      //    ✅ 原設計 100% 保留（jsPDF + html2canvas 在 Chromium 中執行）
+      //    ✅ 使用者可關閉 APP
+      if (xmode === 'headless') {
+        if (emailBar) emailBar.className = 'rg-email-bar pending';
+        const shortJob = (data.job_id || '').slice(0, 8);
+        if (emailText && subjectEmail) {
+          emailText.innerHTML = `🤖 報告已受理（job=${shortJob}…）<br>正在主後端背景生成，預計 5-15 分鐘後寄送至 <b>${subjectEmail}</b><br><u>您可關閉此頁面 / APP，不影響生成</u>`;
+        } else if (emailText) {
+          emailText.textContent = `🤖 報告已受理（job=${shortJob}…），背景生成中…`;
+        }
+        return;
+      }
+
+      // 1b) vite_prefill / redirect：Playwright 未啟用時的 fallback（要保持瀏覽器開啟）
       if (xmode === 'vite_prefill' || xmode === 'redirect') {
         if (emailBar) emailBar.className = 'rg-email-bar done';
         if (emailText) {
-          emailText.innerHTML = `🤖 報告系統已啟動，<a href="${data.redirect_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">若未自動跳轉請點此 →</a>${subjectEmail ? `<br>完成後將自動寄送至 <b>${subjectEmail}</b>` : ''}`;
+          emailText.innerHTML = `🤖 報告系統已啟動，<a href="${data.redirect_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">若未自動跳轉請點此 →</a>${subjectEmail ? `<br>完成後將自動寄送至 <b>${subjectEmail}</b>` : ''}<br><small>(fallback: 需保持頁面開啟)</small>`;
         }
-        // 自動全頁跳轉：在外部 React App 完成自動填表 + 全章生成 + 寄信
         setTimeout(() => {
           try { window.location.href = data.redirect_url; }
           catch (e) { try { window.open(data.redirect_url, '_blank'); } catch (e2) {} }

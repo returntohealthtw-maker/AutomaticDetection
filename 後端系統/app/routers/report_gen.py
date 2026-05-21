@@ -207,13 +207,14 @@ def start_full(req: StartRequest):
         return {
             "ok":              result.get("ok", False),
             "mode":            "external",
-            "external_mode":   result.get("mode"),         # marital_rest / redirect
+            "external_mode":   result.get("mode"),         # headless / marital_rest / parent_child_rest / vite_prefill(fallback)
             "report_type":     req.report_type,
             "external_url":    result.get("external_url"),
             "external_job_id": result.get("external_job_id") or result.get("job_id"),
+            "job_id":          result.get("job_id"),       # headless mode 用
             "status_url":      result.get("status_url"),
             "result_url":      result.get("result_url"),
-            "redirect_url":    result.get("redirect_url"),  # for redirect mode
+            "redirect_url":    result.get("redirect_url"),  # vite_prefill fallback 用
             "note":            result.get("note"),
             "error":           result.get("error"),
         }
