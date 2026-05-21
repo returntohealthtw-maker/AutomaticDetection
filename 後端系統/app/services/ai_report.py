@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 import json
+import os
 import time
 import uuid
 import threading
@@ -251,32 +252,115 @@ def _run_full_generation(
             job["save_error"] = str(e)
             logger.error("save report failed: %s", e)
 
-        # ── 寄 Email（若有提供 subject_email）─────────────────────────
+        # ── 生成 PDF + 上傳 GCS + 寫回 DB ────────────────────────────
+        pdf_url = None
+        if not job.get("cancelled"):
+            try:
+                from . import pdf_builder, gcs_uploader
+                pdf_local = f"generated_reports/{job_id}.pdf"
+                pdf_builder.render_report_pdf(
+                    out_path=pdf_local,
+                    subject_name=subject_name,
+                    report_type=report_type,
+                    variant=variant,
+                    chapters_list=job["chapters_list"],
+                    results=job["results"],
+                    brainwave_data=brainwave_data,
+                    subject_age=job.get("subject_age"),
+                    subject_gender=job.get("subject_gender"),
+                )
+                job["pdf_status"] = "rendered"
+
+                # 上傳 GCS（取 signed URL）
+                from .pdf_builder import REPORTS_LABEL
+                safe_name = (subject_name or "report").replace("/", "_").replace(" ", "_")
+                object_name = f"reports/{report_type}_{variant}_{safe_name}_{job_id}.pdf"
+                signed_url = gcs_uploader.upload_pdf(pdf_local, object_name)
+
+                if signed_url:
+                    pdf_url = signed_url
+                    job["pdf_status"] = "uploaded"
+                    job["pdf_url"] = pdf_url
+                    logger.info("✅ PDF 已上傳 GCS → %s", object_name)
+                else:
+                    # GCS 沒設好的 fallback：給本地下載連結
+                    job["pdf_status"] = "local_only"
+                    base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+                    if base and not base.startswith("http"):
+                        base = f"https://{base}"
+                    pdf_url = f"{base}/reports/{os.path.basename(pdf_local)}" if base else None
+                    job["pdf_url"] = pdf_url
+                    logger.warning("⚠ GCS 未設好，使用本地連結：%s", pdf_url)
+
+                # 寫回 DB reports 表（若有 session_id）
+                if pdf_url and job.get("session_id"):
+                    try:
+                        from app.core.database import SessionLocal
+                        from app.core import models as M
+                        db = SessionLocal()
+                        try:
+                            rep = db.query(M.Report).filter(
+                                M.Report.session_id == job["session_id"]
+                            ).first()
+                            if rep:
+                                rep.pdf_url = pdf_url
+                                rep.status = "completed"
+                                rep.notify_email = subject_email or rep.notify_email
+                            else:
+                                rep = M.Report(
+                                    session_id=job["session_id"],
+                                    pdf_url=pdf_url,
+                                    status="completed",
+                                    notify_email=subject_email,
+                                )
+                                db.add(rep)
+                            db.commit()
+                            logger.info("✅ DB reports 已更新 session_id=%s", job["session_id"])
+                        finally:
+                            db.close()
+                    except Exception as e:
+                        logger.exception("DB 更新失敗：%s", e)
+            except Exception as e:
+                job["pdf_status"] = "failed"
+                job["pdf_error"] = f"{type(e).__name__}: {e}"
+                logger.exception("PDF/GCS 流程例外")
+
+        # ── 寄 Email（GCS 連結版；若沒 PDF URL 才退回全文版）─────────
         job["email_status"] = "skipped"
         if subject_email and not job.get("cancelled"):
             try:
-                # 把所有生成的節合併成一篇報告內文
-                merged_text_parts = []
-                first_chapter = job["chapters_list"][0] if job["chapters_list"] else None
-                for key, sec in job["results"].items():
-                    merged_text_parts.append(
-                        f"【第{sec['section_num']}節：{sec['section_title']}】\n\n{sec['text']}"
+                if pdf_url:
+                    from .pdf_builder import REPORTS_LABEL
+                    report_title = REPORTS_LABEL(report_type, variant)
+                    email_result = email_sender.send_report_link_email(
+                        to=subject_email,
+                        subject_name=subject_name,
+                        report_title=report_title,
+                        pdf_url=pdf_url,
+                        expires_days=7,
                     )
-                merged_text = "\n\n\n".join(merged_text_parts)
+                else:
+                    # 沒 PDF URL 時 fallback：寄全文版
+                    merged_text_parts = []
+                    first_chapter = job["chapters_list"][0] if job["chapters_list"] else None
+                    for key, sec in job["results"].items():
+                        merged_text_parts.append(
+                            f"【第{sec['section_num']}節：{sec['section_title']}】\n\n{sec['text']}"
+                        )
+                    merged_text = "\n\n\n".join(merged_text_parts)
+                    ch_title = (
+                        f"第{first_chapter['num']}章：{first_chapter['title']}"
+                        if first_chapter else "AI 分析報告"
+                    )
+                    ch_icon = (first_chapter or {}).get("icon", "📄")
+                    email_result = email_sender.send_report_email(
+                        to=subject_email,
+                        subject_name=subject_name,
+                        chapter_title=ch_title,
+                        chapter_text=merged_text,
+                        chapter_icon=ch_icon,
+                    )
 
-                ch_title = (
-                    f"第{first_chapter['num']}章：{first_chapter['title']}"
-                    if first_chapter else "AI 分析報告"
-                )
-                ch_icon = (first_chapter or {}).get("icon", "📄")
-
-                email_result = email_sender.send_report_email(
-                    to=subject_email,
-                    subject_name=subject_name,
-                    chapter_title=ch_title,
-                    chapter_text=merged_text,
-                    chapter_icon=ch_icon,
-                )
                 if email_result.get("ok"):
                     job["email_status"] = "sent"
                     job["email_to"]     = subject_email
@@ -307,6 +391,9 @@ def start_full_report(
     brainwave_data: Optional[Dict[str, Any]] = None,
     chapters_to_generate: Optional[List[int]] = None,
     subject_email: Optional[str] = None,
+    subject_age: Optional[int] = None,
+    subject_gender: Optional[str] = None,
+    session_id: Optional[int] = None,
 ) -> str:
     """
     啟動報告背景生成，立即回傳 job_id
@@ -314,6 +401,7 @@ def start_full_report(
     Args:
         chapters_to_generate: 只生成這些章節（如 [1]）。None = 該 variant 全部章節
         subject_email:        生成完自動寄到此 email（None = 不寄）
+        session_id:           EEG session_id，用於把 PDF URL 寫回 reports 表
     """
     bw = brainwave_data or _demo_brainwave_data()
 
@@ -338,11 +426,16 @@ def start_full_report(
             "chapters_list":       [],
             "results":             {},
             "subject_name":        subject_name,
+            "subject_age":         subject_age,
+            "subject_gender":      subject_gender,
             "subject_email":       subject_email,
             "report_type":         report_type,
             "variant":             variant,
             "chapters_to_generate": chapters_to_generate,
             "email_status":        "pending" if subject_email else "skipped",
+            "pdf_status":          "pending",
+            "pdf_url":             None,
+            "session_id":          session_id,
         }
 
     t = threading.Thread(

@@ -3490,6 +3490,13 @@ async function startFullReportGeneration(opts) {
       return;
     }
     _rgJobId = data.job_id;
+    // 內建模式：背景 thread 在主後端跑 → 即使使用者關閉 APP，PDF/GCS/Email 流程仍會完成
+    if (emailBar) emailBar.className = 'rg-email-bar pending';
+    if (emailText && subjectEmail) {
+      emailText.innerHTML = `🤖 報告已受理（job=${data.job_id.slice(0,8)}…）<br>預計 3-15 分鐘後寄送至 <b>${subjectEmail}</b>，<u>您可關閉此頁面</u>`;
+    } else if (emailText) {
+      emailText.textContent = `🤖 報告已受理（job=${data.job_id.slice(0,8)}…），生成中…`;
+    }
     _connectReportSSE(_rgJobId);
   } catch (e) {
     console.error('啟動報告生成失敗：', e);

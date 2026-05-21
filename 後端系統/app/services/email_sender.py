@@ -194,3 +194,72 @@ def send_report_email(
     else:
         logger.error("❌ Gmail 寄發失敗: %s", result.get("error"))
     return result
+
+
+def send_report_link_email(
+    to: str,
+    subject_name: str,
+    report_title: str,
+    pdf_url: str,
+    expires_days: int = 7,
+) -> dict:
+    """
+    寄一封「報告生成完成 + 下載連結」的 Email（不含全文，PDF 在 GCS）。
+    """
+    subject_line = f"📄 您的腦波分析報告已產生：{report_title} - onlineReport"
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{subject_line}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:'PingFang TC','Microsoft JhengHei','Helvetica Neue',sans-serif;color:#333;">
+  <div style="max-width:680px;margin:0 auto;background:white;">
+    <div style="background:linear-gradient(135deg,#2D3561,#4a90e2);padding:36px 32px;color:white;">
+      <div style="font-size:13px;opacity:0.85;letter-spacing:2px;">onlineReport · 線上腦波分析系統</div>
+      <div style="font-size:24px;font-weight:700;margin-top:12px;line-height:1.4;">{subject_name} 的腦波分析報告</div>
+      <div style="font-size:16px;opacity:0.95;margin-top:10px;">✅ {report_title} 已產生</div>
+    </div>
+    <div style="padding:40px 32px;font-size:15px;line-height:1.8;color:#222;">
+      <p>您好 {subject_name}：</p>
+      <p>您的個人化腦波分析報告已完成，請點擊下方按鈕下載 PDF：</p>
+
+      <div style="text-align:center;margin:32px 0;">
+        <a href="{pdf_url}" style="display:inline-block;padding:16px 40px;
+           background:#4a90e2;color:white;text-decoration:none;
+           border-radius:10px;font-weight:600;font-size:16px;
+           box-shadow:0 4px 12px rgba(74,144,226,0.3);">📥 下載報告 PDF</a>
+      </div>
+
+      <p style="font-size:13px;color:#888;text-align:center;">
+        ⏰ 下載連結將於 <b>{expires_days} 天後</b>失效，請儘早下載保存
+      </p>
+
+      <div style="margin-top:32px;padding:18px 22px;background:#f5f7fa;border-radius:10px;font-size:13px;line-height:1.7;color:#555;">
+        <b>📌 報告使用建議</b><br>
+        本報告依您的腦波數據與 AI 分析生成，建議搭配專業諮詢使用，<br>
+        報告內容僅供個人化參考，不作為任何醫療診斷依據。
+      </div>
+    </div>
+    <div style="background:#f5f7fa;padding:24px 32px;text-align:center;color:#888;font-size:12px;line-height:1.6;border-top:1px solid #eee;">
+      此 Email 由 onlineReport 線上腦波分析系統自動寄發<br>
+      若您並未進行腦波檢測，請忽略此封信件
+    </div>
+  </div>
+</body>
+</html>"""
+
+    plain = (
+        f"{subject_name} 您好：\n\n"
+        f"您的腦波分析報告「{report_title}」已產生。\n\n"
+        f"下載連結（{expires_days} 天內有效）：\n{pdf_url}\n\n"
+        f"— onlineReport 線上腦波分析系統"
+    )
+    result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)
+    if result.get("ok"):
+        logger.info("✅ 報告連結 email 寄發成功 → %s", to)
+    else:
+        logger.error("❌ 報告連結 email 寄發失敗: %s", result.get("error"))
+    return result

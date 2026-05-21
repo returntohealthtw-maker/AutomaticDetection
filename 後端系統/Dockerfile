@@ -3,10 +3,13 @@ LABEL maintainer="AutomaticDetection" version="1.0"
 
 WORKDIR /app
 
-# 安裝系統依賴（psycopg2 需要）
+# 安裝系統依賴
+#   gcc/libpq-dev：psycopg2 編譯
+#   fonts-noto-cjk：reportlab PDF 中文字型（必要！否則中文會變方塊）
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

@@ -218,7 +218,8 @@ def start_full(req: StartRequest):
             "error":           result.get("error"),
         }
 
-    # 內建 Gemini fallback
+    # 內建 Gemini 生成（背景任務）→ 生 PDF → 上傳 GCS → 寄 email 連結
+    # 這是「方案 C」的核心：使用者下單後可以離開頁面，後端默默跑，完成寄信
     job_id = report_generator.start_full_report(
         subject_name=req.subject_name,
         report_type=req.report_type,
@@ -226,6 +227,9 @@ def start_full(req: StartRequest):
         brainwave_data=req.brainwave_data,
         chapters_to_generate=req.chapters_to_generate,
         subject_email=req.subject_email,
+        subject_age=req.subject_age,
+        subject_gender=req.subject_gender,
+        session_id=req.session_id,
     )
     return {"ok": True, "mode": "internal", "job_id": job_id}
 

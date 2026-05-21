@@ -61,6 +61,14 @@ def _url_for(report_type: str) -> Optional[str]:
 
 
 def is_external_available(report_type: str) -> bool:
+    """是否預設用外部系統。
+    - life_script / child：False（改用主後端內建 Gemini + reportlab PDF + GCS + email）
+      因為外部 Vercel React App 需要使用者保持瀏覽器開啟 10-20 分鐘，UX 不可商業化。
+      呼叫端若強制要 external，可顯式傳 use_external=True 仍可走外部。
+    - parent_child / marital：本來就是 server-side REST，仍走外部。
+    """
+    if report_type in ("life_script", "child"):
+        return False
     return _url_for(report_type) is not None
 
 
