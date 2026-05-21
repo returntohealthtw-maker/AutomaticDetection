@@ -1,12 +1,16 @@
 """
 PayUni 統一金流串接 (https://www.payuni.com.tw)
 
-加密規則（取自統一金流 API 文件 v1.6）：
+⚠️ 加密規則（取自 PayUni 官方 WooCommerce 外掛 class-payuni.php，亦即實際 API 規範）：
   1. 把參數 dict urlencode 成 query string (e.g. MerTradeNo=xxx&TradeAmt=100)
-  2. AES-256-CBC 加密該 query string；key=HashKey, iv=HashIV，PKCS7 padding
-  3. 轉小寫 hex 得到 EncryptInfo
-  4. HashInfo = SHA256( "HashKey=xxx&" + EncryptInfo + "&HashIV=yyy" ).upper()
+  2. AES-256-GCM 加密該 query string，key=HashKey(32 bytes)，iv=HashIV(16 bytes)
+     openssl_encrypt 預設輸出 base64，並另外輸出 16 bytes GCM tag
+  3. EncryptInfo = bin2hex( base64(ciphertext) + ":::" + base64(tag) )
+  4. HashInfo = SHA256( HashKey + EncryptInfo + HashIV ).upper()
+     ⚠️ 直接字串連接，沒有 "HashKey="、"HashIV=" 等 query 字串！
   5. POST { MerID, Version, EncryptInfo, HashInfo } 到 PayUni endpoint
+
+⚠️ 過去版本曾使用 AES-256-CBC + PKCS7，已不正確；目前已改回 PayUni 官方規格。
 
 支援：
   build_create_form() ── 產生「導去 PayUni」的 HTML form data
@@ -14,12 +18,12 @@ PayUni 統一金流串接 (https://www.payuni.com.tw)
 """
 from __future__ import annotations
 import json
+import base64
 import hashlib
 from urllib.parse import urlencode, parse_qs
 from typing import Optional
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.padding import PKCS7
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import settings
 
@@ -40,7 +44,7 @@ def upp_url() -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# AES-256-CBC 加密 / 解密
+# AES-256-GCM 加密 / 解密（與 PayUni PHP 實作對齊）
 # ──────────────────────────────────────────────────────────────────────
 def _key_iv() -> tuple[bytes, bytes]:
     k = (settings.PAYUNI_HASH_KEY or "").encode()
@@ -59,34 +63,39 @@ def is_configured() -> bool:
 
 
 def aes_encrypt(plain: str) -> str:
-    """回傳 lowercase hex"""
-    k, v = _key_iv()
-    padder = PKCS7(128).padder()
-    padded = padder.update(plain.encode("utf-8")) + padder.finalize()
-    cipher = Cipher(algorithms.AES(k), modes.CBC(v))
-    enc = cipher.encryptor()
-    ct  = enc.update(padded) + enc.finalize()
-    return ct.hex()
+    """
+    PayUni AES-256-GCM 加密；對齊 PayUni 官方 PHP：
+        $encrypted = openssl_encrypt($plain, 'aes-256-gcm', $HashKey, 0, $HashIV, $tag);
+        return bin2hex($encrypted . ':::' . base64_encode($tag));
+
+    cryptography 的 AESGCM.encrypt(nonce, data, aad) 回傳 ciphertext+tag（最後 16 bytes 為 tag）；
+    PHP 的 openssl_encrypt 第 4 個參數 0 代表輸出 base64，所以 PayUni 的 ciphertext
+    其實是 base64(raw_ciphertext) — 注意這層 base64 千萬別忘。
+    """
+    key, iv = _key_iv()
+    ct_plus_tag = AESGCM(key).encrypt(iv, plain.encode("utf-8"), None)
+    ct, tag = ct_plus_tag[:-16], ct_plus_tag[-16:]
+    combined = base64.b64encode(ct).decode("ascii") + ":::" + base64.b64encode(tag).decode("ascii")
+    return combined.encode("ascii").hex()
 
 
 def aes_decrypt(hex_str: str) -> str:
-    k, v = _key_iv()
-    cipher = Cipher(algorithms.AES(k), modes.CBC(v))
-    dec = cipher.decryptor()
-    padded = dec.update(bytes.fromhex(hex_str)) + dec.finalize()
-    unpadder = PKCS7(128).unpadder()
-    plain = unpadder.update(padded) + unpadder.finalize()
+    """逆向 aes_encrypt"""
+    key, iv = _key_iv()
+    raw = bytes.fromhex(hex_str).decode("ascii")
+    if ":::" not in raw:
+        raise ValueError("EncryptInfo 格式不正確（缺少 ::: 分隔）")
+    ct_b64, tag_b64 = raw.split(":::", 1)
+    ct  = base64.b64decode(ct_b64)
+    tag = base64.b64decode(tag_b64)
+    plain = AESGCM(key).decrypt(iv, ct + tag, None)
     return plain.decode("utf-8")
 
 
 def hash_sign(encrypt_hex: str) -> str:
-    """HashInfo = SHA256(HashKey={key}&{enc}&HashIV={iv}).upper()"""
-    raw = (
-        f"HashKey={settings.PAYUNI_HASH_KEY}&"
-        f"{encrypt_hex}&"
-        f"HashIV={settings.PAYUNI_HASH_IV}"
-    )
-    return hashlib.sha256(raw.encode()).hexdigest().upper()
+    """HashInfo = SHA256(HashKey + EncryptHex + HashIV).upper() — 直接字串連接！"""
+    raw = (settings.PAYUNI_HASH_KEY or "") + encrypt_hex + (settings.PAYUNI_HASH_IV or "")
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest().upper()
 
 
 # ──────────────────────────────────────────────────────────────────────

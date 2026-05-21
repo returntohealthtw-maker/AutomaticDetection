@@ -354,37 +354,84 @@ async def payuni_notify(request: Request):
     return "SUCCESS"
 
 
+# PayUni Status 代碼對應（從 PayUni 文件 + CREDIT01007 對應表整理）
+_PAYUNI_STATUS_CODES = {
+    "SUCCESS":     ("付款成功", "您的付款已完成。"),
+    # 通用 DEF01xxx 系列：對應 CREDIT01xxx
+    "DEF01000":    ("系統錯誤", "PayUni 系統發生錯誤，請聯絡客服。"),
+    "DEF01001":    ("連線上限", "PayUni 連線處理達上限，請稍後再試。"),
+    "DEF01002":    ("商店代號錯誤", "未提供商店代號，請聯絡管理員確認 PAYUNI_MER_ID。"),
+    "DEF01003":    ("簽章不符", "資料 HASH 比對不符合，PAYUNI_HASH_KEY/IV 可能設錯。"),
+    "DEF01004":    ("解密失敗", "PayUni 解開我方資料失敗，加密演算法或金鑰錯誤。"),
+    "DEF01005":    ("解密資料不存在", "送出的資料解開後是空的。"),
+    "DEF01006":    ("商店不存在", "PayUni 找不到符合的商店資料，請檢查 PAYUNI_MER_ID。"),
+    "DEF01007":    ("缺少交易 Hash", "送出的 HashInfo 缺少或不正確。"),
+    # 商店啟用狀況 DEF03xxx
+    "DEF03001":    ("商店未啟用", "PayUni 後台尚未啟用此商店，請至 PayUni 後台確認。"),
+    "DEF03002":    ("商店未啟用信用卡一次付清", "PayUni 後台未開通信用卡一次付清功能。"),
+    "DEF03003":    ("商店未啟用信用卡分期", "PayUni 後台未開通信用卡分期功能。"),
+    "DEF03012":    ("商店未設定 AesType", "PayUni 後台「商店設定」需設定加密類型。"),
+    "DEF03013":    ("AesType 不符", "PayUni 後台加密類型設定與送出資料不一致。"),
+    # 信用卡系列 CREDIT05xxx
+    "CREDIT05001": ("授權閘道失敗", "銀行授權閘道暫時無法回應。"),
+    "CREDIT05002": ("授權失敗", "信用卡授權失敗，可能餘額不足/卡片過期。"),
+    "CREDIT05004": ("已取消授權", "授權已被取消。"),
+}
+
+
+def _payuni_status_human(code: str) -> tuple[str, str]:
+    """把 PayUni Status 代碼翻成人話 (title, hint)"""
+    if not code:
+        return ("", "")
+    if code in _PAYUNI_STATUS_CODES:
+        return _PAYUNI_STATUS_CODES[code]
+    # 處理 CREDIT01xxx -> 對應 DEF01xxx
+    if code.startswith("CREDIT") and code[6:] in [k[3:] for k in _PAYUNI_STATUS_CODES if k.startswith("DEF")]:
+        mapped = "DEF" + code[6:]
+        return _PAYUNI_STATUS_CODES.get(mapped, (f"信用卡錯誤 {code}", "信用卡授權失敗"))
+    return (f"未識別代碼 {code}", "請對照 PayUni 後台「錯誤代碼表」查詢。")
+
+
 async def _handle_payuni_return(request: Request, order_id_from_path: str = "") -> HTMLResponse:
     """共用邏輯：處理 PayUni return 的 POST/GET，order_id 可從路徑或 form 取得
 
     結果分四種：
       paid_ok=True            付款成功（綠勾）
       result_kind='cancel'    使用者沒帶資料回來 → 「您似乎沒完成付款」（藍色資訊）
-      result_kind='fail'      PayUni 回報付款失敗（橘色警告）
+      result_kind='fail'      PayUni 回報付款失敗（橘色警告，含明文 Status 代碼）
       result_kind='sign_err'  HashKey/IV 設錯 → 真正的系統問題（紅色錯誤，內部除錯用）
     """
     enc, hsh = "", ""
+    payuni_status_code = ""
     form_data = {}
     if request.method == "POST":
         form = await request.form()
         form_data = dict(form)
         enc = form.get("EncryptInfo", "")
         hsh = form.get("HashInfo", "")
+        payuni_status_code = form.get("Status", "") or ""
     else:
         enc = request.query_params.get("EncryptInfo", "")
         hsh = request.query_params.get("HashInfo", "")
+        payuni_status_code = request.query_params.get("Status", "") or ""
 
     real_no    = order_id_from_path or ""
     paid_ok    = False
     result_kind = "cancel"   # 預設：沒帶資料 = 使用者取消
     err_detail  = ""         # 給開發者看的詳細訊息（會印 log）
+    status_title, status_hint = _payuni_status_human(payuni_status_code)
 
-    if enc and hsh:
+    # 若 PayUni 明文 Status 已表明錯誤（非 SUCCESS），直接視為 fail，跳過解密
+    if payuni_status_code and payuni_status_code != "SUCCESS":
+        result_kind = "fail"
+        err_detail  = f"PayUni Status={payuni_status_code}（{status_title}）"
+        print(f"[PayUni Return] {err_detail}")
+    elif enc and hsh:
         result = payuni.decrypt_callback(enc, hsh)
         if result.get("ok"):
             data = result["data"]
             real_no = data.get("MerTradeNo") or data.get("MerchantOrderNo") or real_no
-            if result.get("success"):
+            if result.get("success") or payuni_status_code == "SUCCESS":
                 order = _payment_store.get(real_no)
                 if order and order["status"] == "pending":
                     order["status"]  = "paid"
@@ -393,7 +440,6 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
                     paid_ok = True
                     print(f"[PayUni Return] 訂單 {real_no} 已立即確認付款成功")
                 elif order:
-                    # webhook 先到、訂單已是 paid
                     paid_ok = (order["status"] == "paid")
                 else:
                     result_kind = "fail"
@@ -408,9 +454,8 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
             err_detail = f"PayUni 簽章驗證失敗：{result.get('error')}（檢查 PAYUNI_HASH_KEY / PAYUNI_HASH_IV 是否與後台一致）"
             print(f"[PayUni Return] {err_detail}")
     else:
-        # 沒帶 EncryptInfo/HashInfo = 使用者按取消或瀏覽器返回
         result_kind = "cancel"
-        print(f"[PayUni Return] 使用者取消／返回（無 EncryptInfo），order={real_no}，form_keys={list(form_data.keys())}, query_keys={list(request.query_params.keys())}")
+        print(f"[PayUni Return] 使用者取消／返回（無 Status/EncryptInfo），order={real_no}，form_keys={list(form_data.keys())}, query_keys={list(request.query_params.keys())}")
 
     show_id = real_no or "(尚未建立)"
     if paid_ok:
@@ -431,8 +476,13 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
         icon  = "⚠️"
         bg    = "#f57c00"   # 橘
         title = "付款未成功"
-        msg   = "金流系統回報這筆交易未完成（可能是卡片驗證失敗或金額不符）。"
-        hint  = "💡 您可以回到 App，重新建立訂單再試一次。如果款項已被扣除，請聯絡客服協助退款。"
+        if payuni_status_code and payuni_status_code != "SUCCESS":
+            msg   = f"金流系統回報：{status_title or payuni_status_code}"
+            hint  = f"💡 {status_hint or '請回到 App 重新建立訂單再試。'}<br><br>"
+            hint += f"<span style='font-family:monospace;font-size:11px;color:#999;'>錯誤代碼：{payuni_status_code}</span>"
+        else:
+            msg   = "金流系統回報這筆交易未完成（可能是卡片驗證失敗或金額不符）。"
+            hint  = "💡 您可以回到 App，重新建立訂單再試一次。如果款項已被扣除，請聯絡客服協助退款。"
         hint_bg = "#fff3e0"; hint_color = "#e65100"
     else:  # sign_err
         icon  = "🛠"
