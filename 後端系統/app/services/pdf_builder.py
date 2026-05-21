@@ -114,50 +114,51 @@ def render_report_pdf(
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
     )
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
     font_name = _CJK_FONT_NAME if _find_cjk_font() else "Helvetica"
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "Title", parent=styles["Title"],
-        fontName=font_name, fontSize=26, leading=32, alignment=TA_CENTER,
-        textColor=colors.HexColor("#2D3561"),
-        spaceAfter=8,
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle", parent=styles["Normal"],
-        fontName=font_name, fontSize=13, leading=18, alignment=TA_CENTER,
-        textColor=colors.HexColor("#6b7a99"),
-        spaceAfter=20,
-    )
-    meta_style = ParagraphStyle(
-        "Meta", parent=styles["Normal"],
-        fontName=font_name, fontSize=10.5, leading=15, alignment=TA_CENTER,
-        textColor=colors.HexColor("#8a93a8"),
-        spaceAfter=24,
-    )
-    chapter_title_style = ParagraphStyle(
-        "ChapterTitle", parent=styles["Heading1"],
-        fontName=font_name, fontSize=20, leading=26,
-        textColor=colors.HexColor("#1a2540"),
-        spaceBefore=24, spaceAfter=12,
-    )
-    section_title_style = ParagraphStyle(
-        "SectionTitle", parent=styles["Heading2"],
-        fontName=font_name, fontSize=14, leading=20,
-        textColor=colors.HexColor("#3b4a6b"),
-        spaceBefore=14, spaceAfter=6,
-    )
-    body_style = ParagraphStyle(
-        "Body", parent=styles["BodyText"],
-        fontName=font_name, fontSize=11, leading=18,
-        textColor=colors.HexColor("#222"), alignment=TA_LEFT,
-        spaceAfter=10,
-    )
+        # ⚠️ 不繼承 getSampleStyleSheet["Title"]/["Heading1"] 等
+        # 否則 parent 帶 Helvetica-Bold 會觸發 bold/italic fontFamily lookup → 中文字型炸掉
+        title_style = ParagraphStyle(
+            "ReportTitle",
+            fontName=font_name, fontSize=26, leading=32, alignment=TA_CENTER,
+            textColor=colors.HexColor("#2D3561"),
+            spaceAfter=8,
+        )
+        subtitle_style = ParagraphStyle(
+            "ReportSubtitle",
+            fontName=font_name, fontSize=13, leading=18, alignment=TA_CENTER,
+            textColor=colors.HexColor("#6b7a99"),
+            spaceAfter=20,
+        )
+        meta_style = ParagraphStyle(
+            "ReportMeta",
+            fontName=font_name, fontSize=10.5, leading=15, alignment=TA_CENTER,
+            textColor=colors.HexColor("#8a93a8"),
+            spaceAfter=24,
+        )
+        chapter_title_style = ParagraphStyle(
+            "ReportChapterTitle",
+            fontName=font_name, fontSize=20, leading=26,
+            textColor=colors.HexColor("#1a2540"),
+            spaceBefore=24, spaceAfter=12,
+        )
+        section_title_style = ParagraphStyle(
+            "ReportSectionTitle",
+            fontName=font_name, fontSize=14, leading=20,
+            textColor=colors.HexColor("#3b4a6b"),
+            spaceBefore=14, spaceAfter=6,
+        )
+        body_style = ParagraphStyle(
+            "ReportBody",
+            fontName=font_name, fontSize=11, leading=18,
+            textColor=colors.HexColor("#222"), alignment=TA_LEFT,
+            spaceAfter=10,
+        )
 
     story = []
 
