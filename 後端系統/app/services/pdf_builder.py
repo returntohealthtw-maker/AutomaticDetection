@@ -42,19 +42,19 @@ VARIANT_LABELS = {
 
 
 def _find_cjk_font() -> Optional[str]:
-    """嘗試找一個可用的 CJK 字型路徑。
-    Railway 容器內：/usr/share/fonts 等位置。
-    Windows 本地：C:\\Windows\\Fonts。
-    若都找不到，回 None（reportlab 會用 Helvetica，中文會顯示為方塊）。
+    """嘗試找一個 reportlab 可用的 CJK TrueType 字型。
+
+    ⚠️ 重要：NotoSansCJK 是 PostScript/CFF outlines，reportlab TTFont 不支援，必須跳過。
+    優先順序：WenQuanYi (.ttc TrueType) → AR PL (.ttc) → DejaVu (無中文 fallback)。
     """
     candidates = [
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # 至少不會出錯（無中文）
-        "C:\\Windows\\Fonts\\msjh.ttc",   # 微軟正黑體
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
+        "/usr/share/fonts/truetype/arphic/ukai.ttc",
+        # 不再列 NotoSansCJK：reportlab 報 "postscript outlines are not supported"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # 至少不會出錯（但無中文）
+        "C:\\Windows\\Fonts\\msjh.ttc",
         "C:\\Windows\\Fonts\\mingliu.ttc",
         "C:\\Windows\\Fonts\\simhei.ttf",
     ]
