@@ -279,6 +279,92 @@ def list_reports(
     return {"ok": True, "count": len(out), "reports": out}
 
 
+@router.get("/gcs-list")
+def list_gcs_pdfs(
+    prefix: str = Query("", description="GCS object 前綴篩選（例：reports/general/）"),
+    limit: int = Query(500, ge=1, le=2000),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    直接列出 GCS bucket 內所有 PDF（不只是 DB 中有紀錄的）。
+    管理員專用。每筆會附 7 天 signed URL。
+    若該物件 URL 已在 DB Report.pdf_url 內，附上 report_id、subject_name、email_sent 等資訊。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可使用此功能")
+
+    from app.services import gcs_uploader
+    if not gcs_uploader.is_configured():
+        return {
+            "ok": False,
+            "error": "GCS 未設定（缺 GCS_BUCKET_NAME 或 GCP_SERVICE_ACCOUNT_JSON）",
+            "items": [],
+        }
+
+    items = gcs_uploader.list_pdfs(prefix=prefix, max_items=limit)
+
+    # 跟 DB 比對：用 object name 末端的檔名去 LIKE
+    # 因為 Report.pdf_url 是「signed URL（含 token）」，每次簽會變，
+    # 用 object_name 子字串去匹配 pdf_url 才穩。
+    db_reports = db.query(
+        M.Report.report_id,
+        M.Report.pdf_url,
+        M.Report.notify_email,
+        M.Report.email_sent,
+        M.Report.talent_report_kind,
+        M.Report.completed_at,
+        M.Session.subject_name,
+        M.Session.consultant_name,
+    ).outerjoin(
+        M.Session, M.Report.session_id == M.Session.session_id
+    ).filter(M.Report.pdf_url.isnot(None)).all()
+
+    # 把 (pdf_url, info) 整理成可查的 dict（用 object name 比對）
+    # GCS pdf_url 包含 /<bucket>/<object_name>?X-Goog-...
+    db_by_object: dict[str, dict] = {}
+    for r in db_reports:
+        url = r.pdf_url or ""
+        # 取 query 之前那段，並抽出 bucket 後的 path
+        try:
+            # https://storage.googleapis.com/<bucket>/<obj>?...
+            no_q = url.split("?", 1)[0]
+            # 抓 bucket 之後的部分
+            seg = no_q.split("/")
+            # 至少形如 ['https:', '', 'storage.googleapis.com', bucket, '...']
+            if len(seg) >= 5:
+                obj_in_db = "/".join(seg[4:])
+            else:
+                obj_in_db = no_q
+        except Exception:
+            obj_in_db = ""
+        if obj_in_db:
+            db_by_object[obj_in_db] = {
+                "report_id":    r.report_id,
+                "subject_name": r.subject_name,
+                "subject_email": r.notify_email,
+                "email_sent":   r.email_sent,
+                "report_kind":  r.talent_report_kind,
+                "consultant":   r.consultant_name,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            }
+
+    enriched = []
+    for it in items:
+        match = db_by_object.get(it["name"])
+        enriched.append({**it, "db": match})
+
+    return {
+        "ok": True,
+        "bucket": gcs_uploader._bucket_name(),
+        "prefix": prefix,
+        "count": len(enriched),
+        "with_db_record": sum(1 for x in enriched if x.get("db")),
+        "items": enriched,
+    }
+
+
 @router.get("/by-subject")
 def by_subject(
     email: str = Query(..., description="受測者 email"),

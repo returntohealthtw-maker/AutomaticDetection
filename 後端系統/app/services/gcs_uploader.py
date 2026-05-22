@@ -97,3 +97,63 @@ def diag() -> dict:
         "client_email": (creds or {}).get("client_email", ""),
         "signed_days": _signed_days(),
     }
+
+
+def list_pdfs(prefix: str = "", max_items: int = 500) -> list[dict]:
+    """
+    直接列出 GCS bucket 裡所有 PDF（後台『報告管理 → GCS 全部檔案』用）。
+
+    每筆回傳：{
+        "name":        object_name (e.g. reports/general/xxx.pdf)
+        "size":        bytes
+        "created":     ISO 字串
+        "updated":     ISO 字串
+        "content_type": "application/pdf"
+        "signed_url":  7 天 signed URL（可直接點開或下載）
+    }
+    失敗或未設定時回傳 []。
+    """
+    if not is_configured():
+        logger.warning("list_pdfs: GCS 未設定")
+        return []
+
+    try:
+        from google.cloud import storage
+        from google.oauth2 import service_account
+
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket = client.bucket(_bucket_name())
+
+        out: list[dict] = []
+        blobs = client.list_blobs(bucket, prefix=prefix or None, max_results=max_items)
+        for b in blobs:
+            # 只列 PDF
+            name = b.name or ""
+            if not name.lower().endswith(".pdf"):
+                continue
+            try:
+                signed = b.generate_signed_url(
+                    version="v4",
+                    expiration=timedelta(days=_signed_days()),
+                    method="GET",
+                    response_disposition=f'attachment; filename="{os.path.basename(name)}"',
+                )
+            except Exception as e:
+                logger.warning("簽 URL 失敗 (%s)：%s", name, e)
+                signed = ""
+            out.append({
+                "name":         name,
+                "size":         int(b.size or 0),
+                "created":      b.time_created.isoformat() if b.time_created else "",
+                "updated":      b.updated.isoformat() if b.updated else "",
+                "content_type": b.content_type or "",
+                "signed_url":   signed,
+            })
+        # 新到舊
+        out.sort(key=lambda x: x.get("updated") or x.get("created") or "", reverse=True)
+        return out
+    except Exception as e:
+        logger.exception("list_pdfs 失敗：%s", e)
+        return []
