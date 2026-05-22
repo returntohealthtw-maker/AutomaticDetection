@@ -2441,89 +2441,61 @@
 
           <div class="report-body">
 
-            <!-- 能力指標 chips -->
-            <div class="report-chips">
-              <span class="report-chip">直覺 83%</span>
-              <span class="report-chip">放鬆 77%</span>
-              <span class="report-chip">專注 47%</span>
-              <span class="report-chip">氣血 27%</span>
-              <span class="report-chip">內在安定 45%</span>
-              <span class="report-chip">高度專注 48%</span>
-              <span class="report-chip">邏輯分析 48%</span>
-              <span class="report-chip">觀察環境 22%</span>
-              <span class="report-chip">慈悲柔軟 36%</span>
+            <!-- 能力指標 chips（檢測完成後動態填入受測者實際腦波）-->
+            <div class="report-chips" id="result-chips">
+              <span class="report-chip" data-key="intuition">直覺 —</span>
+              <span class="report-chip" data-key="meditation">放鬆 —</span>
+              <span class="report-chip" data-key="attention">專注 —</span>
+              <span class="report-chip" data-key="vitality">氣血 —</span>
+              <span class="report-chip" data-key="calmness">內在安定 —</span>
+              <span class="report-chip" data-key="hyperfocus">高度專注 —</span>
+              <span class="report-chip" data-key="logic">邏輯分析 —</span>
+              <span class="report-chip" data-key="observation">觀察環境 —</span>
+              <span class="report-chip" data-key="compassion">慈悲柔軟 —</span>
             </div>
 
-            <!-- 腦波指標概覽 -->
+            <!-- 腦波指標概覽（檢測完成後動態填入）-->
             <div class="report-section">
               <div class="report-section-title">腦波指標概覽</div>
-              <div class="bw-row">
-                <div class="bw-head"><span>直覺能力</span><span class="bw-pct">83%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:83%;"></div></div>
+              <div id="result-bw-overview">
+                <div class="bw-row" data-key="intuition">
+                  <div class="bw-head"><span>直覺能力</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="vitality">
+                  <div class="bw-head"><span>氣血飽滿</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="calmness">
+                  <div class="bw-head"><span>內在安定</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="observation">
+                  <div class="bw-head"><span>觀察環境</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="meditation">
+                  <div class="bw-head"><span>放鬆能力</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="logic">
+                  <div class="bw-head"><span>邏輯分析</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
+                <div class="bw-row" data-key="compassion">
+                  <div class="bw-head"><span>慈悲柔軟</span><span class="bw-pct">—</span></div>
+                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
+                </div>
               </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>氣血飽滿</span><span class="bw-pct">27%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:27%;"></div></div>
-              </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>內在安定</span><span class="bw-pct">45%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:45%;"></div></div>
-              </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>觀察環境</span><span class="bw-pct">22%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:22%;"></div></div>
-              </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>放鬆能力</span><span class="bw-pct">77%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:77%;"></div></div>
-              </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>邏輯分析</span><span class="bw-pct">48%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:48%;"></div></div>
-              </div>
-              <div class="bw-row">
-                <div class="bw-head"><span>慈悲柔軟</span><span class="bw-pct">36%</span></div>
-                <div class="bw-bar"><div class="bw-fill" style="width:36%;"></div></div>
-              </div>
+              <div id="result-bw-source" style="font-size:10px;color:#7d8aa8;margin-top:6px;text-align:right;">資料來源：剛採集的腦波（沒採集時顯示 —）</div>
             </div>
 
-            <!-- 原生家庭狀況 -->
+            <!-- 報告 AI 分析等待訊息 -->
             <div class="report-section">
-              <div class="report-section-title">原生家庭狀況</div>
-              <div class="report-text-box">
-                你從小就很會感受氣氛與情緒變化，直覺能力明顯高於其他指標，代表你在家庭中經常扮演「先察覺、先調整」的角色。當環境出現緊張、情緒暗流或未說出口的期待時，你往往比別人更早感受到，但未必能直接說清楚原因。這樣的成長經驗容易讓你習慣把重點放在維持平衡，而不是優先表達自己的需求。 放鬆能力高，表示你學會用抽離、退一步或讓自己看起來沒事，來維持表面的和諧；但內在安定與氣血偏低，代表這種「撐住」其實很耗能。你不是沒有責任感，而是太早學會把情緒與需要往後放。
-              </div>
-            </div>
-
-            <!-- 性格矛盾 -->
-            <div class="report-section">
-              <div class="report-section-title">性格矛盾</div>
-              <div class="report-text-box">
-                你的內在矛盾來自於「感受很快、驗證很慢」。直覺讓你迅速抓到問題核心，但觀察環境偏低，使你不容易用客觀證據來支持自己的判斷，久而久之容易懷疑自己是否想太多。你也能讓自己看起來很放鬆，但內在其實一直在預判與運算，導致身體真正放鬆、心理卻停不下來。 另一個矛盾是責任感與能量之間的落差。你願意把事情做好，但氣血不足讓你在長期高輸出後容易突然耗盡。
-              </div>
-            </div>
-
-            <!-- 性格地雷 -->
-            <div class="report-section">
-              <div class="report-section-title">性格地雷</div>
-              <div class="report-text-box">
-                你最容易被觸發的狀況，是模糊期待與情緒暗示。當他人用「你應該懂」「你看著辦」來交代事情，你會下意識接住全部責任，卻沒有清楚邊界，最後變成內耗。你也對冷處理、語氣轉變非常敏感，一旦無法釐清對方真實想法，容易選擇抽離而不是對抗。 長時間被要求高專注、高產出而缺乏休息與段落，會快速消耗你。
-              </div>
-            </div>
-
-            <!-- 人生天賦 -->
-            <div class="report-section">
-              <div class="report-section-title">人生天賦</div>
-              <div class="report-text-box">
-                你最大的天賦是直覺式洞察與情緒調頻能力。你能在混亂中快速看懂人心與問題，並在壓力狀態下維持表面穩定，讓事情不至於失控。你同時具備一定的邏輯與專注能力，只要有清楚框架與節奏，就能把洞察轉為實際行動。 你適合做「把複雜變清楚」的人，而不是只負責衝刺的角色。
-              </div>
-            </div>
-
-            <!-- 最佳職業方向 -->
-            <div class="report-section">
-              <div class="report-section-title">最佳職業方向</div>
-              <div class="report-text-box">
-                你最省力、也最能發揮價值的職涯類型，是結合洞察、整合與陪伴的角色，例如：顧問、健康管理師、教練、個案管理、教育引導、課程設計、客戶成功、人資培訓、專案協調、品牌與內容策略等。 不建議長期處於高噪音、即時反應、細節密集且缺乏節奏的工作環境，那會快速耗盡你的能量。
+              <div class="report-section-title">📄 報告內容</div>
+              <div class="report-text-box" style="text-align:center;color:#7d8aa8;line-height:1.8;">
+                完整報告（個性分析、職涯方向、性格盲點等 AI 解析章節）正在背景生成中，<br>
+                完成後管理員會在「📁 報告管理」核准後，自動寄送 PDF 下載連結至受測者 email。
               </div>
             </div>
 
@@ -2757,22 +2729,22 @@ function gotoIndex(idx) {
   document.getElementById(screens[current].id).classList.add('active');
   document.querySelectorAll('.screen-dot')[current].classList.add('active');
 
-  // 進入「檢測結果」頁時，自動啟動完整報告 AI 生成（背景任務 + SSE 進度）
-  if (screens[current].id === 'screen-results' && !_rgJobId) {
-    if (typeof startFullReportGeneration === 'function') {
-      try {
-        startFullReportGeneration({
-          brainwaveData: window._lastEegCapture || null,
-        });
-      } catch (e) { console.error('啟動報告生成失敗', e); }
-    }
-    // 把 result-meta 改成這次受測者
-    const meta = document.getElementById('result-meta');
-    if (meta) {
-      const now = new Date();
-      const stamp = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      const ageTxt = (_currentSubjectAge != null) ? ` · ${_currentSubjectAge}歲` : '';
-      meta.textContent = `${_currentSubjectName || '受測者'}${ageTxt} · ${stamp}`;
+  // 進入「檢測結果」頁時：
+  //   1. 把本次採集的腦波填進各 chip / bw-row（取代寫死的 demo 數字）
+  //   2. 自動啟動完整報告 AI 生成（背景任務 + SSE 進度）
+  if (screens[current].id === 'screen-results') {
+    try {
+      if (typeof _renderResultsFromEeg === 'function') _renderResultsFromEeg();
+    } catch (e) { console.error('填入腦波失敗', e); }
+
+    if (!_rgJobId) {
+      if (typeof startFullReportGeneration === 'function') {
+        try {
+          startFullReportGeneration({
+            brainwaveData: window._lastEegCapture || null,
+          });
+        } catch (e) { console.error('啟動報告生成失敗', e); }
+      }
     }
   }
   document.getElementById('screen-title').textContent = screens[current].label;
@@ -4529,6 +4501,72 @@ function _summarizeEegAccum(acc) {
       gamma: avg(acc.gamma),
     },
   };
+}
+
+// 把實際採集到的腦波填入 screen-results 各 chip / bw-row。
+// data-key 對應：
+//   intuition  = theta            放鬆 = meditation_percentage
+//   attention  = attention_pct    vitality   = alpha (上)
+//   calmness   = alpha (下)       hyperfocus = beta  (上)
+//   logic      = beta  (下)       observation= gamma (上)
+//   compassion = gamma (下)
+function _renderResultsFromEeg() {
+  const stats = window._lastEegCapture;
+  const meta  = document.getElementById('result-meta');
+  if (meta) {
+    const name = _currentSubjectName || '受測者';
+    const age  = _currentSubjectAge != null ? ` · ${_currentSubjectAge}歲` : '';
+    const ts   = new Date().toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const sc   = stats?.sample_count ? `${stats.sample_count} 筆` : '尚未採集';
+    meta.textContent = `${name}${age} · ${ts} · ${sc}`;
+  }
+  if (!stats || !stats.sample_count) {
+    // 未採集 → 全部回 "—"
+    document.querySelectorAll('#result-chips .report-chip').forEach(el => {
+      const label = (el.textContent || '').split(' ')[0];
+      el.textContent = `${label} —`;
+    });
+    document.querySelectorAll('#result-bw-overview .bw-row').forEach(row => {
+      const pct = row.querySelector('.bw-pct'); if (pct) pct.textContent = '—';
+      const fill = row.querySelector('.bw-fill'); if (fill) fill.style.width = '0%';
+    });
+    const src = document.getElementById('result-bw-source');
+    if (src) src.textContent = '⚠️ 尚未採集腦波資料';
+    return;
+  }
+  const b = stats.bands_avg || {};
+  const clamp = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+  const values = {
+    intuition:   clamp(b.theta),
+    meditation:  clamp(stats.meditation_percentage),
+    attention:   clamp(stats.attention_percentage),
+    vitality:    clamp(Math.min(100, (b.alpha || 0) * 1.1)),
+    calmness:    clamp(Math.max(0,   (b.alpha || 0) * 0.9)),
+    hyperfocus:  clamp(Math.min(100, (b.beta  || 0) * 1.1)),
+    logic:       clamp(Math.max(0,   (b.beta  || 0) * 0.9)),
+    observation: clamp(Math.min(100, (b.gamma || 0) * 1.1)),
+    compassion:  clamp(Math.max(0,   (b.gamma || 0) * 0.9)),
+  };
+  const labelMap = {
+    intuition: '直覺', meditation: '放鬆', attention: '專注', vitality: '氣血',
+    calmness: '內在安定', hyperfocus: '高度專注', logic: '邏輯分析',
+    observation: '觀察環境', compassion: '慈悲柔軟',
+  };
+  document.querySelectorAll('#result-chips .report-chip').forEach(el => {
+    const k = el.dataset.key;
+    if (k != null && values[k] != null) {
+      el.textContent = `${labelMap[k]} ${values[k]}%`;
+    }
+  });
+  document.querySelectorAll('#result-bw-overview .bw-row').forEach(row => {
+    const k = row.dataset.key;
+    if (k != null && values[k] != null) {
+      const pct = row.querySelector('.bw-pct'); if (pct) pct.textContent = `${values[k]}%`;
+      const fill = row.querySelector('.bw-fill'); if (fill) fill.style.width = `${values[k]}%`;
+    }
+  });
+  const src = document.getElementById('result-bw-source');
+  if (src) src.textContent = `資料來源：本次採集 (${stats.sample_count} 筆) · attention=${values.attention} meditation=${values.meditation}`;
 }
 
 // 簡單隨機走勢模擬器（瀏覽器測試用）
