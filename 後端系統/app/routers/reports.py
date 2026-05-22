@@ -426,6 +426,189 @@ def list_gcs_pdfs(
     }
 
 
+@router.get("/sessions-with-status")
+def sessions_with_status(
+    limit: int = Query(200, ge=1, le=1000),
+    only_missing: bool = Query(False, description="True = 只看漏報告 / 失敗 / 卡住的"),
+    only_mine: bool = Query(False),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    檢測 ↔ 報告 對照表：列出 Session 並標出對應 Report 狀態。
+
+    每筆回傳：
+      session_id / subject_name / consultant / report_type / captures / created_at
+      report_status: pending/processing/completed/failed/none
+      has_pdf:       bool
+      health:        ok | missing_pdf | stale_pending | failed | session_failed
+      is_missing:    True 表示需要重新生成（漏報告）
+
+    health 判定：
+      - session.status == 2          → "session_failed"（檢測本身失敗，不需重生）
+      - report 不存在                → "missing_report"
+      - report.status == "failed"   → "failed"
+      - report.status in pending/processing 且距今 > 30 分鐘 → "stale_pending"
+      - report.status == "completed" 但無 pdf_url           → "missing_pdf"
+      - report.status == "completed" 且有 pdf_url           → "ok"
+      - 其他（剛跑沒多久的 pending）                       → "in_progress"
+    """
+    user = require_user(authorization, db)
+
+    q = db.query(M.Session).order_by(M.Session.session_id.desc())
+    if user.role != "admin" or only_mine:
+        q = q.filter(M.Session.consultant_name == user.name)
+    sessions = q.limit(limit).all()
+
+    sess_ids = [s.session_id for s in sessions]
+    reports = (
+        db.query(M.Report).filter(M.Report.session_id.in_(sess_ids)).all()
+        if sess_ids else []
+    )
+    rep_by_sid = {r.session_id: r for r in reports}
+
+    now_ms = int(time.time() * 1000)
+    out = []
+    missing_count = 0
+    for s in sessions:
+        r = rep_by_sid.get(s.session_id)
+
+        if s.status == 2:
+            health = "session_failed"
+            is_missing = False
+        elif r is None:
+            health = "missing_report"
+            is_missing = True
+        elif r.status == "failed":
+            health = "failed"
+            is_missing = True
+        elif r.status == "completed" and not r.pdf_url:
+            health = "missing_pdf"
+            is_missing = True
+        elif r.status == "completed" and r.pdf_url:
+            health = "ok"
+            is_missing = False
+        else:
+            # pending / processing — 看時間
+            age_ms = now_ms - (s.created_at or now_ms)
+            if age_ms > 30 * 60 * 1000:
+                health = "stale_pending"
+                is_missing = True
+            else:
+                health = "in_progress"
+                is_missing = False
+
+        if only_missing and not is_missing:
+            continue
+
+        if is_missing:
+            missing_count += 1
+
+        out.append({
+            "session_id":   s.session_id,
+            "subject_name": s.subject_name,
+            "subject_age":  s.subject_age,
+            "consultant":   s.consultant_name,
+            "report_type":  s.report_type,
+            "audience":     s.report_audience,
+            "captures":     s.total_captures,
+            "session_ok":   s.status == 1,
+            "created_at":   s.created_at,
+            "report_id":    r.report_id if r else None,
+            "report_status": (r.status if r else "none"),
+            "has_pdf":      bool(r and r.pdf_url),
+            "pdf_url":      r.pdf_url if r else None,
+            "email_sent":   r.email_sent if r else 0,
+            "notify_email": r.notify_email if r else None,
+            "completed_at": r.completed_at.isoformat() if (r and r.completed_at) else None,
+            "health":       health,
+            "is_missing":   is_missing,
+        })
+
+    return {
+        "ok":             True,
+        "count":          len(out),
+        "missing_count":  missing_count,
+        "sessions":       out,
+    }
+
+
+class RegenerateReportIn(BaseModel):
+    notify_email: Optional[str] = None  # 補填收件 email（若 session 當初沒填）
+
+
+@router.post("/sessions/{session_id}/regenerate")
+def regenerate_report_for_session(
+    session_id: int,
+    payload: RegenerateReportIn = None,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    對指定 Session 重新觸發報告生成（漏報告救援用，管理員專用）。
+
+    動作：
+      1. 確認 Session 存在且檢測沒失敗（status != 2）
+      2. Report 若不存在 → 建一筆 pending；若存在 → reset status=pending、清 pdf_url
+      3. 觸發背景 generate_report_async（非同步、不阻塞回應）
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可觸發重新生成")
+
+    s = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not s:
+        raise HTTPException(404, f"Session #{session_id} 不存在")
+    if s.status == 2:
+        raise HTTPException(400, "原始檢測本身失敗（status=2），無法重新生成")
+
+    r = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    if r is None:
+        import uuid
+        r = M.Report(
+            session_id   = session_id,
+            status       = "pending",
+            qr_token     = uuid.uuid4().hex,
+            notify_email = (payload.notify_email if payload else None) or None,
+        )
+        db.add(r)
+    else:
+        r.status     = "pending"
+        r.pdf_url    = None
+        r.email_sent = 0
+        if payload and payload.notify_email and not r.notify_email:
+            r.notify_email = payload.notify_email
+    db.commit()
+    db.refresh(r)
+
+    # 用 asyncio 觸發背景任務（同 sessions/upload 的做法）
+    import asyncio
+    from app.services.report_generator import generate_report_async
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(generate_report_async(r.report_id, session_id))
+        else:
+            # 沒有 loop（不該發生）— 開 thread 跑
+            import threading
+            def _run():
+                asyncio.run(generate_report_async(r.report_id, session_id))
+            threading.Thread(target=_run, daemon=True).start()
+    except RuntimeError:
+        import threading
+        def _run2():
+            asyncio.run(generate_report_async(r.report_id, session_id))
+        threading.Thread(target=_run2, daemon=True).start()
+
+    return {
+        "ok": True,
+        "session_id":  session_id,
+        "report_id":   r.report_id,
+        "subject_name": s.subject_name,
+        "note": "已重新觸發報告生成。請至『生成監看』查看進度。",
+    }
+
+
 class ImportFromGcsIn(BaseModel):
     object_name:   str                          # 例: reports/general/1779359536955_鄭小怡_腦波分析報告.pdf
     subject_name:  Optional[str] = None         # 為空時從檔名解析
