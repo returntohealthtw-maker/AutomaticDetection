@@ -845,8 +845,13 @@
   [data-dev-only] {
     display: none !important;
   }
-  html.is-admin-user [data-dev-only] {
+  /* 管理員登入後：非 screen 的 dev-only 元素（按鈕、區塊）才解除隱藏 */
+  html.is-admin-user [data-dev-only]:not(.screen) {
     display: unset !important;
+  }
+  /* 管理員登入後：dev-only 的 screen 只有在 active 時才顯示（避免蓋住其他畫面） */
+  html.is-admin-user .screen[data-dev-only].active {
+    display: flex !important;
   }
   /* Android Release 也確保隱藏（防止 WebView 注入前閃現） */
   html.android-franchise [data-dev-only] {
