@@ -27,16 +27,77 @@ BUILD_VERSION = "planc-v15-timeout-45min"
 
 
 @router.get("/diag/full")
-def diag_full() -> dict:
-    """檢查 GCS、Email Proxy、Headless renderer、部署版本"""
+def diag_full(db: Session = Depends(get_db)) -> dict:
+    """檢查 GCS、Email Proxy、Headless renderer、部署版本 + 計數（不需 auth）"""
     from app.services import gcs_uploader, email_sender, headless_renderer
-    gcs = gcs_uploader.diag()
+
+    # DB 計數
+    try:
+        total_reports = db.query(M.Report).count()
+        with_pdf      = db.query(M.Report).filter(M.Report.pdf_url.isnot(None)).count()
+        email_sent_y  = db.query(M.Report).filter(M.Report.email_sent == 1).count()
+        email_sent_n  = db.query(M.Report).filter(M.Report.email_sent == 0).count()
+        latest        = db.query(M.Report).order_by(M.Report.report_id.desc()).first()
+        latest_info = {
+            "report_id":    latest.report_id if latest else None,
+            "pdf_url_set":  bool(latest.pdf_url) if latest else None,
+            "email_sent":   latest.email_sent if latest else None,
+            "completed_at": latest.completed_at.isoformat() if (latest and latest.completed_at) else None,
+        } if latest else None
+    except Exception as e:
+        total_reports = with_pdf = email_sent_y = email_sent_n = -1
+        latest_info = {"error": f"{type(e).__name__}: {e}"}
+
+    # GCS PDF 計數（最多列 50 筆做快速估算）
+    gcs_pdf_count = -1
+    gcs_sample: list[str] = []
+    try:
+        if gcs_uploader.is_configured():
+            sample = gcs_uploader.list_pdfs(prefix="", max_items=50)
+            gcs_pdf_count = len(sample)
+            gcs_sample = [s["name"] for s in sample[:5]]
+    except Exception as e:
+        gcs_sample = [f"err: {type(e).__name__}: {e}"]
+
+    # 事件計數
+    try:
+        evt_total = db.query(M.ReportGenerationEvent).count()
+        evt_recent = db.query(M.ReportGenerationEvent).order_by(
+            M.ReportGenerationEvent.event_id.desc()
+        ).limit(3).all()
+        evt_recent_info = [
+            {
+                "event_id":    e.event_id,
+                "phase":       e.phase,
+                "subject":     e.subject_name,
+                "created_at":  e.created_at.isoformat() if e.created_at else None,
+            } for e in evt_recent
+        ]
+    except Exception as e:
+        evt_total = -1
+        evt_recent_info = [{"error": f"{type(e).__name__}: {e}"}]
+
     return {
         "build_version": BUILD_VERSION,
-        "gcs": gcs,
+        "gcs": gcs_uploader.diag(),
         "vercel_email_proxy": email_sender._vercel_email_proxy(),
         "ingest_secret_set": bool(os.environ.get("REPORTS_INGEST_SECRET")),
         "headless": headless_renderer.diag(),
+        "db_counts": {
+            "total_reports": total_reports,
+            "with_pdf_url":  with_pdf,
+            "email_sent_yes": email_sent_y,
+            "email_sent_no":  email_sent_n,
+            "latest_report":  latest_info,
+        },
+        "gcs_quick_scan": {
+            "pdf_count_first_50": gcs_pdf_count,
+            "sample_object_names": gcs_sample,
+        },
+        "events": {
+            "total": evt_total,
+            "recent": evt_recent_info,
+        },
     }
 
 
