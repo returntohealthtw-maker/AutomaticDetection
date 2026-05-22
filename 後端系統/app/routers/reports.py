@@ -426,6 +426,123 @@ def list_gcs_pdfs(
     }
 
 
+class ImportFromGcsIn(BaseModel):
+    object_name:   str                          # 例: reports/general/1779359536955_鄭小怡_腦波分析報告.pdf
+    subject_name:  Optional[str] = None         # 為空時從檔名解析
+    subject_email: Optional[str] = None         # 之後寄信用
+    report_type:   str = "life_script"          # life_script / child / parent_child / marital
+    variant:       str = "full"
+    pending_send:  int = 1                      # 預設要等 admin 核准才寄
+    consultant:    Optional[str] = None         # 若知道是哪位顧問客戶
+
+
+@router.post("/import-from-gcs")
+def import_from_gcs(
+    payload: ImportFromGcsIn,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    將 GCS 上的孤兒 PDF 補錄到 DB Report 表（管理員專用）。
+
+    用途：早期 record callback bug 期間生成的報告在 GCS 但沒進 DB，
+    用此端點讓 admin 一鍵把它們補進來，之後就能正常管理 / 寄信。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可使用此功能")
+
+    from app.services import gcs_uploader
+    from google.cloud import storage
+    from google.oauth2 import service_account
+    from datetime import timedelta
+
+    obj = (payload.object_name or "").strip()
+    if not obj:
+        raise HTTPException(400, "缺少 object_name")
+    if not obj.lower().endswith(".pdf"):
+        raise HTTPException(400, "只支援 .pdf")
+
+    if not gcs_uploader.is_configured():
+        raise HTTPException(500, "GCS 未設定")
+
+    # 1) 確認檔案存在且簽 URL
+    try:
+        creds_dict = gcs_uploader._credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket = client.bucket(gcs_uploader._bucket_name())
+        blob = bucket.blob(obj)
+        if not blob.exists():
+            raise HTTPException(404, f"GCS 找不到此物件：{obj}")
+        blob.reload()
+        signed = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(days=gcs_uploader._signed_days()),
+            method="GET",
+            response_disposition=f'attachment; filename="{os.path.basename(obj)}"',
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"簽 GCS URL 失敗：{type(e).__name__}: {e}")
+
+    # 2) 從檔名解析 subject_name（若呼叫端沒指定）
+    #    格式：reports/<area>/<epoch_ms>_<subject_name>_<report_label>.pdf
+    subject_name = (payload.subject_name or "").strip()
+    if not subject_name:
+        fname = os.path.basename(obj).rsplit(".", 1)[0]
+        parts = fname.split("_")
+        # parts[0]=epoch、parts[1]=name、parts[2:]=label
+        if len(parts) >= 2:
+            subject_name = parts[1] or "(未知)"
+        else:
+            subject_name = fname
+
+    # 3) 避免重複補錄（用 object_name 做去重，比對 pdf_url 中的 object path）
+    existing = db.query(M.Report).filter(M.Report.pdf_url.like(f"%{obj}%")).first()
+    if existing:
+        # 已經補過 / 已經有紀錄 → 更新 signed URL（過期會自動續簽）
+        existing.pdf_url = signed
+        if payload.subject_email and not existing.notify_email:
+            existing.notify_email = payload.subject_email
+        db.commit()
+        return {
+            "ok": True,
+            "note": "此檔案已在 DB，已更新 signed URL",
+            "report_id": existing.report_id,
+        }
+
+    # 4) 建立 Report row（孤兒：session_id=NULL）
+    rep = M.Report(
+        session_id     = None,
+        status         = "completed",
+        pdf_url        = signed,
+        notify_email   = payload.subject_email or None,
+        email_sent     = 0 if payload.pending_send else 1,
+        talent_report_kind = f"{payload.report_type}_{payload.variant}",
+        client_summary = (
+            '{"subject_name":"' + (subject_name or "") + '",'
+            '"source":"manual_import_from_gcs",'
+            '"object_name":"' + obj + '",'
+            '"imported_by":"' + (user.name or "") + '",'
+            '"consultant_hint":"' + (payload.consultant or "") + '"}'
+        ),
+        completed_at   = func.now(),
+    )
+    db.add(rep)
+    db.commit()
+    db.refresh(rep)
+
+    return {
+        "ok": True,
+        "report_id": rep.report_id,
+        "subject_name": subject_name,
+        "pdf_url": signed,
+        "note": "已將孤兒檔補錄到 DB。下次到『報告管理 → 💾 資料庫紀錄』即可看見。",
+    }
+
+
 @router.get("/by-subject")
 def by_subject(
     email: str = Query(..., description="受測者 email"),

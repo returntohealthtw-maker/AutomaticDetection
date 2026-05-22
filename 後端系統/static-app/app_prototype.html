@@ -5215,9 +5215,12 @@ function _filterGcsList() {
     const sendBtn = (db && !db.email_sent && db.subject_email)
       ? `<button onclick="_adminSendReportEmail(${db.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
       : '';
+    const importBtn = !db
+      ? `<button onclick="_importGcsToDb('${(it.name || '').replace(/'/g, "\\'")}')" style="background:#7e57c2;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📝 補錄到資料庫</button>`
+      : '';
     const badge = db
       ? `<span style="background:#4caf50;color:white;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">✅ 已入庫 #${db.report_id}</span>`
-      : `<span style="background:#9e9e9e;color:white;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">⚠️ 未入庫</span>`;
+      : `<span style="background:#9e9e9e;color:white;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">⚠️ 未入庫（歷史檔）</span>`;
     const sendStatus = db
       ? (db.email_sent
           ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
@@ -5243,12 +5246,52 @@ function _filterGcsList() {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <a href="${it.signed_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;text-align:center;">🔍 預覽/下載</a>
+          ${importBtn}
           ${sendBtn}
         </div>
       </div>
       <div style="font-size:10px;color:#aaa;margin-top:6px;word-break:break-all;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;">${it.name}</div>
     </div>
   `; }).join('');
+}
+
+// 把 GCS 上的孤兒檔補錄到 DB
+async function _importGcsToDb(objectName) {
+  // 從檔名先試著解析出 subject_name (時間_姓名_類型)
+  const fname = objectName.split('/').pop().replace(/\.pdf$/i, '');
+  const parts = fname.split('_');
+  const guessName = parts.length >= 2 ? parts[1] : '';
+  const subjectName = prompt(`補錄到資料庫：\n\n檔名：${objectName}\n\n受測者姓名（用於後台顯示）：`, guessName);
+  if (subjectName === null) return;
+  const email = prompt(`收件 Email（之後可從『報告管理』按「📨 預覽後寄信」寄給此 email；留空表示不寄）：`, '');
+  if (email === null) return;
+  // 報告類型猜：路徑含 child / xin → child，否則 life_script
+  const guessType = /child|xin/i.test(objectName) ? 'child' : 'life_script';
+  const reportType = prompt(`報告類型 (life_script / child / parent_child / marital)：`, guessType);
+  if (!reportType) return;
+  try {
+    const r = await apiFetch('/reports/import-from-gcs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        object_name:   objectName,
+        subject_name:  subjectName.trim(),
+        subject_email: (email || '').trim(),
+        report_type:   reportType.trim(),
+        variant:       'full',
+        pending_send:  1,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert(`❌ 補錄失敗：${data.detail || data.error || r.status}`);
+      return;
+    }
+    alert(`✅ 已補錄為 Report #${data.report_id}\n\n${data.note || ''}\n\n建議切到「💾 資料庫紀錄」即可看見。`);
+    renderAdminGcsList(); // 重整 GCS 列表（會把該筆顯示為「✅ 已入庫」）
+  } catch (e) {
+    alert(`❌ 補錄例外：${e.message}`);
+  }
 }
 
 // ─── 報告管理：從 /api/v1/reports/list 取所有報告（含 GCS URL）──────────────
