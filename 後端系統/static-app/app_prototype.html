@@ -802,7 +802,14 @@
     display: none !important;
   }
 
-  /* 加盟商版（Android Release）：隱藏開發測試區与模擬付款按鈕 */
+  /* 商業版：dev-only 元素預設全部隱藏，僅管理員帳號登入後才顯示 */
+  [data-dev-only] {
+    display: none !important;
+  }
+  html.is-admin-user [data-dev-only] {
+    display: unset !important;
+  }
+  /* Android Release 也確保隱藏（防止 WebView 注入前閃現） */
   html.android-franchise [data-dev-only] {
     display: none !important;
   }
@@ -929,13 +936,6 @@
           <button class="btn btn-primary" onclick="loginConsultant()">
             登入
           </button>
-          <div data-dev-only style="margin-top:14px;background:#fff3e0;border:1px dashed #ffb300;border-radius:10px;padding:10px 12px;font-size:11px;color:#5d4037;line-height:1.6;">
-            🧪 <b>開發測試帳號</b>（demo 用）：<br>
-            示範顧問　0900000001 / demo123<br>
-            系統管理員 0900000000 / admin123<br>
-            <span style="color:#bf360c;">⚠️ 輸入時請切到「半形 / 英數」鍵盤，不要用全形（注音 / 倉頡 IME 預設會輸入全形數字）</span><br>
-            <span style="color:#bf360c;">第一次使用請先在後端跑 POST /api/v1/auth/bootstrap 建好帳號</span>
-          </div>
           <div style="text-align:center;margin-top:20px;">
             <span class="text-muted">首次使用？</span>
             <a href="#" onclick="event.preventDefault();goto('screen-contact');" style="font-size:13px;color:#2D3561;font-weight:600;"> 聯絡我們取得帳號</a>
@@ -3737,13 +3737,19 @@ function _getAuth() {
   try { return JSON.parse(localStorage.getItem(_AUTH_KEY) || 'null'); }
   catch (e) { return null; }
 }
+function _syncAdminDevMode() {
+  const isAdmin = !!((_currentUser || {}).role === 'admin');
+  document.documentElement.classList.toggle('is-admin-user', isAdmin);
+}
 function _saveAuth(obj) {
   try { localStorage.setItem(_AUTH_KEY, JSON.stringify(obj)); } catch (e) {}
   _currentUser = obj;
+  _syncAdminDevMode();
 }
 function _clearAuth() {
   try { localStorage.removeItem(_AUTH_KEY); } catch (e) {}
   _currentUser = null;
+  _syncAdminDevMode();
 }
 
 async function apiFetch(path, options = {}) {
