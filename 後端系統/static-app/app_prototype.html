@@ -4904,13 +4904,80 @@ function selectUpgrade(el, reportKey, amount, qrScreen) {
 }
 
 // ─── 關係報告：合格名單（VIP 含加購升級者）──────────────────────────────────
-// effectiveLevel：'trial' | 'full' | 'vip' | 'vip-upgraded'
-const _vipCustomers = [
-  { id:'p1', name:'陳小明', age:12, avatarColor:'linear-gradient(135deg,#667eea,#764ba2)', level:'vip',          completedAt:'2026/03/03' },
-  { id:'p2', name:'林小花', age:14, avatarColor:'linear-gradient(135deg,#f093fb,#f5576c)', level:'vip',          completedAt:'2026/03/02' },
-  { id:'p3', name:'王小雯', age:38, avatarColor:'linear-gradient(135deg,#43e97b,#38f9d7)', level:'vip-upgraded', completedAt:'2026/02/28', upgradeNote:'加購升級' },
-  { id:'p4', name:'張大偉', age:42, avatarColor:'linear-gradient(135deg,#fa709a,#fee140)', level:'vip',          completedAt:'2026/02/20' },
+// 由 _loadVipCustomers() 從後端動態載入，不再寫死
+let _vipCustomers = [];   // 執行期填入
+
+// 頭像顏色池（依姓名 hash 決定，相同姓名永遠同色）
+const _AVATAR_COLORS = [
+  'linear-gradient(135deg,#667eea,#764ba2)',
+  'linear-gradient(135deg,#f093fb,#f5576c)',
+  'linear-gradient(135deg,#43e97b,#38f9d7)',
+  'linear-gradient(135deg,#fa709a,#fee140)',
+  'linear-gradient(135deg,#4facfe,#00f2fe)',
+  'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+  'linear-gradient(135deg,#fccb90,#d57eeb)',
+  'linear-gradient(135deg,#84fab0,#8fd3f4)',
 ];
+function _avatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return _AVATAR_COLORS[h % _AVATAR_COLORS.length];
+}
+
+async function _loadVipCustomers() {
+  // 從付款記錄取 VIP 已付款的受測者（life_vip / child_vip 均算）
+  // 也從 sessions 取得年齡資料，合併後去重
+  let payments = [], sessions = [];
+  try {
+    const [rp, rs] = await Promise.all([
+      apiFetch('/payments/my?limit=200'),
+      apiFetch('/eeg/sessions?limit=200'),
+    ]);
+    if (rp.ok) payments = (await rp.json()).payments || [];
+    if (rs.ok) sessions = (await rs.json()).sessions || [];
+  } catch (e) { }
+
+  // 篩選付 VIP 款的受測者（包含 life_vip、child_vip；paid 才算）
+  const VIP_TYPES = new Set(['life_vip', 'child_vip']);
+  const vipPayments = payments.filter(p => VIP_TYPES.has(p.report_type) && p.status === 'paid');
+
+  // 以 subject_name 去重，保留最新一筆
+  const byName = {};
+  vipPayments.forEach(p => {
+    if (!p.subject_name) return;
+    if (!byName[p.subject_name] || (p.paid_at || 0) > (byName[p.subject_name].paid_at || 0)) {
+      byName[p.subject_name] = p;
+    }
+  });
+
+  // 再從 sessions 補 age（付款時不一定有存 age）
+  const sessionByName = {};
+  sessions.forEach(s => {
+    if (s.subject_name && !sessionByName[s.subject_name]) {
+      sessionByName[s.subject_name] = s;
+    }
+  });
+
+  const pad = n => String(n).padStart(2, '0');
+  _vipCustomers = Object.values(byName).map((p, i) => {
+    const sess = sessionByName[p.subject_name] || {};
+    const d    = p.paid_at ? new Date(p.paid_at * 1000) : new Date((p.created_at || 0) * 1000);
+    return {
+      id:           `p${i}`,
+      name:         p.subject_name,
+      age:          sess.subject_age || null,
+      gender:       sess.subject_gender || null,
+      email:        p.subject_email || '',
+      report_type:  p.report_type,
+      level:        'vip',
+      completedAt:  `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`,
+      avatarColor:  _avatarColor(p.subject_name),
+      // 腦波 session 資料（關係報告生成時用到）
+      session_id:   sess.session_id || null,
+      payment_id:   p.payment_id,
+    };
+  });
+}
 
 const _relationConfigs = {
   parent: { title: '選擇關係人 · 親子', label: '親子腦波共振關係報告', minPersons: 3, color: '#c2185b', emoji: '👨‍👩‍👧' },
@@ -4920,25 +4987,40 @@ const _relationConfigs = {
 let _currentRelationType = null;
 let _selectedPersonIds   = [];
 
-function openRelation(type) {
+async function openRelation(type) {
   _currentRelationType = type;
   _selectedPersonIds   = [];
   const cfg = _relationConfigs[type];
+
+  // 先跳頁、顯示載入中
   document.getElementById('relation-select-title').textContent = cfg.title;
   document.getElementById('relation-hint').innerHTML =
-    `💡 以下為已完成 <b>VIP 版個人報告（含加購升級）</b>的人員，請選擇 <b>${cfg.minPersons} 位${cfg.minPersons===3?' 以上':''}</b>，選定後系統將直接生成「${cfg.label}」，無需重新檢測。`;
+    `💡 以下為已完成 <b>VIP 版個人報告</b>的人員，請選擇 <b>${cfg.minPersons} 位${cfg.minPersons===3?' 以上':''}</b>，選定後系統將直接生成「${cfg.label}」，無需重新檢測。`;
+  document.getElementById('relation-list').innerHTML =
+    '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入 VIP 名單中…</div>';
+  document.getElementById('relation-count-label').textContent = '可選人員';
+  document.getElementById('relation-empty').style.display = 'none';
+  document.getElementById('relation-selected-info').style.display = 'none';
+  const btn = document.getElementById('relation-submit-btn');
+  btn.style.opacity = '0.4';
+  btn.style.pointerEvents = 'none';
+  goto('screen-relation-select');
+
+  // 動態載入 VIP 名單
+  await _loadVipCustomers();
 
   const list = document.getElementById('relation-list');
   list.innerHTML = '';
-  const eligible = _vipCustomers.filter(p => p.level === 'vip' || p.level === 'vip-upgraded');
+  const eligible = _vipCustomers;   // _loadVipCustomers 已只保留 VIP
   document.getElementById('relation-count-label').textContent = `可選人員（共 ${eligible.length} 人）`;
   document.getElementById('relation-empty').style.display = eligible.length === 0 ? 'block' : 'none';
 
+  if (eligible.length === 0) return;
+
   eligible.forEach(p => {
     const initial = p.name.charAt(0);
-    const upgradeBadge = p.level === 'vip-upgraded'
-      ? `<span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;font-weight:600;">⬆️ ${p.upgradeNote||'升級'}</span>`
-      : `<span style="background:#fffde7;color:#f9a825;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;font-weight:600;">👑 VIP</span>`;
+    const ageTxt  = p.age ? `${p.age}歲 · ` : '';
+    const badge   = `<span style="background:#fffde7;color:#f9a825;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;font-weight:600;">👑 VIP</span>`;
     const row = document.createElement('div');
     row.className = 'relation-person';
     row.dataset.pid = p.id;
@@ -4946,22 +5028,14 @@ function openRelation(type) {
     row.innerHTML = `
       <div style="width:40px;height:40px;border-radius:50%;background:${p.avatarColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">${initial}</div>
       <div style="flex:1;">
-        <div style="font-size:14px;font-weight:600;color:#1a1a2e;">${p.name}${upgradeBadge}</div>
-        <div style="font-size:11px;color:#888;margin-top:2px;">${p.age}歲 · ${p.completedAt} 完成 VIP</div>
+        <div style="font-size:14px;font-weight:600;color:#1a1a2e;">${p.name}${badge}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px;">${ageTxt}${p.completedAt} 完成 VIP</div>
       </div>
       <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
     `;
     row.onclick = () => togglePerson(row);
     list.appendChild(row);
   });
-
-  // 重置已選資訊
-  document.getElementById('relation-selected-info').style.display = 'none';
-  const btn = document.getElementById('relation-submit-btn');
-  btn.style.opacity = '0.4';
-  btn.style.pointerEvents = 'none';
-
-  goto('screen-relation-select');
 }
 
 function togglePerson(el) {
@@ -5010,12 +5084,21 @@ function togglePerson(el) {
 function generateRelationReport() {
   const cfg = _relationConfigs[_currentRelationType];
   if (!cfg) { goto('screen-home'); return; }
-  const names = _selectedPersonIds
-    .map(id => (_vipCustomers.find(p => p.id === id) || {}).name)
-    .filter(Boolean).join('、');
+
+  const selectedPersons = _selectedPersonIds
+    .map(id => _vipCustomers.find(p => p.id === id))
+    .filter(Boolean);
+  const names = selectedPersons.map(p => p.name).join('、');
+  const emails = [...new Set(selectedPersons.map(p => p.email).filter(Boolean))];
+
   document.getElementById('relation-done-msg').innerHTML =
-    `${cfg.emoji} <b>${cfg.label}</b><br>對象：${names}`;
+    `${cfg.emoji} <b>${cfg.label}</b><br>對象：${names}` +
+    (emails.length ? `<br><span style="font-size:11px;color:#aaa;margin-top:4px;display:block;">報告將寄送至：${emails.join('、')}</span>` : '');
   goto('screen-relation-done');
+
+  // TODO: 呼叫後端啟動關係報告生成（帶 session_ids + report_type）
+  // 目前先顯示「生成中」畫面；下一版接通 orchestrator
+  console.log('[relation] 啟動關係報告', _currentRelationType, selectedPersons.map(p => p.session_id));
 }
 
 // 開發測試：模擬付款成功
