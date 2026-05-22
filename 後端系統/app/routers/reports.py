@@ -63,11 +63,11 @@ def diag_full(db: Session = Depends(get_db)) -> dict:
     try:
         evt_total = db.query(M.ReportGenerationEvent).count()
         evt_recent = db.query(M.ReportGenerationEvent).order_by(
-            M.ReportGenerationEvent.event_id.desc()
+            M.ReportGenerationEvent.id.desc()
         ).limit(3).all()
         evt_recent_info = [
             {
-                "event_id":    e.event_id,
+                "id":          e.id,
                 "phase":       e.phase,
                 "subject":     e.subject_name,
                 "created_at":  e.created_at.isoformat() if e.created_at else None,
