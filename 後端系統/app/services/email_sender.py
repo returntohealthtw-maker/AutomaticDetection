@@ -241,16 +241,16 @@ def send_consultant_welcome_email(
             base = "https://" + base
         login_url = (base + "/app") if base else ""
 
-    cta_html = ""
-    if login_url:
-        cta_html = (
-            f'<div style="text-align:center;margin:32px 0 8px;">'
-            f'<a href="{login_url}" style="display:inline-block;padding:14px 36px;'
-            f'background:#4a90e2;color:white;text-decoration:none;'
-            f'border-radius:10px;font-weight:600;font-size:16px;'
-            f'box-shadow:0 4px 12px rgba(74,144,226,0.3);">🔐 立即登入</a>'
-            f'</div>'
-        )
+    # 不提供網頁登入連結，避免顧問誤從瀏覽器登入
+    # 請顧問安裝 APP 後輸入帳號密碼登入
+    cta_html = (
+        '<div style="margin:28px 0 8px;padding:16px 20px;background:#e8f5e9;'
+        'border-left:4px solid #43a047;border-radius:6px;font-size:13px;line-height:1.7;color:#2e7d32;">'
+        '<b>📱 如何登入？</b><br>'
+        '請安裝「路加腦波檢測系統」APP，並使用上方帳號與初始密碼登入。<br>'
+        '如尚未安裝，請向管理員索取 APK 安裝檔。'
+        '</div>'
+    )
 
     org_info_html = ""
     if org_type or org:
@@ -316,9 +316,10 @@ def send_consultant_welcome_email(
     )
     if org_type or org:
         plain += f"  身份：{org_type or '-'}\n  單位：{org or '-'}\n"
-    if login_url:
-        plain += f"\n登入連結：{login_url}\n"
     plain += (
+        "\n📱 如何登入？\n"
+        "請安裝「路加腦波檢測系統」APP，並使用上方帳號與初始密碼登入。\n"
+        "如尚未安裝，請向管理員索取 APK 安裝檔。\n"
         "\n⚠️ 安全提醒：請於首次登入後立即修改密碼。\n"
         "如有任何問題，請與管理員聯繫。\n\n"
         "— onlineReport 線上腦波分析系統"
