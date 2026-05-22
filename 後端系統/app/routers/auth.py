@@ -325,6 +325,39 @@ def toggle_consultant_active(
     }
 
 
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@router.patch("/consultants/{cid}/reset-password")
+def admin_reset_password(
+    cid: int,
+    req: AdminResetPasswordRequest,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    管理員強制重設指定顧問的密碼（admin only）。
+    不需要舊密碼，重設後同時清除「初始密碼待更換」標記。
+    """
+    require_admin(authorization, db)
+    target = db.query(M.Consultant).filter(M.Consultant.consultant_id == cid).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="顧問帳號不存在")
+    new_pw = (req.new_password or "").strip()
+    if len(new_pw) < 6:
+        raise HTTPException(status_code=400, detail="新密碼至少 6 碼")
+
+    target.password_hash = hash_password(new_pw)
+    # 清除初始密碼標記，讓顧問下次登入不再強制彈出修改對話框
+    db.query(M.ContactRequest).filter(
+        M.ContactRequest.consultant_id == cid,
+        M.ContactRequest.initial_password.isnot(None),
+    ).update({"initial_password": None}, synchronize_session=False)
+    db.commit()
+    return {"ok": True, "consultant_id": cid, "name": target.name}
+
+
 @router.delete("/consultants/{cid}")
 def delete_consultant(
     cid: int,
