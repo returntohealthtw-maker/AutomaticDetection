@@ -811,6 +811,36 @@
     display: none !important;
   }
 
+  /* ── Android WebView 滿版模式 ─────────────────────────────────────
+     拿掉手機外框，讓內容直接佔滿整個裝置螢幕                          */
+  html.android-webapp body {
+    background: #F5F7FA;
+    display: block;
+    height: 100%;
+    overflow: hidden;
+  }
+  html.android-webapp .phone-wrap {
+    width: 100vw !important;
+    height: 100vh !important;
+    zoom: 1 !important;
+    transform: none !important;
+  }
+  html.android-webapp .phone-frame {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #F5F7FA !important;
+  }
+  html.android-webapp .phone-notch { display: none !important; }
+  html.android-webapp .phone-screen {
+    border-radius: 0 !important;
+  }
+  html.android-webapp .status-bar {
+    padding-top: 10px !important;
+  }
+
   /* 商業版：dev-only 元素預設全部隱藏，僅管理員帳號登入後才顯示 */
   [data-dev-only] {
     display: none !important;
@@ -6541,18 +6571,19 @@ document.addEventListener('keydown', e => {
 
 // ── Auto-fit phone to viewport ──────────────────────────────────
 function fitPhone() {
+  // Android WebView 滿版模式：CSS 已處理，JS 不做縮放
+  if (document.documentElement.classList.contains('android-webapp')) return;
+
   const wrap = document.querySelector('.phone-wrap');
   const PHONE_W = 406;  // 390px + 8px border × 2
   const PHONE_H = 860;  // 844px + 8px border × 2
-  const PAD_TOP = 52;   // top info label height
+  const PAD_TOP  = 0;   // 頂端提示列已移除
   const PAD_SIDE = 80;  // room for left dots + right buttons
 
   const availW = window.innerWidth  - PAD_SIDE;
   const availH = window.innerHeight - PAD_TOP;
 
   const scale = Math.min(availW / PHONE_W, availH / PHONE_H, 1.0);
-
-  // Apply via CSS zoom (preserves layout flow, supported in all modern browsers)
   wrap.style.zoom = scale.toFixed(4);
 }
 
