@@ -11,11 +11,14 @@ import time
 APP_HTML_VERSION = "2026.05.22.1"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 3
-APK_LATEST_VERSION_NAME = "1.0.2"
+APK_LATEST_VERSION_CODE = 4
+APK_LATEST_VERSION_NAME = "1.0.3"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
 APK_RELEASE_NOTES = (
-    "v1.0.2 更新內容：\n"
+    "v1.0.3 更新內容：\n"
+    "・App 名稱更新為「路加腦波檢測系統」\n"
+    "\n"
+    "v1.0.2 歷史更新：\n"
     "・付款後自動連線腦波儀（含權限請求）\n"
     "・若腦波儀未就緒，跳出友善對話框（重連／繼續／稍後）\n"
     "・10 秒無訊號保護，避免空跡計時 3 分鐘\n"
