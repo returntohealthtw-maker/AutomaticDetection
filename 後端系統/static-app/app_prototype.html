@@ -1979,168 +1979,27 @@
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
-          <h2>獲利明細</h2>
+          <h2>付款紀錄</h2>
         </div>
         <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
-
-          <!-- 獲利總覽 -->
+          <!-- 總覽 -->
           <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px 16px;color:white;">
-            <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">本月總獲利</div>
-            <div style="font-size:36px;font-weight:800;color:#4CAF50;">NT$12,500</div>
+            <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">本月已付款總額</div>
+            <div id="earnings-total" style="font-size:36px;font-weight:800;color:#4CAF50;">—</div>
             <div style="display:flex;gap:16px;margin-top:12px;">
               <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
                 <div style="font-size:11px;opacity:0.7;">本月件數</div>
-                <div style="font-size:20px;font-weight:700;">8 件</div>
+                <div id="earnings-month-count" style="font-size:20px;font-weight:700;">—</div>
               </div>
               <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
-                <div style="font-size:11px;opacity:0.7;">平均每件</div>
-                <div style="font-size:20px;font-weight:700;">NT$1,563</div>
+                <div style="font-size:11px;opacity:0.7;">累計筆數</div>
+                <div id="earnings-total-count" style="font-size:20px;font-weight:700;">—</div>
               </div>
             </div>
           </div>
-
-          <!-- 分潤明細 -->
-          <div style="padding:16px;">
-            <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:12px;">每筆分潤紀錄</div>
-
-            <!-- 單筆 -->
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">陳小明</div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">腦波分析人生劇本 · VIP版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/03 09:41</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$3,000</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$12,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#f3e5f5;color:#6a1b9a;padding:2px 8px;border-radius:8px;font-size:11px;">VIP版</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">林小花</div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">兒童腦波天賦解碼 · 完整版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/02 14:20</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$1,250</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$5,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;">完整版</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">王小雯 · 張大偉</div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">夫妻腦波共振關係報告</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/01 11:00</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$2,000</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$8,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#fce4ec;color:#c2185b;padding:2px 8px;border-radius:8px;font-size:11px;">關係報告</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;opacity:0.7;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">李大明</div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">腦波分析人生劇本 · 體驗版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/01 09:00</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#ff9800;">+NT$750</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$3,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">體驗版</span>
-                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">待入帳</span>
-              </div>
-            </div>
-
-            <!-- 加購升級分潤紀錄 -->
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">王小雯 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：體驗版 → VIP版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/28 16:30</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$2,250</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$9,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
-                <span style="background:#fffde7;color:#f9a825;padding:2px 8px;border-radius:8px;font-size:11px;">VIP版</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">吳小語 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：完整版 → VIP版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/26 14:00</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$1,750</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$7,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
-                <span style="background:#fffde7;color:#f9a825;padding:2px 8px;border-radius:8px;font-size:11px;">VIP版</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
-            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border-left:3px solid #ffa726;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">林小新 <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;font-weight:600;">⬆️ 升級</span></div>
-                  <div style="font-size:11px;color:#888;margin-top:2px;">加購升級：體驗版 → 完整版</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/02/24 10:00</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$500</div>
-                  <div style="font-size:10px;color:#aaa;">售價 NT$2,000 · 分潤25%</div>
-                </div>
-              </div>
-              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
-              <div style="display:flex;gap:6px;margin-top:8px;">
-                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">加購升級</span>
-                <span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;">完整版</span>
-                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">已入帳</span>
-              </div>
-            </div>
-
+          <!-- 明細列表 -->
+          <div id="earnings-list" style="padding:16px;">
+            <div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入中…</div>
           </div>
         </div>
         <div class="nav-overlay">
@@ -2889,6 +2748,109 @@ async function refreshHomeData() {
     if (valEl) valEl.textContent = '—';
     if (listEl) listEl.innerHTML = `<div class="history-item" style="color:#c62828;">載入失敗：${e.message}</div>`;
   }
+}
+
+// ─── 付款紀錄（查看細節）：動態載入 payments/my ──────────────────────────
+async function refreshEarningsData() {
+  const listEl  = document.getElementById('earnings-list');
+  const totalEl = document.getElementById('earnings-total');
+  const mCntEl  = document.getElementById('earnings-month-count');
+  const tCntEl  = document.getElementById('earnings-total-count');
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入中…</div>';
+
+  const user = _currentUser || _getAuth();
+  if (!user || !user.token) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">請先登入</div>';
+    return;
+  }
+
+  let payments = [];
+  try {
+    const r = await apiFetch('/payments/my?limit=100');
+    if (r.ok) payments = (await r.json()).payments || [];
+  } catch (e) {
+    listEl.innerHTML = `<div style="text-align:center;padding:30px;color:#c62828;font-size:13px;">載入失敗：${e.message}</div>`;
+    return;
+  }
+
+  // ── 統計 ──
+  const paidList = payments.filter(p => p.status === 'paid');
+  const nowMs = Date.now();
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthPaid = paidList.filter(p => (p.paid_at || 0) * 1000 >= monthStart.getTime());
+  const monthTotal = monthPaid.reduce((s, p) => s + (p.amount || 0), 0);
+
+  if (totalEl) totalEl.textContent = `NT$${monthTotal.toLocaleString()}`;
+  if (mCntEl)  mCntEl.textContent  = `${monthPaid.length} 件`;
+  if (tCntEl)  tCntEl.textContent  = `${paidList.length} 筆`;
+
+  // ── 無資料 ──
+  if (payments.length === 0) {
+    listEl.innerHTML = `
+      <div style="text-align:center;padding:50px 16px;color:#bbb;">
+        <div style="font-size:48px;margin-bottom:10px;">💳</div>
+        <div style="font-size:14px;font-weight:600;color:#666;">尚無付款紀錄</div>
+        <div style="font-size:12px;margin-top:6px;line-height:1.6;">完成首筆腦波檢測付款後，<br>紀錄會自動顯示在這裡</div>
+      </div>`;
+    return;
+  }
+
+  // ── 報告類型標籤 ──
+  const _rtTag = (rt) => {
+    const m = {
+      life_trial: { label:'人生劇本·體驗版', bg:'#f3e5f5', color:'#6a1b9a' },
+      life_full:  { label:'人生劇本·完整版', bg:'#ede7f6', color:'#4527a0' },
+      life_vip:   { label:'人生劇本·VIP版',  bg:'#f3e5f5', color:'#6a1b9a' },
+      child_trial:{ label:'兒童天賦·體驗版', bg:'#e3f2fd', color:'#1565c0' },
+      child_full: { label:'兒童天賦·完整版', bg:'#e3f2fd', color:'#1565c0' },
+      child_vip:  { label:'兒童天賦·VIP版',  bg:'#e3f2fd', color:'#1565c0' },
+      test_1:     { label:'NT$1功能測試',     bg:'#fff3e0', color:'#e65100' },
+    };
+    const t = m[rt] || { label: rt || '—', bg:'#f5f5f5', color:'#666' };
+    return `<span style="background:${t.bg};color:${t.color};padding:2px 8px;border-radius:8px;font-size:11px;">${t.label}</span>`;
+  };
+
+  const _statusTag = (s) => {
+    const m = {
+      paid:    { label:'✅ 已付款', bg:'#e8f5e9', color:'#2e7d32' },
+      pending: { label:'⏳ 待付款', bg:'#fff8e1', color:'#f57c00' },
+      expired: { label:'⌛ 已逾時', bg:'#f5f5f5', color:'#999'    },
+      failed:  { label:'❌ 失敗',   bg:'#ffebee', color:'#c62828' },
+      refunded:{ label:'↩️ 退款',  bg:'#f3e5f5', color:'#6a1b9a' },
+    };
+    const t = m[s] || { label: s, bg:'#f5f5f5', color:'#666' };
+    return `<span style="background:${t.bg};color:${t.color};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;">${t.label}</span>`;
+  };
+
+  // ── 渲染 ──
+  let html = `<div style="font-size:14px;font-weight:600;color:#333;margin-bottom:12px;">每筆付款紀錄</div>`;
+  payments.forEach(p => {
+    const dateStr = _formatTs(p.created_at);
+    const paidStr = p.paid_at ? _formatTs(p.paid_at) : null;
+    const invoiceLine = p.invoice_no
+      ? `<div style="font-size:11px;color:#888;margin-top:2px;">發票：${p.invoice_no}</div>` : '';
+    html += `
+      <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;${p.status!=='paid'?'opacity:0.75;':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;">${p.subject_name || '—'}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px;">${dateStr}${paidStr && paidStr !== dateStr ? ' · 付款 ' + paidStr : ''}</div>
+            ${invoiceLine}
+          </div>
+          <div style="text-align:right;margin-left:10px;">
+            <div style="font-size:16px;font-weight:700;color:${p.status==='paid'?'#2e7d32':'#bbb'};">NT$${(p.amount||0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          ${_rtTag(p.report_type)}
+          ${_statusTag(p.status)}
+        </div>
+      </div>`;
+  });
+  listEl.innerHTML = html;
 }
 
 // ─── 歷史紀錄：動態載入該帳號的檢測場次 ─────────────────────────────────
@@ -6371,9 +6333,7 @@ async function resendWelcomeEmail(id) {
   await renderAdminList();
 }
 
-// ─── 分潤規則：身份 × 報告類型（百分比 / 加購升級可改成固定金額）─────────────
-const _SHARE_RULES_KEY = 'eeg_share_rules_v1';
-
+// ─── 分潤規則：身份 × 報告類型（比例 / 固定金額，全產品皆支援）────────────────
 const _ROLES = [
   { key:'franchise',  label:'加盟商' },
   { key:'direct',     label:'直營商' },
@@ -6383,78 +6343,122 @@ const _ROLES = [
 ];
 
 const _PRODUCTS = [
-  { key:'life_trial',  label:'人生劇本 · 體驗版',     price:3000 },
-  { key:'life_full',   label:'人生劇本 · 完整版',     price:5000 },
-  { key:'life_vip',    label:'人生劇本 · VIP版',     price:12000 },
-  { key:'child_trial', label:'兒童天賦 · 體驗版',     price:3000 },
-  { key:'child_full',  label:'兒童天賦 · 完整版',     price:5000 },
-  { key:'child_vip',   label:'兒童天賦 · VIP版',     price:12000 },
-  { key:'relation',    label:'關係報告（共振）',       price:8000 },
+  { key:'life_trial',    label:'人生劇本 · 體驗版',   price:3000  },
+  { key:'life_full',     label:'人生劇本 · 完整版',   price:5000  },
+  { key:'life_vip',      label:'人生劇本 · VIP版',    price:12000 },
+  { key:'child_trial',   label:'兒童天賦 · 體驗版',   price:3000  },
+  { key:'child_full',    label:'兒童天賦 · 完整版',   price:5000  },
+  { key:'child_vip',     label:'兒童天賦 · VIP版',    price:12000 },
+  { key:'relation',      label:'關係報告（共振）',     price:8000  },
   { key:'up_trial_full', label:'加購升級：體驗→完整', price:2000, upgrade:true },
   { key:'up_full_vip',   label:'加購升級：完整→VIP',  price:7000, upgrade:true },
   { key:'up_trial_vip',  label:'加購升級：體驗→VIP',  price:9000, upgrade:true },
 ];
 
+// 快取，避免每次 render 都 re-fetch
+let _cachedRules = null;
+
 function _defaultShareRules() {
-  // 預設值：個人/關係 報告以「百分比」；加購升級也預設用百分比，可改固定金額
-  // 起始比例：加盟商 25 / 直營商 20 / 代理商 18 / 專案人員 15 / 工作人員 5
-  const baseByRole = { franchise:25, direct:20, agent:18, project:15, staff:5 };
+  const basePct    = { franchise:25, direct:20, agent:18, project:15, staff:5 };
   const rules = {};
   _PRODUCTS.forEach(p => {
-    rules[p.key] = { mode:'pct', byRole:{}, };
-    _ROLES.forEach(r => { rules[p.key].byRole[r.key] = baseByRole[r.key]; });
+    rules[p.key] = {
+      mode: 'pct',
+      pct_byRole:    Object.fromEntries(_ROLES.map(r => [r.key, basePct[r.key]])),
+      amount_byRole: Object.fromEntries(_ROLES.map(r => [r.key, Math.round(p.price * basePct[r.key] / 100)])),
+    };
   });
   return rules;
 }
 
-function _loadShareRules() {
-  try {
-    const raw = localStorage.getItem(_SHARE_RULES_KEY);
-    if (!raw) return _defaultShareRules();
-    const parsed = JSON.parse(raw);
-    // 缺欄位時補上預設值
-    const defaults = _defaultShareRules();
-    Object.keys(defaults).forEach(k => {
-      if (!parsed[k]) parsed[k] = defaults[k];
-      if (!parsed[k].byRole) parsed[k].byRole = defaults[k].byRole;
+function _mergeDefaults(parsed) {
+  const defaults = _defaultShareRules();
+  Object.keys(defaults).forEach(k => {
+    if (!parsed[k]) { parsed[k] = defaults[k]; return; }
+    ['pct_byRole','amount_byRole'].forEach(sub => {
+      if (!parsed[k][sub]) parsed[k][sub] = defaults[k][sub];
       _ROLES.forEach(r => {
-        if (typeof parsed[k].byRole[r.key] !== 'number')
-          parsed[k].byRole[r.key] = defaults[k].byRole[r.key];
+        if (typeof parsed[k][sub][r.key] !== 'number')
+          parsed[k][sub][r.key] = defaults[k][sub][r.key];
       });
     });
-    return parsed;
-  } catch (e) {
-    return _defaultShareRules();
-  }
+    // 相容舊格式（byRole → pct_byRole）
+    if (parsed[k].byRole && !parsed[k].pct_byRole) {
+      parsed[k].pct_byRole = parsed[k].byRole;
+      delete parsed[k].byRole;
+    }
+    if (!parsed[k].mode) parsed[k].mode = 'pct';
+  });
+  return parsed;
 }
 
-function _saveShareRules(obj) {
-  try { localStorage.setItem(_SHARE_RULES_KEY, JSON.stringify(obj)); } catch (e) {}
+async function _loadShareRulesAsync() {
+  try {
+    const r = await apiFetch('/share-rules');
+    if (r.ok) {
+      const data = await r.json();
+      if (data.ok && data.rules) {
+        _cachedRules = _mergeDefaults(data.rules);
+        return _cachedRules;
+      }
+    }
+  } catch(e) { /* fallback */ }
+  // localStorage fallback
+  try {
+    const raw = localStorage.getItem('eeg_share_rules_v2');
+    if (raw) { _cachedRules = _mergeDefaults(JSON.parse(raw)); return _cachedRules; }
+  } catch(e) {}
+  _cachedRules = _defaultShareRules();
+  return _cachedRules;
 }
 
-function resetShareRules() {
+function _loadShareRules() {
+  return _cachedRules || _defaultShareRules();
+}
+
+async function resetShareRules() {
   if (!confirm('確定要回復預設分潤規則嗎？')) return;
-  _saveShareRules(_defaultShareRules());
+  _cachedRules = _defaultShareRules();
+  await _persistRules(_cachedRules);
   renderShareRulesEditor();
 }
 
-function saveShareRules() {
-  // 從 UI 收集
+async function _persistRules(rules) {
+  try {
+    const token = _getAuthToken();
+    if (token) {
+      await apiFetch('/share-rules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules }),
+      });
+    }
+  } catch(e) {}
+  try { localStorage.setItem('eeg_share_rules_v2', JSON.stringify(rules)); } catch(e) {}
+}
+
+function _getAuthToken() {
+  try { return JSON.parse(localStorage.getItem('eeg_auth') || '{}').token || null; } catch(e) { return null; }
+}
+
+async function saveShareRules() {
   const rules = _loadShareRules();
   _PRODUCTS.forEach(p => {
     const modeBtn = document.querySelector(`.rule-mode-toggle[data-prod="${p.key}"] button.active`);
-    const mode = modeBtn ? modeBtn.dataset.mode : 'pct';
-    rules[p.key].mode = mode;
-    _ROLES.forEach(r => {
-      const inp = document.querySelector(`input[data-prod="${p.key}"][data-role="${r.key}"]`);
-      if (inp) {
-        const v = parseFloat(inp.value);
-        rules[p.key].byRole[r.key] = isNaN(v) ? 0 : v;
-      }
+    if (modeBtn) rules[p.key].mode = modeBtn.dataset.mode;
+    ['pct','amount'].forEach(kind => {
+      _ROLES.forEach(r => {
+        const inp = document.querySelector(`input[data-prod="${p.key}"][data-role="${r.key}"][data-kind="${kind}"]`);
+        if (inp) {
+          const v = parseFloat(inp.value);
+          rules[p.key][`${kind}_byRole`][r.key] = isNaN(v) ? 0 : v;
+        }
+      });
     });
   });
-  _saveShareRules(rules);
-  alert('✅ 分潤規則已儲存');
+  _cachedRules = rules;
+  await _persistRules(rules);
+  alert('✅ 分潤規則已儲存並同步至伺服器');
   renderEarningsOverview();
 }
 
@@ -6463,26 +6467,26 @@ function renderShareRulesEditor() {
   const wrap = document.getElementById('admin-rules-table');
   if (!wrap) return;
   wrap.innerHTML = _PRODUCTS.map(p => {
-    const r = rules[p.key];
-    const isUpgrade = !!p.upgrade;
-    const modeToggle = isUpgrade
-      ? `<div class="rule-mode-toggle" data-prod="${p.key}">
-           <button data-mode="pct"    class="${r.mode==='pct'?'active':''}"   onclick="toggleRuleMode('${p.key}','pct')">% 比例</button>
-           <button data-mode="amount" class="${r.mode==='amount'?'active':''}" onclick="toggleRuleMode('${p.key}','amount')">固定金額</button>
-         </div>`
-      : '';
+    const r = rules[p.key] || _defaultShareRules()[p.key];
+    const mode = r.mode || 'pct';
+    const modeToggle = `<div class="rule-mode-toggle" data-prod="${p.key}">
+      <button data-mode="pct"    class="${mode==='pct'?'active':''}"    onclick="toggleRuleMode('${p.key}','pct')">% 比例</button>
+      <button data-mode="amount" class="${mode==='amount'?'active':''}" onclick="toggleRuleMode('${p.key}','amount')">固定金額</button>
+    </div>`;
     const rows = _ROLES.map(role => {
-      const v = r.byRole[role.key] ?? 0;
-      const suffix = (isUpgrade && r.mode==='amount') ? 'NT$' : '%';
+      const pctVal    = (r.pct_byRole    || {})[role.key] ?? 0;
+      const amtVal    = (r.amount_byRole || {})[role.key] ?? 0;
+      const isPct = mode === 'pct';
       return `<div class="rule-row">
         <span class="rule-role">${role.label}</span>
-        <input type="number" class="rule-input" min="0" step="${suffix==='%'?'0.5':'100'}"
-               data-prod="${p.key}" data-role="${role.key}" value="${v}">
-        <span class="rule-suffix">${suffix}</span>
+        <input type="number" class="rule-input" min="0" step="${isPct?'0.5':'100'}"
+               data-prod="${p.key}" data-role="${role.key}" data-kind="${isPct?'pct':'amount'}"
+               value="${isPct ? pctVal : amtVal}">
+        <span class="rule-suffix">${isPct ? '%' : 'NT$'}</span>
       </div>`;
     }).join('');
     return `<div class="rule-card">
-      <div class="rule-title">${isUpgrade?'⬆️':'📊'} ${p.label}
+      <div class="rule-title">${p.upgrade?'⬆️':'📊'} ${p.label}
         <span style="font-size:11px;color:#888;font-weight:400;margin-left:auto;">售價 NT$${p.price.toLocaleString()}</span>
       </div>
       ${modeToggle}
@@ -6495,77 +6499,74 @@ function toggleRuleMode(prodKey, mode) {
   const rules = _loadShareRules();
   if (!rules[prodKey]) return;
   rules[prodKey].mode = mode;
-  _saveShareRules(rules);
+  _cachedRules = rules;
   renderShareRulesEditor();
 }
 
-// ─── 分潤總覽：依 demo 訂單 + 規則動態計算 ───────────────────────────────────
-const _DEMO_ORDERS = [
-  { date:'2026/03/03', subject:'陳小明',           product:'life_vip',     consultant:'王小明', role:'franchise' },
-  { date:'2026/03/02', subject:'林小花',           product:'child_full',   consultant:'王小明', role:'franchise' },
-  { date:'2026/03/01', subject:'王小雯·張大偉',    product:'relation',     consultant:'王小明', role:'franchise' },
-  { date:'2026/03/01', subject:'李大明',           product:'life_trial',   consultant:'李婉婷', role:'project'   },
-  { date:'2026/02/28', subject:'王小雯',           product:'up_trial_vip', consultant:'李婉婷', role:'project'   },
-  { date:'2026/02/27', subject:'周大華',           product:'life_full',    consultant:'張企業', role:'direct'    },
-  { date:'2026/02/26', subject:'吳小語',           product:'up_full_vip',  consultant:'張企業', role:'direct'    },
-  { date:'2026/02/25', subject:'陳大同',           product:'child_vip',    consultant:'代理商A', role:'agent'    },
-];
+// ─── 分潤總覽：從後端 /api/v1/earnings 拉取真實付款資料 ──────────────────────
+let _earningsMonth = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+})();
 
-function _calcShare(order, rules) {
-  const prod = _PRODUCTS.find(p => p.key === order.product);
-  if (!prod) return { amount:0, ruleText:'未知' };
-  const r = rules[prod.key];
-  if (!r) return { amount:0, ruleText:'未設定' };
-  const v = r.byRole[order.role] ?? 0;
-  if (prod.upgrade && r.mode === 'amount') {
-    return { amount: v, ruleText: `固定 NT$${v.toLocaleString()}` };
-  }
-  return { amount: Math.round(prod.price * v / 100), ruleText: `${v}% × NT$${prod.price.toLocaleString()}` };
-}
-
-function renderEarningsOverview() {
-  const rules = _loadShareRules();
-  const list  = document.getElementById('admin-earnings-list');
+async function renderEarningsOverview() {
+  const list    = document.getElementById('admin-earnings-list');
+  const totalEl = document.getElementById('admin-total-earnings');
+  const byRoleEl = document.getElementById('admin-earnings-by-role');
   if (!list) return;
 
-  let total = 0;
-  const byRole = {};
-  _ROLES.forEach(r => byRole[r.key] = 0);
+  list.innerHTML = '<div style="text-align:center;padding:24px;color:#aaa;">📊 載入中...</div>';
+  if (totalEl) totalEl.textContent = 'NT$--';
 
-  const cards = _DEMO_ORDERS.map(o => {
-    const prod = _PRODUCTS.find(p => p.key === o.product) || { label:o.product, price:0 };
-    const calc = _calcShare(o, rules);
-    total += calc.amount;
-    if (byRole[o.role] != null) byRole[o.role] += calc.amount;
-    const roleLabel = (_ROLES.find(r => r.key === o.role) || {}).label || o.role;
+  try {
+    const r = await apiFetch(`/earnings?month=${_earningsMonth}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
 
-    return `<div class="earn-card">
-      <div class="earn-row">
-        <div>
-          <div class="earn-title">${o.subject}</div>
-          <div class="earn-meta">${prod.label} · ${o.date}</div>
+    if (totalEl) totalEl.textContent = 'NT$' + (data.total_share||0).toLocaleString();
+
+    // 按角色匯總
+    const byRole = {};
+    _ROLES.forEach(r => byRole[r.key] = 0);
+    (data.by_consultant || []).forEach(c => {
+      if (byRole[c.role] != null) byRole[c.role] += c.total_share;
+    });
+    if (byRoleEl) byRoleEl.innerHTML = _ROLES.map(r =>
+      `<span style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;">
+        ${r.label}：<b style="color:#90caf9;">NT$${(byRole[r.key]||0).toLocaleString()}</b>
+      </span>`
+    ).join('');
+
+    if (!(data.items || []).length) {
+      list.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;">本月尚無已付款紀錄</div>';
+      return;
+    }
+
+    list.innerHTML = (data.items || []).map(o => {
+      const prod = _PRODUCTS.find(p => p.key === o.report_type) || { label: o.report_type, upgrade: false };
+      const roleLabel = (_ROLES.find(r => r.key === o.role) || {}).label || o.role;
+      const paidDate = o.paid_at ? new Date(o.paid_at * 1000).toLocaleDateString('zh-TW') : '';
+      return `<div class="earn-card">
+        <div class="earn-row">
+          <div>
+            <div class="earn-title">${o.subject_name || '(未知)'}</div>
+            <div class="earn-meta">${prod.label} · ${paidDate}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="earn-amt">+NT$${(o.share||0).toLocaleString()}</div>
+            <div class="earn-share">${o.rule_text}</div>
+          </div>
         </div>
-        <div style="text-align:right;">
-          <div class="earn-amt">+NT$${calc.amount.toLocaleString()}</div>
-          <div class="earn-share">${calc.ruleText}</div>
+        <div class="earn-tags">
+          <span class="earn-tag" style="background:#e3f2fd;color:#1565c0;">👤 ${o.consultant_name||'(未知)'}</span>
+          <span class="earn-tag" style="background:#fff3e0;color:#e65100;">${roleLabel}</span>
+          ${prod.upgrade ? '<span class="earn-tag" style="background:#fce4ec;color:#c2185b;">⬆️ 加購升級</span>' : ''}
         </div>
-      </div>
-      <div class="earn-tags">
-        <span class="earn-tag" style="background:#e3f2fd;color:#1565c0;">👤 ${o.consultant}</span>
-        <span class="earn-tag" style="background:#fff3e0;color:#e65100;">${roleLabel}</span>
-        ${prod.upgrade ? '<span class="earn-tag" style="background:#fce4ec;color:#c2185b;">⬆️ 加購升級</span>' : ''}
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('admin-total-earnings').textContent = 'NT$' + total.toLocaleString();
-  document.getElementById('admin-earnings-by-role').innerHTML = _ROLES.map(r => {
-    return `<span style="background:rgba(255,255,255,0.1);border-radius:8px;padding:4px 10px;">
-      ${r.label}：<b style="color:#90caf9;">NT$${(byRole[r.key]||0).toLocaleString()}</b>
-    </span>`;
-  }).join('');
-
-  list.innerHTML = cards || '<div class="admin-empty">尚無分潤紀錄</div>';
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="text-align:center;padding:24px;color:#c00;">❌ 載入失敗：${e.message}</div>`;
+  }
 }
 
 async function simulatePaid(qrScreenId) {
