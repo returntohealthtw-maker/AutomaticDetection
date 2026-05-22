@@ -663,7 +663,6 @@ def _do_regenerate_one(
         "report_id":     r.report_id,
         "subject_name":  s.subject_name,
         "notify_email":  r.notify_email,
-        "auto_send":     auto_send,
         "external_mode": result.get("mode"),
         "job_id":        result.get("job_id"),
         "error":         result.get("error"),
