@@ -5912,7 +5912,7 @@ function _filterGcsList() {
           ${sendBtn}
         </div>
       </div>
-      <div style="font-size:10px;color:#aaa;margin-top:6px;word-break:break-all;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;">${it.name}</div>
+      <div style="font-size:10px;color:#aaa;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;" title="${it.name}">${it.name}</div>
     </div>
   `; }).join('');
 }
@@ -6011,11 +6011,10 @@ function _filterAdminReports() {
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <a href="${r.pdf_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;text-align:center;">${pendingSend ? '🔍 預覽 PDF' : '下載'}</a>
+          <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載'}</button>
           ${sendBtn}
         </div>
       </div>
-      <div style="font-size:10px;color:#aaa;margin-top:6px;word-break:break-all;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;">${r.pdf_url}</div>
     </div>
   `; }).join('');
 }
