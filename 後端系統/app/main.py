@@ -13,7 +13,7 @@ APP_HTML_VERSION = "2026.05.22.1"  # 每次改 HTML/JS 都更新這個
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 3
 APK_LATEST_VERSION_NAME = "1.0.2"
-APK_DOWNLOAD_PATH       = "/static-app/apk/onlineReport-latest.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
+APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
 APK_RELEASE_NOTES = (
     "v1.0.2 更新內容：\n"
     "・付款後自動連線腦波儀（含權限請求）\n"
@@ -247,7 +247,7 @@ def app_version(request: Request):
     # 確認 APK 檔案實際存在（不存在就不公告，避免下載 404）
     apk_exists = False
     if _STATIC_APP_DIR:
-        apk_local = os.path.join(_STATIC_APP_DIR, "apk", "onlineReport-latest.apk")
+        apk_local = os.path.join(_STATIC_APP_DIR, "apk", "BrainReport-LUKE.apk")
         apk_exists = os.path.exists(apk_local)
 
     return {
@@ -272,16 +272,16 @@ def download_apk():
     if not _STATIC_APP_DIR:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="APK not found")
-    apk_path = os.path.join(_STATIC_APP_DIR, "apk", "onlineReport-latest.apk")
+    apk_path = os.path.join(_STATIC_APP_DIR, "apk", "BrainReport-LUKE.apk")
     if not os.path.exists(apk_path):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="APK not found")
     return FileResponse(
         apk_path,
         media_type="application/vnd.android.package-archive",
-        filename="onlineReport-latest.apk",
+        filename="BrainReport-LUKE.apk",
         headers={
-            "Content-Disposition": "attachment; filename=onlineReport-latest.apk",
+            "Content-Disposition": "attachment; filename=BrainReport-LUKE.apk",
             "Cache-Control": "no-cache",
         }
     )
