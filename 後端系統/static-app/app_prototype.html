@@ -52,6 +52,15 @@
   }
   .status-bar .time { font-weight:600; }
   .status-bar .icons { display:flex; gap:4px; align-items:center; }
+  /* 腦波儀電量標籤 */
+  .eeg-battery {
+    display:inline-flex; align-items:center; gap:3px;
+    font-size:11px; font-weight:600; margin-left:4px;
+  }
+  .eeg-battery.high  { color:#7CFC7C; }
+  .eeg-battery.mid   { color:#FFD700; }
+  .eeg-battery.low   { color:#FF6B6B; }
+  .eeg-battery.off   { color:rgba(255,255,255,0.35); }
 
   /* Top Bar */
   .top-bar {
@@ -948,7 +957,7 @@
 
       <!-- ===== SCREEN: 聯絡我們 / 申請帳號 ===== -->
       <div class="screen" id="screen-contact">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-login')">‹</button>
           <h2>聯絡我們 · 申請帳號</h2>
@@ -1000,7 +1009,7 @@
 
       <!-- ===== SCREEN: 申請完成 ===== -->
       <div class="screen" id="screen-contact-done">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
           <div style="font-size:72px;margin-bottom:12px;">📨</div>
           <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">申請已送出！</div>
@@ -1014,7 +1023,7 @@
 
       <!-- ===== SCREEN: 管理員登入 ===== -->
       <div class="screen" id="screen-admin-login">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="background:linear-gradient(160deg,#0d1729,#1a2540);padding:50px 30px 30px;text-align:center;color:white;">
           <div style="font-size:42px;">🔐</div>
           <h1 style="font-size:20px;font-weight:700;margin-top:6px;">管理員後台</h1>
@@ -1042,7 +1051,7 @@
 
       <!-- ===== SCREEN: 管理員後台主控台 ===== -->
       <div class="screen" id="screen-admin-console">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="--header-bg:#0d1729;">
           <button class="back-btn" onclick="goto('screen-admin-login')">‹</button>
           <h2 id="admin-console-title">管理員後台</h2>
@@ -1242,7 +1251,7 @@
       <div class="screen" id="screen-home">
         <div class="status-bar">
           <span class="time">9:41</span>
-          <span class="icons">📶 🔋</span>
+          <span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span>
         </div>
         <div class="home-header">
           <div class="home-greeting">👋 您好</div>
@@ -1295,7 +1304,7 @@
 
       <!-- ===== SCREEN 4: SUBJECT INFO ===== -->
       <div class="screen" id="screen-subject">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
           <h2>受測者資料</h2>
@@ -1370,7 +1379,7 @@
 
       <!-- ===== SCREEN 5: REPORT SELECTION ===== -->
       <div class="screen" id="screen-reports">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-subject')">‹</button>
           <h2>選擇報告項目</h2>
@@ -1552,7 +1561,7 @@
 
       <!-- ===== SCREEN: QR 付款（體驗版 NT$3,000）===== -->
       <div class="screen" id="screen-qr-trial">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款</h2>
@@ -1599,7 +1608,7 @@
 
       <!-- ===== SCREEN: QR 付款（完整版 NT$5,000）===== -->
       <div class="screen" id="screen-qr-full">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款</h2>
@@ -1644,7 +1653,7 @@
 
       <!-- ===== SCREEN: QR 付款（VIP版 NT$12,000）===== -->
       <div class="screen" id="screen-qr-vip">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款</h2>
@@ -1693,7 +1702,7 @@
 
       <!-- 體驗版升級完整版 NT$2,000 -->
       <div class="screen" id="screen-qr-up-2000">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="--header-bg:#e65100;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款 · 加購升級</h2>
@@ -1737,7 +1746,7 @@
 
       <!-- 完整版升級 VIP 版 NT$7,000 -->
       <div class="screen" id="screen-qr-up-7000">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="--header-bg:#e65100;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款 · 加購升級</h2>
@@ -1781,7 +1790,7 @@
 
       <!-- 體驗版升級 VIP 版 NT$9,000 -->
       <div class="screen" id="screen-qr-up-9000">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="--header-bg:#e65100;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>掃碼付款 · 加購升級</h2>
@@ -1825,7 +1834,7 @@
 
       <!-- 升級成功確認頁（共用） -->
       <div class="screen" id="screen-upgrade-done">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
           <div style="font-size:72px;margin-bottom:12px;">🎉</div>
           <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">升級成功！</div>
@@ -1842,7 +1851,7 @@
 
       <!-- 關係報告生成完成頁 -->
       <div class="screen" id="screen-relation-done">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
           <div style="font-size:72px;margin-bottom:12px;">💞</div>
           <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">關係報告生成中！</div>
@@ -1857,7 +1866,7 @@
 
       <!-- ===== SCREEN: QR 付款（NT$1 測試，僅 Debug）===== -->
       <div class="screen" id="screen-qr-test" data-dev-only>
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="--header-bg:#880e4f;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>🧪 測試付款 NT$1</h2>
@@ -1901,7 +1910,7 @@
 
       <!-- ===== SCREEN: 關係報告選人 ===== -->
       <div class="screen" id="screen-relation-select">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2 id="relation-select-title">選擇關係人</h2>
@@ -1932,7 +1941,7 @@
 
       <!-- ===== SCREEN: 獲利明細 ===== -->
       <div class="screen" id="screen-earnings">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
           <h2>獲利明細</h2>
@@ -2108,7 +2117,7 @@
 
       <!-- ===== SCREEN 6: PAYMENT (舊版，保留備用) ===== -->
       <div class="screen" id="screen-payment">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>購買點數</h2>
@@ -2173,7 +2182,7 @@
 
       <!-- ===== SCREEN 7: MBTI QUESTIONNAIRE ===== -->
       <div class="screen" id="screen-mbti">
-        <div class="status-bar" style="background:#6B3FA0;"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar" style="background:#6B3FA0;"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="background:#6B3FA0;">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>MBTI 前測問卷</h2>
@@ -2210,7 +2219,7 @@
 
       <!-- ===== SCREEN 8: DEVICE CONNECTION ===== -->
       <div class="screen" id="screen-connect">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-reports')">‹</button>
           <h2>連接腦波設備</h2>
@@ -2287,7 +2296,7 @@
 
       <!-- ===== SCREEN 9: BASELINE ===== -->
       <div class="screen" id="screen-baseline">
-        <div class="status-bar" style="background:#2D3561;"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar" style="background:#2D3561;"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar" style="background:#2D3561;">
           <button class="back-btn" onclick="goto('screen-connect')">‹</button>
           <h2>建立靜息基線</h2>
@@ -2319,7 +2328,7 @@
 
       <!-- ===== SCREEN 10: DETECTION ===== -->
       <div class="screen" id="screen-detect">
-        <div class="status-bar" style="background:#0a0f1e;"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar" style="background:#0a0f1e;"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
           <div class="detect-header">
             <div class="dh-top">
@@ -2423,7 +2432,7 @@
 
       <!-- ===== SCREEN 11: RESULTS（個人整合分析報告） ===== -->
       <div class="screen" id="screen-results">
-        <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="overflow-y:auto;flex:1;background:#0d1729;">
           <div class="result-header">
             <div class="result-brand">onlineReport · 線上腦波分析系統</div>
@@ -2544,7 +2553,7 @@
 
       <!-- ===== SCREEN 12: HISTORY ===== -->
       <div class="screen" id="screen-history">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <h2 style="margin-left:0;">歷史紀錄</h2>
         </div>
@@ -2567,7 +2576,7 @@
 
       <!-- ===== SCREEN 13: SETTINGS ===== -->
       <div class="screen" id="screen-settings">
-        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋</span></div>
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar"><h2 style="margin-left:0;">設定</h2></div>
         <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
           <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px;text-align:center;color:white;">
@@ -2650,6 +2659,38 @@
       document.documentElement.classList.add('android-franchise');
     }
   } catch (e) { /* WebView 橋接未注入時略過 */ }
+})();
+
+// ── 腦波儀電量 Polling（每 10 秒更新一次所有 status bar 的電量圖示）────────
+(function startBatteryPolling() {
+  function updateBattery() {
+    let pct = -1;
+    try {
+      if (typeof AndroidBridge !== 'undefined' && AndroidBridge &&
+          typeof AndroidBridge.getDeviceBattery === 'function') {
+        pct = AndroidBridge.getDeviceBattery();
+      }
+    } catch(e) { pct = -1; }
+
+    const els = document.querySelectorAll('.eeg-battery');
+    els.forEach(function(el) {
+      if (pct < 0) {
+        el.textContent = '🧠--';
+        el.className = 'eeg-battery off';
+      } else if (pct >= 60) {
+        el.textContent = '🧠' + pct + '%';
+        el.className = 'eeg-battery high';
+      } else if (pct >= 20) {
+        el.textContent = '🧠' + pct + '%';
+        el.className = 'eeg-battery mid';
+      } else {
+        el.textContent = '🧠' + pct + '%';
+        el.className = 'eeg-battery low';
+      }
+    });
+  }
+  updateBattery();
+  setInterval(updateBattery, 10000);
 })();
 
 const screens = [

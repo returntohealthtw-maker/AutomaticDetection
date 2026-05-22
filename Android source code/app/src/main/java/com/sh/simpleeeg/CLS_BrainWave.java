@@ -66,6 +66,14 @@ public class CLS_BrainWave
         catch (Throwable t) { return false; }
     }
     //===================================================
+    /** 取得腦波儀電量（0-100）；未連線或無法取得時回傳 -1 */
+    public int getBatteryLevel(){
+        try {
+            if (!clsEeg.bConnected()) return -1;
+            return clsEeg.iBattery();
+        } catch (Throwable t) { return -1; }
+    }
+    //===================================================
     private class ThreadProcess extends Thread
     {
         @Override

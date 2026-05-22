@@ -256,6 +256,16 @@ public class WebAppActivity extends Activity {
             new Handler(Looper.getMainLooper()).post(() -> connectBrainwaveSafely());
         }
 
+        /**
+         * 回傳腦波儀目前電量（0-100）；未連線或無資料時回傳 -1。
+         * HTML 每 10 秒輪詢一次，顯示在 status bar 右上角。
+         */
+        @JavascriptInterface
+        public int getDeviceBattery() {
+            if (ble == null) return -1;
+            return ble.getBatteryLevel();
+        }
+
         /** 供 HTML 查詢顧問姓名 */
         @JavascriptInterface
         public String getConsultantName() {
