@@ -106,8 +106,9 @@ def put_share_rules(
 ):
     """儲存分潤規則（需 admin 或有效 token）"""
     user = require_user(authorization, db)
-    if user.role != "admin":
-        raise HTTPException(403, "僅管理員可修改分潤規則")
+    _ALLOWED = {"admin", "project", "staff"}
+    if user.role not in _ALLOWED:
+        raise HTTPException(403, "僅管理員、專案人員或工作人員可修改分潤規則")
 
     row = db.query(M.ShareRuleSet).filter_by(rule_set_key=RULE_SET_KEY).first()
     if row is None:
