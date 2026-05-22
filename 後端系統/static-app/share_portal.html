@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>分潤管理入口 · 路加腦波系統</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+      background: #0f1923;
+      color: #e8eaf6;
+      min-height: 100dvh;
+    }
+
+    /* ── Login Screen ───────────────────────────── */
+    #screen-login {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 24px;
+      background: linear-gradient(135deg, #0d1729 0%, #1a237e 100%);
+    }
+    .login-box {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-logo { font-size: 48px; text-align: center; margin-bottom: 8px; }
+    .login-title { font-size: 20px; font-weight: 700; text-align: center; color: #90caf9; margin-bottom: 4px; }
+    .login-sub { font-size: 13px; text-align: center; color: rgba(255,255,255,0.5); margin-bottom: 28px; }
+    .form-label { font-size: 12px; color: #90caf9; margin-bottom: 6px; display: block; }
+    .form-input {
+      width: 100%; padding: 12px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+      color: white; font-size: 15px; outline: none; margin-bottom: 16px;
+    }
+    .form-input:focus { border-color: #90caf9; background: rgba(144,202,249,0.08); }
+    .btn-login {
+      width: 100%; padding: 14px; border-radius: 12px;
+      background: linear-gradient(90deg, #1565c0, #0d47a1);
+      color: white; font-size: 16px; font-weight: 700;
+      border: none; cursor: pointer; margin-top: 8px;
+    }
+    .btn-login:hover { background: linear-gradient(90deg, #1976d2, #1565c0); }
+    .login-error { color: #ef9a9a; font-size: 13px; text-align: center; margin-top: 12px; min-height: 18px; }
+
+    /* ── Main App ───────────────────────────────── */
+    #screen-main { display: none; flex-direction: column; min-height: 100dvh; }
+
+    .topbar {
+      background: #0d1729;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 20px;
+      display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-title { font-size: 16px; font-weight: 700; color: #90caf9; flex: 1; }
+    .topbar-user { font-size: 12px; color: rgba(255,255,255,0.6); }
+    .btn-logout {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+      color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    }
+
+    .tabs {
+      display: flex;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .tab-btn {
+      flex: 1; padding: 14px 8px; font-size: 13px; font-weight: 600;
+      background: none; border: none; color: rgba(255,255,255,0.55); cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+    .tab-btn.active { color: #90caf9; border-bottom-color: #90caf9; background: rgba(144,202,249,0.06); }
+
+    .pane { display: none; flex-direction: column; flex: 1; }
+    .pane.active { display: flex; }
+
+    /* ── Earnings Pane ──────────────────────────── */
+    .earnings-header {
+      background: #0d1729; padding: 16px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .earnings-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .month-nav-btn {
+      background: rgba(255,255,255,0.12); border: none; color: white;
+      width: 32px; height: 32px; border-radius: 50%; font-size: 18px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .month-label { font-size: 16px; font-weight: 700; min-width: 90px; text-align: center; }
+    .total-label { font-size: 12px; color: rgba(255,255,255,0.6); }
+    .total-value { font-size: 32px; font-weight: 800; color: #4caf50; }
+    .by-role-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .by-role-tag {
+      background: rgba(255,255,255,0.08); border-radius: 8px; padding: 4px 12px;
+      font-size: 12px;
+    }
+    .by-role-tag b { color: #90caf9; }
+    .earn-list { flex: 1; overflow-y: auto; padding: 12px 16px 32px; background: #f5f7fa; }
+    .earn-card {
+      background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .earn-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .earn-title { font-size: 15px; font-weight: 700; color: #1a237e; }
+    .earn-meta { font-size: 11px; color: #888; margin-top: 3px; }
+    .earn-amt { font-size: 18px; font-weight: 800; color: #2e7d32; }
+    .earn-share { font-size: 11px; color: #888; margin-top: 2px; }
+    .earn-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .earn-tag { font-size: 11px; font-weight: 600; border-radius: 6px; padding: 2px 8px; }
+
+    /* ── Rules Pane ─────────────────────────────── */
+    .rules-header {
+      background: #0d1729; padding: 12px 20px; font-size: 12px;
+      color: rgba(255,255,255,0.7); line-height: 1.6;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .rules-scroll { flex: 1; overflow-y: auto; padding: 12px 16px 80px; }
+    .rule-card {
+      background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .rule-title {
+      display: flex; align-items: center; font-size: 14px; font-weight: 700;
+      color: #1a237e; margin-bottom: 12px; gap: 6px;
+    }
+    .rule-mode-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+    .rule-mode-toggle button {
+      flex: 1; padding: 7px 4px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      border: 1.5px solid #c5cae9; background: #f5f7fa; color: #5c6bc0; cursor: pointer;
+    }
+    .rule-mode-toggle button.active { background: #3949ab; color: white; border-color: #3949ab; }
+    .rule-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    .rule-row:last-child { border-bottom: none; }
+    .rule-role { flex: 1; font-size: 13px; color: #555; }
+    .rule-input {
+      width: 80px; text-align: right; padding: 5px 8px; border-radius: 8px;
+      border: 1.5px solid #c5cae9; font-size: 14px; font-weight: 700; color: #1a237e;
+    }
+    .rule-suffix { font-size: 12px; color: #888; width: 26px; }
+
+    .rules-footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: white; border-top: 1px solid #e0e0e0;
+      padding: 12px 20px; display: flex; gap: 10px; z-index: 50;
+    }
+    .btn-secondary {
+      flex: 1; padding: 12px; border-radius: 10px; background: #e8eaf6;
+      color: #3949ab; font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    }
+    .btn-primary {
+      flex: 2; padding: 12px; border-radius: 10px;
+      background: linear-gradient(90deg, #1565c0, #0d47a1);
+      color: white; font-size: 14px; font-weight: 700; border: none; cursor: pointer;
+    }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: #aaa; font-size: 14px; }
+    .loading-state { text-align: center; padding: 40px 20px; color: #aaa; font-size: 14px; }
+    .error-state { text-align: center; padding: 30px 20px; color: #c62828; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<!-- ── 登入畫面 ──────────────────────────────────────── -->
+<div id="screen-login">
+  <div class="login-box">
+    <div class="login-logo">🧠</div>
+    <div class="login-title">分潤管理入口</div>
+    <div class="login-sub">路加腦波檢測系統 · 加盟商管理者專用</div>
+    <label class="form-label">手機號碼</label>
+    <input id="inp-phone" type="tel" class="form-input" placeholder="0912-345-678" autocomplete="username"
+           onkeydown="if(event.key==='Enter')document.getElementById('inp-password').focus()">
+    <label class="form-label">密碼</label>
+    <input id="inp-password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">登入</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── 主畫面 ──────────────────────────────────────────── -->
+<div id="screen-main">
+  <div class="topbar">
+    <div class="topbar-title">🧠 分潤管理</div>
+    <div class="topbar-user" id="topbar-user"></div>
+    <button class="btn-logout" onclick="doLogout()">登出</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="earnings" onclick="switchTab('earnings')">📊 分潤總覽</button>
+    <button class="tab-btn"        data-tab="rules"    onclick="switchTab('rules')">⚙️ 分潤規則</button>
+  </div>
+
+  <!-- 分潤總覽 -->
+  <div class="pane active" id="pane-earnings">
+    <div class="earnings-header">
+      <div class="earnings-nav">
+        <button class="month-nav-btn" onclick="monthAdj(-1)">‹</button>
+        <div class="month-label" id="earnings-month-label"></div>
+        <button class="month-nav-btn" onclick="monthAdj(1)">›</button>
+        <div style="flex:1;"></div>
+        <div>
+          <div class="total-label">本月總分潤</div>
+          <div class="total-value" id="earnings-total">NT$--</div>
+        </div>
+      </div>
+      <div class="by-role-row" id="earnings-by-role"></div>
+    </div>
+    <div class="earn-list" id="earnings-list">
+      <div class="loading-state">📊 請先登入載入資料</div>
+    </div>
+  </div>
+
+  <!-- 分潤規則 -->
+  <div class="pane" id="pane-rules">
+    <div class="rules-header">
+      💡 所有報告類型皆支援「% 比例」或「固定金額」分潤切換。規則儲存後即時同步至所有裝置。
+    </div>
+    <div class="rules-scroll" id="rules-table"></div>
+    <div class="rules-footer">
+      <button class="btn-secondary" onclick="resetRules()">回復預設</button>
+      <button class="btn-primary"   onclick="saveRules()">💾 儲存規則</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── API 基礎設定 ─────────────────────────────────────────────────
+const _p = location.protocol;
+const _h = location.hostname;
+const _port = location.port;
+const API_BASE = `${_p}//${_h}${_port ? ':' + _port : ''}/api/v1`;
+
+let _token  = null;
+let _userName = '';
+
+function _authHeader() {
+  return _token ? { 'Authorization': `Bearer ${_token}` } : {};
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = Object.assign(
+    { 'Content-Type': 'application/json' },
+    options.headers || {},
+    _authHeader()
+  );
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const resp = await fetch(url, Object.assign({}, options, { headers, cache: 'no-store' }));
+  if (resp.status === 401) {
+    doLogout();
+    throw new Error('登入已逾期，請重新登入');
+  }
+  return resp;
+}
+
+// ── 登入 / 登出 ───────────────────────────────────────────────────
+async function doLogin() {
+  const phone    = (document.getElementById('inp-phone').value || '').trim();
+  const password = (document.getElementById('inp-password').value || '').trim();
+  const errEl    = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!phone || !password) { errEl.textContent = '請填寫手機與密碼'; return; }
+
+  try {
+    const r = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.detail || '帳號或密碼錯誤'; return; }
+    if (data.role !== 'admin') { errEl.textContent = '此入口僅限管理員使用'; return; }
+
+    _token = data.token;
+    _userName = data.name || phone;
+    document.getElementById('topbar-user').textContent = `👤 ${_userName}`;
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display  = 'flex';
+    document.getElementById('screen-main').style.flexDirection = 'column';
+
+    // 初始載入
+    loadRules().then(renderRulesEditor);
+    renderEarnings();
+  } catch(e) {
+    errEl.textContent = `連線失敗：${e.message}`;
+  }
+}
+
+function doLogout() {
+  _token = null;
+  document.getElementById('screen-main').style.display  = 'none';
+  document.getElementById('screen-login').style.display = 'flex';
+  document.getElementById('inp-password').value = '';
+  document.getElementById('login-error').textContent = '';
+}
+
+// ── Tab 切換 ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.pane').forEach(p => {
+    p.classList.toggle('active', p.id === `pane-${tab}`);
+  });
+  if (tab === 'earnings') renderEarnings();
+  else if (tab === 'rules') loadRules().then(renderRulesEditor);
+}
+
+// ── 分潤規則 ──────────────────────────────────────────────────────
+const _ROLES = [
+  { key:'franchise', label:'加盟商' },
+  { key:'direct',    label:'直營商' },
+  { key:'agent',     label:'代理商' },
+  { key:'project',   label:'專案人員' },
+  { key:'staff',     label:'工作人員' },
+];
+
+const _PRODUCTS = [
+  { key:'life_trial',    label:'人生劇本 · 體驗版',   price:3000  },
+  { key:'life_full',     label:'人生劇本 · 完整版',   price:5000  },
+  { key:'life_vip',      label:'人生劇本 · VIP版',    price:12000 },
+  { key:'child_trial',   label:'兒童天賦 · 體驗版',   price:3000  },
+  { key:'child_full',    label:'兒童天賦 · 完整版',   price:5000  },
+  { key:'child_vip',     label:'兒童天賦 · VIP版',    price:12000 },
+  { key:'relation',      label:'關係報告（共振）',     price:8000  },
+  { key:'up_trial_full', label:'加購升級：體驗→完整', price:2000, upgrade:true },
+  { key:'up_full_vip',   label:'加購升級：完整→VIP',  price:7000, upgrade:true },
+  { key:'up_trial_vip',  label:'加購升級：體驗→VIP',  price:9000, upgrade:true },
+];
+
+let _rules = null;
+
+function _defaultRules() {
+  const basePct = { franchise:25, direct:20, agent:18, project:15, staff:5 };
+  const r = {};
+  _PRODUCTS.forEach(p => {
+    r[p.key] = {
+      mode: 'pct',
+      pct_byRole:    Object.fromEntries(_ROLES.map(ro => [ro.key, basePct[ro.key]])),
+      amount_byRole: Object.fromEntries(_ROLES.map(ro => [ro.key, Math.round(p.price * basePct[ro.key] / 100)])),
+    };
+  });
+  return r;
+}
+
+function _mergeDefaults(parsed) {
+  const d = _defaultRules();
+  Object.keys(d).forEach(k => {
+    if (!parsed[k]) { parsed[k] = d[k]; return; }
+    ['pct_byRole','amount_byRole'].forEach(sub => {
+      if (!parsed[k][sub]) parsed[k][sub] = d[k][sub];
+      _ROLES.forEach(r => {
+        if (typeof parsed[k][sub][r.key] !== 'number') parsed[k][sub][r.key] = d[k][sub][r.key];
+      });
+    });
+    if (parsed[k].byRole && !parsed[k].pct_byRole) {
+      parsed[k].pct_byRole = parsed[k].byRole;
+      delete parsed[k].byRole;
+    }
+    if (!parsed[k].mode) parsed[k].mode = 'pct';
+  });
+  return parsed;
+}
+
+async function loadRules() {
+  try {
+    const r = await apiFetch('/share-rules');
+    const data = await r.json();
+    if (data.ok && data.rules) { _rules = _mergeDefaults(data.rules); return; }
+  } catch(e) {}
+  _rules = _defaultRules();
+}
+
+function renderRulesEditor() {
+  const wrap = document.getElementById('rules-table');
+  if (!wrap || !_rules) return;
+  wrap.innerHTML = _PRODUCTS.map(p => {
+    const r = _rules[p.key] || _defaultRules()[p.key];
+    const mode = r.mode || 'pct';
+    const isPct = mode === 'pct';
+    const modeToggle = `<div class="rule-mode-toggle" data-prod="${p.key}">
+      <button data-mode="pct"    class="${isPct?'active':''}"   onclick="toggleMode('${p.key}','pct')">% 比例</button>
+      <button data-mode="amount" class="${!isPct?'active':''}"  onclick="toggleMode('${p.key}','amount')">固定金額</button>
+    </div>`;
+    const rows = _ROLES.map(ro => {
+      const val = isPct ? ((r.pct_byRole||{})[ro.key] ?? 0) : ((r.amount_byRole||{})[ro.key] ?? 0);
+      return `<div class="rule-row">
+        <span class="rule-role">${ro.label}</span>
+        <input type="number" class="rule-input" min="0" step="${isPct?'0.5':'100'}"
+               data-prod="${p.key}" data-role="${ro.key}" data-kind="${isPct?'pct':'amount'}" value="${val}">
+        <span class="rule-suffix">${isPct ? '%' : 'NT$'}</span>
+      </div>`;
+    }).join('');
+    return `<div class="rule-card">
+      <div class="rule-title">${p.upgrade?'⬆️':'📊'} ${p.label}
+        <span style="font-size:11px;color:#888;font-weight:400;margin-left:auto;">售價 NT$${p.price.toLocaleString()}</span>
+      </div>
+      ${modeToggle}
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function toggleMode(prodKey, mode) {
+  if (!_rules || !_rules[prodKey]) return;
+  _rules[prodKey].mode = mode;
+  renderRulesEditor();
+}
+
+async function saveRules() {
+  if (!_rules) return;
+  // 從 UI 回收
+  _PRODUCTS.forEach(p => {
+    const modeBtn = document.querySelector(`.rule-mode-toggle[data-prod="${p.key}"] button.active`);
+    if (modeBtn) _rules[p.key].mode = modeBtn.dataset.mode;
+    ['pct','amount'].forEach(kind => {
+      _ROLES.forEach(r => {
+        const inp = document.querySelector(`input[data-prod="${p.key}"][data-role="${r.key}"][data-kind="${kind}"]`);
+        if (inp) {
+          const v = parseFloat(inp.value);
+          _rules[p.key][`${kind}_byRole`][r.key] = isNaN(v) ? 0 : v;
+        }
+      });
+    });
+  });
+  try {
+    const r = await apiFetch('/share-rules', {
+      method: 'PUT',
+      body: JSON.stringify({ rules: _rules }),
+    });
+    const data = await r.json();
+    if (data.ok) alert('✅ 分潤規則已儲存並同步至所有裝置');
+    else alert('❌ 儲存失敗：' + (data.detail || JSON.stringify(data)));
+  } catch(e) {
+    alert('❌ 儲存失敗：' + e.message);
+  }
+}
+
+async function resetRules() {
+  if (!confirm('確定要回復所有分潤規則為預設值嗎？')) return;
+  _rules = _defaultRules();
+  try {
+    await apiFetch('/share-rules', {
+      method: 'PUT',
+      body: JSON.stringify({ rules: _rules }),
+    });
+  } catch(e) {}
+  renderRulesEditor();
+  alert('✅ 已回復預設並儲存');
+}
+
+// ── 分潤總覽 ──────────────────────────────────────────────────────
+let _earningsMonth = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+})();
+
+function monthAdj(delta) {
+  const [y, m] = _earningsMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  _earningsMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderEarnings();
+}
+
+async function renderEarnings() {
+  const listEl   = document.getElementById('earnings-list');
+  const totalEl  = document.getElementById('earnings-total');
+  const byRoleEl = document.getElementById('earnings-by-role');
+  const monthEl  = document.getElementById('earnings-month-label');
+  if (!listEl) return;
+
+  if (monthEl) monthEl.textContent = _earningsMonth;
+  if (totalEl) totalEl.textContent = 'NT$--';
+  listEl.innerHTML = '<div class="loading-state">📊 載入中…</div>';
+
+  try {
+    const r = await apiFetch(`/earnings?month=${_earningsMonth}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+
+    if (totalEl) totalEl.textContent = 'NT$' + (data.total_share || 0).toLocaleString();
+
+    const byRole = {};
+    _ROLES.forEach(r => byRole[r.key] = 0);
+    (data.by_consultant || []).forEach(c => {
+      if (byRole[c.role] != null) byRole[c.role] += c.total_share;
+    });
+    if (byRoleEl) byRoleEl.innerHTML = _ROLES.map(r =>
+      `<span class="by-role-tag">${r.label}：<b>NT$${(byRole[r.key]||0).toLocaleString()}</b></span>`
+    ).join('');
+
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.innerHTML = '<div class="empty-state">本月尚無已付款紀錄</div>';
+      return;
+    }
+
+    listEl.innerHTML = items.map(o => {
+      const prod = _PRODUCTS.find(p => p.key === o.report_type) || { label: o.report_type, upgrade: false };
+      const roleLabel = (_ROLES.find(r => r.key === o.role) || {}).label || o.role;
+      const paidDate = o.paid_at ? new Date(o.paid_at * 1000).toLocaleDateString('zh-TW') : '';
+      return `<div class="earn-card">
+        <div class="earn-row">
+          <div>
+            <div class="earn-title">${o.subject_name || '(未知)'}</div>
+            <div class="earn-meta">${prod.label} · ${paidDate}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="earn-amt">+NT$${(o.share||0).toLocaleString()}</div>
+            <div class="earn-share">${o.rule_text}</div>
+          </div>
+        </div>
+        <div class="earn-tags">
+          <span class="earn-tag" style="background:#e3f2fd;color:#1565c0;">👤 ${o.consultant_name||'(未知)'}</span>
+          <span class="earn-tag" style="background:#fff3e0;color:#e65100;">${roleLabel}</span>
+          ${prod.upgrade ? '<span class="earn-tag" style="background:#fce4ec;color:#c2185b;">⬆️ 加購升級</span>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = `<div class="error-state">❌ 載入失敗：${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>

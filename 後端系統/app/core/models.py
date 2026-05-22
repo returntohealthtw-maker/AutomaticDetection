@@ -241,3 +241,14 @@ class Payment(Base):
         Index("idx_payment_consultant_status", "consultant_id", "status"),
         Index("idx_payment_ctime", "created_at"),
     )
+
+
+class ShareRuleSet(Base):
+    """分潤規則（全域，按 rule_set_key 區分；目前只用 'default'）"""
+    __tablename__ = "share_rule_sets"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    rule_set_key = Column(String(50), unique=True, nullable=False)  # "default"
+    rules_json   = Column(Text, nullable=False)   # 整包 JSON
+    updated_by   = Column(String(100), nullable=True)
+    updated_at   = Column(Integer, default=0)
