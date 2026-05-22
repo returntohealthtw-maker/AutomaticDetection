@@ -158,7 +158,28 @@ public class WebAppActivity extends Activity {
                 progressBar.setProgress(p);
                 progressBar.setVisibility(p == 100 ? View.GONE : View.VISIBLE);
             }
+
+            // target="_blank" 連結（PDF 預覽、外部付款頁）→ 用系統瀏覽器開啟
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog,
+                                          boolean isUserGesture, android.os.Message resultMsg) {
+                WebView.HitTestResult result = view.getHitTestResult();
+                String url = result.getExtra();
+                if (url != null && !url.isEmpty()) {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                    } catch (Throwable t) {
+                        android.util.Log.e("WebAppActivity", "onCreateWindow open url", t);
+                    }
+                }
+                return false;
+            }
         });
+
+        // 允許 WebView 彈出新視窗（讓 onCreateWindow 能被觸發）
+        webView.getSettings().setSupportMultipleWindows(true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override

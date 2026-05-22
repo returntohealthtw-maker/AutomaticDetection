@@ -5048,6 +5048,23 @@ function generateRelationReport() {
 }
 
 // 開發測試：模擬付款成功
+/**
+ * 開啟外部 URL：
+ * - Android WebView → 呼叫 AndroidBridge.openPayUrl()，用系統瀏覽器（Chrome）開啟
+ * - 桌機瀏覽器 → 直接 window.open()
+ */
+function openExternalUrl(url) {
+  if (!url) return;
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge &&
+        typeof AndroidBridge.openPayUrl === 'function') {
+      AndroidBridge.openPayUrl(url);
+      return;
+    }
+  } catch(e) { /* 橋接不可用，fallback */ }
+  window.open(url, '_blank', 'noopener');
+}
+
 function copyPayLink(anchorId) {
   const a = document.getElementById(anchorId);
   if (!a) return;
@@ -5890,7 +5907,7 @@ function _filterGcsList() {
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <a href="${it.signed_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;text-align:center;">🔍 預覽/下載</a>
+          <button onclick="openExternalUrl('${it.signed_url}')" style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;">🔍 預覽/下載</button>
           ${importBtn}
           ${sendBtn}
         </div>
