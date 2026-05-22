@@ -266,6 +266,32 @@ def app_version(request: Request):
         "release_notes":       APK_RELEASE_NOTES,
     }
 
+@app.get("/download/apk/qr")
+def download_apk_qr(request: Request):
+    """產生 APK 下載連結的 QR Code 圖片（PNG），可直接放在說明文件或網頁上讓加盟商掃描安裝。"""
+    import qrcode, io
+    from app.core.config import settings
+    base = (settings.PUBLIC_BASE_URL
+            or os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+            or str(request.base_url).rstrip("/"))
+    if base and not base.startswith("http"):
+        base = f"https://{base}"
+    url = f"{base.rstrip('/')}/download/apk"
+
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buf, media_type="image/png",
+        headers={"Content-Disposition": "inline; filename=BrainReport-LUKE-install-qr.png",
+                 "Cache-Control": "no-cache"})
+
+
 @app.get("/download/apk")
 def download_apk():
     """
