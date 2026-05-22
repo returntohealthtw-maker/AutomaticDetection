@@ -8,17 +8,111 @@ import time
 import urllib.parse
 import io
 import os
+import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Header, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session as DbSession
 
 from app.core.config import settings
+from app.core.database import get_db
+from app.core import models as M
 from app.services import payuni
+from app.routers.auth import require_user, verify_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/payments", tags=["付款"])
+
+
+# ─── DB helper：付款表雙寫（in-memory + Payments table）────────────────────
+def _db_create_payment(
+    db: DbSession,
+    *,
+    order_id: str,
+    consultant_id: Optional[int],
+    consultant_name: Optional[str],
+    subject_name: str,
+    subject_email: str,
+    report_type: str,
+    description: str,
+    amount: int,
+    provider: str,
+    created_at: int,
+    expired_at: int,
+) -> None:
+    """在 payments 表新增一筆 pending；DB 故障時只記 log 不阻斷下單流程"""
+    try:
+        row = M.Payment(
+            order_id        = order_id,
+            consultant_id   = consultant_id,
+            consultant_name = consultant_name,
+            subject_name    = subject_name or None,
+            subject_email   = subject_email or None,
+            report_type     = report_type,
+            description     = description,
+            amount          = amount,
+            provider        = provider,
+            status          = "pending",
+            created_at      = created_at,
+            expired_at      = expired_at,
+        )
+        db.add(row)
+        db.commit()
+    except Exception as e:
+        logger.warning("[payments] DB 寫入失敗 (%s)：%s", order_id, e)
+        try: db.rollback()
+        except Exception: pass
+
+
+def _db_update_payment(
+    order_id: str,
+    *,
+    status: Optional[str] = None,
+    paid_at: Optional[int] = None,
+    provider_trade_no: Optional[str] = None,
+    payment_method: Optional[str] = None,
+    invoice_no: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> None:
+    """以新 DB session 更新 payments 表（Webhook 場景沒有 Depends 環境）"""
+    try:
+        from app.core.database import SessionLocal
+        with SessionLocal() as db:
+            row = db.query(M.Payment).filter(M.Payment.order_id == order_id).first()
+            if not row:
+                return
+            if status is not None:            row.status            = status
+            if paid_at is not None:           row.paid_at           = paid_at
+            if provider_trade_no is not None: row.provider_trade_no = provider_trade_no
+            if payment_method is not None:    row.payment_method    = payment_method
+            if invoice_no is not None:        row.invoice_no        = invoice_no
+            if notes is not None:             row.notes             = notes
+            db.commit()
+    except Exception as e:
+        logger.warning("[payments] DB 更新失敗 (%s)：%s", order_id, e)
+
+
+def _maybe_consultant(authorization: Optional[str], db: DbSession) -> tuple[Optional[int], Optional[str]]:
+    """嘗試從 Authorization header 解出顧問身份；未登入回 (None, None) 不報錯"""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return (None, None)
+    try:
+        payload = verify_token(authorization[7:])
+        if not payload:
+            return (None, None)
+        cid = payload.get("cid")
+        if not cid:
+            return (None, None)
+        user = db.query(M.Consultant).filter(M.Consultant.consultant_id == cid).first()
+        if not user:
+            return (None, None)
+        return (user.consultant_id, user.name)
+    except Exception:
+        return (None, None)
 
 
 def _provider() -> str:
@@ -126,12 +220,17 @@ def _generate_qr_bytes(data: str) -> bytes:
 # ─── API 端點 ────────────────────────────────────────────────────────────────
 
 @router.post("/create", response_model=CreatePaymentResponse)
-async def create_payment(req: CreatePaymentRequest):
+async def create_payment(
+    req: CreatePaymentRequest,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
     """
     Android 呼叫：建立付款訂單
 
-    - 回傳 qr_code_url（PNG 圖片 URL）→ 顧客掃碼後瀏覽器跳轉綠界付款頁
+    - 回傳 qr_code_url（PNG 圖片 URL）→ 顧客掃碼後瀏覽器跳轉付款頁
     - 回傳 pay_url（可直接點開的連結）→ 顧問可貼給顧客用
+    - 若帶 Bearer Token 會把顧問身份寫進 payments 表，未登入也允許下單
     """
     report_labels = {
         "life_trial":  "腦波人生劇本體驗版",
@@ -144,6 +243,7 @@ async def create_payment(req: CreatePaymentRequest):
     }
     desc = report_labels.get(req.report_type, "腦波報告")
     order_id = _generate_order_id()
+    now = int(time.time())
     base = _backend_base()
     pay_url = f"{base}{_pay_path(order_id)}"
 
@@ -155,9 +255,26 @@ async def create_payment(req: CreatePaymentRequest):
         "subject_name": req.subject_name,
         "notify_email": req.notify_email,
         "trade_desc":   desc,
-        "created_at":   int(time.time()),
+        "created_at":   now,
         "paid_at":      None,
     }
+
+    # ── 寫入 payments 表（DB 為單一事實來源；in-memory 只是 hot cache）──
+    cid, cname = _maybe_consultant(authorization, db)
+    _db_create_payment(
+        db,
+        order_id        = order_id,
+        consultant_id   = cid,
+        consultant_name = cname,
+        subject_name    = req.subject_name or "",
+        subject_email   = req.notify_email or "",
+        report_type     = req.report_type,
+        description     = desc,
+        amount          = req.amount,
+        provider        = _provider(),
+        created_at      = now,
+        expired_at      = now + 15 * 60,
+    )
 
     return CreatePaymentResponse(
         order_id       = order_id,
@@ -206,6 +323,7 @@ def get_payment_status(order_id: str):
     if order["status"] == "pending":
         if time.time() - order["created_at"] > 15 * 60:
             order["status"] = "expired"
+            _db_update_payment(order_id, status="expired")
 
     return PaymentStatusResponse(
         order_id = order_id,
@@ -242,6 +360,14 @@ async def ecpay_notify(request: Request):
         order["status"]  = "paid"
         order["paid_at"] = int(time.time())
         print(f"[ECPay Notify] 訂單 {mer_trade_no} Webhook 付款成功！")
+    # 即使 in-memory 沒有（重啟後）也要更新 DB
+    _db_update_payment(
+        mer_trade_no,
+        status            = "paid",
+        paid_at           = int(time.time()),
+        provider_trade_no = params.get("TradeNo") or None,
+        payment_method    = (params.get("PaymentType") or "").lower() or None,
+    )
 
     return "1|OK"
 
@@ -279,6 +405,13 @@ async def ecpay_return(order_id: str, request: Request):
                 order["status"]  = "paid"
                 order["paid_at"] = int(time.time())
                 print(f"[ECPay Return] 訂單 {mer_no} ReturnURL 立即確認付款成功！")
+            _db_update_payment(
+                mer_no,
+                status            = "paid",
+                paid_at           = int(time.time()),
+                provider_trade_no = params_raw.get("TradeNo") or None,
+                payment_method    = (params_raw.get("PaymentType") or "").lower() or None,
+            )
     else:
         # 沒有驗證參數時（測試環境），仍顯示成功頁讓測試流程繼續
         print(f"[ECPay Return] 收到跳轉（無驗證參數），訂單：{order_id}")

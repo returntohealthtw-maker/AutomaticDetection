@@ -209,3 +209,35 @@ class Subject(Base):
         Index("idx_subject_email_name", "email", "name"),
         Index("idx_subject_consultant", "consultant_id"),
     )
+
+
+class Payment(Base):
+    """付款流水（每次下單 → 第三方付款 → Webhook/Return 都會更新此表）"""
+    __tablename__ = "payments"
+
+    payment_id        = Column(Integer, primary_key=True, autoincrement=True)
+    order_id          = Column(String(32),  unique=True, nullable=False, index=True)
+    # 發起付款的顧問（未登入下單時為 NULL，例如「NT$1 功能測試」可未登入跑）
+    consultant_id     = Column(Integer, ForeignKey("consultants.consultant_id", ondelete="SET NULL"), nullable=True, index=True)
+    consultant_name   = Column(String(50),  nullable=True)   # snapshot 方便列表不用 join
+    subject_name      = Column(String(50),  nullable=True)
+    subject_email     = Column(String(200), nullable=True)
+    report_type       = Column(String(20),  nullable=False)  # life_trial/life_full/life_vip/child_*/test_1...
+    description       = Column(String(100), nullable=True)   # 商品描述（人類可讀）
+    amount            = Column(Integer,     nullable=False)
+    provider          = Column(String(16),  nullable=False, default="ecpay")  # ecpay/payuni/test/manual
+    provider_trade_no = Column(String(64),  nullable=True)   # 第三方訂單號（綠界/PayUni）
+    payment_method    = Column(String(32),  nullable=True)   # credit_card/atm/cvs/web_atm/...
+    invoice_no        = Column(String(32),  nullable=True)   # 統一發票號碼
+    status            = Column(String(16),  nullable=False, default="pending", index=True)
+    # pending/paid/failed/expired/refunded
+    session_id        = Column(Integer,     nullable=True, index=True)   # 連結到觸發的 session
+    created_at        = Column(Integer,     default=0, index=True)
+    paid_at           = Column(Integer,     nullable=True)
+    expired_at        = Column(Integer,     nullable=True)
+    notes             = Column(Text,        nullable=True)   # 失敗原因、退款備註等
+
+    __table_args__ = (
+        Index("idx_payment_consultant_status", "consultant_id", "status"),
+        Index("idx_payment_ctime", "created_at"),
+    )
