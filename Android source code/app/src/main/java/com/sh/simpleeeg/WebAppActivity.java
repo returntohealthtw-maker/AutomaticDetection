@@ -255,13 +255,17 @@ public class WebAppActivity extends Activity {
                 clsData.listRecordingTime().add(rt);
                 clsData.NewListSectionData();
 
-                // ── 連線檢查：避免「跑 3 分鐘卻沒有任何訊號」的空轉檢測 ─────
-                if (!isBrainwaveReady()) {
+                // ── 啟動腦波檢測畫面 ────────────────────────────────────────
+                // test.class 本身有完整的掃描/連線 UI（圖2），負責處理 BrainLink 連線。
+                // 這裡只檢查：藍牙開啟 + 有必要權限；其餘交給 test.class 自己處理。
+                // 舊的 isBrainwaveReady()（含 bConnected() 檢查）太嚴格，會在 GATT
+                // 握手後 ThinkGear 資料流尚未啟動的 3-5 秒內誤判「未就緒」並彈對話框。
+                if (!isBluetoothOnAndPermitted()) {
                     showBrainwaveNotReadyDialog(subjectName, reportType, orderId);
-                    return;
+                } else {
+                    connectBrainwaveSafely(); // 預先嘗試連線（加速 test.class 內的掃描）
+                    launchBrainwaveActivity(subjectName, reportType, orderId);
                 }
-
-                launchBrainwaveActivity(subjectName, reportType, orderId);
             });
         }
 
@@ -427,21 +431,30 @@ public class WebAppActivity extends Activity {
     }
 
     /**
-     * 判斷腦波儀是否就緒：
-     *  1. Android 12+ 需有 BLUETOOTH_CONNECT 權限
-     *  2. 藍牙必須開啟
-     *  3. CLS_EEG 已連線（clsRaw.bConnected()）
+     * 只檢查「藍牙是否開啟 + 有沒有 BLUETOOTH_CONNECT 權限」。
+     * 不檢查 ThinkGear 資料流狀態（bConnected()），
+     * 因為 test.class 本身有連線掃描 UI，會自己處理 EEG 連線。
      */
-    private boolean isBrainwaveReady() {
+    private boolean isBluetoothOnAndPermitted() {
         try {
             if (Build.VERSION.SDK_INT >= 31) {
                 if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
                         != PackageManager.PERMISSION_GRANTED) return false;
             }
             BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter == null || !adapter.isEnabled()) return false;
+            return adapter != null && adapter.isEnabled();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
-            // CLS_BrainWave 內部的 clsEeg 是 instance 欄位，但 bConnected() 走 clsRaw（static）
+    /**
+     * 完整就緒檢查（藍牙 + 權限 + ThinkGear 資料流已建立）。
+     * 僅供 isBrainwaveConnected() JavascriptInterface 使用（狀態列電量顯示）。
+     */
+    private boolean isBrainwaveReady() {
+        try {
+            if (!isBluetoothOnAndPermitted()) return false;
             CLS_BrainWave probe = (ble != null) ? ble : new CLS_BrainWave();
             return probe.bConnectedSafe();
         } catch (Throwable t) {
@@ -476,9 +489,9 @@ public class WebAppActivity extends Activity {
                 .setPositiveButton("重新連線", (d, w) -> {
                     if (noPerm) ensureRuntimePermissions();
                     connectBrainwaveSafely();
-                    // 隔 1.5 秒再讓使用者點開始（給藍牙握手時間）
+                    // 只要藍牙開啟就直接啟動 test.class（它自己有連線 UI）
                     new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        if (isBrainwaveReady()) {
+                        if (isBluetoothOnAndPermitted()) {
                             launchBrainwaveActivity(subjectName, reportType, orderId);
                         } else {
                             showBrainwaveNotReadyDialog(subjectName, reportType, orderId);
@@ -489,6 +502,28 @@ public class WebAppActivity extends Activity {
                         launchBrainwaveActivity(subjectName, reportType, orderId))
                 .setNegativeButton("稍後再說", (d, w) -> { /* 留在 WebView 首頁 */ })
                 .show();
+    }
+
+    /**
+     * 每秒輪詢腦波儀是否就緒，最多重試 maxRetries 次。
+     * 就緒 → 直接啟動；用完次數 → 再顯示「未就緒」對話框。
+     * 這解決了 BrainLink 「逼逼兩聲」後 ThinkGear 資料流需要額外 3-5 秒才啟動的問題。
+     */
+    private void pollBrainwaveReady(final String subjectName,
+                                    final String reportType,
+                                    final String orderId,
+                                    final int remainingRetries) {
+        if (remainingRetries <= 0) {
+            showBrainwaveNotReadyDialog(subjectName, reportType, orderId);
+            return;
+        }
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (isBrainwaveReady()) {
+                launchBrainwaveActivity(subjectName, reportType, orderId);
+            } else {
+                pollBrainwaveReady(subjectName, reportType, orderId, remainingRetries - 1);
+            }
+        }, 1000);
     }
 
     private void launchBrainwaveActivity(String subjectName, String reportType, String orderId) {
