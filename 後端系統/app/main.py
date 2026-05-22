@@ -242,7 +242,7 @@ def app_version(request: Request):
             or str(request.base_url).rstrip("/"))
     if base and not base.startswith("http"):
         base = f"https://{base}"
-    apk_url = f"{base.rstrip('/')}{APK_DOWNLOAD_PATH}" if base else ""
+    apk_url = f"{base.rstrip('/')}/download/apk" if base else ""
 
     # 確認 APK 檔案實際存在（不存在就不公告，避免下載 404）
     apk_exists = False
@@ -259,6 +259,33 @@ def app_version(request: Request):
         "apk_download_url":    apk_url if apk_exists else "",
         "release_notes":       APK_RELEASE_NOTES,
     }
+
+@app.get("/download/apk")
+def download_apk():
+    """
+    APK 下載端點（強制設 Content-Type + Content-Disposition）。
+    手機瀏覽器遇到 .apk 時常常把它當 ZIP 解壓，加這個端點就能確保：
+      - Content-Type: application/vnd.android.package-archive
+      - Content-Disposition: attachment; filename=onlineReport-latest.apk
+    讓手機正確辨識並提示安裝。
+    """
+    if not _STATIC_APP_DIR:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="APK not found")
+    apk_path = os.path.join(_STATIC_APP_DIR, "apk", "onlineReport-latest.apk")
+    if not os.path.exists(apk_path):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="APK not found")
+    return FileResponse(
+        apk_path,
+        media_type="application/vnd.android.package-archive",
+        filename="onlineReport-latest.apk",
+        headers={
+            "Content-Disposition": "attachment; filename=onlineReport-latest.apk",
+            "Cache-Control": "no-cache",
+        }
+    )
+
 
 @app.get("/pay/ecpay/{order_id}")
 def pay_ecpay(order_id: str):
