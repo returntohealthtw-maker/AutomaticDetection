@@ -11,11 +11,14 @@ import time
 APP_HTML_VERSION = "2026.05.22.4"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 5
-APK_LATEST_VERSION_NAME = "1.0.4"
+APK_LATEST_VERSION_CODE = 6
+APK_LATEST_VERSION_NAME = "1.0.5"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
 APK_RELEASE_NOTES = (
-    "v1.0.4 更新內容：\n"
+    "v1.0.5 更新內容：\n"
+    "・Status bar 顯示腦波儀即時電量\n"
+    "\n"
+    "v1.0.4 歷史更新：\n"
     "・更換 App 圖示\n"
     "\n"
     "v1.0.3 歷史更新：\n"
