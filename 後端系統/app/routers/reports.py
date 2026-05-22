@@ -296,11 +296,47 @@ def record_report(
     db.commit()
     db.refresh(rep)
 
+    # 若這筆是 admin「重新生成 + 勾選自動寄信」觸發的，現在報告就緒了 → 立即寄信
+    auto_send_triggered = False
+    auto_send_error = None
+    if _check_auto_send_flag(rep) and rep.pdf_url and rep.notify_email:
+        try:
+            from app.services import email_sender
+            subj_name = payload.subject_name or "受測者"
+            # 報告標題從 report_type/variant 組合
+            type_label = {
+                "life_script": "腦波分析人生劇本",
+                "child":       "兒童腦波天賦解碼",
+                "parent_child":"親子腦波報告",
+                "marital":     "夫妻腦波報告",
+            }.get(payload.report_type, "腦波分析報告")
+            variant_label = {"trial": "體驗版", "full": "完整版", "vip": "VIP 版"}.get(payload.variant, "")
+            report_title = f"{type_label}{(' ' + variant_label) if variant_label else ''}"
+
+            result = email_sender.send_report_link_email(
+                to=rep.notify_email,
+                subject_name=subj_name,
+                report_title=report_title,
+                pdf_url=rep.pdf_url,
+            )
+            if result.get("ok"):
+                rep.email_sent = 1
+                # 清掉 marker，避免重送
+                _mark_auto_send_in_report(rep, False)
+                db.commit()
+                auto_send_triggered = True
+            else:
+                auto_send_error = f"寄信失敗 (method={result.get('method', '?')}): {result.get('error', '')}"
+        except Exception as e:
+            auto_send_error = f"寄信例外：{type(e).__name__}: {e}"
+
     return {
         "ok": True,
-        "report_id": rep.report_id,
-        "session_id": rep.session_id,
-        "pdf_url": rep.pdf_url,
+        "report_id":   rep.report_id,
+        "session_id":  rep.session_id,
+        "pdf_url":     rep.pdf_url,
+        "auto_send_triggered": auto_send_triggered,
+        "auto_send_error":     auto_send_error,
     }
 
 
@@ -533,34 +569,103 @@ def sessions_with_status(
     }
 
 
-class RegenerateReportIn(BaseModel):
-    notify_email: Optional[str] = None  # 補填收件 email（若 session 當初沒填）
+def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
+    """從 EegCapture 重組 trigger_external_report 期望的 brainwave_data 格式。
+
+    格式：
+      { attention_percentage, meditation_percentage,
+        bands_avg: { theta, alpha, beta, gamma } }
+    """
+    from app.services.algorithms import compute_averages
+
+    captures = db.query(M.EegCapture).filter(
+        M.EegCapture.session_id == session_id
+    ).order_by(M.EegCapture.seq_num).all()
+    if not captures:
+        return None
+
+    # 排除基線（is_baseline=1）
+    detection = [
+        {
+            "good_signal": c.good_signal,
+            "attention":   c.attention,
+            "meditation":  c.meditation,
+            "delta":       c.delta,
+            "theta":       c.theta,
+            "low_alpha":   c.low_alpha,
+            "high_alpha":  c.high_alpha,
+            "low_beta":    c.low_beta,
+            "high_beta":   c.high_beta,
+            "low_gamma":   c.low_gamma,
+            "high_gamma":  c.high_gamma,
+        }
+        for c in captures if c.is_baseline == 0
+    ]
+    if not detection:
+        detection = [
+            {k: getattr(c, k) for k in [
+                "good_signal", "attention", "meditation", "delta", "theta",
+                "low_alpha", "high_alpha", "low_beta", "high_beta", "low_gamma", "high_gamma"
+            ]} for c in captures
+        ]
+    if not detection:
+        return None
+
+    avg = compute_averages(detection)
+    return {
+        "attention_percentage":  int(avg.attention or 50),
+        "meditation_percentage": int(avg.meditation or 50),
+        "bands_avg": {
+            "theta": float(avg.theta or 50),
+            "alpha": float((avg.low_alpha + avg.high_alpha) / 2 or 50),
+            "beta":  float((avg.low_beta  + avg.high_beta)  / 2 or 50),
+            "gamma": float((avg.low_gamma + avg.high_gamma) / 2 or 50),
+        },
+    }
 
 
-@router.post("/sessions/{session_id}/regenerate")
-def regenerate_report_for_session(
+def _mark_auto_send_in_report(report: "M.Report", auto_send: bool):
+    """在 Report.client_summary JSON 內標記是否要在 record callback 後自動寄信。"""
+    import json
+    try:
+        meta = json.loads(report.client_summary) if report.client_summary else {}
+    except Exception:
+        meta = {}
+    if auto_send:
+        meta["auto_send_after_complete"] = True
+    else:
+        meta.pop("auto_send_after_complete", None)
+    report.client_summary = json.dumps(meta, ensure_ascii=False)
+
+
+def _check_auto_send_flag(report: "M.Report") -> bool:
+    import json
+    try:
+        meta = json.loads(report.client_summary) if report.client_summary else {}
+        return bool(meta.get("auto_send_after_complete"))
+    except Exception:
+        return False
+
+
+def _do_regenerate_one(
+    db: Session,
     session_id: int,
-    payload: RegenerateReportIn = None,
-    authorization: Optional[str] = Header(None),
-    db: Session = Depends(get_db),
-):
-    """
-    對指定 Session 重新觸發報告生成（漏報告救援用，管理員專用）。
-
-    動作：
-      1. 確認 Session 存在且檢測沒失敗（status != 2）
-      2. Report 若不存在 → 建一筆 pending；若存在 → reset status=pending、清 pdf_url
-      3. 觸發背景 generate_report_async（非同步、不阻塞回應）
-    """
-    user = require_user(authorization, db)
-    if user.role != "admin":
-        raise HTTPException(403, "僅管理員可觸發重新生成")
-
+    notify_email: Optional[str],
+    auto_send: bool,
+    variant: str = "full",
+) -> dict:
+    """單筆重生核心：reset Report、組 brainwave_data、觸發 trigger_external_report。"""
     s = db.query(M.Session).filter(M.Session.session_id == session_id).first()
     if not s:
-        raise HTTPException(404, f"Session #{session_id} 不存在")
+        return {"ok": False, "session_id": session_id, "error": "Session 不存在"}
     if s.status == 2:
-        raise HTTPException(400, "原始檢測本身失敗（status=2），無法重新生成")
+        return {"ok": False, "session_id": session_id,
+                "subject_name": s.subject_name, "error": "原始檢測本身失敗 (status=2)"}
+
+    bw = _session_to_brainwave_data(db, session_id)
+    if bw is None:
+        return {"ok": False, "session_id": session_id,
+                "subject_name": s.subject_name, "error": "找不到腦波資料 (EegCapture 為空)"}
 
     r = db.query(M.Report).filter(M.Report.session_id == session_id).first()
     if r is None:
@@ -569,43 +674,134 @@ def regenerate_report_for_session(
             session_id   = session_id,
             status       = "pending",
             qr_token     = uuid.uuid4().hex,
-            notify_email = (payload.notify_email if payload else None) or None,
+            notify_email = notify_email or None,
         )
         db.add(r)
+        db.flush()
     else:
         r.status     = "pending"
         r.pdf_url    = None
         r.email_sent = 0
-        if payload and payload.notify_email and not r.notify_email:
-            r.notify_email = payload.notify_email
+        if notify_email:
+            r.notify_email = notify_email  # 覆寫
+    _mark_auto_send_in_report(r, auto_send)
     db.commit()
     db.refresh(r)
 
-    # 用 asyncio 觸發背景任務（同 sessions/upload 的做法）
-    import asyncio
-    from app.services.report_generator import generate_report_async
+    # 觸發外部 React App（漂亮版報告）
+    from app.services import report_orchestrator
+    # report_type 對應：Session.report_type 是 "adult"/"child"，但 orchestrator 用 life_script/child
+    ext_report_type = "child" if (s.report_type or "").lower() == "child" else "life_script"
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(generate_report_async(r.report_id, session_id))
-        else:
-            # 沒有 loop（不該發生）— 開 thread 跑
-            import threading
-            def _run():
-                asyncio.run(generate_report_async(r.report_id, session_id))
-            threading.Thread(target=_run, daemon=True).start()
-    except RuntimeError:
-        import threading
-        def _run2():
-            asyncio.run(generate_report_async(r.report_id, session_id))
-        threading.Thread(target=_run2, daemon=True).start()
+        result = report_orchestrator.trigger_external_report(
+            report_type=ext_report_type,
+            subject_name=s.subject_name or "",
+            subject_email=r.notify_email or "",
+            subject_age=s.subject_age,
+            subject_gender=s.subject_gender or "",
+            variant=variant,
+            brainwave_data=bw,
+            extra={"session_id": session_id},
+        )
+    except Exception as e:
+        return {"ok": False, "session_id": session_id,
+                "subject_name": s.subject_name,
+                "error": f"trigger 失敗：{type(e).__name__}: {e}"}
 
     return {
-        "ok": True,
-        "session_id":  session_id,
-        "report_id":   r.report_id,
-        "subject_name": s.subject_name,
-        "note": "已重新觸發報告生成。請至『生成監看』查看進度。",
+        "ok":            bool(result.get("ok", False)),
+        "session_id":    session_id,
+        "report_id":     r.report_id,
+        "subject_name":  s.subject_name,
+        "notify_email":  r.notify_email,
+        "auto_send":     auto_send,
+        "external_mode": result.get("mode"),
+        "job_id":        result.get("job_id"),
+        "error":         result.get("error"),
+    }
+
+
+class RegenerateReportIn(BaseModel):
+    notify_email: Optional[str] = None
+    auto_send:    int = 0          # 0 = 等 admin 核准寄信（預設）；1 = 完成後自動寄
+    variant:      str = "full"
+
+
+@router.post("/sessions/{session_id}/regenerate")
+def regenerate_report_for_session(
+    session_id: int,
+    payload: Optional[RegenerateReportIn] = None,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """對指定 Session 重新觸發報告生成（管理員專用）。"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可觸發重新生成")
+
+    p = payload or RegenerateReportIn()
+    res = _do_regenerate_one(
+        db, session_id,
+        notify_email=p.notify_email,
+        auto_send=bool(p.auto_send),
+        variant=p.variant,
+    )
+    if not res.get("ok"):
+        # 不丟 500，回 400 帶 detail
+        raise HTTPException(400, res.get("error") or "重新生成失敗")
+    res["note"] = (
+        "已觸發重新生成。完成後將直接寄信到收件 email。" if p.auto_send
+        else "已觸發重新生成。完成後請至『報告管理 → 💾 資料庫紀錄』預覽後手動寄信。"
+    )
+    return res
+
+
+class RegenerateBatchItem(BaseModel):
+    session_id:   int
+    notify_email: Optional[str] = None
+
+
+class RegenerateBatchIn(BaseModel):
+    items:     List[RegenerateBatchItem]
+    auto_send: int = 0
+    variant:   str = "full"
+
+
+@router.post("/sessions/regenerate-batch")
+def regenerate_report_batch(
+    payload: RegenerateBatchIn,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """批次重生：依序觸發每一筆。回傳每筆結果，方便前端 UI 顯示。"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可觸發重新生成")
+    if not payload.items:
+        raise HTTPException(400, "items 不能為空")
+    if len(payload.items) > 50:
+        raise HTTPException(400, "單次最多 50 筆")
+
+    results = []
+    ok_count = 0
+    for it in payload.items:
+        res = _do_regenerate_one(
+            db, it.session_id,
+            notify_email=it.notify_email,
+            auto_send=bool(payload.auto_send),
+            variant=payload.variant,
+        )
+        if res.get("ok"):
+            ok_count += 1
+        results.append(res)
+
+    return {
+        "ok":         True,
+        "total":      len(results),
+        "success":    ok_count,
+        "failed":     len(results) - ok_count,
+        "auto_send":  bool(payload.auto_send),
+        "results":    results,
     }
 
 

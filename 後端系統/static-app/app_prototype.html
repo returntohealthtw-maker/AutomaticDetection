@@ -1150,7 +1150,60 @@
               <span id="missing-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminMissing()">🔄 重新載入</button>
             </div>
+            <!-- 批次操作 toolbar -->
+            <div style="background:#fff;padding:8px 16px;border-bottom:1px solid #e0e6f0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button onclick="_selectAllMissing(true)" style="background:#f0f4f8;color:#1a3a6e;border:1px solid #c5d0e0;font-size:11px;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;">☑️ 全選漏報告</button>
+              <button onclick="_selectAllMissing(false)" style="background:#f0f4f8;color:#666;border:1px solid #c5d0e0;font-size:11px;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;">取消全選</button>
+              <span style="font-size:11px;color:#666;">已選 <span id="missing-selected-count" style="font-weight:700;color:#1a3a6e;">0</span> 筆</span>
+              <div style="flex:1;"></div>
+              <button id="missing-batch-btn" onclick="_openBatchRegenerateModal()" disabled style="background:#7e57c2;color:white;border:none;font-size:12px;padding:7px 14px;border-radius:6px;font-weight:600;cursor:not-allowed;opacity:0.5;">🔄 批次重新生成</button>
+            </div>
             <div id="admin-missing-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
+          </div>
+
+          <!-- ── 批次重新生成 modal ───────────────────────────────── -->
+          <div id="batch-regen-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+            <div style="background:white;width:100%;max-width:760px;max-height:85vh;border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;">
+              <div style="background:linear-gradient(135deg,#7e57c2,#5e35b1);color:white;padding:16px 20px;display:flex;align-items:center;gap:10px;">
+                <div style="font-size:20px;">🔄</div>
+                <div style="flex:1;">
+                  <div style="font-size:16px;font-weight:700;">批次重新生成報告</div>
+                  <div style="font-size:11px;opacity:0.85;margin-top:2px;">即將對 <span id="batch-modal-count">0</span> 筆檢測重新觸發報告生成</div>
+                </div>
+                <button onclick="_closeBatchRegenerateModal()" style="background:rgba(255,255,255,0.18);color:white;border:none;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;">×</button>
+              </div>
+
+              <!-- 設定區 -->
+              <div style="padding:16px 20px;background:#f5f7fa;border-bottom:1px solid #e0e6f0;">
+                <div style="font-size:12px;font-weight:700;color:#1a3a6e;margin-bottom:8px;">📧 完成後的處理方式</div>
+                <label style="display:block;padding:10px 12px;background:white;border:2px solid #e0e6f0;border-radius:8px;margin-bottom:6px;cursor:pointer;" id="batch-mode-pending-label">
+                  <input type="radio" name="batch-send-mode" value="pending" checked style="margin-right:8px;">
+                  <span style="font-weight:600;color:#1a3a6e;">⏳ 進入「待核准」（推薦）</span>
+                  <div style="font-size:11px;color:#666;margin-top:4px;margin-left:22px;">完成後不寄信，由管理員到「💾 資料庫紀錄」預覽後手動點按鈕寄信</div>
+                </label>
+                <label style="display:block;padding:10px 12px;background:white;border:2px solid #e0e6f0;border-radius:8px;cursor:pointer;" id="batch-mode-auto-label">
+                  <input type="radio" name="batch-send-mode" value="auto" style="margin-right:8px;">
+                  <span style="font-weight:600;color:#d84315;">✉️ 完成後自動寄信</span>
+                  <div style="font-size:11px;color:#666;margin-top:4px;margin-left:22px;">不預覽，報告生成完直接寄到下方填寫的 email（缺 email 的會跳過寄信、留 pending）</div>
+                </label>
+              </div>
+
+              <!-- 清單區 -->
+              <div style="padding:8px 20px 4px;background:#f5f7fa;font-size:11px;color:#666;font-weight:600;display:flex;gap:8px;">
+                <div style="width:28px;">#</div>
+                <div style="width:60px;">Session</div>
+                <div style="flex:1;">受測者</div>
+                <div style="flex:1.3;">收件 Email（可修改）</div>
+              </div>
+              <div id="batch-regen-items" style="flex:1;overflow-y:auto;padding:0 20px 8px;background:#f5f7fa;"></div>
+
+              <!-- 按鈕區 -->
+              <div style="padding:14px 20px;background:white;border-top:1px solid #e0e6f0;display:flex;gap:8px;align-items:center;">
+                <div id="batch-regen-status" style="flex:1;font-size:11px;color:#666;"></div>
+                <button onclick="_closeBatchRegenerateModal()" style="background:#f0f4f8;color:#666;border:1px solid #c5d0e0;font-size:13px;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;">取消</button>
+                <button id="batch-regen-submit" onclick="_submitBatchRegenerate()" style="background:#7e57c2;color:white;border:none;font-size:13px;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer;">🔄 立即重新生成</button>
+              </div>
+            </div>
           </div>
 
           <!-- 子分頁 2：GCS 全部 PDF（不靠 DB，直接列 bucket 內所有檔案）-->
@@ -5224,6 +5277,8 @@ async function renderAdminMissing() {
     listEl.innerHTML = `<div style="text-align:center;padding:30px;color:#c00;">❌ 載入失敗：${e.message}</div>`;
   }
 }
+const _missingSelected = new Set();   // 已勾選的 session_id
+
 function _filterMissingList() {
   const listEl = document.getElementById('admin-missing-list');
   const q = (document.getElementById('missing-search')?.value || '').toLowerCase().trim();
@@ -5233,12 +5288,18 @@ function _filterMissingList() {
     (s.consultant || '').toLowerCase().includes(q));
   if (!rows.length) {
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">沒有符合的紀錄</div>';
+    _updateMissingSelectedCount();
     return;
   }
   listEl.innerHTML = rows.map(s => {
     const meta = _HEALTH_META[s.health] || { color: '#757575', label: s.health, border: false };
     const created = s.created_at ? new Date(s.created_at).toLocaleString('zh-TW') : '';
-    const regen = (s.health !== 'ok' && s.health !== 'session_failed' && s.health !== 'in_progress')
+    const canRegen = (s.health !== 'ok' && s.health !== 'session_failed' && s.health !== 'in_progress');
+    const checked = _missingSelected.has(s.session_id) ? 'checked' : '';
+    const cb = canRegen
+      ? `<input type="checkbox" class="missing-cb" data-sid="${s.session_id}" onchange="_toggleMissingSelect(${s.session_id}, this.checked)" ${checked} style="width:18px;height:18px;cursor:pointer;flex-shrink:0;margin-top:3px;">`
+      : `<span style="width:18px;flex-shrink:0;"></span>`;
+    const regen = canRegen
       ? `<button onclick="_regenerateSessionReport(${s.session_id}, '${(s.subject_name || '').replace(/'/g, "\\'")}')" style="background:#7e57c2;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新生成</button>`
       : '';
     const view = s.has_pdf
@@ -5246,7 +5307,8 @@ function _filterMissingList() {
       : '';
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${meta.border ? `border-left:4px solid ${meta.color};` : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        ${cb}
         <div style="flex:1;min-width:0;">
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <div style="font-weight:700;color:#1a3a6e;font-size:14px;">${s.subject_name || '(未知)'}</div>
@@ -5272,19 +5334,66 @@ function _filterMissingList() {
       </div>
     </div>
   `; }).join('');
+  _updateMissingSelectedCount();
+}
+
+function _toggleMissingSelect(sid, checked) {
+  if (checked) _missingSelected.add(sid); else _missingSelected.delete(sid);
+  _updateMissingSelectedCount();
+}
+
+function _selectAllMissing(select) {
+  if (!select) {
+    _missingSelected.clear();
+  } else {
+    for (const s of _missingCache) {
+      if (s.health !== 'ok' && s.health !== 'session_failed' && s.health !== 'in_progress') {
+        _missingSelected.add(s.session_id);
+      }
+    }
+  }
+  _filterMissingList();
+}
+
+function _updateMissingSelectedCount() {
+  const cntEl = document.getElementById('missing-selected-count');
+  const btn = document.getElementById('missing-batch-btn');
+  const n = _missingSelected.size;
+  if (cntEl) cntEl.textContent = n;
+  if (btn) {
+    if (n > 0) {
+      btn.disabled = false;
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '1';
+      btn.textContent = `🔄 批次重新生成 (${n})`;
+    } else {
+      btn.disabled = true;
+      btn.style.cursor = 'not-allowed';
+      btn.style.opacity = '0.5';
+      btn.textContent = '🔄 批次重新生成';
+    }
+  }
 }
 
 async function _regenerateSessionReport(sessionId, subjectName) {
   const sess = _missingCache.find(s => s.session_id === sessionId);
   const defaultEmail = sess?.notify_email || '';
-  const email = prompt(`重新生成 ${subjectName || `Session #${sessionId}`} 的報告\n\n請輸入收件 Email（之後預覽後可手動寄信，留空表示先不指定）：`, defaultEmail);
+  const email = prompt(`重新生成 ${subjectName || `Session #${sessionId}`} 的報告\n\n請輸入收件 Email（留空 = 不指定收件）：`, defaultEmail);
   if (email === null) return;
-  if (!confirm(`確定對 Session #${sessionId} 觸發重新生成？\n\n受測者：${subjectName || '?'}\n\n生成需 3~10 分鐘，可在「🔍 生成監看」分頁查看進度。`)) return;
+  // 顯示模式選擇
+  const choice = confirm(
+    `確定對 Session #${sessionId} 重新生成？\n\n受測者：${subjectName || '?'}\nEmail：${email || '(無)'}\n\n` +
+    `── 寄信方式 ──\n` +
+    `按【確定】 = ⏳ 進入待核准（推薦，預覽後再寄）\n` +
+    `按【取消】 = 中止操作\n\n` +
+    `※ 想自動寄信請改用「批次重新生成」介面，內含自動寄信選項。`
+  );
+  if (!choice) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notify_email: email || null }),
+      body: JSON.stringify({ notify_email: email || null, auto_send: 0 }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -5295,6 +5404,95 @@ async function _regenerateSessionReport(sessionId, subjectName) {
     renderAdminMissing();
   } catch (e) {
     alert(`❌ 例外：${e.message}`);
+  }
+}
+
+// ─── 批次重新生成 modal ─────────────────────────────────────────────────
+function _openBatchRegenerateModal() {
+  if (_missingSelected.size === 0) return;
+  const items = _missingCache.filter(s => _missingSelected.has(s.session_id));
+  const itemsEl = document.getElementById('batch-regen-items');
+  document.getElementById('batch-modal-count').textContent = items.length;
+  itemsEl.innerHTML = items.map((s, i) => `
+    <div style="background:white;border:1px solid #e0e6f0;border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;gap:8px;align-items:center;">
+      <div style="width:28px;color:#999;font-size:11px;">${i + 1}</div>
+      <div style="width:60px;font-size:11px;color:#1976d2;font-family:monospace;">#${s.session_id}</div>
+      <div style="flex:1;font-size:12px;font-weight:600;color:#1a3a6e;">${s.subject_name || '(未知)'}</div>
+      <input type="email" class="batch-email-input" data-sid="${s.session_id}" value="${s.notify_email || ''}" placeholder="留空 = 不寄信" style="flex:1.3;padding:5px 8px;border:1px solid #c5d0e0;border-radius:4px;font-size:11px;">
+    </div>
+  `).join('');
+  // radio 視覺
+  const updateRadioStyle = () => {
+    const mode = document.querySelector('input[name="batch-send-mode"]:checked')?.value;
+    document.getElementById('batch-mode-pending-label').style.borderColor = mode === 'pending' ? '#7e57c2' : '#e0e6f0';
+    document.getElementById('batch-mode-pending-label').style.background  = mode === 'pending' ? '#f3eafa' : 'white';
+    document.getElementById('batch-mode-auto-label').style.borderColor    = mode === 'auto'    ? '#d84315' : '#e0e6f0';
+    document.getElementById('batch-mode-auto-label').style.background     = mode === 'auto'    ? '#fff3e0' : 'white';
+  };
+  document.querySelectorAll('input[name="batch-send-mode"]').forEach(r => r.addEventListener('change', updateRadioStyle));
+  updateRadioStyle();
+  document.getElementById('batch-regen-status').textContent = '';
+  document.getElementById('batch-regen-modal').style.display = 'flex';
+}
+
+function _closeBatchRegenerateModal() {
+  document.getElementById('batch-regen-modal').style.display = 'none';
+}
+
+async function _submitBatchRegenerate() {
+  const inputs = document.querySelectorAll('.batch-email-input');
+  const items = Array.from(inputs).map(el => ({
+    session_id:   parseInt(el.dataset.sid, 10),
+    notify_email: (el.value || '').trim() || null,
+  }));
+  if (!items.length) {
+    alert('未選任何受測者');
+    return;
+  }
+  const mode = document.querySelector('input[name="batch-send-mode"]:checked')?.value || 'pending';
+  const auto_send = mode === 'auto' ? 1 : 0;
+  // 自動寄信時警告未填 email 的
+  if (auto_send) {
+    const noEmail = items.filter(it => !it.notify_email);
+    if (noEmail.length === items.length) {
+      alert('「自動寄信」模式下所有人都沒填 email — 沒人會收到信。請改填 email 或改回「待核准」模式。');
+      return;
+    }
+    if (noEmail.length > 0 &&
+      !confirm(`有 ${noEmail.length} 筆未填 email，這些將不會寄信（會留 pending）。其餘 ${items.length - noEmail.length} 筆會自動寄信。\n\n繼續嗎？`)) {
+      return;
+    }
+  }
+  const btn = document.getElementById('batch-regen-submit');
+  const statusEl = document.getElementById('batch-regen-status');
+  btn.disabled = true; btn.textContent = '⏳ 處理中...'; btn.style.opacity = '0.6'; btn.style.cursor = 'wait';
+  statusEl.textContent = `送出 ${items.length} 筆中...`;
+  try {
+    const r = await apiFetch('/reports/sessions/regenerate-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, auto_send, variant: 'full' }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      statusEl.textContent = '';
+      alert(`❌ 批次重生失敗：${data.detail || data.error || r.status}`);
+      btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.textContent = '🔄 立即重新生成';
+      return;
+    }
+    const failed = (data.results || []).filter(x => !x.ok);
+    let msg = `✅ 已觸發 ${data.success}/${data.total} 筆\n${auto_send ? '完成後將自動寄信' : '完成後請至「💾 資料庫紀錄」預覽後手動寄信'}\n\n進度請到「🔍 生成監看」分頁查看`;
+    if (failed.length) {
+      msg += `\n\n❌ 失敗：${failed.length} 筆\n` + failed.map(f => `- Session #${f.session_id} (${f.subject_name || '?'})：${f.error}`).slice(0, 10).join('\n');
+    }
+    alert(msg);
+    _missingSelected.clear();
+    _closeBatchRegenerateModal();
+    renderAdminMissing();
+  } catch (e) {
+    statusEl.textContent = '';
+    alert(`❌ 例外：${e.message}`);
+    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.textContent = '🔄 立即重新生成';
   }
 }
 
