@@ -707,6 +707,48 @@ def simulate_paid(order_id: str):
     order = _payment_store.get(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="訂單不存在")
+    now = int(time.time())
     order["status"]  = "paid"
-    order["paid_at"] = int(time.time())
+    order["paid_at"] = now
+    _db_update_payment(order_id, status="paid", paid_at=now)
     return {"message": f"訂單 {order_id} 已模擬付款成功", "status": "paid"}
+
+
+@router.get("/my")
+def my_payments(
+    limit: int = 50,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    取得目前登入顧問的付款流水（APP 設定頁「付款記錄」使用）
+
+    回傳最近 limit 筆，依 created_at 降冪。
+    admin 可看全部；一般顧問只看自己的。
+    """
+    user = require_user(authorization, db)
+    q = db.query(M.Payment)
+    if user.role != "admin":
+        q = q.filter(M.Payment.consultant_id == user.consultant_id)
+    rows = q.order_by(M.Payment.created_at.desc()).limit(limit).all()
+
+    out = []
+    for r in rows:
+        out.append({
+            "payment_id":        r.payment_id,
+            "order_id":          r.order_id,
+            "subject_name":      r.subject_name,
+            "subject_email":     r.subject_email,
+            "report_type":       r.report_type,
+            "description":       r.description,
+            "amount":            r.amount,
+            "provider":          r.provider,
+            "payment_method":    r.payment_method,
+            "invoice_no":        r.invoice_no,
+            "status":            r.status,
+            "session_id":        r.session_id,
+            "created_at":        r.created_at,
+            "paid_at":           r.paid_at,
+            "notes":             r.notes,
+        })
+    return {"ok": True, "count": len(out), "payments": out}

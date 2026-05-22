@@ -6744,44 +6744,67 @@ async function openProfileModal() {
 
 // 🧾 付款記錄（從本機 _historyCache + sessionStorage 簡易彙整）
 async function openPaymentsModal() {
-  // 先確保 history 載入過（要看到的是同一份資料）
-  if (!_historyCache.length) {
-    try { await refreshHistoryData(); } catch (e) {}
-  }
-  const completed = (_historyCache || []).filter(s => s.status === 1);
+  _showSettingsInfo('🧾 付款記錄', '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入中…</div>');
 
-  if (completed.length === 0) {
-    _showSettingsInfo('🧾 付款記錄',
-      `<div style="text-align:center;padding:30px 12px;color:#bbb;">
-         <div style="font-size:48px;margin-bottom:10px;">💳</div>
-         <div style="font-size:14px;font-weight:600;color:#666;">尚無付款記錄</div>
-         <div style="font-size:12px;margin-top:6px;line-height:1.5;">完成首筆腦波檢測付款後，<br>記錄會自動顯示在這裡</div>
-       </div>`);
+  let payments = [];
+  try {
+    const r = await apiFetch('/payments/my?limit=50');
+    if (r.ok) {
+      const data = await r.json();
+      payments = data.payments || [];
+    }
+  } catch (e) {}
+
+  if (payments.length === 0) {
+    document.getElementById('settings-info-body').innerHTML = `
+      <div style="text-align:center;padding:30px 12px;color:#bbb;">
+        <div style="font-size:48px;margin-bottom:10px;">💳</div>
+        <div style="font-size:14px;font-weight:600;color:#666;">尚無付款記錄</div>
+        <div style="font-size:12px;margin-top:6px;line-height:1.5;">完成首筆腦波檢測付款後，<br>記錄會自動顯示在這裡</div>
+      </div>`;
     return;
   }
 
-  let totalShown = 0;
-  let listHtml = '';
-  completed.slice(0, 30).forEach(s => {
-    const lbl = _historyReportLabel(s.report_type);
-    const date = _formatTs(s.created_at);
-    listHtml += `
-      <div style="padding:12px 0;border-bottom:1px solid #eef0f4;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-weight:600;color:#1a1a2e;font-size:13px;">${s.subject_name || '—'}</div>
-          <div style="font-size:11px;color:#888;">${date}</div>
-        </div>
-        <div style="margin-top:4px;font-size:12px;color:#666;">${lbl.icon} ${lbl.name}</div>
-      </div>`;
-    totalShown++;
-  });
+  const _statusLabel = (s) => ({
+    paid:    '<span style="color:#2e7d32;font-weight:600;">✅ 已付款</span>',
+    pending: '<span style="color:#e65100;font-weight:600;">⏳ 待付款</span>',
+    expired: '<span style="color:#999;">⌛ 已逾時</span>',
+    failed:  '<span style="color:#c62828;font-weight:600;">❌ 失敗</span>',
+    refunded:'<span style="color:#6a1b9a;font-weight:600;">↩️ 已退款</span>',
+  }[s] || `<span style="color:#888;">${s}</span>`);
 
-  const html = `
-    <div style="padding:8px 10px 12px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">
-      💡 顯示最近 ${totalShown} 筆已完成檢測。詳細金額可至「歷史紀錄」查看。
+  const _reportLabel = (rt) => {
+    const m = {
+      life_trial:'人生劇本體驗版', life_full:'人生劇本完整版', life_vip:'人生劇本VIP版',
+      child_trial:'兒童天賦體驗版', child_full:'兒童天賦完整版', child_vip:'兒童天賦VIP版',
+      test_1:'NT$1功能測試',
+    };
+    return m[rt] || rt;
+  };
+
+  const totalPaid = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+  let listHtml = payments.map(p => `
+    <div style="padding:12px;background:#f8f9fc;border-radius:10px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-weight:600;color:#1a1a2e;font-size:13px;">${p.subject_name || '—'}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px;">${_reportLabel(p.report_type)}</div>
+          ${p.invoice_no ? `<div style="font-size:11px;color:#888;margin-top:2px;">發票：${p.invoice_no}</div>` : ''}
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">${_formatTs(p.created_at)}</div>
+        </div>
+        <div style="text-align:right;min-width:80px;">
+          <div style="font-weight:700;color:#1a1a2e;font-size:14px;">NT$${p.amount.toLocaleString()}</div>
+          <div style="margin-top:4px;">${_statusLabel(p.status)}</div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('settings-info-body').innerHTML = `
+    <div style="padding:10px 12px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span>已付款合計</span>
+      <b>NT$${totalPaid.toLocaleString()}</b>
     </div>
     ${listHtml}`;
-  _showSettingsInfo('🧾 付款記錄', html);
 }
 
 // 🎧 已配對設備
