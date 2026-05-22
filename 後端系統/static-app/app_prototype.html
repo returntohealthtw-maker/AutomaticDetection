@@ -4344,50 +4344,12 @@ function showPaymentResult(status, qrScreenId) {
     btn.textContent   = "開始檢測 →";
     btn.style.display = '';
 
-    // ── 呼叫 Android 原生橋接（App 安裝版）────────────────────────────
-    if (window.AndroidBridge &&
-        typeof window.AndroidBridge.startBrainwaveDetection === 'function') {
-      btn.style.display = 'none'; // Android 自動跳轉，隱藏按鈕
-
-      // 先嘗試查詢腦波儀連線狀態（新版 Bridge 才有）。
-      // 若連線中：直接呼叫 startBrainwaveDetection（原生端會二次確認）
-      // 若沒連線：先給使用者 2.5 秒看到「準備中」訊息，再讓原生端跳「未就緒」對話框
-      let connected = true;
-      try {
-        if (typeof window.AndroidBridge.isBrainwaveConnected === 'function') {
-          connected = !!window.AndroidBridge.isBrainwaveConnected();
-        }
-      } catch (e) { connected = true; }
-
-      if (!connected) {
-        msg.innerHTML = "正在連線腦波儀…<br><span style='font-size:13px;color:#e65100;'>請確認腦波儀已開機並完成藍牙配對</span>";
-        try {
-          if (typeof window.AndroidBridge.reconnectBrainwave === 'function') {
-            window.AndroidBridge.reconnectBrainwave();
-          }
-        } catch (e) {}
-      }
-
-      const launchDelay = connected ? 800 : 2500;
-      setTimeout(() => {
-        try {
-          window.AndroidBridge.startBrainwaveDetection(
-            _currentSubjectName || '受測者',
-            _currentReportType  || 'unknown',
-            _currentOrderId     || ''
-          );
-        } catch (e) {
-          console.error('[startBrainwaveDetection]', e);
-          msg.textContent = "啟動腦波檢測失敗，請重新進入 App。";
-          btn.style.display = '';
-          btn.onclick = () => { overlay.style.display = "none"; goto("screen-home"); };
-        }
-      }, launchDelay);
-    } else {
-      // ── 瀏覽器測試 fallback：直接跳到「連接腦波設備」（已移除 MBTI 問卷）──
-      btn.onclick = () => { overlay.style.display = "none"; goto("screen-connect"); };
-      setTimeout(() => { overlay.style.display = "none"; goto("screen-connect"); }, 2000);
-    }
+    // ── 統一走 WebApp screen-connect 流程（Android / 瀏覽器相同路徑）──
+    // screen-detect 進入後會呼叫 AndroidBridge.startStreamingEeg()，
+    // 由 Java 層每秒把真實腦波資料推進 window.JSBridge.onEegSample()，
+    // WebApp 顯示圖1的自訂檢測畫面，不再跳 test.class（圖2廠商原始畫面）。
+    btn.onclick = () => { overlay.style.display = "none"; goto("screen-connect"); };
+    setTimeout(() => { overlay.style.display = "none"; goto("screen-connect"); }, 1500);
   } else if (status === "expired") {
     icon.textContent  = "⏰";
     title.textContent = "付款逾時";

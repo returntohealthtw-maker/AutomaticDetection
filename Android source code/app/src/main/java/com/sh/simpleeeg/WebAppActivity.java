@@ -282,6 +282,54 @@ public class WebAppActivity extends Activity {
         }
 
         /**
+         * HTML screen-detect 進入時呼叫。
+         * 啟動 CLS_BrainWave 並將每秒一筆的腦波資料透過 evaluateJavascript
+         * 推入 WebApp：window.JSBridge.onEegSample({attn,medi,delta,theta,alpha,beta,gamma})
+         * 如此 screen-detect 就能顯示真實資料，不再需要跳到 test.class。
+         */
+        @JavascriptInterface
+        public void startStreamingEeg() {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    if (ble == null) ble = new CLS_BrainWave();
+                    ble.SetCallback((cmd, val) -> {
+                        CLS_PARAM sp = new CLS_PARAM();
+                        if (cmd == sp.BrainwaveValue) {
+                            int attn  = CLS_DATA.iAttention;
+                            int medi  = CLS_DATA.iMeditation;
+                            int delta = bandTo100(CLS_DATA.iDelta);
+                            int theta = bandTo100(CLS_DATA.iTheta);
+                            int alpha = bandTo100((CLS_DATA.iLowAlpha + CLS_DATA.iHighAlpha) / 2);
+                            int beta  = bandTo100((CLS_DATA.iLowBeta  + CLS_DATA.iHighBeta)  / 2);
+                            int gamma = bandTo100((CLS_DATA.iLowGamma + CLS_DATA.iHighGamma) / 2);
+                            String json = String.format(
+                                "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
+                                "\"alpha\":%d,\"beta\":%d,\"gamma\":%d}",
+                                attn, medi, delta, theta, alpha, beta, gamma);
+                            webView.post(() -> webView.evaluateJavascript(
+                                "window.JSBridge&&window.JSBridge.onEegSample('" + json + "')", null));
+                        }
+                    });
+                    ble.Connect(WebAppActivity.this);
+                } catch (Throwable t) {
+                    android.util.Log.e("WebAppActivity", "startStreamingEeg", t);
+                }
+            });
+        }
+
+        /** screen-detect 離開（結束採集）時呼叫，停止推送並恢復空 callback。 */
+        @JavascriptInterface
+        public void stopStreamingEeg() {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    if (ble != null) ble.SetCallback((cmd, val) -> { /* idle */ });
+                } catch (Throwable t) {
+                    android.util.Log.e("WebAppActivity", "stopStreamingEeg", t);
+                }
+            });
+        }
+
+        /**
          * 回傳腦波儀目前電量（0-100）；未連線或無資料時回傳 -1。
          * HTML 每 10 秒輪詢一次，顯示在 status bar 右上角。
          */
@@ -428,6 +476,16 @@ public class WebAppActivity extends Activity {
         } catch (Throwable t) {
             android.util.Log.e("WebAppActivity", "connectBrainwaveSafely", t);
         }
+    }
+
+    /**
+     * BrainLink 頻帶原始功率值（0 ~ ~1,000,000）→ 0-100 log 正規化。
+     * log10(1+1)≈0.3 → ~5；log10(100001)≈5 → ~83；log10(1000001)≈6 → 100
+     */
+    private int bandTo100(int raw) {
+        if (raw <= 0) return 0;
+        double normalized = Math.log10(raw + 1) / 6.0 * 100.0;
+        return (int) Math.max(0, Math.min(100, normalized));
     }
 
     /**
