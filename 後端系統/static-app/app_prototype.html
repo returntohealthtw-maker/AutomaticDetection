@@ -1175,17 +1175,11 @@
 
               <!-- 設定區 -->
               <div style="padding:16px 20px;background:#f5f7fa;border-bottom:1px solid #e0e6f0;">
-                <div style="font-size:12px;font-weight:700;color:#1a3a6e;margin-bottom:8px;">📧 完成後的處理方式</div>
-                <label style="display:block;padding:10px 12px;background:white;border:2px solid #e0e6f0;border-radius:8px;margin-bottom:6px;cursor:pointer;" id="batch-mode-pending-label">
-                  <input type="radio" name="batch-send-mode" value="pending" checked style="margin-right:8px;">
-                  <span style="font-weight:600;color:#1a3a6e;">⏳ 進入「待核准」（推薦）</span>
-                  <div style="font-size:11px;color:#666;margin-top:4px;margin-left:22px;">完成後不寄信，由管理員到「💾 資料庫紀錄」預覽後手動點按鈕寄信</div>
-                </label>
-                <label style="display:block;padding:10px 12px;background:white;border:2px solid #e0e6f0;border-radius:8px;cursor:pointer;" id="batch-mode-auto-label">
-                  <input type="radio" name="batch-send-mode" value="auto" style="margin-right:8px;">
-                  <span style="font-weight:600;color:#d84315;">✉️ 完成後自動寄信</span>
-                  <div style="font-size:11px;color:#666;margin-top:4px;margin-left:22px;">不預覽，報告生成完直接寄到下方填寫的 email（缺 email 的會跳過寄信、留 pending）</div>
-                </label>
+                <div style="padding:12px 14px;background:#fff3e0;border:1px solid #ffb74d;border-radius:8px;font-size:12px;color:#bf360c;line-height:1.7;">
+                  <div style="font-weight:700;margin-bottom:4px;">⏳ 系統規則：所有報告都需 admin 人工審核才能寄信</div>
+                  <div>本批次重新生成完成後，會進入「<b>💾 資料庫紀錄</b>」分頁顯示為「<b>⏳ 待管理員核准寄信</b>」狀態。請務必先點「<b>🔍 預覽 PDF</b>」確認內容無誤，再點「<b>📨 預覽後寄信</b>」才會寄出。</div>
+                  <div style="margin-top:6px;font-size:11px;color:#666;">收件 email 可在下方逐筆修改；留空表示先不指定，事後可在「報告管理」補填。</div>
+                </div>
               </div>
 
               <!-- 清單區 -->
@@ -2583,38 +2577,14 @@
           <h2 style="margin-left:0;">歷史紀錄</h2>
         </div>
         <div class="filter-bar">
-          <button class="filter-chip active">全部</button>
-          <button class="filter-chip">人生劇本</button>
-          <button class="filter-chip">兒童天賦</button>
-          <button class="filter-chip">關係報告</button>
-          <button class="filter-chip">本週</button>
+          <button class="filter-chip active" data-filter="all"    onclick="setHistoryFilter('all', this)">全部</button>
+          <button class="filter-chip"        data-filter="adult"  onclick="setHistoryFilter('adult', this)">人生劇本</button>
+          <button class="filter-chip"        data-filter="child"  onclick="setHistoryFilter('child', this)">兒童天賦</button>
+          <button class="filter-chip"        data-filter="relation" onclick="setHistoryFilter('relation', this)">關係報告</button>
+          <button class="filter-chip"        data-filter="week"   onclick="setHistoryFilter('week', this)">本週</button>
         </div>
-        <div style="flex:1;overflow-y:auto;padding:12px 16px;padding-bottom:80px;">
-          <div style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500;">2026年3月</div>
-          <div class="history-item" onclick="goto('screen-results')" style="margin:0 0 10px;">
-            <div class="hi-top"><span class="hi-name">陳小明</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags"><span class="tag tag-purple">🎭 腦波分析人生劇本 · VIP版</span></div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/03 09:41 · 3分鐘 · NT$12,000</div>
-          </div>
-          <div class="history-item" style="margin:0 0 10px;">
-            <div class="hi-top"><span class="hi-name">林小花</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags"><span class="tag tag-blue">🌟 兒童腦波天賦解碼 · 完整版</span></div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/02 14:20 · 3分鐘 · NT$5,000</div>
-          </div>
-          <div class="history-item" style="margin:0 0 10px;opacity:0.7;">
-            <div class="hi-top"><span class="hi-name">張大偉</span><span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">❌ 連線失敗</span></div>
-            <div style="font-size:12px;color:#aaa;margin-top:4px;">藍牙連線中斷，未扣款</div>
-            <div style="font-size:11px;color:#bbb;margin-top:4px;">2026/03/02 09:15</div>
-          </div>
-          <div style="font-size:12px;color:#888;margin:12px 0 8px;font-weight:500;">2026年2月</div>
-          <div class="history-item" style="margin:0 0 10px;">
-            <div class="hi-top"><span class="hi-name">王小雯</span><span class="tag-status tag-done">✅ 完成</span></div>
-            <div class="hi-tags">
-              <span class="tag tag-purple">🎭 腦波分析人生劇本 · 體驗版</span>
-              <span class="tag" style="background:#fff3e0;color:#e65100;">⬆️ 已加購升級 VIP</span>
-            </div>
-            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/02/28 10:00 · 3分鐘 · NT$3,000 + NT$9,000</div>
-          </div>
+        <div id="history-list-container" style="flex:1;overflow-y:auto;padding:12px 16px;padding-bottom:80px;">
+          <div id="history-loading" style="text-align:center;padding:40px 12px;color:#bbb;font-size:13px;">載入中…</div>
         </div>
         <div class="nav-overlay">
           <div class="nav-item" onclick="goto('screen-home')"><span class="nav-icon">🏠</span><span class="nav-label">首頁</span></div>
@@ -2639,25 +2609,25 @@
           </div>
           <div class="settings-section-label">帳號管理</div>
           <div style="background:white;border-radius:0;">
-            <div class="setting-item"><span class="si-icon">👤</span><span class="si-label">個人資料</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openProfileModal()"><span class="si-icon">👤</span><span class="si-label">個人資料</span><span class="si-arrow">›</span></div>
             <div class="setting-item" onclick="openChangePassword()"><span class="si-icon">🔑</span><span class="si-label">修改密碼</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">交易</div>
           <div style="background:white;">
-            <div class="setting-item"><span class="si-icon">🧾</span><span class="si-label">付款記錄</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openPaymentsModal()"><span class="si-icon">🧾</span><span class="si-label">付款記錄</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">設備</div>
           <div style="background:white;">
-            <div class="setting-item"><span class="si-icon">🎧</span><span class="si-label">已配對設備</span><span class="si-value">1 台</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openDevicesModal()"><span class="si-icon">🎧</span><span class="si-label">已配對設備</span><span id="settings-device-count" class="si-value">— 台</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">通知</div>
           <div style="background:white;">
-            <div class="setting-item"><span class="si-icon">🔔</span><span class="si-label">報告完成通知</span><span class="si-value" style="color:#2D3561;">開啟</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="toggleReportNotification()"><span class="si-icon">🔔</span><span class="si-label">報告完成通知</span><span id="settings-notify-state" class="si-value" style="color:#2D3561;">開啟</span><span class="si-arrow">›</span></div>
           </div>
           <div class="settings-section-label">關於</div>
           <div style="background:white;">
-            <div class="setting-item"><span class="si-icon">📄</span><span class="si-label">隱私政策</span><span class="si-arrow">›</span></div>
-            <div class="setting-item"><span class="si-icon">📋</span><span class="si-label">使用條款</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openPrivacyModal()"><span class="si-icon">📄</span><span class="si-label">隱私政策</span><span class="si-arrow">›</span></div>
+            <div class="setting-item" onclick="openTermsModal()"><span class="si-icon">📋</span><span class="si-label">使用條款</span><span class="si-arrow">›</span></div>
             <div class="setting-item"><span class="si-icon">ℹ️</span><span class="si-label">版本</span><span class="si-value">v1.0.0</span></div>
           </div>
           <div style="padding:16px;">
@@ -2818,6 +2788,7 @@ function gotoIndex(idx) {
   }
   if (id === 'screen-home'     && typeof refreshHomeData     === 'function') refreshHomeData();
   if (id === 'screen-settings' && typeof refreshSettingsData === 'function') refreshSettingsData();
+  if (id === 'screen-history'  && typeof refreshHistoryData  === 'function') refreshHistoryData();
   if (id === 'screen-connect'  && typeof _populateConnectScreen === 'function') _populateConnectScreen();
   if (id === 'screen-detect'   && typeof _startEegLiveCapture   === 'function') _startEegLiveCapture();
   if (id === 'screen-reports'  && typeof _applyRolePricing      === 'function') _applyRolePricing();
@@ -2877,6 +2848,142 @@ async function refreshHomeData() {
   }
 }
 
+// ─── 歷史紀錄：動態載入該帳號的檢測場次 ─────────────────────────────────
+let _historyFilter = 'all';     // all / adult / child / relation / week
+let _historyCache  = [];        // 從後端取回的原始資料
+
+const _HISTORY_PRICE_MAP = {
+  // session.report_type → 預估金額（顯示用，無資料時不顯示）
+  // 注意：DB 只存 adult/child，無細分 trial/full/vip，因此暫不顯示金額
+};
+
+function _formatTs(epochSec) {
+  if (!epochSec) return '—';
+  const d = new Date(epochSec * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function _historyReportLabel(rt) {
+  switch (rt) {
+    case 'adult':    return { name: '腦波分析人生劇本', cls: 'tag-purple', icon: '🎭' };
+    case 'child':    return { name: '兒童腦波天賦解碼', cls: 'tag-blue',   icon: '🌟' };
+    case 'relation': return { name: '腦波共振關係報告', cls: 'tag-green',  icon: '💞' };
+    default:         return { name: rt || '檢測', cls: 'tag-purple', icon: '🧠' };
+  }
+}
+
+function setHistoryFilter(filter, btn) {
+  _historyFilter = filter;
+  document.querySelectorAll('#screen-history .filter-chip').forEach(c => c.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _renderHistoryList();
+}
+
+function _renderHistoryList() {
+  const c = document.getElementById('history-list-container');
+  if (!c) return;
+
+  // 套用篩選
+  const nowSec = Math.floor(Date.now() / 1000);
+  const weekAgo = nowSec - 7 * 86400;
+  const filtered = _historyCache.filter(s => {
+    if (_historyFilter === 'all')   return true;
+    if (_historyFilter === 'week')  return (s.created_at || 0) >= weekAgo;
+    return (s.report_type || 'adult') === _historyFilter;
+  });
+
+  if (filtered.length === 0) {
+    c.innerHTML = `
+      <div style="text-align:center;padding:60px 16px;color:#bbb;">
+        <div style="font-size:48px;margin-bottom:10px;">📭</div>
+        <div style="font-size:14px;font-weight:600;">尚無檢測紀錄</div>
+        <div style="font-size:12px;margin-top:6px;line-height:1.5;">完成一筆腦波檢測後，<br>記錄會自動顯示在這裡</div>
+      </div>`;
+    return;
+  }
+
+  // 依「年月」分組
+  const groups = {};
+  filtered.forEach(s => {
+    const d = s.created_at ? new Date(s.created_at * 1000) : new Date();
+    const key = `${d.getFullYear()}年${d.getMonth()+1}月`;
+    (groups[key] = groups[key] || []).push(s);
+  });
+
+  let html = '';
+  Object.keys(groups).forEach(monthKey => {
+    html += `<div style="font-size:12px;color:#888;margin:8px 0 8px;font-weight:500;">${monthKey}</div>`;
+    groups[monthKey].forEach(s => {
+      const lbl = _historyReportLabel(s.report_type);
+      const isSuccess = s.status === 1;
+      const reportDone = s.report_status === 'completed' && s.report_url;
+      let statusTag, extraNote = '', reportTagsHtml = '';
+      if (!isSuccess) {
+        statusTag = `<span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">❌ 失敗</span>`;
+        if (s.failure_reason) extraNote = `<div style="font-size:12px;color:#aaa;margin-top:4px;">${s.failure_reason}</div>`;
+      } else if (reportDone) {
+        statusTag = `<span class="tag-status tag-done">✅ 報告完成</span>`;
+      } else if (s.report_status === 'processing') {
+        statusTag = `<span class="tag-status" style="background:#fff8e1;color:#f57c00;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">⏳ 生成中</span>`;
+      } else {
+        statusTag = `<span class="tag-status tag-done">✅ 檢測完成</span>`;
+      }
+
+      reportTagsHtml = `<div class="hi-tags"><span class="tag ${lbl.cls}">${lbl.icon} ${lbl.name}</span></div>`;
+
+      const subjAge = s.subject_age ? ` · ${s.subject_age}歲` : '';
+      const dateStr = _formatTs(s.created_at);
+      const captures = s.total_captures ? ` · ${s.total_captures} 筆` : '';
+      const reportLink = reportDone
+        ? `<a href="${s.report_url}" target="_blank" style="color:#2D3561;font-weight:600;text-decoration:none;font-size:12px;">📄 查看報告 →</a>`
+        : '';
+
+      html += `
+        <div class="history-item" style="margin:0 0 10px;${isSuccess ? '' : 'opacity:0.7;'}">
+          <div class="hi-top">
+            <span class="hi-name">${s.subject_name || '—'}${subjAge}</span>
+            ${statusTag}
+          </div>
+          ${reportTagsHtml}
+          ${extraNote}
+          <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures}</div>
+          ${reportLink ? `<div style="margin-top:8px;">${reportLink}</div>` : ''}
+        </div>`;
+    });
+  });
+  c.innerHTML = html;
+}
+
+async function refreshHistoryData() {
+  const c = document.getElementById('history-list-container');
+  if (!c) return;
+  c.innerHTML = `<div style="text-align:center;padding:40px 12px;color:#bbb;font-size:13px;">載入中…</div>`;
+
+  const user = _currentUser || _getAuth();
+  if (!user || !user.token) {
+    c.innerHTML = `
+      <div style="text-align:center;padding:60px 16px;color:#bbb;">
+        <div style="font-size:48px;margin-bottom:10px;">🔒</div>
+        <div style="font-size:14px;font-weight:600;">請先登入</div>
+      </div>`;
+    return;
+  }
+
+  try {
+    const r = await apiFetch('/eeg/sessions?limit=100');
+    if (!r.ok) {
+      c.innerHTML = `<div style="text-align:center;padding:40px 12px;color:#c62828;font-size:13px;">載入失敗：HTTP ${r.status}</div>`;
+      return;
+    }
+    const data = await r.json();
+    _historyCache = (data && data.sessions) || [];
+    _renderHistoryList();
+  } catch (e) {
+    c.innerHTML = `<div style="text-align:center;padding:40px 12px;color:#c62828;font-size:13px;">連線失敗：${e.message}</div>`;
+  }
+}
+
 async function refreshSettingsData() {
   const nameEl  = document.getElementById('settings-name-display');
   const phoneEl = document.getElementById('settings-phone-display');
@@ -2903,6 +3010,30 @@ async function refreshSettingsData() {
       if (valEl) valEl.textContent = `${subs.length} 位`;
     }
   } catch (e) { /* 已被 apiFetch 401 處理 */ }
+
+  // 通知開關顯示
+  try {
+    const notifEl = document.getElementById('settings-notify-state');
+    if (notifEl) {
+      const on = _getNotifPref();
+      notifEl.textContent = on ? '開啟' : '關閉';
+      notifEl.style.color = on ? '#2D3561' : '#888';
+    }
+  } catch (e) {}
+
+  // 已配對設備數（以 localStorage + 當前 BLE 連線推估）
+  try {
+    const devEl = document.getElementById('settings-device-count');
+    if (devEl) {
+      let count = 0;
+      try {
+        const raw = localStorage.getItem('paired_devices');
+        if (raw) count += (JSON.parse(raw) || []).length;
+      } catch (e) {}
+      if (window._btDevice && window._btDevice.name) count = Math.max(count, 1);
+      devEl.textContent = `${count} 台`;
+    }
+  } catch (e) {}
 }
 
 // openChangePassword 由頁底 modal 區的 script 覆寫成 modal 版本（避免使用 prompt() 體驗差）
@@ -5407,7 +5538,7 @@ async function _regenerateSessionReport(sessionId, subjectName) {
   }
 }
 
-// ─── 批次重新生成 modal ─────────────────────────────────────────────────
+// ─── 批次重新生成 modal（強制走人工核准，無自動寄信選項）──────────────
 function _openBatchRegenerateModal() {
   if (_missingSelected.size === 0) return;
   const items = _missingCache.filter(s => _missingSelected.has(s.session_id));
@@ -5418,19 +5549,9 @@ function _openBatchRegenerateModal() {
       <div style="width:28px;color:#999;font-size:11px;">${i + 1}</div>
       <div style="width:60px;font-size:11px;color:#1976d2;font-family:monospace;">#${s.session_id}</div>
       <div style="flex:1;font-size:12px;font-weight:600;color:#1a3a6e;">${s.subject_name || '(未知)'}</div>
-      <input type="email" class="batch-email-input" data-sid="${s.session_id}" value="${s.notify_email || ''}" placeholder="留空 = 不寄信" style="flex:1.3;padding:5px 8px;border:1px solid #c5d0e0;border-radius:4px;font-size:11px;">
+      <input type="email" class="batch-email-input" data-sid="${s.session_id}" value="${s.notify_email || ''}" placeholder="留空 = 之後再補" style="flex:1.3;padding:5px 8px;border:1px solid #c5d0e0;border-radius:4px;font-size:11px;">
     </div>
   `).join('');
-  // radio 視覺
-  const updateRadioStyle = () => {
-    const mode = document.querySelector('input[name="batch-send-mode"]:checked')?.value;
-    document.getElementById('batch-mode-pending-label').style.borderColor = mode === 'pending' ? '#7e57c2' : '#e0e6f0';
-    document.getElementById('batch-mode-pending-label').style.background  = mode === 'pending' ? '#f3eafa' : 'white';
-    document.getElementById('batch-mode-auto-label').style.borderColor    = mode === 'auto'    ? '#d84315' : '#e0e6f0';
-    document.getElementById('batch-mode-auto-label').style.background     = mode === 'auto'    ? '#fff3e0' : 'white';
-  };
-  document.querySelectorAll('input[name="batch-send-mode"]').forEach(r => r.addEventListener('change', updateRadioStyle));
-  updateRadioStyle();
   document.getElementById('batch-regen-status').textContent = '';
   document.getElementById('batch-regen-modal').style.display = 'flex';
 }
@@ -5449,20 +5570,6 @@ async function _submitBatchRegenerate() {
     alert('未選任何受測者');
     return;
   }
-  const mode = document.querySelector('input[name="batch-send-mode"]:checked')?.value || 'pending';
-  const auto_send = mode === 'auto' ? 1 : 0;
-  // 自動寄信時警告未填 email 的
-  if (auto_send) {
-    const noEmail = items.filter(it => !it.notify_email);
-    if (noEmail.length === items.length) {
-      alert('「自動寄信」模式下所有人都沒填 email — 沒人會收到信。請改填 email 或改回「待核准」模式。');
-      return;
-    }
-    if (noEmail.length > 0 &&
-      !confirm(`有 ${noEmail.length} 筆未填 email，這些將不會寄信（會留 pending）。其餘 ${items.length - noEmail.length} 筆會自動寄信。\n\n繼續嗎？`)) {
-      return;
-    }
-  }
   const btn = document.getElementById('batch-regen-submit');
   const statusEl = document.getElementById('batch-regen-status');
   btn.disabled = true; btn.textContent = '⏳ 處理中...'; btn.style.opacity = '0.6'; btn.style.cursor = 'wait';
@@ -5471,7 +5578,7 @@ async function _submitBatchRegenerate() {
     const r = await apiFetch('/reports/sessions/regenerate-batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, auto_send, variant: 'full' }),
+      body: JSON.stringify({ items, variant: 'full' }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -5481,7 +5588,7 @@ async function _submitBatchRegenerate() {
       return;
     }
     const failed = (data.results || []).filter(x => !x.ok);
-    let msg = `✅ 已觸發 ${data.success}/${data.total} 筆\n${auto_send ? '完成後將自動寄信' : '完成後請至「💾 資料庫紀錄」預覽後手動寄信'}\n\n進度請到「🔍 生成監看」分頁查看`;
+    let msg = `✅ 已觸發 ${data.success}/${data.total} 筆\n\n完成後請至「💾 資料庫紀錄」預覽後手動點「📨 預覽後寄信」。\n進度可在「🔍 生成監看」分頁查看。`;
     if (failed.length) {
       msg += `\n\n❌ 失敗：${failed.length} 筆\n` + failed.map(f => `- Session #${f.session_id} (${f.subject_name || '?'})：${f.error}`).slice(0, 10).join('\n');
     }
@@ -6324,6 +6431,20 @@ fitPhone();
   </div>
 </div>
 
+<!-- ═════════════════ 通用設定 Modal（個資 / 付款記錄 / 設備 / 政策 / 條款）═════════════════ -->
+<div id="settings-info-modal" class="modal-overlay" role="dialog" aria-hidden="true">
+  <div class="modal-card" style="max-width:420px;">
+    <div class="modal-header">
+      <div id="settings-info-title" class="modal-title">標題</div>
+      <div id="settings-info-sub"   class="modal-sub" style="display:none;"></div>
+    </div>
+    <div id="settings-info-body" class="modal-body" style="max-height:60vh;overflow-y:auto;font-size:13px;line-height:1.6;color:#333;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" type="button" onclick="closeSettingsInfoModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═════════════════ Toast 通知容器 ═════════════════ -->
 <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
@@ -6442,6 +6563,197 @@ async function submitChangePassword() {
 
 // 取代舊版用 prompt() 的 openChangePassword
 window.openChangePassword = function() { openChangePasswordModal({ force: false }); };
+
+// ────────────────────────────────────────────────────────────────────────
+// 設定頁：通用資訊 Modal
+// ────────────────────────────────────────────────────────────────────────
+function _showSettingsInfo(title, bodyHtml, subText) {
+  const m = document.getElementById('settings-info-modal');
+  if (!m) return;
+  document.getElementById('settings-info-title').textContent = title || '';
+  const sub = document.getElementById('settings-info-sub');
+  if (subText) { sub.textContent = subText; sub.style.display = 'block'; }
+  else         { sub.textContent = '';      sub.style.display = 'none'; }
+  document.getElementById('settings-info-body').innerHTML = bodyHtml || '';
+  m.classList.add('show');
+  m.setAttribute('aria-hidden', 'false');
+}
+
+function closeSettingsInfoModal() {
+  const m = document.getElementById('settings-info-modal');
+  if (!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden', 'true');
+}
+
+// 👤 個人資料
+async function openProfileModal() {
+  const user = _currentUser || _getAuth();
+  if (!user) { showToast('請先登入', 'warn'); return; }
+  // 嘗試刷新最新資料
+  let me = user;
+  try {
+    const r = await apiFetch('/auth/me');
+    if (r.ok) me = await r.json();
+  } catch (e) {}
+
+  const rowStyle = 'padding:10px 0;border-bottom:1px solid #eef0f4;display:flex;justify-content:space-between;';
+  const labelStyle = 'color:#888;font-size:12px;';
+  const valStyle = 'color:#1a1a2e;font-weight:600;font-size:13px;text-align:right;max-width:60%;word-break:break-all;';
+  const roleLabel = me.role === 'admin' ? '👑 管理員' : '顧問';
+  const orgLine = me.org ? `<div style="${rowStyle}"><span style="${labelStyle}">所屬單位</span><span style="${valStyle}">${(me.org_type ? me.org_type + ' · ' : '') + me.org}</span></div>` : '';
+  const html = `
+    <div style="${rowStyle}"><span style="${labelStyle}">姓名</span><span style="${valStyle}">${me.name || '—'}</span></div>
+    <div style="${rowStyle}"><span style="${labelStyle}">身份</span><span style="${valStyle}">${roleLabel}</span></div>
+    <div style="${rowStyle}"><span style="${labelStyle}">手機</span><span style="${valStyle}">${me.phone || '—'}</span></div>
+    <div style="${rowStyle}"><span style="${labelStyle}">Email</span><span style="${valStyle}">${me.email || '—'}</span></div>
+    ${orgLine}
+    <div style="margin-top:14px;padding:10px 12px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#555;line-height:1.6;">
+      💡 如需修改姓名、Email 或所屬單位，請聯絡系統管理員。
+    </div>`;
+  _showSettingsInfo('👤 個人資料', html);
+}
+
+// 🧾 付款記錄（從本機 _historyCache + sessionStorage 簡易彙整）
+async function openPaymentsModal() {
+  // 先確保 history 載入過（要看到的是同一份資料）
+  if (!_historyCache.length) {
+    try { await refreshHistoryData(); } catch (e) {}
+  }
+  const completed = (_historyCache || []).filter(s => s.status === 1);
+
+  if (completed.length === 0) {
+    _showSettingsInfo('🧾 付款記錄',
+      `<div style="text-align:center;padding:30px 12px;color:#bbb;">
+         <div style="font-size:48px;margin-bottom:10px;">💳</div>
+         <div style="font-size:14px;font-weight:600;color:#666;">尚無付款記錄</div>
+         <div style="font-size:12px;margin-top:6px;line-height:1.5;">完成首筆腦波檢測付款後，<br>記錄會自動顯示在這裡</div>
+       </div>`);
+    return;
+  }
+
+  let totalShown = 0;
+  let listHtml = '';
+  completed.slice(0, 30).forEach(s => {
+    const lbl = _historyReportLabel(s.report_type);
+    const date = _formatTs(s.created_at);
+    listHtml += `
+      <div style="padding:12px 0;border-bottom:1px solid #eef0f4;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:600;color:#1a1a2e;font-size:13px;">${s.subject_name || '—'}</div>
+          <div style="font-size:11px;color:#888;">${date}</div>
+        </div>
+        <div style="margin-top:4px;font-size:12px;color:#666;">${lbl.icon} ${lbl.name}</div>
+      </div>`;
+    totalShown++;
+  });
+
+  const html = `
+    <div style="padding:8px 10px 12px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">
+      💡 顯示最近 ${totalShown} 筆已完成檢測。詳細金額可至「歷史紀錄」查看。
+    </div>
+    ${listHtml}`;
+  _showSettingsInfo('🧾 付款記錄', html);
+}
+
+// 🎧 已配對設備
+function openDevicesModal() {
+  let devices = [];
+  try {
+    const raw = localStorage.getItem('paired_devices');
+    if (raw) devices = JSON.parse(raw) || [];
+  } catch (e) {}
+
+  // 從現有的 BLE 連線狀態推測：若 window._btDevice 還在則加進去
+  try {
+    if (window._btDevice && window._btDevice.name) {
+      const exists = devices.find(d => d.name === window._btDevice.name);
+      if (!exists) devices.push({ name: window._btDevice.name, type: 'BLE', last_used: Date.now() });
+    }
+  } catch (e) {}
+
+  if (devices.length === 0) {
+    _showSettingsInfo('🎧 已配對設備',
+      `<div style="text-align:center;padding:24px 12px;color:#bbb;">
+         <div style="font-size:48px;margin-bottom:10px;">📡</div>
+         <div style="font-size:14px;font-weight:600;color:#666;">尚未配對任何設備</div>
+         <div style="font-size:12px;margin-top:6px;line-height:1.6;color:#888;">請在「開始檢測」流程中點擊<br>「連接腦波設備」進行藍牙配對</div>
+       </div>`);
+    return;
+  }
+
+  let html = '';
+  devices.forEach(d => {
+    const last = d.last_used ? new Date(d.last_used).toLocaleString('zh-TW', { hour12: false }) : '—';
+    html += `
+      <div style="padding:12px;background:#f8f9fc;border-radius:10px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;">🎧 ${d.name}</div>
+            <div style="font-size:11px;color:#888;margin-top:2px;">${d.type || 'BLE'} · 上次使用 ${last}</div>
+          </div>
+          <span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;">已配對</span>
+        </div>
+      </div>`;
+  });
+  html += `<div style="margin-top:8px;padding:10px 12px;background:#fff8e1;border-radius:8px;font-size:12px;color:#666;line-height:1.6;">⚠️ 若要解除配對，請至手機系統「設定 → 藍牙」操作。</div>`;
+  _showSettingsInfo('🎧 已配對設備', html);
+}
+
+// 🔔 報告完成通知（localStorage 切換）
+function _getNotifPref() {
+  try {
+    const v = localStorage.getItem('notify_report_done');
+    return v === null ? true : v === '1';
+  } catch (e) { return true; }
+}
+function _setNotifPref(on) {
+  try { localStorage.setItem('notify_report_done', on ? '1' : '0'); } catch (e) {}
+}
+function toggleReportNotification() {
+  const cur = _getNotifPref();
+  const next = !cur;
+  _setNotifPref(next);
+  const el = document.getElementById('settings-notify-state');
+  if (el) { el.textContent = next ? '開啟' : '關閉'; el.style.color = next ? '#2D3561' : '#888'; }
+  showToast(next ? '✅ 已開啟報告完成通知' : '已關閉報告完成通知', 'ok', 2500);
+}
+
+// 📄 隱私政策
+function openPrivacyModal() {
+  _showSettingsInfo('📄 隱私政策',
+    `<p><b>線上腦波分析系統（onlineReport）尊重並保護所有使用者個人資料。</b></p>
+     <h4 style="margin:12px 0 4px;">1. 蒐集的資料</h4>
+     <p>檢測時記錄之腦波統計（不含原始波形）、受測者基本資料（姓名、出生年月日、性別、Email、手機）、檢測時間與生成之報告。</p>
+     <h4 style="margin:12px 0 4px;">2. 使用目的</h4>
+     <p>用於生成個人化分析報告、寄送報告連結至受測者 Email、以及未來再次檢測時的歷史對照。</p>
+     <h4 style="margin:12px 0 4px;">3. 保存與銷毀</h4>
+     <p>資料儲存於受 ISO 27001 認證之雲端服務（Google Cloud），保存期限預設為三年；受測者可隨時來信申請刪除。</p>
+     <h4 style="margin:12px 0 4px;">4. 第三方分享</h4>
+     <p>除法律規定外，未經您同意，本系統不會將個資提供給第三方。</p>
+     <h4 style="margin:12px 0 4px;">5. 聯絡我們</h4>
+     <p>如對隱私有任何疑問，請來信 <a href="mailto:support@onlinereport.tw">support@onlinereport.tw</a>。</p>
+     <p style="margin-top:14px;color:#888;font-size:11px;">最後更新：2026/05</p>`);
+}
+
+// 📋 使用條款
+function openTermsModal() {
+  _showSettingsInfo('📋 使用條款',
+    `<p><b>歡迎使用「線上腦波分析系統 onlineReport」。</b>使用本系統前請詳閱以下條款。</p>
+     <h4 style="margin:12px 0 4px;">1. 服務內容</h4>
+     <p>本系統提供腦波檢測、AI 個性化分析報告生成、報告寄送、歷史紀錄查詢等服務。</p>
+     <h4 style="margin:12px 0 4px;">2. 使用者責任</h4>
+     <p>使用者應確保所提供之受測者資料正確無誤，並取得受測者本人或法定代理人同意進行檢測。</p>
+     <h4 style="margin:12px 0 4px;">3. 報告性質</h4>
+     <p>本系統產出之報告為「身心狀態參考」，<b>非醫療診斷</b>。如有臨床需求，請諮詢專業醫師或心理師。</p>
+     <h4 style="margin:12px 0 4px;">4. 付款與退款</h4>
+     <p>檢測費用於確認付款後執行；報告生成後無法退款。若因系統錯誤導致報告無法產出，本系統將全額退款或補做。</p>
+     <h4 style="margin:12px 0 4px;">5. 智慧財產權</h4>
+     <p>本系統之 UI、演算法、報告版型皆受著作權保護，不得擅自複製、轉售或公開展示。</p>
+     <h4 style="margin:12px 0 4px;">6. 條款修改</h4>
+     <p>本系統保留隨時修改條款之權利，修改後將於本頁公告，繼續使用視為同意新條款。</p>
+     <p style="margin-top:14px;color:#888;font-size:11px;">最後更新：2026/05</p>`);
+}
 
 // 登入完成後自動檢查是否仍使用初始密碼，是的話強制彈窗
 function _maybePromptInitialPwdChange() {

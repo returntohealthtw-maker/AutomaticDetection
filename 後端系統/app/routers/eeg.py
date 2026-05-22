@@ -126,14 +126,26 @@ def list_my_sessions(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """列出此顧問所做過的檢測場次（依姓名比對；admin 看全部）"""
+    """列出此顧問所做過的檢測場次（依姓名比對；admin 看全部）
+
+    回傳欄位含 report_status / report_url，供 APP「歷史紀錄」顯示。
+    """
     user = require_user(authorization, db)
     q = db.query(M.Session)
     if user.role != "admin":
         q = q.filter(M.Session.consultant_name == user.name)
     rows = q.order_by(M.Session.session_id.desc()).limit(limit).all()
+
+    session_ids = [s.session_id for s in rows]
+    report_map = {}
+    if session_ids:
+        rep_rows = db.query(M.Report).filter(M.Report.session_id.in_(session_ids)).all()
+        for r in rep_rows:
+            report_map[r.session_id] = r
+
     out = []
     for s in rows:
+        rep = report_map.get(s.session_id)
         out.append({
             "session_id":    s.session_id,
             "consultant":    s.consultant_name,
@@ -141,8 +153,13 @@ def list_my_sessions(
             "subject_age":   s.subject_age,
             "subject_gender":s.subject_gender,
             "report_type":   s.report_type,
+            "report_audience": s.report_audience,
             "total_captures":s.total_captures,
             "created_at":    s.created_at,
             "status":        s.status,
+            "failure_reason":s.failure_reason,
+            "report_status": (rep.status if rep else None),
+            "report_url":    (rep.pdf_url if rep else None),
+            "report_variant":(getattr(rep, "variant", None) if rep else None),
         })
     return {"ok": True, "count": len(out), "sessions": out}
