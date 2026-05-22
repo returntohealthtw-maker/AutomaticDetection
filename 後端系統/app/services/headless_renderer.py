@@ -148,6 +148,7 @@ def start_headless_job(
         "variant":    variant,
         "api_base":   api_base or "",
         "session_id": str(session_id or ""),
+        "report_type": report_type,
         "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
         "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
         "theta":      int(ba.get("theta", 50)),
@@ -158,6 +159,11 @@ def start_headless_job(
         "highGamma":  int(min(100, ba.get("gamma", 50) * 1.1)),
         "lowGamma":   int(max(0,   ba.get("gamma", 50) * 0.9)),
     }
+    # 把 REPORTS_INGEST_SECRET 一併帶到 URL，讓 React app 在 callback /events 與 /record 時
+    # 能加上 X-Ingest-Secret header（否則後端有設 secret 時會被 401 擋掉，導致監看 + 報告管理都看不到資料）
+    ingest_secret = os.environ.get("REPORTS_INGEST_SECRET", "").strip()
+    if ingest_secret:
+        params["ingest_secret"] = ingest_secret
     target_url = f"{vercel_base.rstrip('/')}/?{urlencode(params)}"
 
     # 紀錄
