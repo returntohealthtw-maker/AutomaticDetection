@@ -2,14 +2,29 @@ apply plugin: 'com.android.application'
 
 android {
     namespace 'com.sh.simpleeeg'
+    // testNamespace 預設 = namespace + ".test" = "com.sh.simpleeeg.test"，
+    // 跟主程式碼裡的 class `com.sh.simpleeeg.test` 撞名（package vs class clashes）。
+    // 必須顯式指定一個不衝突的 namespace。
+    testNamespace 'com.sh.simpleeeg.androidtest'
     compileSdkVersion 33
+
+    // AGP 8.x 預設不再自動產生 BuildConfig；WebAppActivity / AppUpdater 都用到了
+    // BuildConfig.VERSION_NAME / VERSION_CODE / DEBUG，必須打開。
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId "com.sh.simpleeeg"
+        // 主程式碼有一個叫 `test` 的 class（com.sh.simpleeeg.test），預設
+        // testApplicationId = applicationId + ".test" 會讓 androidTest 的
+        // BuildConfig 落到 `com.sh.simpleeeg.test` package，跟 class test
+        // 名稱衝突（package vs class clashes）。改成獨立後綴避免衝突。
+        testApplicationId "com.sh.simpleeeg.androidtest"
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -37,6 +52,18 @@ android {
         exclude 'META-INF/DEPENDENCIES'
         exclude 'META-INF/LICENSE'
         exclude 'META-INF/NOTICE'
+    }
+
+    // 主程式碼有一個叫 `test` 的 class（com.sh.simpleeeg.test）。androidTest 變體
+    // 在這個 namespace 下產生 BuildConfig 就會出現「package com.sh.simpleeeg.test
+    // clashes with class」。我們完全不跑 instrumented tests，直接把該 sourceSet
+    // 清空，等於跳過 :app:compileDebugAndroidTestJavaWithJavac。
+    sourceSets {
+        androidTest {
+            java.srcDirs = []
+            res.srcDirs = []
+            assets.srcDirs = []
+        }
     }
 }
 

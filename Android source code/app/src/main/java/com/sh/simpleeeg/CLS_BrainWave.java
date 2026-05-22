@@ -60,6 +60,12 @@ public class CLS_BrainWave
         }
     }
     //===================================================
+    /** 安全查詢：腦波儀是否已連線（不會丟出例外） */
+    public boolean bConnectedSafe(){
+        try { return clsEeg.bConnected(); }
+        catch (Throwable t) { return false; }
+    }
+    //===================================================
     private class ThreadProcess extends Thread
     {
         @Override
@@ -82,10 +88,12 @@ public class CLS_BrainWave
                 clsData.SetBrainData(clsEeg.iGoodSignal(), clsEeg.iAttention(), clsEeg.iMeditation(),
                         clsEeg.iDelta(), clsEeg.iTheta(),clsEeg.iLowAlpha(), clsEeg.iHighAlpha(),
                         clsEeg.iLowBeta(), clsEeg.iHighBeta(), clsEeg.iLowGamma(), clsEeg.iHighGamma());
-                m_Callback.Do(S.BrainwaveValue, 0);
+                if (m_Callback != null)
+                    m_Callback.Do(S.BrainwaveValue, 0);
             }
             else{
-                m_Callback.Do(S.BrainwaveDisconnected, 0);
+                if (m_Callback != null)
+                    m_Callback.Do(S.BrainwaveDisconnected, 0);
             }
         }
     }

@@ -54,3 +54,10 @@ ngrok.exe
 # Local-only review/test files
 _reports_review/
 測試報告.pdf
+
+# 開發暫存檔（railway logs、status dump、build log）
+_status.json
+diag.json
+*_build*.log
+*build.log
+後端系統/_build*.log

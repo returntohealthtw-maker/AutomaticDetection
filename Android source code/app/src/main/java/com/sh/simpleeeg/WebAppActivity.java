@@ -1,13 +1,18 @@
 package com.sh.simpleeeg;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,6 +31,8 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import androidx.core.app.ActivityCompat;
+
 import com.sh.simpleeeg.BuildConfig;
 
 public class WebAppActivity extends Activity {
@@ -40,6 +47,13 @@ public class WebAppActivity extends Activity {
     private TextView tvLoading;
 
     private final CLS_DATA clsData = new CLS_DATA();
+
+    /** 全域單一藍牙物件，否則每次 new CLS_BrainWave 雖然 static thread 還在，
+     *  但 m_Callback / clsEeg 可能被 GC，導致連線資訊遺失。 */
+    private CLS_BrainWave ble;
+
+    private static final int REQ_PERMISSION_BLE     = 1111;
+    private static final int REQ_PERMISSION_STORAGE = 1;
 
     @SuppressLint({"SetJavaScriptEnabled", "SourceLockedOrientationActivity"})
     @Override
@@ -61,15 +75,9 @@ public class WebAppActivity extends Activity {
         clsData.setTeacherName(consultant);
         CLS_DB.getInstance().setConsultantName(consultant);
 
-        // 啟動藍牙連線（必須先 SetCallback，否則 Connect 失敗時會 NullPointerException 崩潰）
-        try {
-            CLS_BrainWave ble = new CLS_BrainWave();
-            ble.SetCallback((cmd, val) -> { /* WebView 啟動頁不需處理訊號 */ });
-            ble.Connect(this);
-        } catch (Throwable t) {
-            // 藍牙尚未開啟或權限不足時不應讓 App 崩潰
-            android.util.Log.e("WebAppActivity", "BrainWave connect", t);
-        }
+        // 先請求權限 → 再嘗試藍牙連線（首次安裝最關鍵的一步）
+        ensureRuntimePermissions();
+        connectBrainwaveSafely();
 
         // 啟動時自動檢查 APK 是否有新版（背景執行，不阻塞主畫面）
         try {
@@ -226,14 +234,26 @@ public class WebAppActivity extends Activity {
                 clsData.listRecordingTime().add(rt);
                 clsData.NewListSectionData();
 
-                // 啟動腦波檢測 Activity（test.java）
-                Intent intent = new Intent(WebAppActivity.this, test.class);
-                intent.putExtra("subjectName", subjectName);
-                intent.putExtra("reportType",  reportType);
-                intent.putExtra("orderId",     orderId);
-                startActivityForResult(intent, REQUEST_BRAINWAVE);
-                overridePendingTransition(0, 0);
+                // ── 連線檢查：避免「跑 3 分鐘卻沒有任何訊號」的空轉檢測 ─────
+                if (!isBrainwaveReady()) {
+                    showBrainwaveNotReadyDialog(subjectName, reportType, orderId);
+                    return;
+                }
+
+                launchBrainwaveActivity(subjectName, reportType, orderId);
             });
+        }
+
+        /** HTML 端可隨時詢問腦波儀是否已就緒（藍牙開啟+權限+裝置已配對+連線中） */
+        @JavascriptInterface
+        public boolean isBrainwaveConnected() {
+            return isBrainwaveReady();
+        }
+
+        /** 由 HTML 呼叫主動嘗試重連（使用者按「重新連線腦波儀」時） */
+        @JavascriptInterface
+        public void reconnectBrainwave() {
+            new Handler(Looper.getMainLooper()).post(() -> connectBrainwaveSafely());
         }
 
         /** 供 HTML 查詢顧問姓名 */
@@ -316,5 +336,136 @@ public class WebAppActivity extends Activity {
             webView = null;
         }
         super.onDestroy();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  權限請求（Android 12+ 必須動態要 BLUETOOTH_CONNECT/SCAN，否則
+    //  ble.Connect() 會 silently fail，使用者付完款後腦波儀完全連不上）
+    // ═══════════════════════════════════════════════════════════════════
+    private void ensureRuntimePermissions() {
+        try {
+            if (Build.VERSION.SDK_INT < 23) return;
+
+            if (Build.VERSION.SDK_INT <= 29) {
+                if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    }, REQ_PERMISSION_STORAGE);
+                }
+            } else {
+                java.util.List<String> need = new java.util.ArrayList<>();
+                if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    need.add(Manifest.permission.BLUETOOTH_CONNECT);
+                }
+                if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    need.add(Manifest.permission.BLUETOOTH_SCAN);
+                }
+                if (!need.isEmpty()) {
+                    ActivityCompat.requestPermissions(this,
+                            need.toArray(new String[0]), REQ_PERMISSION_BLE);
+                }
+            }
+        } catch (Throwable t) {
+            android.util.Log.e("WebAppActivity", "ensureRuntimePermissions", t);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_PERMISSION_BLE || requestCode == REQ_PERMISSION_STORAGE) {
+            // 權限結果不論是否全給，都嘗試一次連線；若被拒，後續流程會在
+            // startBrainwaveDetection 時跳「未就緒」對話框引導使用者重試
+            connectBrainwaveSafely();
+        }
+    }
+
+    /** 嘗試藍牙連線（容錯：權限不足/藍牙關閉/腦波儀未配對都不會 crash） */
+    private void connectBrainwaveSafely() {
+        try {
+            if (ble == null) ble = new CLS_BrainWave();
+            ble.SetCallback((cmd, val) -> { /* 啟動頁不需處理具體訊號 */ });
+            ble.Connect(this);
+        } catch (Throwable t) {
+            android.util.Log.e("WebAppActivity", "connectBrainwaveSafely", t);
+        }
+    }
+
+    /**
+     * 判斷腦波儀是否就緒：
+     *  1. Android 12+ 需有 BLUETOOTH_CONNECT 權限
+     *  2. 藍牙必須開啟
+     *  3. CLS_EEG 已連線（clsRaw.bConnected()）
+     */
+    private boolean isBrainwaveReady() {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                        != PackageManager.PERMISSION_GRANTED) return false;
+            }
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter == null || !adapter.isEnabled()) return false;
+
+            // CLS_BrainWave 內部的 clsEeg 是 instance 欄位，但 bConnected() 走 clsRaw（static）
+            CLS_BrainWave probe = (ble != null) ? ble : new CLS_BrainWave();
+            return probe.bConnectedSafe();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 腦波儀未就緒時的友善對話框（避免使用者付完款卻看到「空跡 3 分鐘」）。
+     * 提供：重新連線 / 仍要繼續 / 取消三個選項。
+     */
+    private void showBrainwaveNotReadyDialog(final String subjectName,
+                                             final String reportType,
+                                             final String orderId) {
+        BluetoothAdapter adapter = null;
+        try { adapter = BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+        boolean btOff = (adapter == null || !adapter.isEnabled());
+        boolean noPerm = (Build.VERSION.SDK_INT >= 31)
+                && (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED);
+
+        String reason;
+        if (noPerm)       reason = "尚未授權藍牙連線權限";
+        else if (btOff)   reason = "藍牙尚未開啟";
+        else              reason = "尚未偵測到腦波儀（請確認 BrainLink/MindWave 已開機並完成藍牙配對）";
+
+        new AlertDialog.Builder(this)
+                .setTitle("腦波儀尚未就緒")
+                .setMessage("檢測無法立即啟動，原因：\n  " + reason
+                        + "\n\n您的付款已完成，可以稍後在此頁面重新開始檢測。")
+                .setCancelable(false)
+                .setPositiveButton("重新連線", (d, w) -> {
+                    if (noPerm) ensureRuntimePermissions();
+                    connectBrainwaveSafely();
+                    // 隔 1.5 秒再讓使用者點開始（給藍牙握手時間）
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        if (isBrainwaveReady()) {
+                            launchBrainwaveActivity(subjectName, reportType, orderId);
+                        } else {
+                            showBrainwaveNotReadyDialog(subjectName, reportType, orderId);
+                        }
+                    }, 1500);
+                })
+                .setNeutralButton("仍要繼續（無腦波訊號）", (d, w) ->
+                        launchBrainwaveActivity(subjectName, reportType, orderId))
+                .setNegativeButton("稍後再說", (d, w) -> { /* 留在 WebView 首頁 */ })
+                .show();
+    }
+
+    private void launchBrainwaveActivity(String subjectName, String reportType, String orderId) {
+        Intent intent = new Intent(WebAppActivity.this, test.class);
+        intent.putExtra("subjectName", subjectName);
+        intent.putExtra("reportType",  reportType);
+        intent.putExtra("orderId",     orderId);
+        startActivityForResult(intent, REQUEST_BRAINWAVE);
+        overridePendingTransition(0, 0);
     }
 }

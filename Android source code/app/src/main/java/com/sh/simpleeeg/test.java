@@ -2,6 +2,7 @@ package com.sh.simpleeeg;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -40,6 +41,13 @@ public class test extends Activity {
 
     static double dX = 0;
 
+    /** 腦波儀目前是否在送資料；給 ThreadCount 即時顯示「無訊號」警示 */
+    static volatile long lLastSignalTimeMs = 0;
+    /** 連線狀態文字（顯示在倒數計時下方） */
+    static volatile String strLinkState = "等待腦波儀訊號…";
+    /** 是否已彈過「無訊號」警告 */
+    static volatile boolean bWarnedNoSignal = false;
+
     static ThreadMsg mThreadMsg;//改用自訂thread方式處理msg,取代原有 static msg 複雜的方式
     static Handler mHandlerMsg = new Handler();
     static List<Integer> listMsg = new ArrayList<Integer>();
@@ -67,6 +75,11 @@ public class test extends Activity {
         tvCountDown.setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f*clsData.fTextScale());
 
         SetCallback();
+
+        // 重置「無訊號保護」狀態（這些是 static，進入新的場次必須清乾淨）
+        lLastSignalTimeMs = 0;
+        bWarnedNoSignal   = false;
+        strLinkState      = "等待腦波儀訊號…";
 
         listMsg.clear();
         mThreadMsg = new ThreadMsg();
@@ -185,7 +198,22 @@ public class test extends Activity {
             //@Override
             public void Do(int iCmd, int iVal) {
                 if(iCmd == S.BrainwaveValue) {
+                    lLastSignalTimeMs = System.currentTimeMillis();
+                    strLinkState = "腦波儀已連線";
                     PostMyMsg(S.BrainwaveValue);
+                }
+                else if (iCmd == S.SIGNAL_GOOD) {
+                    lLastSignalTimeMs = System.currentTimeMillis();
+                    strLinkState = "訊號品質良好";
+                }
+                else if (iCmd == S.BrainwaveConnected) {
+                    strLinkState = "腦波儀已連線（訊號擷取中…）";
+                }
+                else if (iCmd == S.BrainwaveDisconnected) {
+                    strLinkState = "⚠ 腦波儀已斷線";
+                }
+                else if (iCmd == S.BluetoothClosed) {
+                    strLinkState = "⚠ 藍牙未開啟或腦波儀未配對";
                 }
             }
         });
@@ -210,6 +238,16 @@ public class test extends Activity {
                     iPrevSec = iSec;
                     PostMyMsg(S.ShowCountDown);
                     iRecordingTotalSeconds--;
+
+                    // ── 無訊號保護：開始 10 秒後若仍未收到任何 BrainwaveValue，
+                    //    暫停倒數並彈出對話框，避免使用者付費後跑了 3 分鐘空跡。
+                    long now = System.currentTimeMillis();
+                    boolean noSignalLong = (lLastSignalTimeMs == 0 || (now - lLastSignalTimeMs) > 10000);
+                    if (noSignalLong && !bWarnedNoSignal && iRecordingTotalSeconds > 0) {
+                        bWarnedNoSignal = true;
+                        warnNoSignal();
+                    }
+
                     if (iRecordingTotalSeconds < 0) {
                         bQuit = true;
                         clsData.EnableRecording(false);
@@ -237,6 +275,41 @@ public class test extends Activity {
                 String str = ex.toString();
             }
         }
+    }
+    //==============================================================================================
+    /**
+     * 開始檢測 10 秒後仍無腦波訊號 → 彈出對話框讓使用者選擇：
+     *   1) 重試連線並繼續
+     *   2) 仍要繼續（若手動操作，會生成空白報告）
+     *   3) 中止本次檢測（不扣秒數，回到 WebApp）
+     */
+    void warnNoSignal() {
+        runOnUiThread(() -> {
+            // 暫停倒數
+            mHandlerCount.removeCallbacks(mThreadCount);
+            new AlertDialog.Builder(mContext)
+                    .setTitle("無腦波訊號")
+                    .setMessage("已超過 10 秒沒有收到腦波儀訊號。\n"
+                              + "可能原因：腦波儀電量不足、未戴好、藍牙連線中斷。\n\n"
+                              + "目前狀態：" + strLinkState)
+                    .setCancelable(false)
+                    .setPositiveButton("重新連線並繼續", (d, w) -> {
+                        try { clsBrainwave.Connect(test.this); } catch (Throwable ignore) {}
+                        bWarnedNoSignal = false; // 重置警告，給使用者另一次 10 秒緩衝
+                        lLastSignalTimeMs = System.currentTimeMillis();
+                        mHandlerCount.postDelayed(mThreadCount, 500); // 恢復倒數
+                    })
+                    .setNeutralButton("仍要繼續", (d, w) -> {
+                        mHandlerCount.postDelayed(mThreadCount, 500);
+                    })
+                    .setNegativeButton("中止檢測", (d, w) -> {
+                        bQuit = true;
+                        clsData.EnableRecording(false);
+                        CLS_DB.getInstance().failSession("no_signal", null);
+                        finish(); // 回到 WebAppActivity
+                    })
+                    .show();
+        });
     }
     //==============================================================================================
     void StopTest() {

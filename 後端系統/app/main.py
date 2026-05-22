@@ -8,14 +8,20 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.21.5"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.22.1"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 2
-APK_LATEST_VERSION_NAME = "1.0.1"
+APK_LATEST_VERSION_CODE = 3
+APK_LATEST_VERSION_NAME = "1.0.2"
 APK_DOWNLOAD_PATH       = "/static-app/apk/onlineReport-latest.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
 APK_RELEASE_NOTES = (
-    "v1.0.1 更新內容：\n"
+    "v1.0.2 更新內容：\n"
+    "・付款後自動連線腦波儀（含權限請求）\n"
+    "・若腦波儀未就緒，跳出友善對話框（重連／繼續／稍後）\n"
+    "・10 秒無訊號保護，避免空跡計時 3 分鐘\n"
+    "・修正藍牙 callback 為 null 時的崩潰\n"
+    "\n"
+    "v1.0.1 歷史更新：\n"
     "・修正點報告無法付款問題\n"
     "・新增「立即付款」大按鈕，免掃 QR Code 也能付\n"
     "・WebView 自動載入最新前端版本\n"
