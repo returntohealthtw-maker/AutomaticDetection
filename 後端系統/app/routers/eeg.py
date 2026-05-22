@@ -120,6 +120,72 @@ def save_eeg_stats(
     )
 
 
+@router.get("/sessions/{session_id}/stats")
+def get_session_stats(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    取得指定 Session 的腦波統計值（供「歷史紀錄」點開後填入結果頁用）。
+    回傳格式與 _lastEegCapture 相同，前端可直接傳給 _renderResultsFromEeg。
+    """
+    user = require_user(authorization, db)
+
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(404, "Session 不存在")
+    # 非 admin 只能看自己的
+    if user.role != "admin" and sess.consultant_name != user.name:
+        raise HTTPException(403, "無權限查看此 Session")
+
+    caps = db.query(M.EegCapture).filter(
+        M.EegCapture.session_id == session_id
+    ).order_by(M.EegCapture.seq_num).all()
+
+    if not caps:
+        return {
+            "ok": True, "session_id": session_id,
+            "subject_name": sess.subject_name,
+            "subject_age":  sess.subject_age,
+            "eeg_stats": None,
+        }
+
+    # 平均（排除基線，全部都是基線就全用）
+    det = [c for c in caps if c.is_baseline == 0] or list(caps)
+    n = len(det)
+    def avg(attr): return round(sum(getattr(c, attr, 0) or 0 for c in det) / n)
+
+    stats = {
+        "sample_count":           n,
+        "attention_percentage":   avg("attention"),
+        "meditation_percentage":  avg("meditation"),
+        "bands_avg": {
+            "delta": avg("delta"),
+            "theta": avg("theta"),
+            "alpha": round((avg("low_alpha") + avg("high_alpha")) / 2),
+            "beta":  round((avg("low_beta")  + avg("high_beta"))  / 2),
+            "gamma": round((avg("low_gamma") + avg("high_gamma")) / 2),
+        },
+    }
+
+    rep = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+
+    return {
+        "ok":          True,
+        "session_id":  session_id,
+        "subject_name": sess.subject_name,
+        "subject_age":  sess.subject_age,
+        "subject_gender": sess.subject_gender,
+        "report_type":  sess.report_type,
+        "created_at":   sess.created_at,
+        "eeg_stats":    stats,
+        "report_status": rep.status if rep else None,
+        "report_url":    rep.pdf_url if rep else None,
+        "email_sent":    rep.email_sent if rep else 0,
+    }
+
+
 @router.get("/sessions")
 def list_my_sessions(
     limit: int = 50,

@@ -2911,6 +2911,10 @@ function _renderHistoryList() {
         ? `<a href="${s.report_url}" target="_blank" style="color:#2D3561;font-weight:600;text-decoration:none;font-size:12px;">📄 查看報告 →</a>`
         : '';
 
+      const bwBtn = isSuccess
+        ? `<button onclick="_viewHistorySession(${s.session_id})" style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">🧠 查看腦波</button>`
+        : '';
+
       html += `
         <div class="history-item" style="margin:0 0 10px;${isSuccess ? '' : 'opacity:0.7;'}">
           <div class="hi-top">
@@ -2920,11 +2924,105 @@ function _renderHistoryList() {
           ${reportTagsHtml}
           ${extraNote}
           <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures}</div>
-          ${reportLink ? `<div style="margin-top:8px;">${reportLink}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+            ${reportLink}
+            ${bwBtn}
+          </div>
+          <!-- 腦波展開區（預設隱藏）-->
+          <div id="bw-detail-${s.session_id}" style="display:none;margin-top:10px;padding:10px 12px;background:#f0f4f8;border-radius:10px;font-size:12px;"></div>
         </div>`;
     });
   });
   c.innerHTML = html;
+}
+
+// 點「🧠 查看腦波」：從後端取該 Session 的腦波統計，展開在卡片下方
+// 同時把 window._lastEegCapture 設為這筆，方便「切換到結果頁」時顯示正確腦波
+async function _viewHistorySession(sessionId) {
+  const detailEl = document.getElementById(`bw-detail-${sessionId}`);
+  if (!detailEl) return;
+
+  // toggle：已顯示就收起
+  if (detailEl.style.display !== 'none') {
+    detailEl.style.display = 'none';
+    return;
+  }
+
+  detailEl.style.display = 'block';
+  detailEl.innerHTML = '<span style="color:#888;">⏳ 載入腦波資料中…</span>';
+
+  try {
+    const r = await apiFetch(`/eeg/sessions/${sessionId}/stats`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+
+    if (!data.eeg_stats) {
+      detailEl.innerHTML = '<span style="color:#aaa;">⚠️ 此場次無腦波資料</span>';
+      return;
+    }
+
+    const s = data.eeg_stats;
+    const b = s.bands_avg || {};
+    const clamp = v => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+
+    const metrics = [
+      { name: '專注',     val: clamp(s.attention_percentage) },
+      { name: '放鬆',     val: clamp(s.meditation_percentage) },
+      { name: '直覺(θ)', val: clamp(b.theta) },
+      { name: '氣血(α)', val: clamp(b.alpha) },
+      { name: '邏輯(β)', val: clamp(b.beta) },
+      { name: '觀察(γ)', val: clamp(b.gamma) },
+    ];
+
+    const bars = metrics.map(m => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+        <div style="width:64px;font-size:11px;color:#555;flex-shrink:0;">${m.name}</div>
+        <div style="flex:1;height:8px;background:#dde4ef;border-radius:4px;overflow:hidden;">
+          <div style="width:${m.val}%;height:100%;background:#2D3561;border-radius:4px;"></div>
+        </div>
+        <div style="width:34px;text-align:right;font-size:11px;font-weight:700;color:#1a3a6e;">${m.val}%</div>
+      </div>`).join('');
+
+    const createdStr = data.created_at
+      ? new Date(data.created_at * 1000).toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+      : '';
+
+    detailEl.innerHTML = `
+      <div style="font-weight:700;color:#1a3a6e;margin-bottom:8px;">
+        🧠 ${data.subject_name || '受測者'}${data.subject_age ? ` · ${data.subject_age}歲` : ''} ${createdStr ? '(' + createdStr + ')' : ''} · ${s.sample_count} 筆
+      </div>
+      ${bars}
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="_loadHistoryToResultsPage(${sessionId})" style="background:#2D3561;color:white;border:none;font-size:11px;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;">📊 在結果頁顯示</button>
+        ${data.report_url ? `<a href="${data.report_url}" target="_blank" style="background:#4caf50;color:white;text-decoration:none;font-size:11px;padding:5px 12px;border-radius:6px;font-weight:600;">📄 查看報告</a>` : ''}
+      </div>`;
+
+    // 把這筆 session 的腦波存起來備用
+    window._historyEegCache = window._historyEegCache || {};
+    window._historyEegCache[sessionId] = {
+      stats: s,
+      meta:  { subject_name: data.subject_name, subject_age: data.subject_age, created_at: data.created_at },
+    };
+  } catch (e) {
+    detailEl.innerHTML = `<span style="color:#c00;">❌ 載入失敗：${e.message}</span>`;
+  }
+}
+
+// 點「📊 在結果頁顯示」：把歷史 session 的腦波填入結果頁並跳轉
+function _loadHistoryToResultsPage(sessionId) {
+  const cached = (window._historyEegCache || {})[sessionId];
+  if (!cached) return;
+
+  // 把歷史腦波複寫到 _lastEegCapture（暫時覆蓋，讓結果頁能讀到）
+  window._lastEegCapture = cached.stats;
+
+  // 設定對應的受測者基本資訊
+  const meta = cached.meta || {};
+  if (meta.subject_name) _currentSubjectName = meta.subject_name;
+  if (meta.subject_age != null) _currentSubjectAge = meta.subject_age;
+
+  // 跳到結果頁，gotoIndex 會自動呼叫 _renderResultsFromEeg
+  goto('screen-results');
 }
 
 async function refreshHistoryData() {
