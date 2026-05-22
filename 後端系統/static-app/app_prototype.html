@@ -4755,6 +4755,8 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   _currentReportSubType  = parsed.type;
   _currentReportVariant  = parsed.variant;
   _testMode_chapter1Only = parsed.chapter1Only;
+  // NT$1 測試使用 60 秒採集；正式報告 180 秒
+  _eegLiveDurationSec = (reportKey === 'test_1') ? 60 : 180;
 
   const reportNames = {
     'life_trial':  '腦波分析人生劇本 · 體驗版',
