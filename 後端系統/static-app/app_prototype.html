@@ -5509,22 +5509,14 @@ function _updateMissingSelectedCount() {
 async function _regenerateSessionReport(sessionId, subjectName) {
   const sess = _missingCache.find(s => s.session_id === sessionId);
   const defaultEmail = sess?.notify_email || '';
-  const email = prompt(`重新生成 ${subjectName || `Session #${sessionId}`} 的報告\n\n請輸入收件 Email（留空 = 不指定收件）：`, defaultEmail);
+  const email = prompt(`重新生成 ${subjectName || `Session #${sessionId}`} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, defaultEmail);
   if (email === null) return;
-  // 顯示模式選擇
-  const choice = confirm(
-    `確定對 Session #${sessionId} 重新生成？\n\n受測者：${subjectName || '?'}\nEmail：${email || '(無)'}\n\n` +
-    `── 寄信方式 ──\n` +
-    `按【確定】 = ⏳ 進入待核准（推薦，預覽後再寄）\n` +
-    `按【取消】 = 中止操作\n\n` +
-    `※ 想自動寄信請改用「批次重新生成」介面，內含自動寄信選項。`
-  );
-  if (!choice) return;
+  if (!confirm(`確定對 Session #${sessionId} 重新生成？\n\n受測者：${subjectName || '?'}\nEmail：${email || '(無)'}\n\n⏳ 完成後會進入「待核准」，需 admin 預覽 PDF 後手動點「📨 預覽後寄信」才會寄出。`)) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notify_email: email || null, auto_send: 0 }),
+      body: JSON.stringify({ notify_email: email || null }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {

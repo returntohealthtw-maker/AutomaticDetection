@@ -271,13 +271,17 @@ def record_report(
     # pending_send=1 表示外部系統尚未寄信，留給後台手動觸發
     email_sent_value = 0 if payload.pending_send else 1
 
+    # ── 系統級規則：所有報告都必須走 admin 人工審核才能寄信 ──
+    # 不論 payload.pending_send 是 0 或 1，一律當成 pending（email_sent=0）。
+    # 即使外部 React app 仍嘗試發信（過渡期），DB 仍紀錄 email_sent=0，
+    # admin 在「報告管理」介面看到後才手動點「📨 預覽後寄信」。
     if rep is None:
         rep = M.Report(
             session_id     = payload.session_id,
             status         = "completed",
             pdf_url        = payload.pdf_url,
             notify_email   = payload.subject_email or None,
-            email_sent     = email_sent_value,
+            email_sent     = 0,  # 強制：等待 admin 核准
             talent_report_kind = f"{payload.report_type}_{payload.variant}",
             client_summary = f'{{"subject_name":"{payload.subject_name}","source":"{payload.source}"}}',
             completed_at   = func.now(),
@@ -287,56 +291,21 @@ def record_report(
         rep.pdf_url = payload.pdf_url
         rep.status = "completed"
         rep.notify_email = payload.subject_email or rep.notify_email
-        # 只有當外部系統已寄信時才覆寫 email_sent；pending_send 不要清掉既有狀態
-        if not payload.pending_send:
-            rep.email_sent = 1
+        # 強制 reset 為待核准（即使之前已寄過，重新生成後也必須重審）
+        rep.email_sent = 0
         rep.talent_report_kind = f"{payload.report_type}_{payload.variant}"
         rep.completed_at = func.now()
 
     db.commit()
     db.refresh(rep)
 
-    # 若這筆是 admin「重新生成 + 勾選自動寄信」觸發的，現在報告就緒了 → 立即寄信
-    auto_send_triggered = False
-    auto_send_error = None
-    if _check_auto_send_flag(rep) and rep.pdf_url and rep.notify_email:
-        try:
-            from app.services import email_sender
-            subj_name = payload.subject_name or "受測者"
-            # 報告標題從 report_type/variant 組合
-            type_label = {
-                "life_script": "腦波分析人生劇本",
-                "child":       "兒童腦波天賦解碼",
-                "parent_child":"親子腦波報告",
-                "marital":     "夫妻腦波報告",
-            }.get(payload.report_type, "腦波分析報告")
-            variant_label = {"trial": "體驗版", "full": "完整版", "vip": "VIP 版"}.get(payload.variant, "")
-            report_title = f"{type_label}{(' ' + variant_label) if variant_label else ''}"
-
-            result = email_sender.send_report_link_email(
-                to=rep.notify_email,
-                subject_name=subj_name,
-                report_title=report_title,
-                pdf_url=rep.pdf_url,
-            )
-            if result.get("ok"):
-                rep.email_sent = 1
-                # 清掉 marker，避免重送
-                _mark_auto_send_in_report(rep, False)
-                db.commit()
-                auto_send_triggered = True
-            else:
-                auto_send_error = f"寄信失敗 (method={result.get('method', '?')}): {result.get('error', '')}"
-        except Exception as e:
-            auto_send_error = f"寄信例外：{type(e).__name__}: {e}"
-
     return {
         "ok": True,
         "report_id":   rep.report_id,
         "session_id":  rep.session_id,
         "pdf_url":     rep.pdf_url,
-        "auto_send_triggered": auto_send_triggered,
-        "auto_send_error":     auto_send_error,
+        "email_sent":  0,
+        "note":        "已紀錄到資料庫。所有報告需 admin 在『報告管理』預覽後手動寄信。",
     }
 
 
@@ -624,37 +593,17 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     }
 
 
-def _mark_auto_send_in_report(report: "M.Report", auto_send: bool):
-    """在 Report.client_summary JSON 內標記是否要在 record callback 後自動寄信。"""
-    import json
-    try:
-        meta = json.loads(report.client_summary) if report.client_summary else {}
-    except Exception:
-        meta = {}
-    if auto_send:
-        meta["auto_send_after_complete"] = True
-    else:
-        meta.pop("auto_send_after_complete", None)
-    report.client_summary = json.dumps(meta, ensure_ascii=False)
-
-
-def _check_auto_send_flag(report: "M.Report") -> bool:
-    import json
-    try:
-        meta = json.loads(report.client_summary) if report.client_summary else {}
-        return bool(meta.get("auto_send_after_complete"))
-    except Exception:
-        return False
-
-
 def _do_regenerate_one(
     db: Session,
     session_id: int,
     notify_email: Optional[str],
-    auto_send: bool,
     variant: str = "full",
 ) -> dict:
-    """單筆重生核心：reset Report、組 brainwave_data、觸發 trigger_external_report。"""
+    """單筆重生核心：reset Report、組 brainwave_data、觸發 trigger_external_report。
+
+    重生完成後一律進入「待 admin 核准寄信」狀態 (email_sent=0)，
+    管理員須到「報告管理」預覽 PDF 後才能手動寄出。
+    """
     s = db.query(M.Session).filter(M.Session.session_id == session_id).first()
     if not s:
         return {"ok": False, "session_id": session_id, "error": "Session 不存在"}
@@ -675,6 +624,7 @@ def _do_regenerate_one(
             status       = "pending",
             qr_token     = uuid.uuid4().hex,
             notify_email = notify_email or None,
+            email_sent   = 0,
         )
         db.add(r)
         db.flush()
@@ -683,8 +633,7 @@ def _do_regenerate_one(
         r.pdf_url    = None
         r.email_sent = 0
         if notify_email:
-            r.notify_email = notify_email  # 覆寫
-    _mark_auto_send_in_report(r, auto_send)
+            r.notify_email = notify_email
     db.commit()
     db.refresh(r)
 
@@ -723,7 +672,6 @@ def _do_regenerate_one(
 
 class RegenerateReportIn(BaseModel):
     notify_email: Optional[str] = None
-    auto_send:    int = 0          # 0 = 等 admin 核准寄信（預設）；1 = 完成後自動寄
     variant:      str = "full"
 
 
@@ -734,7 +682,8 @@ def regenerate_report_for_session(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """對指定 Session 重新觸發報告生成（管理員專用）。"""
+    """對指定 Session 重新觸發報告生成（管理員專用）。
+    重生完成後一律進入「待 admin 核准寄信」狀態，永不自動寄。"""
     user = require_user(authorization, db)
     if user.role != "admin":
         raise HTTPException(403, "僅管理員可觸發重新生成")
@@ -743,16 +692,11 @@ def regenerate_report_for_session(
     res = _do_regenerate_one(
         db, session_id,
         notify_email=p.notify_email,
-        auto_send=bool(p.auto_send),
         variant=p.variant,
     )
     if not res.get("ok"):
-        # 不丟 500，回 400 帶 detail
         raise HTTPException(400, res.get("error") or "重新生成失敗")
-    res["note"] = (
-        "已觸發重新生成。完成後將直接寄信到收件 email。" if p.auto_send
-        else "已觸發重新生成。完成後請至『報告管理 → 💾 資料庫紀錄』預覽後手動寄信。"
-    )
+    res["note"] = "已觸發重新生成。完成後請至『報告管理 → 💾 資料庫紀錄』預覽後手動點「📨 預覽後寄信」。"
     return res
 
 
@@ -762,9 +706,8 @@ class RegenerateBatchItem(BaseModel):
 
 
 class RegenerateBatchIn(BaseModel):
-    items:     List[RegenerateBatchItem]
-    auto_send: int = 0
-    variant:   str = "full"
+    items:   List[RegenerateBatchItem]
+    variant: str = "full"
 
 
 @router.post("/sessions/regenerate-batch")
@@ -773,7 +716,7 @@ def regenerate_report_batch(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """批次重生：依序觸發每一筆。回傳每筆結果，方便前端 UI 顯示。"""
+    """批次重生：依序觸發每一筆，全部進入「待核准」狀態。"""
     user = require_user(authorization, db)
     if user.role != "admin":
         raise HTTPException(403, "僅管理員可觸發重新生成")
@@ -788,7 +731,6 @@ def regenerate_report_batch(
         res = _do_regenerate_one(
             db, it.session_id,
             notify_email=it.notify_email,
-            auto_send=bool(payload.auto_send),
             variant=payload.variant,
         )
         if res.get("ok"):
@@ -796,12 +738,12 @@ def regenerate_report_batch(
         results.append(res)
 
     return {
-        "ok":         True,
-        "total":      len(results),
-        "success":    ok_count,
-        "failed":     len(results) - ok_count,
-        "auto_send":  bool(payload.auto_send),
-        "results":    results,
+        "ok":       True,
+        "total":    len(results),
+        "success":  ok_count,
+        "failed":   len(results) - ok_count,
+        "results":  results,
+        "note":     "全部完成後須由 admin 在『報告管理 → 💾 資料庫紀錄』預覽後手動寄信。",
     }
 
 

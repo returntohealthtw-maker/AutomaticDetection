@@ -223,23 +223,12 @@ async def generate_report_async(report_id: int, session_id: int):
             report.line_sent = 1
             db.commit()
 
-        # 10. Email 傳送報告連結（若設定 SMTP）
-        if report.notify_email:
-            base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
-            client_link = (
-                f"{base}/api/v1/public/client/{report.qr_token}"
-                if base and report.qr_token
-                else ""
-            )
-            ok = await _send_report_email(
-                to_addr   = report.notify_email,
-                subject   = f"【天賦檢測】{session_obj.subject_name or ''} 報告已產生",
-                pdf_url   = pdf_url,
-                extra_link = client_link,
-            )
-            if ok:
-                report.email_sent = 1
-                db.commit()
+        # 10. ❌ 不再自動寄信
+        #     系統規則：所有報告必須由 admin 在後台「報告管理」預覽後
+        #     手動點「📨 預覽後寄信」才會寄出。
+        #     保留 notify_email 在 DB；email_sent=0 表示「待 admin 核准寄發」。
+        report.email_sent = 0
+        db.commit()
 
         print(f"[OK] Report {report_id} done: {pdf_url}")
 

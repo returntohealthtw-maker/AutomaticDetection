@@ -325,55 +325,16 @@ def _run_full_generation(
                 job["pdf_error"] = f"{type(e).__name__}: {e}"
                 logger.exception("PDF/GCS 流程例外")
 
-        # ── 寄 Email（GCS 連結版；若沒 PDF URL 才退回全文版）─────────
-        job["email_status"] = "skipped"
-        if subject_email and not job.get("cancelled"):
-            try:
-                if pdf_url:
-                    from .pdf_builder import REPORTS_LABEL
-                    report_title = REPORTS_LABEL(report_type, variant)
-                    email_result = email_sender.send_report_link_email(
-                        to=subject_email,
-                        subject_name=subject_name,
-                        report_title=report_title,
-                        pdf_url=pdf_url,
-                        expires_days=7,
-                    )
-                else:
-                    # 沒 PDF URL 時 fallback：寄全文版
-                    merged_text_parts = []
-                    first_chapter = job["chapters_list"][0] if job["chapters_list"] else None
-                    for key, sec in job["results"].items():
-                        merged_text_parts.append(
-                            f"【第{sec['section_num']}節：{sec['section_title']}】\n\n{sec['text']}"
-                        )
-                    merged_text = "\n\n\n".join(merged_text_parts)
-                    ch_title = (
-                        f"第{first_chapter['num']}章：{first_chapter['title']}"
-                        if first_chapter else "AI 分析報告"
-                    )
-                    ch_icon = (first_chapter or {}).get("icon", "📄")
-                    email_result = email_sender.send_report_email(
-                        to=subject_email,
-                        subject_name=subject_name,
-                        chapter_title=ch_title,
-                        chapter_text=merged_text,
-                        chapter_icon=ch_icon,
-                    )
-
-                if email_result.get("ok"):
-                    job["email_status"] = "sent"
-                    job["email_to"]     = subject_email
-                    job["email_from"]   = email_result.get("from")
-                    logger.info("✅ Email 寄出 → %s", subject_email)
-                else:
-                    job["email_status"] = "failed"
-                    job["email_error"]  = email_result.get("error", "unknown")
-                    logger.error("❌ Email 失敗：%s", email_result.get("error"))
-            except Exception as e:
-                job["email_status"] = "failed"
-                job["email_error"]  = f"{type(e).__name__}: {e}"
-                logger.exception("email 寄發例外")
+        # ── ❌ 不再自動寄信 ──────────────────────────────────────────
+        # 系統規則：所有報告必須由 admin 在後台「報告管理」預覽後
+        # 手動點「📨 預覽後寄信」才會寄出。
+        # 這裡只標記「待人工核准」，email_to 留下供後台顯示。
+        job["email_status"] = "pending_admin_approval"
+        job["email_to"]     = subject_email or ""
+        if subject_email:
+            logger.info("📋 報告已產生，待 admin 核准寄信 → %s", subject_email)
+        else:
+            logger.info("📋 報告已產生（未填收件 email）")
 
         job["status"] = "completed"
         job["finished_at"] = time.time()
