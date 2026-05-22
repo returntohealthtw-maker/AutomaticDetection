@@ -2640,11 +2640,6 @@
 <!-- Screen Index Dots -->
 <div class="screen-list" id="screen-list"></div>
 
-<!-- Info Panel -->
-<div style="position:fixed;top:12px;left:50%;transform:translateX(-50%);text-align:center;color:rgba(255,255,255,0.6);font-size:12px;pointer-events:none;white-space:nowrap;">
-  <div id="screen-title" style="font-weight:600;color:white;font-size:14px;"></div>
-  <div style="margin-top:3px;font-size:11px;">點擊按鈕切換頁面 &nbsp;|&nbsp; 右側 ‹ › 瀏覽所有畫面 &nbsp;|&nbsp; ← → 鍵盤</div>
-</div>
 
 <script>
 (function initAndroidShellMode() {
@@ -2747,7 +2742,7 @@ function gotoIndex(idx) {
       }
     }
   }
-  document.getElementById('screen-title').textContent = screens[current].label;
+  const _t = document.getElementById('screen-title'); if(_t) _t.textContent = screens[current].label;
 
   // 進入特定畫面時的初始化 hook
   const id = screens[current].id;
@@ -6495,7 +6490,7 @@ async function simulatePaid(qrScreenId) {
 }
 
 // Init title
-document.getElementById('screen-title').textContent = screens[0].label;
+const _t0 = document.getElementById('screen-title'); if(_t0) _t0.textContent = screens[0].label;
 
 // Keyboard navigation
 document.addEventListener('keydown', e => {
