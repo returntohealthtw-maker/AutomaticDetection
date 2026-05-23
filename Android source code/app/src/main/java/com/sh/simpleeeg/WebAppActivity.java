@@ -302,10 +302,11 @@ public class WebAppActivity extends Activity {
                             int alpha = bandTo100((CLS_DATA.iLowAlpha + CLS_DATA.iHighAlpha) / 2);
                             int beta  = bandTo100((CLS_DATA.iLowBeta  + CLS_DATA.iHighBeta)  / 2);
                             int gamma = bandTo100((CLS_DATA.iLowGamma + CLS_DATA.iHighGamma) / 2);
+                            int bat   = ble.getBatteryLevel();
                             String json = String.format(
                                 "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
-                                "\"alpha\":%d,\"beta\":%d,\"gamma\":%d}",
-                                attn, medi, delta, theta, alpha, beta, gamma);
+                                "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d}",
+                                attn, medi, delta, theta, alpha, beta, gamma, bat);
                             webView.post(() -> webView.evaluateJavascript(
                                 "window.JSBridge&&window.JSBridge.onEegSample('" + json + "')", null));
                         }

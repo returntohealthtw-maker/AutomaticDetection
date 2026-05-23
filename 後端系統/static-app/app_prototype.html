@@ -2399,7 +2399,7 @@
         </div>
 
         <div class="detect-footer">
-          <div class="warning">⚠️ 採集完成後系統將自動產生報告，待管理員審核後寄出</div>
+          <div class="warning">⚠️ 採集完成後系統將自動產生報告</div>
           <div class="detect-buttons">
             <button class="btn-end" onclick="_stopEegLiveCapture(); goto('screen-results')">■ 結束採集</button>
           </div>
@@ -2795,6 +2795,21 @@
   }
   updateBattery();
   setInterval(updateBattery, 10000);
+})();
+
+// ── 狀態列即時時鐘 ─────────────────────────────────────────────────────
+(function() {
+  function _updateStatusBarTime() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const ts = h + ':' + m;
+    document.querySelectorAll('.status-bar .time').forEach(function(el) {
+      el.textContent = ts;
+    });
+  }
+  _updateStatusBarTime();
+  setInterval(_updateStatusBarTime, 30000);
 })();
 
 const screens = [
@@ -4752,6 +4767,15 @@ function _ingestEegSample(s) {
   const al= clamp(s.alpha);
   const be= clamp(s.beta);
   const ga= clamp(s.gamma);
+
+  // 更新腦波儀電量（僅在 APK 推入 bat 時更新，避免覆蓋 AndroidBridge 輪詢值）
+  if (typeof s.bat === 'number' && s.bat >= 0) {
+    const pct = s.bat;
+    document.querySelectorAll('.eeg-battery').forEach(function(el) {
+      el.textContent = '🧠' + pct + '%';
+      el.className = 'eeg-battery ' + (pct >= 60 ? 'high' : pct >= 20 ? 'mid' : 'low');
+    });
+  }
 
   _eegLiveAccum.attn.push(a);
   _eegLiveAccum.medi.push(m);

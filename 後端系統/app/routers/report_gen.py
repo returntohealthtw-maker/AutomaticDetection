@@ -246,6 +246,46 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
             brainwave_data=bw,
             extra={"session_id": req.session_id},  # 給外部 React App 在 callback /reports/record 時帶上
         )
+
+        # ── 夫妻 / 親子 REST 模式：外部系統不回呼 /reports/record，主動寫 DB ──
+        ext_mode = result.get("mode", "")
+        if result.get("ok") and ext_mode in ("marital_rest", "parent_child_rest"):
+            try:
+                from sqlalchemy import func as sqlfunc
+                import json as _json
+                pdf_url   = result.get("result_url") or result.get("file_path") or ""
+                rep_kind  = f"{req.report_type}_{req.variant}"
+                summary   = _json.dumps({"subject_name": req.subject_name, "source": ext_mode}, ensure_ascii=False)
+
+                existing = None
+                if req.session_id:
+                    existing = db.query(M.Report).filter(M.Report.session_id == req.session_id).first()
+
+                if existing is None:
+                    new_rep = M.Report(
+                        session_id          = req.session_id,
+                        status              = "completed",
+                        pdf_url             = pdf_url,
+                        notify_email        = req.subject_email or None,
+                        email_sent          = 0,
+                        talent_report_kind  = rep_kind,
+                        client_summary      = summary,
+                        completed_at        = sqlfunc.now(),
+                    )
+                    db.add(new_rep)
+                else:
+                    existing.pdf_url            = pdf_url
+                    existing.status             = "completed"
+                    existing.notify_email       = req.subject_email or existing.notify_email
+                    existing.email_sent         = 0
+                    existing.talent_report_kind = rep_kind
+                    existing.completed_at       = sqlfunc.now()
+
+                db.commit()
+                logger.info("[report-gen/start] %s 報告已寫入 DB，session_id=%s", ext_mode, req.session_id)
+            except Exception as db_err:
+                logger.warning("[report-gen/start] 寫入 DB 失敗（%s）: %s", ext_mode, db_err)
+
         return {
             "ok":              result.get("ok", False),
             "mode":            "external",
