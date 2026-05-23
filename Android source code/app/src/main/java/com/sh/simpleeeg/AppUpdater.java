@@ -1,25 +1,16 @@
 package com.sh.simpleeeg;
 
 import android.app.AlertDialog;
-import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.pm.PackageManager;
-import android.database.Cursor;
+import android.content.SharedPreferences;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import androidx.core.content.FileProvider;
-
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -33,10 +24,14 @@ import okhttp3.Response;
  *   1. 開 App 時呼叫 {@link #checkForUpdate(Context, boolean)}
  *   2. 從後端 /api/v1/app/version 拿 latest_apk_version
  *   3. 比對 BuildConfig.VERSION_CODE，若有新版且非略過 → 跳對話框
- *   4. 使用者按「立即更新」→ DownloadManager 下載 APK 到 app cache
- *   5. 下載完 → FileProvider URI + ACTION_VIEW + apk MIME type → 觸發系統安裝程式
+ *   4. 使用者按「立即更新」→ 開瀏覽器下載 APK（MIUI 相容方案）
+ *      MIUI 的 DownloadManager + FileProvider 常被安全機制攔截，
+ *      改用瀏覽器開啟 APK URL，讓系統自行處理下載與安裝提示。
  *
- * 加盟商只需要點「更新」就能裝新版，免去自己找檔案、開啟未知來源等步驟。
+ * 防重複彈窗：
+ *   - sDialogShownThisSession：process 內只彈一次（記憶體）
+ *   - TRIGGERED_KEY：持久化，記錄「已觸發下載的版本號」，
+ *     只有在 current_version >= triggered_version 時才清除（代表安裝成功）
  */
 public class AppUpdater {
 
@@ -45,20 +40,16 @@ public class AppUpdater {
     private static final String VERSION_URL =
             "https://backend-production-2da61.up.railway.app/api/v1/app/version";
 
-    private static final String SKIP_KEY            = "skip_apk_version";
-    private static final String TRIGGERED_KEY       = "update_triggered_version";
+    private static final String SKIP_KEY      = "skip_apk_version";
+    private static final String TRIGGERED_KEY = "update_triggered_version";
 
-    /**
-     * 同一個 process 生命週期內只彈一次（避免同 session 重複）。
-     * 持久化的「已觸發下載」由 SharedPreferences TRIGGERED_KEY 管理。
-     */
+    /** process 內只彈一次 */
     private static volatile boolean sDialogShownThisSession = false;
 
     /**
-     * @param force 為 true 時忽略「使用者按過稍後再說」，強制檢查（例如使用者點「檢查更新」按鈕）
+     * @param force true = 忽略 skip/triggered 記錄，強制顯示（給「檢查更新」按鈕用）
      */
     public static void checkForUpdate(final Context ctx, final boolean force) {
-        // 同 session 已彈過，不重複
         if (!force && sDialogShownThisSession) return;
 
         new Thread(() -> {
@@ -70,31 +61,36 @@ public class AppUpdater {
                 Request req = new Request.Builder().url(VERSION_URL).get().build();
                 try (Response resp = client.newCall(req).execute()) {
                     if (!resp.isSuccessful() || resp.body() == null) return;
-                    JSONObject json = new JSONObject(resp.body().string());
-                    final int    latest      = json.optInt("latest_apk_version", 0);
-                    final String htmlVersion = json.optString("html_version", "");
-                    final String apkUrl      = json.optString("apk_download_url", "");
-                    final String notes       = json.optString("release_notes", "");
+                    JSONObject json   = new JSONObject(resp.body().string());
+                    final int    latest  = json.optInt("latest_apk_version", 0);
+                    final String apkUrl  = json.optString("apk_download_url", "");
+                    final String notes   = json.optString("release_notes", "");
 
                     int current = BuildConfig.VERSION_CODE;
-                    Log.i(TAG, "current=" + current + " latest=" + latest + " html=" + htmlVersion);
+                    Log.i(TAG, "current=" + current + " latest=" + latest);
 
+                    // 已是最新版 → 不需提示
                     if (latest <= current || apkUrl.isEmpty()) return;
 
-                    android.content.SharedPreferences prefs =
+                    SharedPreferences prefs =
                             ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE);
+
+                    // 若安裝成功（current 已追上 triggered），清掉舊記錄
+                    int triggered = prefs.getInt(TRIGGERED_KEY, 0);
+                    if (triggered > 0 && current >= triggered) {
+                        prefs.edit().remove(TRIGGERED_KEY).apply();
+                        triggered = 0;
+                    }
 
                     if (!force) {
                         // 使用者選「略過此版」
-                        int skipped = prefs.getInt(SKIP_KEY, 0);
-                        if (skipped >= latest) {
-                            Log.i(TAG, "使用者已選擇略過版本 " + skipped);
+                        if (prefs.getInt(SKIP_KEY, 0) >= latest) {
+                            Log.i(TAG, "已略過版本 " + latest);
                             return;
                         }
-                        // 使用者已觸發此版本的下載（按過「立即更新」）—— 不重複彈
-                        int triggered = prefs.getInt(TRIGGERED_KEY, 0);
+                        // 使用者已按「立即更新」（下載可能還沒裝完，不重複彈）
                         if (triggered >= latest) {
-                            Log.i(TAG, "已觸發下載版本 " + triggered + "，不重複彈窗");
+                            Log.i(TAG, "已觸發下載版本 " + triggered + "，不重複彈");
                             return;
                         }
                     }
@@ -113,114 +109,36 @@ public class AppUpdater {
                                          final String apkUrl, final String notes) {
         new AlertDialog.Builder(ctx)
                 .setTitle("發現新版本 (v" + latest + ")")
-                .setMessage(notes.isEmpty()
+                .setMessage((notes.isEmpty()
                         ? "有更新可用，建議立即更新以取得最新功能與修正。"
                         : notes)
+                        + "\n\n點「立即更新」後會開啟瀏覽器下載，下載完請點安裝。")
                 .setCancelable(false)
                 .setPositiveButton("立即更新", (d, w) -> {
-                    // 記錄「已觸發下載此版本」，App 重啟後不再重複彈窗
+                    // 持久化記錄：已觸發下載，重開 App 不再重複彈
                     ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
                             .edit().putInt(TRIGGERED_KEY, latest).apply();
-                    downloadAndInstall(ctx, apkUrl);
+                    openBrowserDownload(ctx, apkUrl);
                 })
                 .setNeutralButton("稍後再說", (d, w) -> d.dismiss())
-                .setNegativeButton("略過此版", (d, w) -> {
-                    ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
-                            .edit().putInt(SKIP_KEY, latest).apply();
-                })
+                .setNegativeButton("略過此版", (d, w) ->
+                        ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
+                                .edit().putInt(SKIP_KEY, latest).apply())
                 .show();
     }
 
-    private static void downloadAndInstall(final Context ctx, final String apkUrl) {
+    /**
+     * 用瀏覽器開啟 APK 下載連結。
+     * 相比 DownloadManager + FileProvider，此方式在小米 MIUI / EMUI / ColorOS
+     * 上更可靠：系統瀏覽器下載完後會自動彈出安裝提示。
+     */
+    private static void openBrowserDownload(final Context ctx, final String apkUrl) {
         try {
-            File apkDir = new File(ctx.getCacheDir(), "apk");
-            if (!apkDir.exists() && !apkDir.mkdirs()) {
-                Log.w(TAG, "mkdir failed: " + apkDir);
-            }
-            File apkFile = new File(apkDir, "update.apk");
-            if (apkFile.exists()) apkFile.delete();
-
-            final DownloadManager dm =
-                    (DownloadManager) ctx.getSystemService(Context.DOWNLOAD_SERVICE);
-            if (dm == null) return;
-
-            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(apkUrl))
-                    .setTitle("腦波檢測系統更新")
-                    .setDescription("正在下載新版 APK ...")
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                    .setDestinationUri(Uri.fromFile(apkFile))
-                    .setMimeType("application/vnd.android.package-archive");
-            req.setAllowedOverMetered(true);
-            req.setAllowedOverRoaming(true);
-
-            final long id = dm.enqueue(req);
-
-            // 監聽下載完成
-            BroadcastReceiver receiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    long doneId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-                    if (doneId != id) return;
-                    ctx.unregisterReceiver(this);
-
-                    DownloadManager.Query q = new DownloadManager.Query().setFilterById(id);
-                    Cursor c = dm.query(q);
-                    if (c != null && c.moveToFirst()) {
-                        int status = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
-                        c.close();
-                        if (status != DownloadManager.STATUS_SUCCESSFUL) {
-                            Log.w(TAG, "download failed status=" + status);
-                            return;
-                        }
-                    }
-                    // 安裝成功後清除觸發記錄，讓下次新版本能正常提醒
-                    ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
-                            .edit().remove(TRIGGERED_KEY).apply();
-                    triggerInstall(ctx, apkFile);
-                }
-            };
-            // Android 14 (API 34+) 要求明確指定 RECEIVER_NOT_EXPORTED
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ctx.registerReceiver(receiver,
-                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                        Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                ctx.registerReceiver(receiver,
-                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-            }
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
         } catch (Throwable t) {
-            Log.e(TAG, "downloadAndInstall", t);
-        }
-    }
-
-    private static void triggerInstall(Context ctx, File apkFile) {
-        try {
-            // Android 8.0+ 需要 REQUEST_INSTALL_PACKAGES + 使用者授權「安裝未知來源」
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                PackageManager pm = ctx.getPackageManager();
-                if (!pm.canRequestPackageInstalls()) {
-                    // 跳到設定頁，讓使用者勾選允許本 App 安裝
-                    Intent setting = new Intent(
-                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:" + ctx.getPackageName()));
-                    setting.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    ctx.startActivity(setting);
-                    return;
-                }
-            }
-
-            Uri apkUri = FileProvider.getUriForFile(
-                    ctx,
-                    ctx.getPackageName() + ".fileprovider",
-                    apkFile);
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    | Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            ctx.startActivity(install);
-        } catch (Throwable t) {
-            Log.e(TAG, "triggerInstall", t);
+            Log.e(TAG, "openBrowserDownload", t);
         }
     }
 }
