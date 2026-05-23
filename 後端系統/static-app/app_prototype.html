@@ -552,6 +552,47 @@
   .detect-buttons { display:flex; gap:10px; }
   .btn-end { flex:1; padding:14px; background:rgba(255,82,82,0.2); border:1px solid rgba(255,82,82,0.4); border-radius:12px; color:#ff5252; font-weight:600; font-size:14px; cursor:pointer; }
 
+  /* ========== SCREEN: EEG TEST RESULT ========== */
+  #screen-eegtest-result { background:#0d1729; --header-bg:#0d1729; }
+  #screen-eegtest-result .status-bar { background:#0d1729; }
+  .et-header { padding:20px 18px 12px; background:linear-gradient(160deg,#1a237e,#0d1729); text-align:center; }
+  .et-badge { display:inline-block; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
+              border-radius:20px; padding:4px 14px; font-size:11px; color:rgba(255,255,255,0.7); margin-bottom:10px; }
+  .et-brain-color { width:90px; height:90px; border-radius:50%; margin:0 auto 10px;
+                    display:flex; align-items:center; justify-content:center; font-size:32px;
+                    box-shadow:0 4px 20px rgba(0,0,0,0.4); }
+  .et-brain-label { font-size:18px; font-weight:800; color:white; }
+  .et-brain-sub   { font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px; }
+  .et-section { margin:14px 16px; background:rgba(255,255,255,0.05); border-radius:14px;
+                border:1px solid rgba(255,255,255,0.08); padding:14px 16px; }
+  .et-section-title { font-size:12px; color:rgba(255,255,255,0.5); font-weight:700; letter-spacing:0.5px;
+                       text-transform:uppercase; margin-bottom:12px; }
+  .et-dec { text-align:center; margin:8px 0 4px; }
+  .et-dec-val { font-size:48px; font-weight:900; color:#fff; line-height:1; }
+  .et-dec-label { font-size:12px; color:rgba(255,255,255,0.5); margin-top:4px; }
+  .et-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .et-bar-name { width:72px; font-size:12px; color:rgba(255,255,255,0.7); flex-shrink:0; text-align:right; }
+  .et-bar-track { flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:6px; overflow:hidden; }
+  .et-bar-fill  { height:100%; border-radius:6px; transition:width 0.8s ease; }
+  .et-bar-pct   { width:36px; font-size:12px; font-weight:700; color:rgba(255,255,255,0.85); text-align:right; }
+  .et-mbti-type { font-size:36px; font-weight:900; text-align:center; letter-spacing:4px;
+                  background:linear-gradient(90deg,#90caf9,#ce93d8); -webkit-background-clip:text;
+                  -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:4px; }
+  .et-mbti-dims { display:flex; flex-direction:column; gap:8px; }
+  .et-dim-row { display:flex; align-items:center; gap:8px; }
+  .et-dim-l { width:20px; font-size:12px; font-weight:700; color:#90caf9; text-align:center; }
+  .et-dim-r { width:20px; font-size:12px; font-weight:700; color:#ce93d8; text-align:center; }
+  .et-dim-track { flex:1; height:10px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden; position:relative; }
+  .et-dim-fill-l { position:absolute; left:0; top:0; height:100%; border-radius:10px; background:#90caf9; }
+  .et-dim-fill-r { position:absolute; right:0; top:0; height:100%; border-radius:10px; background:#ce93d8; }
+  .et-dim-strength { width:36px; font-size:10px; color:rgba(255,255,255,0.5); text-align:center; }
+  .et-strength-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+  .et-strength-item:last-child { border-bottom:none; }
+  .et-strength-rank { width:24px; height:24px; border-radius:50%; background:rgba(255,255,255,0.1);
+                       color:rgba(255,255,255,0.6); font-size:12px; font-weight:700;
+                       display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .et-strength-name { flex:1; font-size:13px; color:rgba(255,255,255,0.85); font-weight:600; }
+  .et-strength-val { font-size:14px; font-weight:800; color:#4caf50; }
   /* ========== SCREEN 11: RESULTS（個人整合分析報告） ========== */
   #screen-results { --header-bg:#0d1729; background:#0d1729; }
   #screen-results .status-bar { background:#0d1729; }
@@ -1334,12 +1375,20 @@
         </div>
 
         <div style="flex:1;overflow-y:auto;padding-bottom:16px;">
-          <div style="padding:16px 16px 0;">
+          <div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:10px;">
             <button class="start-btn" onclick="goto('screen-subject')">
               <span class="icon">🧪</span>
               <span class="text">
                 <div class="title">開始新檢測</div>
                 <div class="sub">填入受測者資料 · 選擇報告 · 開始採集</div>
+              </span>
+              <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
+            </button>
+            <button class="start-btn" style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 14px;" onclick="startEegTest()">
+              <span class="icon" style="font-size:20px;">🧠</span>
+              <span class="text">
+                <div class="title" style="font-size:14px;">腦波儀測試</div>
+                <div class="sub">即時分析 · 無需填寫資料 · 不記錄</div>
               </span>
               <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
             </button>
@@ -2357,6 +2406,134 @@
         </div>
       </div>
 
+      <!-- ===== SCREEN: EEG TEST — CONNECT ===== -->
+      <div class="screen" id="screen-eegtest-connect">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-home')">‹</button>
+          <h2>腦波儀測試</h2>
+          <span class="step-badge" style="background:#1a237e;">連接設備</span>
+        </div>
+
+        <div class="content" style="padding-bottom:24px;">
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:12px;padding:12px 14px;font-size:12px;color:#2e7d32;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
+            <span>💡</span>
+            <span>此模式僅即時分析腦波，<b>不記錄資料、不生成報告、不需填寫受測者資料</b>。任何帳號皆可使用。</span>
+          </div>
+          <div class="device-status-card">
+            <div class="scan-animation">
+              <div class="scan-ring"></div>
+              <div class="scan-ring"></div>
+              🎧
+            </div>
+            <div style="text-align:center;font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">搜尋藍牙設備中...</div>
+            <div style="text-align:center;font-size:12px;color:#888;margin-bottom:16px;">請確認腦波頭帶已開機</div>
+            <div class="device-found">
+              <span class="dev-icon">🎧</span>
+              <div class="dev-info">
+                <div class="dev-name">EEG Headband #001</div>
+                <div class="dev-id">BT MAC: A4:C1:38:XX:XX:XX</div>
+              </div>
+              <div>
+                <div class="signal-bars">
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                </div>
+                <div style="font-size:10px;color:#00C853;text-align:center;margin-top:2px;">良好</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">電極接觸品質</div>
+            <div class="contact-checks">
+              <div class="contact-item"><span class="check-icon">✅</span> 額頭（Fp1）</div>
+              <div class="contact-item"><span class="check-icon">✅</span> 左耳夾（A1）</div>
+            </div>
+            <div style="margin-top:10px;padding:8px 10px;background:#e8f5e9;border-radius:8px;font-size:12px;color:#2e7d32;">
+              ✅ Fp1 單通道就緒，可開始測試
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="_startEegTestSession()">
+            ✅ 連接完成，開始腦波測試 →
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: EEG TEST — RESULT ===== -->
+      <div class="screen" id="screen-eegtest-result">
+        <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
+        <div style="overflow-y:auto;flex:1;">
+
+          <!-- 腦人顏色 Header -->
+          <div class="et-header">
+            <div class="et-badge">🧠 腦波即時分析結果</div>
+            <div class="et-brain-color" id="et-brain-color-circle">🧠</div>
+            <div class="et-brain-label" id="et-brain-color-name">分析中…</div>
+            <div class="et-brain-sub" id="et-brain-color-desc"></div>
+          </div>
+
+          <!-- 決策指標 -->
+          <div class="et-section">
+            <div class="et-section-title">🎯 決策指標</div>
+            <div class="et-dec">
+              <div class="et-dec-val" id="et-dec-val">--</div>
+              <div class="et-dec-label" id="et-dec-desc">--</div>
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+              <div class="et-bar-row">
+                <span class="et-bar-name">決策力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-dec" style="background:#ff9800;width:0%"></div></div>
+                <span class="et-bar-pct" id="et-pct-dec">0%</span>
+              </div>
+              <div class="et-bar-row">
+                <span class="et-bar-name">領導力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-ldr" style="background:#4caf50;width:0%"></div></div>
+                <span class="et-bar-pct" id="et-pct-ldr">0%</span>
+              </div>
+              <div class="et-bar-row">
+                <span class="et-bar-name">執行腦力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-ebi" style="background:#2196f3;width:0%"></div></div>
+                <span class="et-bar-pct" id="et-pct-ebi">0%</span>
+              </div>
+              <div class="et-bar-row">
+                <span class="et-bar-name">抗壓韌性</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-res" style="background:#9c27b0;width:0%"></div></div>
+                <span class="et-bar-pct" id="et-pct-res">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- MBTI -->
+          <div class="et-section">
+            <div class="et-section-title">🔵 MBTI 性格傾向（由強到弱）</div>
+            <div class="et-mbti-type" id="et-mbti-type">----</div>
+            <div class="et-mbti-dims" id="et-mbti-dims"></div>
+          </div>
+
+          <!-- 五大優勢 -->
+          <div class="et-section">
+            <div class="et-section-title">⭐ 五大優勢</div>
+            <div id="et-strengths"></div>
+          </div>
+
+          <!-- 腦波概況 -->
+          <div class="et-section">
+            <div class="et-section-title">📊 腦波頻帶概況</div>
+            <div id="et-bands"></div>
+          </div>
+
+          <div style="padding:16px 16px 32px;display:flex;flex-direction:column;gap:10px;">
+            <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);padding:0 16px;">
+              ⚠️ 本次分析僅供參考，未儲存至系統
+            </div>
+            <button class="btn btn-primary" onclick="goto('screen-home')">返回首頁</button>
+            <button class="btn" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);" onclick="_startEegTestSession()">重新測試</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== SCREEN 11: RESULTS（個人整合分析報告） ===== -->
       <div class="screen" id="screen-results">
         <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
@@ -2648,6 +2825,8 @@ const screens = [
   { id: 'screen-baseline',        label: '靜息基線' },
   { id: 'screen-detect',          label: '檢測進行中' },
   { id: 'screen-results',         label: '檢測結果' },
+  { id: 'screen-eegtest-connect', label: '腦波儀測試 · 連接' },
+  { id: 'screen-eegtest-result',  label: '腦波儀測試 · 結果' },
   { id: 'screen-history',         label: '歷史紀錄' },
   { id: 'screen-settings',        label: '設定' },
 ];
@@ -4242,6 +4421,8 @@ let _currentReportSubType  = 'life_script';   // life_script / child / parent_ch
 let _currentReportVariant  = 'full';          // trial / full / vip
 // 若為 true，進入 screen-results 時只生成第一章（NT$1 測試模式）
 let _testMode_chapter1Only = true;
+// 若為 true：採集完成後導到 screen-eegtest-result，不記錄不生成報告
+let _eegTestMode = false;
 // 即時擷取累積值（給結束採集時送回後端用）
 let _eegLiveAccum = null;       // { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] }
 let _eegLiveTimer = null;       // setInterval id
@@ -4476,10 +4657,14 @@ function _startEegLiveCapture() {
 
     if (elapsedSec >= _eegLiveDurationSec) {
       _stopEegLiveCapture();
-      // 採集完成自動跳結果頁
       const stxt = document.getElementById('detect-status-text');
-      if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
-      setTimeout(() => goto('screen-results'), 600);
+      if (_eegTestMode) {
+        if (stxt) stxt.textContent = '✅ 測試完成，運算結果…';
+        setTimeout(() => { _renderEegTestResult(); goto('screen-eegtest-result'); }, 600);
+      } else {
+        if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
+        setTimeout(() => goto('screen-results'), 600);
+      }
     }
   }, 250);
 }
@@ -4496,8 +4681,10 @@ function _stopEegLiveCapture() {
   // 把累積資料丟到全域，後續 startFullReportGeneration 帶進 brainwave_data
   if (_eegLiveAccum) {
     window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
-    // 寫入後端 DB（背景，不擋 UI）
-    _persistEegStats(window._lastEegCapture);
+    if (!_eegTestMode) {
+      // 寫入後端 DB（背景，不擋 UI）—— 測試模式不記錄
+      _persistEegStats(window._lastEegCapture);
+    }
   }
 }
 
@@ -4723,6 +4910,221 @@ function _simNextSample() {
   _eegSimState.beta  = step(_eegSimState.beta , 25, 80, 12);
   _eegSimState.gamma = step(_eegSimState.gamma, 10, 55, 8);
   return { ..._eegSimState };
+}
+
+// ─── 腦波儀測試：進入 / 演算 / 渲染 ────────────────────────────────────────
+function startEegTest() {
+  _eegTestMode = false; // will be set to true by _startEegTestSession
+  goto('screen-eegtest-connect');
+}
+
+function _startEegTestSession() {
+  _eegTestMode = true;
+  _eegLiveDurationSec = 180;
+  _currentSubjectName = '測試模式';
+  const subEl = document.getElementById('detect-subject');
+  if (subEl) subEl.textContent = '🧠 腦波儀測試模式';
+  goto('screen-detect');
+}
+
+// ── JS 版演算法（移植自 Python services/algorithms.py）──────────────────────
+function _etSafeDiv(a, b, def = 0) { return b > 1e-6 ? a / b : def; }
+function _etClamp(v, lo = 0, hi = 100) { return Math.max(lo, Math.min(hi, v)); }
+function _etSigmoid(raw) { return 1 / (1 + Math.exp(-3 * (raw - 1))); }
+
+function _etComputeAll(acc) {
+  // acc = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] }
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const d  = avg(acc.delta);
+  const t  = avg(acc.theta);
+  // 近似拆分 sub-bands（各半）
+  const la = avg(acc.alpha) * 0.5;
+  const ha = avg(acc.alpha) * 0.5;
+  const lb = avg(acc.beta)  * 0.5;
+  const hb = avg(acc.beta)  * 0.5;
+  const lg = avg(acc.gamma) * 0.5;
+  const hg = avg(acc.gamma) * 0.5;
+  const a  = la + ha;
+  const b  = lb + hb;
+  const g  = lg + hg;
+  const att= avg(acc.attn);
+  const med= avg(acc.medi);
+  const total = d + t + a + b + g || 1;
+
+  const pct = (raw, isRatioStat) => {
+    if (isRatioStat) return _etClamp(_etSigmoid(raw) * 100, 0, 100);
+    return _etClamp(raw, 0, 100);
+  };
+
+  return {
+    // 決策領導
+    DEC: { label:'決策力',    cat:'leadership', pct: pct(_etSafeDiv(hb, lb+a), true) },
+    LDR: { label:'領導力',    cat:'leadership', pct: pct(_etSafeDiv(b+g, d+t), true) },
+    VIS: { label:'願景思維',  cat:'leadership', pct: pct(_etSafeDiv(t, b),     true) },
+    CRE: { label:'創造力',    cat:'leadership', pct: pct(_etSafeDiv(t, a),     true) },
+    RES: { label:'抗壓韌性',  cat:'leadership', pct: pct(_etSafeDiv(a, b+d+t), true) },
+    FOC: { label:'高度聚焦',  cat:'leadership', pct: pct(_etSafeDiv(hb, total)*100, false) },
+    // 認知
+    ATT: { label:'專注力',    cat:'cognitive',  pct: _etClamp(att, 0, 100) },
+    MED: { label:'放鬆指數',  cat:'cognitive',  pct: _etClamp(med, 0, 100) },
+    EBI: { label:'執行腦力',  cat:'cognitive',  pct: pct(_etSafeDiv(b, a+t), true) },
+    CCR: { label:'認知清晰',  cat:'cognitive',  pct: pct(_etSafeDiv(a, b+t), true) },
+    // 情緒
+    EI:  { label:'情緒穩定',  cat:'emotional',  pct: pct(_etSafeDiv(a, b+d), true) },
+    EQ:  { label:'情緒商數',  cat:'emotional',  pct: pct(_etSafeDiv(a+t, b), true) },
+    INN: { label:'內在安定',  cat:'emotional',  pct: pct(_etSafeDiv(la, total)*100, false) },
+    VIT: { label:'生命活力',  cat:'emotional',  pct: pct(_etSafeDiv(ha, total)*100, false) },
+    INS: { label:'直覺感受',  cat:'emotional',  pct: pct(_etSafeDiv(t,  total)*100, false) },
+    EMO: { label:'慈悲連結',  cat:'emotional',  pct: pct(_etSafeDiv(lg, total)*100, false) },
+    // 人際
+    SOC: { label:'社交敏感',  cat:'social',     pct: pct(_etSafeDiv(g, a+b), true) },
+    EMP: { label:'同理共鳴',  cat:'social',     pct: pct(_etSafeDiv(t+lg, total)*100, false) },
+    COM: { label:'溝通表達',  cat:'social',     pct: pct(_etSafeDiv(b, t+d), true) },
+    OBS: { label:'環境觀察',  cat:'social',     pct: pct(_etSafeDiv(hg, total)*100, false) },
+    _bands: { d, t, la, ha, lb, hb, lg, hg, a, b, g, att, med },
+  };
+}
+
+function _etComputeMBTI(acc) {
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const la = avg(acc.alpha) * 0.5;
+  const ha = avg(acc.alpha) * 0.5;
+  const lb = avg(acc.beta)  * 0.5;
+  const hb = avg(acc.beta)  * 0.5;
+  const lg = avg(acc.gamma) * 0.5;
+  const t  = avg(acc.theta);
+  const a  = la + ha; const b  = lb + hb;
+  const sig = (raw) => _etClamp(_etSigmoid(raw) * 100, 0, 100);
+  const ei = sig(_etSafeDiv(b, a));
+  const ns = sig(_etSafeDiv(t, b));
+  const tf = sig(_etSafeDiv(lb, lg + t));
+  const jp = sig(_etSafeDiv(hb, t));
+  // Sort dims by distance from 50 (strength)
+  const dims = [
+    { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei, oppPct:100-ei },
+    { pair:'N/S', score:ns, dominant: ns>=50?'N':'S', pct:ns, oppPct:100-ns },
+    { pair:'T/F', score:tf, dominant: tf>=50?'T':'F', pct:tf, oppPct:100-tf },
+    { pair:'J/P', score:jp, dominant: jp>=50?'J':'P', pct:jp, oppPct:100-jp },
+  ];
+  dims.forEach(d => d.strength = Math.abs(d.score - 50));
+  dims.sort((a,b) => b.strength - a.strength);
+  const type = dims.map(d => d.dominant).join('');
+  return { type, dims };
+}
+
+function _etCalcBrainColor(acc) {
+  // 簡化版 MindColorAlgorithm.calc()（僅需 gamma/alpha, gamma/beta 兩個因子）
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const alpha = avg(acc.alpha);
+  const beta  = avg(acc.beta);
+  const gamma = avg(acc.gamma);
+  if (alpha <= 0 || beta <= 0) return 0; // orange fallback
+  const f1 = (gamma / alpha) * 100;
+  const f2 = (gamma / beta)  * 100;
+  const centers = { orange:[32.5,42.5], green:[32.5,27.5], blue:[42.5,52.5], yellow:[25,20] };
+  let best = null, bestDist = 9999;
+  for (const [k, [cx, cy]] of Object.entries(centers)) {
+    const d = Math.sqrt((cx-f1)**2 + (cy-f2)**2);
+    if (d < bestDist) { bestDist = d; best = k; }
+  }
+  return best || 'orange';
+}
+
+const _ET_BRAIN_INFO = {
+  orange: { emoji:'🟠', name:'橘腦人', color:'#ff9800', bg:'rgba(255,152,0,0.2)',
+    desc:'行動力強・重感受・富情感熱情', traits:['積極主動','情感豐富','社交活躍','直覺敏銳'] },
+  green:  { emoji:'🟢', name:'綠腦人', color:'#4caf50', bg:'rgba(76,175,80,0.2)',
+    desc:'平衡協調・善溝通・重和諧關係', traits:['和諧溝通','靈活適應','觀察細膩','富同理心'] },
+  blue:   { emoji:'🔵', name:'藍腦人', color:'#2196f3', bg:'rgba(33,150,243,0.2)',
+    desc:'分析理性・重邏輯・目標導向強', traits:['邏輯分析','目標清晰','自律專注','系統思考'] },
+  yellow: { emoji:'🟡', name:'黃腦人', color:'#ffc107', bg:'rgba(255,193,7,0.2)',
+    desc:'創意直覺・重內在・善反思深思', traits:['深度思考','創意豐富','直覺靈感','內省安靜'] },
+};
+
+function _renderEegTestResult() {
+  if (!_eegLiveAccum) return;
+  const acc = _eegLiveAccum;
+  const indices = _etComputeAll(acc);
+  const mbti    = _etComputeMBTI(acc);
+  const colorKey= _etCalcBrainColor(acc);
+  const info    = _ET_BRAIN_INFO[colorKey] || _ET_BRAIN_INFO.orange;
+
+  // ── 腦人顏色 ──
+  const circle = document.getElementById('et-brain-color-circle');
+  const bname  = document.getElementById('et-brain-color-name');
+  const bdesc  = document.getElementById('et-brain-color-desc');
+  if (circle) { circle.textContent = info.emoji; circle.style.background = info.bg;
+                circle.style.border = `3px solid ${info.color}`; }
+  if (bname)  bname.textContent = info.name;
+  if (bdesc)  bdesc.textContent = info.desc;
+
+  // ── 決策指標 ──
+  const dec = Math.round(indices.DEC.pct);
+  const setTxt = (id, v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+  const setW   = (id, v) => { const e=document.getElementById(id); if(e) e.style.width=v+'%'; };
+  setTxt('et-dec-val', dec);
+  setTxt('et-dec-desc', dec>=75?'決策果斷・行動力強':dec>=50?'決策穩健・有主見':dec>=30?'傾向審慎・多方考量':'偏向緩慢・重複確認');
+  setW('et-bar-dec', dec); setTxt('et-pct-dec', dec+'%');
+  const ldr=Math.round(indices.LDR.pct); setW('et-bar-ldr', ldr); setTxt('et-pct-ldr', ldr+'%');
+  const ebi=Math.round(indices.EBI.pct); setW('et-bar-ebi', ebi); setTxt('et-pct-ebi', ebi+'%');
+  const res=Math.round(indices.RES.pct); setW('et-bar-res', res); setTxt('et-pct-res', res+'%');
+
+  // ── MBTI ──
+  setTxt('et-mbti-type', mbti.type);
+  const dimsEl = document.getElementById('et-mbti-dims');
+  if (dimsEl) {
+    const dimPairLabels = { 'E/I':['外向','內向'], 'N/S':['直覺','感官'], 'T/F':['理性','情感'], 'J/P':['計畫','彈性'] };
+    dimsEl.innerHTML = mbti.dims.map((d,i) => {
+      const [lbl, rbl] = dimPairLabels[d.pair] || ['',''];
+      const dominated = d.pct >= 50 ? d.pct : 100 - d.pct;
+      const fillL = d.pct >= 50 ? d.pct : 0;
+      const fillR = d.pct < 50  ? 100 - d.pct : 0;
+      return `<div class="et-dim-row">
+        <span class="et-dim-l" style="color:${fillL>50?'#90caf9':'rgba(255,255,255,0.3)'}">${d.pair[0]}</span>
+        <div class="et-dim-track">
+          <div class="et-dim-fill-l" style="width:${fillL}%"></div>
+          <div class="et-dim-fill-r" style="width:${fillR}%"></div>
+        </div>
+        <span class="et-dim-r" style="color:${fillR>50?'#ce93d8':'rgba(255,255,255,0.3)'}">${d.pair[2]}</span>
+        <span class="et-dim-strength">${Math.round(dominated)}%</span>
+        <span style="font-size:10px;color:rgba(255,255,255,0.4);width:28px;text-align:center;">${i===0?'最強':i===3?'最弱':''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── 五大優勢 ──
+  const keys = Object.keys(indices).filter(k => k !== '_bands');
+  const sorted = keys.map(k => ({ ...indices[k], key:k }))
+                     .sort((a,b) => b.pct - a.pct).slice(0, 5);
+  const strengthColors = ['#ffd700','#c0c0c0','#cd7f32','#4caf50','#2196f3'];
+  const strEl = document.getElementById('et-strengths');
+  if (strEl) strEl.innerHTML = sorted.map((s, i) =>
+    `<div class="et-strength-item">
+      <div class="et-strength-rank" style="background:${strengthColors[i]}22;color:${strengthColors[i]};">${i+1}</div>
+      <div class="et-strength-name">${s.label}</div>
+      <div class="et-strength-val">${Math.round(s.pct)}%</div>
+    </div>`
+  ).join('');
+
+  // ── 腦波頻帶概況 ──
+  const bnd = indices._bands;
+  const bands = [
+    { name:'注意力', val:Math.round(bnd.att),  color:'#ff9800' },
+    { name:'放鬆度', val:Math.round(bnd.med),  color:'#00bcd4' },
+    { name:'Alpha',  val:Math.round(bnd.a),    color:'#4caf50' },
+    { name:'Beta',   val:Math.round(bnd.b),    color:'#ff5722' },
+    { name:'Theta',  val:Math.round(bnd.t),    color:'#9c27b0' },
+    { name:'Gamma',  val:Math.round(bnd.g),    color:'#f44336' },
+    { name:'Delta',  val:Math.round(bnd.d),    color:'#607d8b' },
+  ];
+  const bandsEl = document.getElementById('et-bands');
+  if (bandsEl) bandsEl.innerHTML = bands.map(b =>
+    `<div class="et-bar-row">
+      <span class="et-bar-name">${b.name}</span>
+      <div class="et-bar-track"><div class="et-bar-fill" style="background:${b.color};width:${_etClamp(b.val,0,100)}%"></div></div>
+      <span class="et-bar-pct">${b.val}%</span>
+    </div>`
+  ).join('');
 }
 
 // reportKey → reportType + variant + 是否只生成第一章
