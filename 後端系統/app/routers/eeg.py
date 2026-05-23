@@ -100,12 +100,12 @@ def save_eeg_stats(
         meditation   = _i(payload.meditation_percentage),
         delta        = _i(bands.get("delta")),
         theta        = _i(bands.get("theta")),
-        # 沒分 low/high 就一律放到 high_*
-        low_alpha    = 0,
+        # 沒分 low/high 就同時存入 low_* 與 high_*（讓 _session_to_brainwave_data 平均後不會減半）
+        low_alpha    = _i(bands.get("alpha")),
         high_alpha   = _i(bands.get("alpha")),
-        low_beta     = 0,
+        low_beta     = _i(bands.get("beta")),
         high_beta    = _i(bands.get("beta")),
-        low_gamma    = 0,
+        low_gamma    = _i(bands.get("gamma")),
         high_gamma   = _i(bands.get("gamma")),
         feedback     = 0,
     )

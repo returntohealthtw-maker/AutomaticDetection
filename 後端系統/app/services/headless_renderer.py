@@ -249,7 +249,8 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     "✅ 報告下載連結已寄送",
                     "Email 已寄送",
                     "已寄送",
-                    "全部完成",
+                    "待管理員",        # 新版：「待管理員後台預覽核准後寄送至」
+                    "本頁可關閉",       # 新版：「...本頁可關閉。」
                     "已完成",
                 ]
                 err_keywords = [

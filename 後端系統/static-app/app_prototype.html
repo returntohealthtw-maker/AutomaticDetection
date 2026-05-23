@@ -2350,7 +2350,7 @@
         </div>
 
         <div class="detect-footer">
-          <div class="warning">⚠️ 採集完成後系統會自動產生報告並寄送 Email</div>
+          <div class="warning">⚠️ 採集完成後系統將自動產生報告，待管理員審核後寄出</div>
           <div class="detect-buttons">
             <button class="btn-end" onclick="_stopEegLiveCapture(); goto('screen-results')">■ 結束採集</button>
           </div>
@@ -2466,7 +2466,7 @@
 
             <div style="display:flex;gap:10px;margin-top:6px;">
               <button class="btn btn-primary" style="flex:2;" onclick="goto('screen-home')">查看完整報告 →</button>
-              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;" onclick="startFullReportGeneration()">▶ 啟動完整生成</button>
+              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;" onclick="startFullReportGeneration({brainwaveData: window._lastEegCapture || null})">▶ 啟動完整生成</button>
             </div>
           </div>
         </div>
@@ -3974,12 +3974,12 @@ async function startFullReportGeneration(opts) {
   const emailText = document.getElementById('result-email-text');
   if (!card) return;
 
-  // 等 EEG 統計寫入 DB 取得 session_id（最多 3 秒），這樣外部 React App 才能 callback /reports/record
+  // 等 EEG 統計寫入 DB 取得 session_id（最多 8 秒），這樣外部 React App 才能 callback /reports/record
   if (window._lastEegPersistPromise && !window._lastEegSessionId) {
     try {
       await Promise.race([
         window._lastEegPersistPromise,
-        new Promise(res => setTimeout(res, 3000)),
+        new Promise(res => setTimeout(res, 8000)),
       ]);
     } catch (e) { /* 忽略：session_id 可選 */ }
   }
@@ -4756,7 +4756,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   _currentReportVariant  = parsed.variant;
   _testMode_chapter1Only = parsed.chapter1Only;
   // NT$1 測試使用 60 秒採集；正式報告 180 秒
-  _eegLiveDurationSec = (reportKey === 'test_1') ? 60 : 180;
+  _eegLiveDurationSec = 180;
 
   const reportNames = {
     'life_trial':  '腦波分析人生劇本 · 體驗版',

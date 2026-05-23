@@ -18,15 +18,18 @@ from typing import Optional, List, Dict, Any
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session as DbSession
 
 from app.services import ai_report as report_generator
 from app.services import gemini_client
 from app.services import email_sender
 from app.services import report_orchestrator
 from app.services.report_chapters import get_chapters, count_sections
+from app.core.database import get_db
+from app.core import models as M
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,33 @@ router = APIRouter(prefix="/api/v1/report-gen", tags=["report-gen"])
 
 REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]:
+    """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。"""
+    caps = db.query(M.EegCapture).filter(
+        M.EegCapture.session_id == session_id,
+        M.EegCapture.is_baseline == 0,
+    ).all()
+    if not caps:
+        caps = db.query(M.EegCapture).filter(
+            M.EegCapture.session_id == session_id
+        ).all()
+    if not caps:
+        return None
+    n = len(caps)
+    def avg(attr): return round(sum(getattr(c, attr, 0) or 0 for c in caps) / n)
+    return {
+        "attention_percentage":  avg("attention"),
+        "meditation_percentage": avg("meditation"),
+        "bands_avg": {
+            "delta": avg("delta"),
+            "theta": avg("theta"),
+            "alpha": round((avg("low_alpha") + avg("high_alpha")) / 2),
+            "beta":  round((avg("low_beta")  + avg("high_beta"))  / 2),
+            "gamma": round((avg("low_gamma") + avg("high_gamma")) / 2),
+        },
+    }
 
 
 @router.get("/pdf/{job_id}")
@@ -180,7 +210,7 @@ def test_section(req: TestSectionRequest):
 
 
 @router.post("/start")
-def start_full(req: StartRequest):
+def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
     """啟動報告生成（自動依 report_type 路由到外部系統或內建 Gemini）
 
     優先序：
@@ -188,6 +218,18 @@ def start_full(req: StartRequest):
       2. use_external=False → 一定用內建 Gemini
       3. None（預設）       → 若外部 URL 有設就走外部；否則走內建
     """
+    # 若前端沒有傳 brainwave_data（或 bands_avg 為空），嘗試從 DB 重建
+    bw = req.brainwave_data
+    if req.session_id and (not bw or not (bw or {}).get("bands_avg")):
+        try:
+            db_bw = _bw_from_session(db, req.session_id)
+            if db_bw:
+                bw = db_bw
+                logger.info("[report-gen/start] brainwave_data 缺失，已從 session_id=%d DB 補充: attn=%s",
+                            req.session_id, bw.get("attention_percentage"))
+        except Exception as e:
+            logger.warning("[report-gen/start] DB 補充 brainwave_data 失敗: %s", e)
+
     use_ext = req.use_external
     if use_ext is None:
         use_ext = report_orchestrator.is_external_available(req.report_type)
@@ -201,7 +243,7 @@ def start_full(req: StartRequest):
             subject_gender=req.subject_gender or "",
             variant=req.variant,
             chapters_to_generate=req.chapters_to_generate,
-            brainwave_data=req.brainwave_data,
+            brainwave_data=bw,
             extra={"session_id": req.session_id},  # 給外部 React App 在 callback /reports/record 時帶上
         )
         return {
@@ -225,7 +267,7 @@ def start_full(req: StartRequest):
         subject_name=req.subject_name,
         report_type=req.report_type,
         variant=req.variant,
-        brainwave_data=req.brainwave_data,
+        brainwave_data=bw,
         chapters_to_generate=req.chapters_to_generate,
         subject_email=req.subject_email,
         subject_age=req.subject_age,
