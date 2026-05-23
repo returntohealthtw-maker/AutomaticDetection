@@ -11,14 +11,13 @@ import time
 APP_HTML_VERSION = "2026.05.23.1"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 11
-APK_LATEST_VERSION_NAME = "1.1.0"
-APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"  # 把 APK 上傳到 後端系統/static-app/apk/ 即可
+APK_LATEST_VERSION_CODE = 12
+APK_LATEST_VERSION_NAME = "1.1.1"
+APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
-    "v1.1.0 更新內容：\n"
-    "・修正更新彈窗重複出現問題\n"
-    "・狀態列顯示即時時鐘\n"
-    "・腦波儀電量即時更新\n"
+    "v1.1.1 更新內容：\n"
+    "・徹底修正更新彈窗重複出現問題\n"
+    "・按「立即更新」後不再重複提示同版本\n"
     "\n"
     "v1.0.4 歷史更新：\n"
     "・更換 App 圖示\n"

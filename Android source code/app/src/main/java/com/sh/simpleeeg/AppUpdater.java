@@ -45,12 +45,12 @@ public class AppUpdater {
     private static final String VERSION_URL =
             "https://backend-production-2da61.up.railway.app/api/v1/app/version";
 
-    private static final String SKIP_KEY = "skip_apk_version";
+    private static final String SKIP_KEY            = "skip_apk_version";
+    private static final String TRIGGERED_KEY       = "update_triggered_version";
 
     /**
-     * 同一個 process 生命週期內只彈一次更新框。
-     * 使用者按「立即更新」後 App 可能因下載/安裝流程數次回到前景，
-     * 若不加此 flag，每次 onCreate → checkForUpdate 都會重複彈窗。
+     * 同一個 process 生命週期內只彈一次（避免同 session 重複）。
+     * 持久化的「已觸發下載」由 SharedPreferences TRIGGERED_KEY 管理。
      */
     private static volatile boolean sDialogShownThisSession = false;
 
@@ -58,7 +58,7 @@ public class AppUpdater {
      * @param force 為 true 時忽略「使用者按過稍後再說」，強制檢查（例如使用者點「檢查更新」按鈕）
      */
     public static void checkForUpdate(final Context ctx, final boolean force) {
-        // 同 session 已彈過（包括「立即更新」後 App 回到前景），不重複
+        // 同 session 已彈過，不重複
         if (!force && sDialogShownThisSession) return;
 
         new Thread(() -> {
@@ -81,18 +81,27 @@ public class AppUpdater {
 
                     if (latest <= current || apkUrl.isEmpty()) return;
 
+                    android.content.SharedPreferences prefs =
+                            ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE);
+
                     if (!force) {
-                        int skipped = ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
-                                .getInt(SKIP_KEY, 0);
+                        // 使用者選「略過此版」
+                        int skipped = prefs.getInt(SKIP_KEY, 0);
                         if (skipped >= latest) {
                             Log.i(TAG, "使用者已選擇略過版本 " + skipped);
                             return;
                         }
+                        // 使用者已觸發此版本的下載（按過「立即更新」）—— 不重複彈
+                        int triggered = prefs.getInt(TRIGGERED_KEY, 0);
+                        if (triggered >= latest) {
+                            Log.i(TAG, "已觸發下載版本 " + triggered + "，不重複彈窗");
+                            return;
+                        }
                     }
 
+                    sDialogShownThisSession = true;
                     new Handler(Looper.getMainLooper()).post(() ->
                             showUpdateDialog(ctx, latest, apkUrl, notes));
-                    sDialogShownThisSession = true;
                 }
             } catch (Throwable t) {
                 Log.w(TAG, "checkForUpdate", t);
@@ -108,7 +117,12 @@ public class AppUpdater {
                         ? "有更新可用，建議立即更新以取得最新功能與修正。"
                         : notes)
                 .setCancelable(false)
-                .setPositiveButton("立即更新", (d, w) -> downloadAndInstall(ctx, apkUrl))
+                .setPositiveButton("立即更新", (d, w) -> {
+                    // 記錄「已觸發下載此版本」，App 重啟後不再重複彈窗
+                    ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
+                            .edit().putInt(TRIGGERED_KEY, latest).apply();
+                    downloadAndInstall(ctx, apkUrl);
+                })
                 .setNeutralButton("稍後再說", (d, w) -> d.dismiss())
                 .setNegativeButton("略過此版", (d, w) -> {
                     ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
@@ -159,6 +173,9 @@ public class AppUpdater {
                             return;
                         }
                     }
+                    // 安裝成功後清除觸發記錄，讓下次新版本能正常提醒
+                    ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
+                            .edit().remove(TRIGGERED_KEY).apply();
                     triggerInstall(ctx, apkFile);
                 }
             };
