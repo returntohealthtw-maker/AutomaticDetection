@@ -48,9 +48,19 @@ public class AppUpdater {
     private static final String SKIP_KEY = "skip_apk_version";
 
     /**
+     * 同一個 process 生命週期內只彈一次更新框。
+     * 使用者按「立即更新」後 App 可能因下載/安裝流程數次回到前景，
+     * 若不加此 flag，每次 onCreate → checkForUpdate 都會重複彈窗。
+     */
+    private static volatile boolean sDialogShownThisSession = false;
+
+    /**
      * @param force 為 true 時忽略「使用者按過稍後再說」，強制檢查（例如使用者點「檢查更新」按鈕）
      */
     public static void checkForUpdate(final Context ctx, final boolean force) {
+        // 同 session 已彈過（包括「立即更新」後 App 回到前景），不重複
+        if (!force && sDialogShownThisSession) return;
+
         new Thread(() -> {
             try {
                 OkHttpClient client = new OkHttpClient.Builder()
@@ -82,6 +92,7 @@ public class AppUpdater {
 
                     new Handler(Looper.getMainLooper()).post(() ->
                             showUpdateDialog(ctx, latest, apkUrl, notes));
+                    sDialogShownThisSession = true;
                 }
             } catch (Throwable t) {
                 Log.w(TAG, "checkForUpdate", t);
