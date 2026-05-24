@@ -1099,15 +1099,18 @@ def all_subjects_overview(
             "medications":     s.medications or "",
             "created_at":      s.created_at.isoformat() if s.created_at else None,
             # 顧問資訊（哪個帳號建檔）
-            "consultant_id":   s.consultant_id,
-            "consultant_name": (cons.name if cons else None),
-            "consultant_org":  (cons.org  if cons else None),
-            "consultant_role": (cons.role if cons else None),
+            "consultant_id":       s.consultant_id,
+            "consultant_name":     (cons.name if cons else None),
+            "consultant_org":      (cons.org  if cons else None),
+            "consultant_role":     (cons.role if cons else None),
+            "consultant_org_type": (cons.org_type if cons else None),
+            "consultant_phone":    (cons.phone if cons else None),
             # 檢測場次彙總
-            "sessions_count":     len(sess_list),
-            "latest_session_id":  (latest.session_id if latest else None),
-            "latest_report_type": (latest.report_type if latest else None),
+            "sessions_count":         len(sess_list),
+            "latest_session_id":      (latest.session_id if latest else None),
+            "latest_report_type":     (latest.report_type if latest else None),
             "latest_consultant_name": (latest.consultant_name if latest else None),
+            "latest_session_at":      (latest.created_at if latest else None),  # ms timestamp
             # 報告 + 腦波
             "reports":           rep_list,
             "latest_brainwave":  bw,

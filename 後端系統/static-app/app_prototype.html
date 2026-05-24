@@ -6138,8 +6138,42 @@ function _renderAllSubjectCard(s) {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const ageTxt = (s.age != null) ? `${s.age}歲` : '—';
+
+  // ── 時間顯示 ────────────────────────────────────────────────────
+  const fmtTime = (t) => {
+    if (!t) return null;
+    try {
+      // 後端 created_at(Subject)=ISO 字串；latest_session_at(Session)=ms timestamp
+      const d = (typeof t === 'number') ? new Date(t) : new Date(String(t));
+      if (isNaN(d.getTime())) return null;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hh  = String(d.getHours()).padStart(2, '0');
+      const mm  = String(d.getMinutes()).padStart(2, '0');
+      return `${y}/${m}/${day} ${hh}:${mm}`;
+    } catch (e) { return null; }
+  };
+  const subjectCreatedTxt = fmtTime(s.created_at);
+  const latestSessionTxt  = fmtTime(s.latest_session_at);
+
+  // ── 顧問 + 機構類型徽章 ────────────────────────────────────────
+  const ORG_TYPE_COLOR = {
+    '加盟商':   { bg: '#fff3e0', fg: '#e65100', emoji: '🏪' },
+    '直營商':   { bg: '#e8f5e9', fg: '#2e7d32', emoji: '🏬' },
+    '代理商':   { bg: '#e3f2fd', fg: '#1565c0', emoji: '🏢' },
+    '專案人員': { bg: '#f3e5f5', fg: '#6a1b9a', emoji: '👔' },
+    '工作人員': { bg: '#eceff1', fg: '#455a64', emoji: '👷' },
+    '其他':     { bg: '#f5f5f5', fg: '#616161', emoji: '🏷️' },
+  };
+  let orgTypeBadge = '';
+  if (s.consultant_org_type) {
+    const c = ORG_TYPE_COLOR[s.consultant_org_type] || ORG_TYPE_COLOR['其他'];
+    orgTypeBadge = `<span style="background:${c.bg};color:${c.fg};font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700;">${c.emoji} ${esc(s.consultant_org_type)}</span>`;
+  }
+
   const consTxt = s.consultant_name
-    ? `${esc(s.consultant_name)}${s.consultant_org ? ` · ${esc(s.consultant_org)}` : ''}`
+    ? `<span style="color:#1a3a6e;font-weight:700;">${esc(s.consultant_name)}</span>${s.consultant_org ? ` <span style="color:#666;">· ${esc(s.consultant_org)}</span>` : ''}`
     : '<span style="color:#999;">（無）</span>';
 
   // 報告列表
@@ -6198,13 +6232,25 @@ function _renderAllSubjectCard(s) {
 
   return `
     <div style="background:white;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+      <!-- 標題列：姓名 + 年齡性別 -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-        <div style="font-size:15px;font-weight:700;color:#1a3a6e;">${esc(s.name)}</div>
+        <div style="font-size:16px;font-weight:700;color:#1a3a6e;">${esc(s.name)}</div>
         <div style="font-size:12px;color:#666;">${ageTxt} · ${esc(s.gender || '—')}</div>
         ${s.occupation ? `<div style="font-size:11px;color:#888;background:#eef2f7;padding:2px 7px;border-radius:8px;">${esc(s.occupation)}</div>` : ''}
-        <div style="flex:1;"></div>
-        <div style="font-size:11px;color:#888;">建立帳號：${consTxt}</div>
       </div>
+
+      <!-- 建立資訊區（時間 + 顧問 + 機構類型）-->
+      <div style="background:#f7faff;border:1px solid #dde6f2;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#444;line-height:1.7;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="color:#666;">🏢 建立帳號：</span>
+          ${consTxt}
+          ${orgTypeBadge}
+        </div>
+        ${subjectCreatedTxt ? `<div><span style="color:#666;">📅 建檔時間：</span><span style="color:#222;font-weight:600;">${subjectCreatedTxt}</span></div>` : ''}
+        ${latestSessionTxt ? `<div><span style="color:#666;">🧪 最新檢測：</span><span style="color:#0d47a1;font-weight:600;">${latestSessionTxt}</span>${s.latest_consultant_name ? ` <span style="color:#666;">（執行：${esc(s.latest_consultant_name)}）</span>` : ''}</div>` : ''}
+      </div>
+
+      <!-- 基本資料 -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;font-size:12px;color:#444;margin-bottom:8px;">
         <div>📧 ${esc(s.email || '—')}</div>
         <div>📱 ${esc(s.phone || '—')}</div>
