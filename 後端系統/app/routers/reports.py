@@ -316,31 +316,98 @@ def list_reports(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """列出已生成的報告 + GCS URL（管理員後台用）"""
+    """列出已生成的報告 + GCS URL（管理員後台用）。
+
+    回傳資料豐富化：
+      - 報告類型轉成中文（report_kind_zh），例如 life_script_full → 成人腦波分析（完整版）
+      - 受測者基本資料：subject_name、subject_age、subject_gender
+      - 若 session_id 為 NULL，會嘗試從 Report.client_summary 取出 subject_name
+      - 顧問完整資訊：consultant_name、consultant_org、consultant_role
+    """
+    import json as _json
+
     user = require_user(authorization, db)
 
     q = db.query(M.Report, M.Session).outerjoin(
         M.Session, M.Report.session_id == M.Session.session_id
     ).filter(M.Report.pdf_url.isnot(None))
 
-    # 一般顧問只能看自己的；admin 看全部
     if user.role != "admin" or only_mine:
         q = q.filter(M.Session.consultant_name == user.name)
 
     rows = q.order_by(M.Report.report_id.desc()).limit(limit).all()
+
+    # ── 把顧問名稱對應到顧問記錄（取機構/角色）
+    cons_names = {sess.consultant_name for _r, sess in rows if sess and sess.consultant_name}
+    cons_map: dict[str, M.Consultant] = {}
+    if cons_names:
+        for c in db.query(M.Consultant).filter(M.Consultant.name.in_(list(cons_names))).all():
+            cons_map[c.name] = c
+
+    REPORT_KIND_ZH = {
+        # 主類型
+        "life_script":   "成人腦波分析",
+        "child":         "兒童腦波天賦解碼",
+        "parent_child":  "親子腦波共振關係報告",
+        "marital":       "夫妻腦波共振關係報告",
+        # 變體
+        "trial":  "體驗版",
+        "full":   "完整版",
+        "vip":    "VIP 版",
+    }
+
+    def _kind_zh(kind: Optional[str]) -> str:
+        if not kind:
+            return "—"
+        parts = kind.split("_")
+        # 嘗試找最長 prefix 對應到主類型
+        for n in (3, 2, 1):
+            if len(parts) >= n:
+                key = "_".join(parts[:n])
+                if key in REPORT_KIND_ZH:
+                    main = REPORT_KIND_ZH[key]
+                    rest = parts[n:]
+                    if rest:
+                        var = REPORT_KIND_ZH.get(rest[-1], rest[-1])
+                        return f"{main}（{var}）"
+                    return main
+        return kind
+
+    def _name_from_summary(s: Optional[str]) -> Optional[str]:
+        if not s:
+            return None
+        try:
+            data = _json.loads(s)
+            return data.get("subject_name")
+        except Exception:
+            return None
+
     out = []
     for rep, sess in rows:
+        cons = cons_map.get(sess.consultant_name) if (sess and sess.consultant_name) else None
+        fallback_name = _name_from_summary(rep.client_summary)
+
+        subject_name  = (sess.subject_name if sess else None) or fallback_name or "(無 session)"
+        subject_age   = (sess.subject_age if sess else None)
+        subject_gender = (sess.subject_gender if sess else None)
+
         out.append({
-            "report_id":    rep.report_id,
-            "session_id":   rep.session_id,
-            "subject_name": (sess.subject_name if sess else "(無 session)"),
-            "subject_email": rep.notify_email,
-            "report_kind":  rep.talent_report_kind,
-            "pdf_url":      rep.pdf_url,
-            "status":       rep.status,
-            "email_sent":   rep.email_sent,
-            "completed_at": rep.completed_at.isoformat() if rep.completed_at else None,
-            "consultant":   (sess.consultant_name if sess else None),
+            "report_id":      rep.report_id,
+            "session_id":     rep.session_id,
+            "subject_name":   subject_name,
+            "subject_age":    subject_age,
+            "subject_gender": subject_gender,
+            "subject_email":  rep.notify_email,
+            "report_kind":    rep.talent_report_kind,
+            "report_kind_zh": _kind_zh(rep.talent_report_kind),
+            "pdf_url":        rep.pdf_url,
+            "status":         rep.status,
+            "email_sent":     rep.email_sent,
+            "completed_at":   rep.completed_at.isoformat() if rep.completed_at else None,
+            "consultant":     (sess.consultant_name if sess else None),
+            "consultant_org": (cons.org if cons else None),
+            "consultant_role": (cons.role if cons else None),
+            "orphan":         (rep.session_id is None),
         })
     return {"ok": True, "count": len(out), "reports": out}
 

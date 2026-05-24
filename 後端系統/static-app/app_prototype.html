@@ -1252,9 +1252,12 @@
           <!-- 子分頁 1：DB 紀錄（已生成 + record callback 成功的）-->
           <div id="reports-subpane-db" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
             <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;">
-              <input id="admin-report-search" type="text" placeholder="搜尋受測者 / Email / 報告類型" style="flex:1;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminReports()">
+              <input id="admin-report-search" type="text" placeholder="搜尋受測者 / Email / 報告類型 / 顧問" style="flex:1;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminReports()">
               <span id="admin-report-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminReports()">🔄 重新載入</button>
+            </div>
+            <div style="background:#e3f2fd;padding:8px 16px;border-bottom:1px solid #90caf9;font-size:11px;color:#0d47a1;line-height:1.6;">
+              💡 此處僅顯示「PDF 已上傳 GCS 且 callback 成功」的報告。若數量比預期少，請點上方「🧠 檢測 ↔ 報告」查看漏報告的檢測場次並批次重生。
             </div>
             <div id="admin-report-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
           </div>
@@ -6605,32 +6608,66 @@ function _filterAdminReports() {
     ? _adminReportsCache.filter(r =>
         (r.subject_name || '').toLowerCase().includes(q) ||
         (r.subject_email || '').toLowerCase().includes(q) ||
-        (r.report_kind || '').toLowerCase().includes(q)
+        (r.report_kind || '').toLowerCase().includes(q) ||
+        (r.report_kind_zh || '').toLowerCase().includes(q) ||
+        (r.consultant || '').toLowerCase().includes(q) ||
+        (r.consultant_org || '').toLowerCase().includes(q)
       )
     : _adminReportsCache;
   if (!rows.length) {
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">沒有符合的報告</div>';
     return;
   }
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   listEl.innerHTML = rows.map(r => {
     const pendingSend = !r.email_sent && r.pdf_url;
     const sendBtn = pendingSend
       ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
       : '';
+
+    // 受測者顯示：姓名 · 年齡 · 性別
+    const subjMeta = [];
+    if (r.subject_age != null && r.subject_age !== '') subjMeta.push(`${r.subject_age}歲`);
+    if (r.subject_gender) subjMeta.push(esc(r.subject_gender));
+    const subjMetaTxt = subjMeta.length ? ` <span style="color:#666;font-weight:400;font-size:12px;">· ${subjMeta.join(' · ')}</span>` : '';
+
+    // 報告類型（中文）
+    const kindTxt = r.report_kind_zh || r.report_kind || '—';
+    const kindBadge = `<span style="background:#e8eef9;color:#1a3a6e;font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600;">📑 ${esc(kindTxt)}</span>`;
+
+    // 顧問 / 機構
+    const consTxt = r.consultant
+      ? `${esc(r.consultant)}${r.consultant_org ? ` · ${esc(r.consultant_org)}` : ''}`
+      : '<span style="color:#bbb;">無資料</span>';
+
+    // 孤兒報告警告
+    const orphanWarn = r.orphan
+      ? '<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;">⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</div>'
+      : '';
+
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${pendingSend ? 'border-left:4px solid #ff9800;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;color:#1a3a6e;font-size:14px;">${r.subject_name || '(未知)'} <span style="color:#888;font-weight:400;font-size:11px;">#${r.report_id}</span></div>
-          <div style="font-size:11px;color:#666;margin-top:3px;">
-            ${r.subject_email ? `📧 ${r.subject_email}` : '<span style="color:#bbb;">無 email</span>'}
-            ${r.report_kind ? ` · 🏷️ ${r.report_kind}` : ''}
-            ${r.consultant ? ` · 👤 ${r.consultant}` : ''}
+          <div style="font-size:15px;font-weight:700;color:#1a3a6e;">
+            👤 ${esc(r.subject_name || '(未知)')}${subjMetaTxt}
+            <span style="color:#888;font-weight:400;font-size:11px;margin-left:4px;">#${r.report_id}</span>
+          </div>
+          <div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            ${kindBadge}
+            ${r.subject_email
+              ? `<span style="font-size:11px;color:#444;">📧 ${esc(r.subject_email)}</span>`
+              : '<span style="font-size:11px;color:#bbb;">📧 無 email</span>'}
+          </div>
+          <div style="font-size:11px;color:#555;margin-top:4px;">
+            🏢 建立帳號：${consTxt}
           </div>
           <div style="font-size:10px;color:#999;margin-top:3px;">
-            ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
+            🕒 ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
             ${r.email_sent ? ' · <span style="color:#4CAF50;">✉️ 已寄信</span>' : ' · <span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>'}
           </div>
+          ${orphanWarn}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載'}</button>
