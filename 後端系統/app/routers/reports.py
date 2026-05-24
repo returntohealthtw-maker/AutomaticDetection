@@ -901,6 +901,158 @@ def diag() -> dict:
     }
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# 管理員：跨帳號受測者全覽
+# ────────────────────────────────────────────────────────────────────────────
+@router.get("/all-subjects-overview")
+def all_subjects_overview(
+    q: Optional[str] = Query(None, description="關鍵字（姓名 / Email / 手機 / 顧問）"),
+    limit: int = Query(500, ge=1, le=2000),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """管理員專用：列出「所有帳號做過的受測者資訊」。
+
+    每筆包含：
+      - 基本資料：subject_id / name / birth_date / gender / age / email / phone /
+                  occupation / medical_history / medications / consultant_id /
+                  consultant_name / consultant_org / created_at
+      - 檢測場次彙總：sessions_count、latest_session_id、latest_session_at、
+                      latest_report_type
+      - 該受測者的所有報告（最多 20 筆，含 pdf_url、status、email_sent、
+        report_kind、completed_at、session_id）
+      - 該受測者最新一次檢測的腦波平均（attention / meditation /
+        bands_avg: theta/alpha/beta/gamma）
+
+    比對策略：先用 Subject.email、Subject.name 同時對應到 Session（
+      sessions 表沒有 subject_id 欄位，所以靠 subject_name 做次要比對）。
+      Report 透過 session_id 反查。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="僅管理員可查看跨帳號受測者資訊")
+
+    # 1) 取所有 Subjects（admin 可看全部）
+    subj_q = db.query(M.Subject)
+    if q:
+        kw = f"%{q.strip()}%"
+        from sqlalchemy import or_ as _or
+        subj_q = subj_q.filter(_or(
+            M.Subject.name.like(kw),
+            M.Subject.email.like(kw),
+            M.Subject.phone.like(kw),
+        ))
+    subjects = subj_q.order_by(M.Subject.subject_id.desc()).limit(limit).all()
+
+    # 2) 顧問清單：subject.consultant_id → Consultant
+    cons_ids = {s.consultant_id for s in subjects if s.consultant_id}
+    cons_map: dict[int, M.Consultant] = {}
+    if cons_ids:
+        for c in db.query(M.Consultant).filter(M.Consultant.consultant_id.in_(cons_ids)).all():
+            cons_map[c.consultant_id] = c
+
+    # 3) 取得所有相關 Session（先用 email/name 雙向比對）
+    #    為避免一次拉太多，只取最近 N 筆 session，再 in-memory 比對
+    name_set  = {s.name for s in subjects if s.name}
+    email_set = {s.email for s in subjects if s.email}
+    sessions_q = db.query(M.Session).order_by(M.Session.session_id.desc())
+    sessions = sessions_q.limit(5000).all()
+    # 用 (name, age) 不夠穩，用 name 為主、email 為輔
+    sess_by_name: dict[str, list[M.Session]] = {}
+    for s in sessions:
+        if s.subject_name in name_set:
+            sess_by_name.setdefault(s.subject_name, []).append(s)
+
+    # 4) 取得這些 session 對應的 Report
+    all_sess_ids = []
+    for arr in sess_by_name.values():
+        all_sess_ids.extend([x.session_id for x in arr])
+    rep_map: dict[int, M.Report] = {}
+    if all_sess_ids:
+        for r in db.query(M.Report).filter(M.Report.session_id.in_(all_sess_ids)).all():
+            rep_map[r.session_id] = r
+
+    # 5) helper：年齡計算
+    def _age_from_birth(birth: str) -> Optional[int]:
+        if not birth or len(birth) < 4:
+            return None
+        try:
+            from datetime import date
+            y, m, d = birth.split("-")
+            b = date(int(y), int(m), int(d))
+            today = date.today()
+            return today.year - b.year - ((today.month, today.day) < (b.month, b.day))
+        except Exception:
+            return None
+
+    out = []
+    for s in subjects:
+        cons = cons_map.get(s.consultant_id) if s.consultant_id else None
+        sess_list = sess_by_name.get(s.name, [])
+        latest = sess_list[0] if sess_list else None
+
+        # 該受測者所有報告（最近 20 筆）
+        rep_list = []
+        for ss in sess_list[:20]:
+            r = rep_map.get(ss.session_id)
+            if not r:
+                continue
+            rep_list.append({
+                "report_id":    r.report_id,
+                "session_id":   r.session_id,
+                "report_kind":  r.talent_report_kind,
+                "status":       r.status,
+                "pdf_url":      r.pdf_url,
+                "email_sent":   r.email_sent,
+                "notify_email": r.notify_email,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "report_type":  ss.report_type,
+                "session_at":   ss.created_at if hasattr(ss, "created_at") else None,
+            })
+
+        # 最新一次檢測的腦波平均
+        bw = None
+        if latest:
+            try:
+                bw = _session_to_brainwave_data(db, latest.session_id)
+            except Exception:
+                bw = None
+
+        out.append({
+            # 基本資料
+            "subject_id":      s.subject_id,
+            "name":            s.name,
+            "birth_date":      s.birth_date,
+            "age":             _age_from_birth(s.birth_date),
+            "gender":          s.gender,
+            "occupation":      s.occupation or "",
+            "email":           s.email,
+            "phone":           s.phone,
+            "medical_history": s.medical_history or "",
+            "medications":     s.medications or "",
+            "created_at":      s.created_at.isoformat() if s.created_at else None,
+            # 顧問資訊（哪個帳號建檔）
+            "consultant_id":   s.consultant_id,
+            "consultant_name": (cons.name if cons else None),
+            "consultant_org":  (cons.org  if cons else None),
+            "consultant_role": (cons.role if cons else None),
+            # 檢測場次彙總
+            "sessions_count":     len(sess_list),
+            "latest_session_id":  (latest.session_id if latest else None),
+            "latest_report_type": (latest.report_type if latest else None),
+            "latest_consultant_name": (latest.consultant_name if latest else None),
+            # 報告 + 腦波
+            "reports":           rep_list,
+            "latest_brainwave":  bw,
+        })
+
+    return {
+        "ok":    True,
+        "count": len(out),
+        "subjects": out,
+    }
+
+
 # ─── 報告生成事件監看 ────────────────────────────────────────────────────────
 #
 # 設計：外部 React App（成人 / 兒童）每跑完一個章節或關鍵步驟，就 POST 一筆事件
