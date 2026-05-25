@@ -5170,6 +5170,9 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   el.style.background = '#fff5f2';
 
   _currentReportType = reportKey; // 記錄當前報告類型供 AndroidBridge 使用
+  // ⚠️ 重要：每次選擇正式報告時，重置 EegTest 旗標
+  // （否則之前用過「腦波儀測試」會殘留 _eegTestMode=true，導致正式報告完成後不會跳 screen-results、不會觸發報告生成）
+  _eegTestMode = false;
   // 同步解析出 AI 生成時要用的 reportType / variant / 測試模式旗標
   const parsed = _parseReportKey(reportKey);
   _currentReportSubType  = parsed.type;
@@ -6657,7 +6660,8 @@ function _filterAdminReports() {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   listEl.innerHTML = rows.map(r => {
-    const pendingSend = !r.email_sent && r.pdf_url;
+    const isGenerating = !r.pdf_url;                       // 還沒收到 Vercel callback
+    const pendingSend  = !r.email_sent && r.pdf_url;       // PDF 好了但 admin 尚未核准寄信
     const sendBtn = pendingSend
       ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
       : '';
@@ -6682,8 +6686,15 @@ function _filterAdminReports() {
       ? '<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;">⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</div>'
       : '';
 
+    const borderColor = isGenerating ? '#90caf9'
+                       : pendingSend ? '#ff9800'
+                       : 'transparent';
+    const statusLabel = isGenerating ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中（等待 Vercel 完成）</span>'
+                       : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
+                                        : '<span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>');
+
     return `
-    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${pendingSend ? 'border-left:4px solid #ff9800;' : ''}">
+    <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${borderColor !== 'transparent' ? `border-left:4px solid ${borderColor};` : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:700;color:#1a3a6e;">
@@ -6701,12 +6712,12 @@ function _filterAdminReports() {
           </div>
           <div style="font-size:10px;color:#999;margin-top:3px;">
             🕒 ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
-            ${r.email_sent ? ' · <span style="color:#4CAF50;">✉️ 已寄信</span>' : ' · <span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>'}
+            · ${statusLabel}
           </div>
           ${orphanWarn}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載'}</button>
+          <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
         </div>
       </div>

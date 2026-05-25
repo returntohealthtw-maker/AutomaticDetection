@@ -235,6 +235,40 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         use_ext = report_orchestrator.is_external_available(req.report_type)
 
     if use_ext:
+        # ── 先建立一筆「pending」Report，讓 admin「報告管理」可立刻看到「⏳ 生成中」狀態 ──
+        # 若 Vercel callback /reports/record 成功，會 UPDATE 這筆（不會重覆建）
+        # 若失敗或 timeout，這筆仍會保留在 DB 供 admin 查找
+        try:
+            from sqlalchemy import func as _sqlfunc
+            import json as _json
+
+            existing_rep = None
+            if req.session_id:
+                existing_rep = db.query(M.Report).filter(
+                    M.Report.session_id == req.session_id
+                ).first()
+            if existing_rep is None:
+                pending_summary = _json.dumps({
+                    "subject_name": req.subject_name,
+                    "source": "report-gen/start (pending)",
+                }, ensure_ascii=False)
+                pending_rep = M.Report(
+                    session_id          = req.session_id,
+                    status              = "generating",
+                    pdf_url             = None,
+                    notify_email        = req.subject_email or None,
+                    email_sent          = 0,
+                    talent_report_kind  = f"{req.report_type}_{req.variant}",
+                    client_summary      = pending_summary,
+                    completed_at        = None,
+                )
+                db.add(pending_rep)
+                db.commit()
+                logger.info("[report-gen/start] 建立 pending Report (session_id=%s, kind=%s_%s)",
+                            req.session_id, req.report_type, req.variant)
+        except Exception as pe:
+            logger.warning("[report-gen/start] 建立 pending Report 失敗: %s", pe)
+
         result = report_orchestrator.trigger_external_report(
             report_type=req.report_type,
             subject_name=req.subject_name,

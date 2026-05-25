@@ -140,7 +140,33 @@ def start_headless_job(
     job_id = job_id or f"hl-{uuid.uuid4().hex[:12]}"
 
     # 組裝 ?auto=1&... URL（與舊 vite_prefill 相同 schema）
+    bw_present = bool(brainwave_data and (brainwave_data.get("bands_avg") or brainwave_data.get("attention_percentage")))
     ba = (brainwave_data or {}).get("bands_avg") or {}
+
+    # 取值函式：有資料就用實際值（不允許 0 被預設覆蓋），無資料時 fallback=50
+    def _v(d, k, default=50):
+        try:
+            x = d.get(k) if isinstance(d, dict) else None
+            if x is None or x == "":
+                return int(default)
+            return int(round(float(x)))
+        except Exception:
+            return int(default)
+
+    attn_val  = _v(brainwave_data, "attention_percentage")
+    medi_val  = _v(brainwave_data, "meditation_percentage")
+    delta_val = _v(ba, "delta")
+    theta_val = _v(ba, "theta")
+    alpha_val = _v(ba, "alpha")
+    beta_val  = _v(ba, "beta")
+    gamma_val = _v(ba, "gamma")
+
+    logger.info(
+        "[headless] brainwave_data %s → attn=%d, medi=%d, bands(δ/θ/α/β/γ)=%d/%d/%d/%d/%d",
+        "received" if bw_present else "MISSING (defaults=50)",
+        attn_val, medi_val, delta_val, theta_val, alpha_val, beta_val, gamma_val,
+    )
+
     params = {
         "auto":       "1",
         "name":       subject_name or "",
@@ -149,15 +175,28 @@ def start_headless_job(
         "api_base":   api_base or "",
         "session_id": str(session_id or ""),
         "report_type": report_type,
-        "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
-        "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
-        "theta":      int(ba.get("theta", 50)),
-        "highAlpha":  int(min(100, ba.get("alpha", 50) * 1.1)),
-        "lowAlpha":   int(max(0,   ba.get("alpha", 50) * 0.9)),
-        "highBeta":   int(min(100, ba.get("beta",  50) * 1.1)),
-        "lowBeta":    int(max(0,   ba.get("beta",  50) * 0.9)),
-        "highGamma":  int(min(100, ba.get("gamma", 50) * 1.1)),
-        "lowGamma":   int(max(0,   ba.get("gamma", 50) * 0.9)),
+        # 主要欄位（舊 schema）
+        "focus":      attn_val,
+        "relaxation": medi_val,
+        "theta":      theta_val,
+        "highAlpha":  min(100, int(alpha_val * 1.1)),
+        "lowAlpha":   max(0,   int(alpha_val * 0.9)),
+        "highBeta":   min(100, int(beta_val  * 1.1)),
+        "lowBeta":    max(0,   int(beta_val  * 0.9)),
+        "highGamma":  min(100, int(gamma_val * 1.1)),
+        "lowGamma":   max(0,   int(gamma_val * 0.9)),
+        # 別名 aliases（防止 Vercel React App 改名後仍能讀到資料 → 不再 fallback 50）
+        "attention":            attn_val,
+        "attention_percentage": attn_val,
+        "concentration":        attn_val,
+        "meditation":           medi_val,
+        "meditation_percentage": medi_val,
+        "delta":                delta_val,
+        "alpha":                alpha_val,
+        "beta":                 beta_val,
+        "gamma":                gamma_val,
+        # 也把整包 brainwave_data 用 JSON 形式塞進去（base64 避免特殊字元）
+        "bw_present":           "1" if bw_present else "0",
     }
     # 把 REPORTS_INGEST_SECRET 一併帶到 URL，讓 React app 在 callback /events 與 /record 時
     # 能加上 X-Ingest-Secret header（否則後端有設 secret 時會被 401 擋掉，導致監看 + 報告管理都看不到資料）

@@ -328,9 +328,11 @@ def list_reports(
 
     user = require_user(authorization, db)
 
+    # ⚠️ 不再過濾 pdf_url，所有 Report 列出（包含尚未完成、外部生成失敗的）
+    # 這樣 admin 才能完整看到「這個系統受測者所有生成過的報告」
     q = db.query(M.Report, M.Session).outerjoin(
         M.Session, M.Report.session_id == M.Session.session_id
-    ).filter(M.Report.pdf_url.isnot(None))
+    )
 
     if user.role != "admin" or only_mine:
         q = q.filter(M.Session.consultant_name == user.name)
