@@ -133,6 +133,9 @@ public class AppUpdater {
                     ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
                             .edit().putInt(TRIGGERED_KEY, latest).apply();
                     openBrowserDownload(ctx, apkUrl);
+                    // 顯示「升級進行中」追蹤對話框，給加盟商明確指引
+                    new Handler(Looper.getMainLooper()).postDelayed(
+                            () -> showDownloadingDialog(ctx, latest, apkUrl), 800);
                 })
                 .setNeutralButton("稍後再說", (d, w) -> d.dismiss())
                 .setNegativeButton("略過此版", (d, w) ->
@@ -153,6 +156,58 @@ public class AppUpdater {
             ctx.startActivity(intent);
         } catch (Throwable t) {
             Log.e(TAG, "openBrowserDownload", t);
+        }
+    }
+
+    /**
+     * 「升級進行中」追蹤對話框：解決加盟商「點完立即更新後不知道是否還在跑」的問題。
+     * 流程：
+     *  1. 顯示明確的當前狀態（瀏覽器已開、下載中、需要做什麼）
+     *  2. 提供「我已下載完成」「再次開啟下載」「我已完成安裝（重新啟動）」按鈕
+     *  3. setCancelable(false) 避免使用者誤點返回鍵把對話框關掉
+     */
+    private static void showDownloadingDialog(final Context ctx, final int latest, final String apkUrl) {
+        try {
+            String msg =
+                "📥 已開啟系統瀏覽器下載新版本 APK\n" +
+                "（檔案約 8 MB，依網速約需 30~60 秒）\n" +
+                "\n" +
+                "🔔 下載完成後，會發生以下事情：\n" +
+                "  ① 系統會在「通知欄」顯示「下載完成」\n" +
+                "  ② 點該通知，會自動跳出安裝畫面\n" +
+                "  ③ 點【安裝】按鈕\n" +
+                "  ④ 安裝完成後，重新打開 APP\n" +
+                "\n" +
+                "💡 找不到下載進度？\n" +
+                "請從手機頂端往下滑開啟「通知欄」查看，\n" +
+                "或切換到瀏覽器 APP（Chrome、小米瀏覽器）。\n" +
+                "\n" +
+                "⚠️ 在更新完成前，請勿關閉此對話框";
+
+            new AlertDialog.Builder(ctx)
+                .setTitle("⏳ 升級進行中 → v" + latest)
+                .setMessage(msg)
+                .setCancelable(false)
+                .setPositiveButton("✅ 我已完成安裝（關閉舊版）", (d, w) -> {
+                    // 使用者已在系統那邊裝完新版，告訴他重新開 APP
+                    new AlertDialog.Builder(ctx)
+                            .setTitle("✅ 升級流程已完成")
+                            .setMessage("請從「桌面」或「最近使用」重新打開「腦波檢測系統」APP，\n" +
+                                        "新版本就會啟動。\n\n" +
+                                        "（若仍是舊版，代表還沒裝完，請先到通知欄完成安裝）")
+                            .setPositiveButton("好的，我去重開 APP", null)
+                            .show();
+                })
+                .setNeutralButton("🔄 再次開啟下載連結", (d, w) -> {
+                    openBrowserDownload(ctx, apkUrl);
+                    // 重新顯示這個追蹤對話框
+                    new Handler(Looper.getMainLooper()).postDelayed(
+                            () -> showDownloadingDialog(ctx, latest, apkUrl), 800);
+                })
+                .setNegativeButton("稍後再說（保留進度）", (d, w) -> d.dismiss())
+                .show();
+        } catch (Throwable t) {
+            Log.e(TAG, "showDownloadingDialog", t);
         }
     }
 }

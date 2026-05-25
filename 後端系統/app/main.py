@@ -11,10 +11,16 @@ import time
 APP_HTML_VERSION = "2026.05.25.7"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 15
-APK_LATEST_VERSION_NAME = "1.1.4"
+APK_LATEST_VERSION_CODE = 16
+APK_LATEST_VERSION_NAME = "1.1.5"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
+    "v1.1.5 更新內容：\n"
+    "・升級流程加入「升級進行中」追蹤對話框\n"
+    "・點立即更新後會持續顯示『下載中』狀態，不再讓加盟商困惑\n"
+    "・新增「已完成安裝」「再次開啟下載」操作按鈕\n"
+    "・包含 v1.1.4 全部修正（小米 A15 電量顯示等）\n"
+    "\n"
     "v1.1.4 更新內容：\n"
     "・修正小米 Android 15 / HyperOS 2 腦波儀電量無法顯示問題\n"
     "・改用 BluetoothManager API（getDefaultAdapter 已淘汰）\n"
