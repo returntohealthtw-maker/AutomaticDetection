@@ -1408,8 +1408,8 @@
             <button class="start-btn" style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 14px;" onclick="startEegTest()">
               <span class="icon" style="font-size:20px;">🧠</span>
               <span class="text">
-                <div class="title" style="font-size:14px;">腦波儀測試</div>
-                <div class="sub">即時分析 · 無需填寫資料 · 不記錄</div>
+                <div class="title" style="font-size:14px;">腦波儀健康檢查</div>
+                <div class="sub">1 分鐘檢測訊號/電量/連線狀態</div>
               </span>
               <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
             </button>
@@ -2427,146 +2427,132 @@
         </div>
       </div>
 
-      <!-- ===== SCREEN: EEG TEST — CONNECT ===== -->
+      <!-- ===== SCREEN: EEG TEST — CONNECT（腦波儀健康檢查 · 連線狀態） ===== -->
       <div class="screen" id="screen-eegtest-connect">
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
-          <h2>腦波儀測試</h2>
-          <span class="step-badge" style="background:#1a237e;">連接設備</span>
+          <h2>腦波儀健康檢查</h2>
+          <span class="step-badge" style="background:#1a237e;">連線狀態</span>
         </div>
 
         <div class="content" style="padding-bottom:24px;">
-          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:12px;padding:12px 14px;font-size:12px;color:#2e7d32;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
-            <span>💡</span>
-            <span>此模式僅即時分析腦波，<b>不記錄資料、不生成報告、不需填寫受測者資料</b>。任何帳號皆可使用。</span>
+          <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;font-size:12px;color:#bf360c;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
+            <span>⚠️</span>
+            <span>本功能僅檢測<b>腦波儀本身的健康狀態</b>（連線、訊號、電量、開機）。<b>不採集分析資料、不記錄、不生成報告</b>。請先戴上腦波儀並開機。</span>
           </div>
-          <div class="device-status-card">
-            <div class="scan-animation">
-              <div class="scan-ring"></div>
-              <div class="scan-ring"></div>
-              🎧
-            </div>
-            <div style="text-align:center;font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">搜尋藍牙設備中...</div>
-            <div style="text-align:center;font-size:12px;color:#888;margin-bottom:16px;">請確認腦波頭帶已開機</div>
-            <div class="device-found">
-              <span class="dev-icon">🎧</span>
-              <div class="dev-info">
-                <div class="dev-name">EEG Headband #001</div>
-                <div class="dev-id">BT MAC: A4:C1:38:XX:XX:XX</div>
-              </div>
-              <div>
-                <div class="signal-bars">
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
-                </div>
-                <div style="font-size:10px;color:#00C853;text-align:center;margin-top:2px;">良好</div>
-              </div>
+
+          <!-- 即時連線狀態卡片（由 _refreshEegHealthPreCheck 動態填入）-->
+          <div class="card" id="ethc-precheck-card">
+            <div class="card-title">⚙️ 即時連線狀態</div>
+            <div id="ethc-precheck-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#1a1a2e;">
+              <div>檢查中…</div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-title">電極接觸品質</div>
-            <div class="contact-checks">
-              <div class="contact-item"><span class="check-icon">✅</span> 額頭（Fp1）</div>
-              <div class="contact-item"><span class="check-icon">✅</span> 左耳夾（A1）</div>
-            </div>
-            <div style="margin-top:10px;padding:8px 10px;background:#e8f5e9;border-radius:8px;font-size:12px;color:#2e7d32;">
-              ✅ Fp1 單通道就緒，可開始測試
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="_startEegTestSession()">
-            ✅ 連接完成，開始腦波測試 →
+
+          <button class="btn" style="background:rgba(0,0,0,0.06);color:#1a1a2e;margin-bottom:8px;" onclick="_refreshEegHealthPreCheck()">
+            🔄 重新檢查連線狀態
+          </button>
+          <button class="btn" style="background:#fff3e0;color:#bf360c;margin-bottom:8px;border:1px solid #ffb74d;" onclick="_eegHealthReconnect()">
+            📡 嘗試重新配對腦波儀
+          </button>
+          <button class="btn btn-primary" id="ethc-start-btn" onclick="_startEegHealthCheckSession()">
+            ✅ 開始 1 分鐘健康檢查 →
           </button>
         </div>
       </div>
 
-      <!-- ===== SCREEN: EEG TEST — RESULT ===== -->
+      <!-- ===== SCREEN: EEG TEST — DETECT（健康檢查採集中，完全獨立於主程式） ===== -->
+      <div class="screen" id="screen-eegtest-detect">
+        <div class="status-bar"><span class="time">9:42</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
+        <div class="top-bar" style="--header-bg:#1a237e;">
+          <button class="back-btn" onclick="_abortEegHealthCheck(); goto('screen-eegtest-connect')">‹</button>
+          <h2>腦波儀健康檢查</h2>
+          <span class="step-badge" style="background:#fff;color:#1a237e;">採集中</span>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;background:#f5f7ff;">
+          <!-- 倒數計時 -->
+          <div style="background:white;border-radius:18px;padding:24px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);text-align:center;margin-bottom:14px;">
+            <div style="font-size:12px;color:#888;margin-bottom:4px;">剩餘時間</div>
+            <div id="ethc-timer" style="font-size:48px;font-weight:800;color:#1a237e;line-height:1;">01:00</div>
+            <div style="margin-top:14px;background:#eceff1;border-radius:6px;height:8px;overflow:hidden;">
+              <div id="ethc-progress" style="height:100%;width:0%;background:linear-gradient(90deg,#1a237e,#3949ab);transition:width .25s;"></div>
+            </div>
+            <div id="ethc-progress-label" style="font-size:11px;color:#888;margin-top:6px;">已採集 0 / 60 秒</div>
+          </div>
+
+          <!-- 即時健康指標卡 -->
+          <div style="background:white;border-radius:18px;padding:16px 18px;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-bottom:14px;">
+            <div style="font-size:13px;font-weight:700;color:#1a237e;margin-bottom:10px;">📡 即時健康指標</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">🔌 藍牙連線</span>
+                <span id="ethc-stat-bt" style="font-weight:700;">檢查中…</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">🧠 腦波儀連線</span>
+                <span id="ethc-stat-conn" style="font-weight:700;">檢查中…</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">📥 已接收樣本</span>
+                <span id="ethc-stat-samples" style="font-weight:700;color:#1a237e;">0 筆</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">⚡ 接收頻率</span>
+                <span id="ethc-stat-rate" style="font-weight:700;color:#1a237e;">— 筆/秒</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">📊 訊號品質</span>
+                <span id="ethc-stat-signal" style="font-weight:700;">尚未接收</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:#555;">🔋 電量讀數</span>
+                <span id="ethc-stat-bat" style="font-weight:700;">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 採集中提示 -->
+          <div id="ethc-detect-hint" style="background:#e3f2fd;border-radius:12px;padding:10px 14px;font-size:12px;color:#1565c0;text-align:center;margin-bottom:14px;">
+            ⏱️ 採集中，請保持腦波儀配戴穩定…
+          </div>
+
+          <button class="btn" style="background:rgba(0,0,0,0.06);color:#1a1a2e;" onclick="_finishEegHealthCheck(true)">
+            ■ 提前結束並查看結果
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: EEG TEST — RESULT（純健康檢查結果，完全獨立） ===== -->
       <div class="screen" id="screen-eegtest-result">
-        <div class="status-bar"><span class="time">9:44</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
-        <div style="overflow-y:auto;flex:1;">
-
-          <!-- 腦人顏色 Header -->
-          <div class="et-header">
-            <div class="et-badge">🧠 腦波即時分析結果</div>
-            <div class="et-brain-color" id="et-brain-color-circle">🧠</div>
-            <div class="et-brain-label" id="et-brain-color-name">分析中…</div>
-            <div class="et-brain-sub" id="et-brain-color-desc"></div>
+        <div class="status-bar"><span class="time">9:43</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
+        <div class="top-bar" style="--header-bg:#1a237e;">
+          <button class="back-btn" onclick="goto('screen-eegtest-connect')">‹</button>
+          <h2>腦波儀健康檢查結果</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;background:#f5f7ff;">
+          <!-- 總結卡 -->
+          <div id="ethr-summary-card" style="background:white;border-radius:18px;padding:24px 20px;text-align:center;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-bottom:14px;">
+            <div id="ethr-summary-emoji" style="font-size:56px;line-height:1;margin-bottom:8px;">🧠</div>
+            <div id="ethr-summary-title" style="font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:6px;">計算中…</div>
+            <div id="ethr-summary-desc" style="font-size:13px;color:#555;line-height:1.6;">請稍候</div>
           </div>
 
-          <!-- 腦人顏色說明 -->
-          <div class="et-section">
-            <div class="et-section-title">🎨 腦人顏色 · 說明</div>
-            <div class="et-section-desc" style="margin-bottom:0;">
-              四色腦人反映你長期的思考模式與行為偏好，每種顏色都有獨特的優勢面向。橘腦人重感受、行動快、富熱情；綠腦人善協調、重和諧、富同理；藍腦人重邏輯、目標導向、自律強；黃腦人重內省、富創意、善反思。沒有絕對好壞，理解自己的顏色有助於發揮天賦。
-            </div>
+          <!-- 細項檢查清單 -->
+          <div style="background:white;border-radius:18px;padding:18px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);">
+            <div style="font-size:13px;font-weight:700;color:#1a237e;margin-bottom:12px;">📋 詳細檢查項目</div>
+            <div id="ethr-checks" style="display:flex;flex-direction:column;gap:10px;font-size:13px;"></div>
           </div>
 
-          <!-- 決策指標 -->
-          <div class="et-section">
-            <div class="et-section-title">🎯 決策指標</div>
-            <div class="et-section-desc">
-              決策力反映在壓力下做出果斷判斷的能力；領導力代表帶領團隊與承擔責任的傾向；執行腦力顯示專注思考、完成任務的能量強度；抗壓韌性則衡量面對挑戰時保持穩定、不被情緒淹沒的能力。四個指標越高，代表你越能在工作場合中獨當一面。
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px;">
-              <div class="et-bar-row">
-                <span class="et-bar-name">決策力</span>
-                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-dec" style="background:#ff9800;width:0%"></div></div>
-                <span class="et-bar-pct" id="et-pct-dec">0%</span>
-              </div>
-              <div class="et-bar-row">
-                <span class="et-bar-name">領導力</span>
-                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-ldr" style="background:#4caf50;width:0%"></div></div>
-                <span class="et-bar-pct" id="et-pct-ldr">0%</span>
-              </div>
-              <div class="et-bar-row">
-                <span class="et-bar-name">執行腦力</span>
-                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-ebi" style="background:#2196f3;width:0%"></div></div>
-                <span class="et-bar-pct" id="et-pct-ebi">0%</span>
-              </div>
-              <div class="et-bar-row">
-                <span class="et-bar-name">抗壓韌性</span>
-                <div class="et-bar-track"><div class="et-bar-fill" id="et-bar-res" style="background:#9c27b0;width:0%"></div></div>
-                <span class="et-bar-pct" id="et-pct-res">0%</span>
-              </div>
-            </div>
+          <!-- 操作按鈕 -->
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+            <button class="btn btn-primary" onclick="goto('screen-home')">返回首頁</button>
+            <button class="btn" style="background:rgba(26,35,126,0.1);color:#1a237e;" onclick="goto('screen-eegtest-connect')">🔄 重新檢查</button>
           </div>
 
-          <!-- MBTI -->
-          <div class="et-section">
-            <div class="et-section-title">🔵 MBTI 性格傾向</div>
-            <div class="et-section-desc">
-              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源是來自外在互動或內在思考、直覺(N)/感官(S) 反映訊息處理偏好抽象想像或具體現實、理性(T)/情感(F) 反映決策依據邏輯或人際感受、計畫(J)/彈性(P) 反映生活節奏喜歡規劃或隨機應變。系統依即時腦波估算各維度傾向強度。
-            </div>
-            <div class="et-mbti-type" id="et-mbti-type">----</div>
-            <div class="et-mbti-dims" id="et-mbti-dims"></div>
-          </div>
-
-          <!-- 五大優勢 -->
-          <div class="et-section">
-            <div class="et-section-title">⭐ 五大優勢</div>
-            <div class="et-section-desc">
-              從 20 個腦波指標中挑出本次得分最高的 5 項，代表你目前最強的能力面向。優勢項目可作為自我了解、職涯發展與團隊角色定位的重要參考；金、銀、銅排名顯示前三名的相對強度差距，後兩名也是值得善用的長處，建議把這些優勢應用到日常工作中。
-            </div>
-            <div id="et-strengths"></div>
-          </div>
-
-          <!-- 腦波概況 -->
-          <div class="et-section">
-            <div class="et-section-title">📊 腦波頻帶概況</div>
-            <div class="et-section-desc">
-              腦波依頻率分為五大頻帶，各自反映不同心理狀態：深度休息（睡眠與潛意識修復）、直覺創意（靈感湧現與放空）、放鬆專注（平靜清醒的理想狀態）、思考執行（理性思考與決策）、高階整合（學習與整合資訊的峰值）。注意力與放鬆度則為即時綜合指數，呈現當下狀態。
-            </div>
-            <div id="et-bands"></div>
-          </div>
-
-          <div style="padding:16px 16px 32px;display:flex;flex-direction:column;gap:10px;">
-            <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);padding:0 16px;">
-              ⚠️ 本次分析僅供參考，未儲存至系統
-            </div>
-            <button class="btn btn-primary" onclick="_exitEegTestMode(); goto('screen-home')">返回首頁</button>
-            <button class="btn" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);" onclick="_startEegTestSession()">重新測試</button>
+          <div style="text-align:center;font-size:11px;color:#aaa;padding:16px;line-height:1.6;">
+            本檢查不採集分析、不寫入資料庫、不生成報告，僅檢測腦波儀本身的健康狀態。
           </div>
         </div>
       </div>
@@ -2970,8 +2956,9 @@ const screens = [
   { id: 'screen-baseline',        label: '靜息基線' },
   { id: 'screen-detect',          label: '檢測進行中' },
   { id: 'screen-results',         label: '檢測結果' },
-  { id: 'screen-eegtest-connect', label: '腦波儀測試 · 連接' },
-  { id: 'screen-eegtest-result',  label: '腦波儀測試 · 結果' },
+  { id: 'screen-eegtest-connect', label: '腦波儀健康檢查 · 連線' },
+  { id: 'screen-eegtest-detect',  label: '腦波儀健康檢查 · 採集' },
+  { id: 'screen-eegtest-result',  label: '腦波儀健康檢查 · 結果' },
   { id: 'screen-history',         label: '歷史紀錄' },
   { id: 'screen-settings',        label: '設定' },
 ];
@@ -4566,7 +4553,8 @@ let _currentReportSubType  = 'life_script';   // life_script / child / parent_ch
 let _currentReportVariant  = 'full';          // trial / full / vip
 // 若為 true，進入 screen-results 時只生成第一章（NT$1 測試模式）
 let _testMode_chapter1Only = true;
-// 若為 true：採集完成後導到 screen-eegtest-result，不記錄不生成報告
+// 已棄用：腦波儀健康檢查已完全獨立成 _ethcState 流程（screen-eegtest-detect / -result）
+// 此變數保留為 false 以避免任何殘存的引用導致主流程被汙染。
 let _eegTestMode = false;
 // 即時擷取累積值（給結束採集時送回後端用）
 let _eegLiveAccum = null;       // { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] }
@@ -4803,13 +4791,8 @@ function _startEegLiveCapture() {
     if (elapsedSec >= _eegLiveDurationSec) {
       _stopEegLiveCapture();
       const stxt = document.getElementById('detect-status-text');
-      if (_eegTestMode) {
-        if (stxt) stxt.textContent = '✅ 測試完成，運算結果…';
-        setTimeout(() => { _renderEegTestResult(); goto('screen-eegtest-result'); }, 600);
-      } else {
-        if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
-        setTimeout(() => goto('screen-results'), 600);
-      }
+      if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
+      setTimeout(() => goto('screen-results'), 600);
     }
   }, 250);
 }
@@ -4826,10 +4809,7 @@ function _stopEegLiveCapture() {
   // 把累積資料丟到全域，後續 startFullReportGeneration 帶進 brainwave_data
   if (_eegLiveAccum) {
     window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
-    if (!_eegTestMode) {
-      // 寫入後端 DB（背景，不擋 UI）—— 測試模式不記錄
-      _persistEegStats(window._lastEegCapture);
-    }
+    _persistEegStats(window._lastEegCapture);
   }
 }
 
@@ -4879,10 +4859,15 @@ function _persistEegStats(stats) {
 
 // 接受 APK 餵進來的單筆 sample（從 native 呼叫 window.JSBridge.onEegSample）
 // 結構建議：{ attn:0-100, medi:0-100, delta, theta, alpha, beta, gamma } (五個 band 為 raw power 或 0-100)
+// 路由：腦波儀健康檢查啟用時，資料只進健康檢查 sink，不會汙染主流程的 _eegLiveAccum
 window.JSBridge = window.JSBridge || {};
 window.JSBridge.onEegSample = function(payload) {
   try {
     const obj = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    if (window._eegHealthActive) {
+      _eegHealthSampleSink(obj);
+      return;
+    }
     _ingestEegSample(obj);
   } catch (e) { console.warn('onEegSample parse error', e); }
 };
@@ -5023,35 +5008,351 @@ function _simNextSample() {
   return { ..._eegSimState };
 }
 
-// ─── 腦波儀測試：進入 / 演算 / 渲染 ────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// 🧠 腦波儀健康檢查（完全獨立於主程式報告生成流程）
+// ───────────────────────────────────────────────────────────────────────────
+// 設計原則：
+//   1. 完全不使用 screen-detect / screen-results / _eegLiveAccum / _ingestEegSample 等主流程變數
+//   2. 結束採集後僅顯示腦波儀本身的健康狀態（連線/訊號/電量/開機），不做分析、不存 DB、不生成報告
+//   3. 沒連到腦波儀就誠實顯示「未連線/未開機/訊號弱」，絕對不模擬假資料
+//   4. 採集時間 1 分鐘（60 秒）
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 健康檢查專用狀態（與主流程完全分離）
+let _ethcState = null;     // { startTs, sampleCount, signals:[], batteries:[], lastSampleTs, abort, durationSec }
+let _ethcTimer = null;     // setInterval id
+let _ethcPreCheckTimer = null;
+
+// 入口（首頁按鈕呼叫）
 function startEegTest() {
-  _eegTestMode = false; // will be set to true by _startEegTestSession
+  _exitEegTestMode();  // 清掉任何殘留狀態
   goto('screen-eegtest-connect');
+  setTimeout(_refreshEegHealthPreCheck, 100);
+  if (_ethcPreCheckTimer) clearInterval(_ethcPreCheckTimer);
+  _ethcPreCheckTimer = setInterval(_refreshEegHealthPreCheck, 3000);
 }
 
-function _startEegTestSession() {
-  _eegTestMode = true;
-  _eegLiveDurationSec = 180;
-  _currentSubjectName = '測試模式';
-  const subEl = document.getElementById('detect-subject');
-  if (subEl) subEl.textContent = '🧠 腦波儀測試模式';
-  goto('screen-detect');
-}
+// 連線狀態頁的即時檢查（每 3 秒刷新一次）
+function _refreshEegHealthPreCheck() {
+  const list = document.getElementById('ethc-precheck-list');
+  const startBtn = document.getElementById('ethc-start-btn');
+  if (!list) return;
+  const bridge = (typeof AndroidBridge !== 'undefined' && AndroidBridge) ? AndroidBridge : null;
+  const rows = [];
 
-// 結束「腦波儀測試」模式：返回首頁前清除 _eegTestMode 旗標、復原時長與受測者顯示，
-// 確保接下來進入正式報告流程不會被殘留狀態污染（修正：bug-2026-05-25）
-function _exitEegTestMode() {
-  _eegTestMode = false;
-  _eegLiveDurationSec = 180;  // 正式流程也是 180s，保持一致
-  _currentSubjectName = null;
+  if (!bridge) {
+    rows.push({ ok:false, label:'執行環境', val:'瀏覽器模式 · 無法測試藍牙設備（請使用 APP 開啟）' });
+    list.innerHTML = rows.map(_ethcRowHtml).join('');
+    if (startBtn) { startBtn.disabled = true; startBtn.style.opacity = '0.4'; }
+    return;
+  }
+
+  // BLE 診斷資訊（如果可用）
+  let dbg = null;
   try {
-    if (_eegLiveTimer) { clearInterval(_eegLiveTimer); _eegLiveTimer = null; }
-  } catch(e) {}
-  try {
-    if (window.AndroidBridge && typeof window.AndroidBridge.stopStreamingEeg === 'function') {
-      window.AndroidBridge.stopStreamingEeg();
+    if (typeof bridge.getBleDebugInfo === 'function') {
+      dbg = JSON.parse(bridge.getBleDebugInfo());
     }
   } catch(e) {}
+
+  if (dbg) {
+    rows.push({ ok: !dbg.adapter_null,            label:'藍牙模組',   val: dbg.adapter_null ? '✗ 系統未提供藍牙服務' : '✓ 可用' });
+    rows.push({ ok: !!dbg.bt_enabled,             label:'藍牙開啟',   val: dbg.bt_enabled ? '✓ 已開啟' : '✗ 未開啟（請到系統設定開啟）' });
+    rows.push({ ok: !!dbg.perm_connect,           label:'連線權限',   val: dbg.perm_connect ? '✓ 已授權' : '✗ 未授權（請允許 APP 取得藍牙權限）' });
+    rows.push({ ok: !!dbg.perm_scan,              label:'掃描權限',   val: dbg.perm_scan    ? '✓ 已授權' : '✗ 未授權' });
+    if (dbg.perm_fine_loc !== undefined) {
+      rows.push({ ok: !!dbg.perm_fine_loc,        label:'位置權限',   val: dbg.perm_fine_loc ? '✓ 已授權' : '⚠ 未授權（部分 Android 需要）' });
+    }
+    rows.push({ ok: (dbg.paired || 0) > 0,        label:'已配對裝置', val: (dbg.paired || 0) + ' 台' + (dbg.mindsensor ? '（含：' + dbg.mindsensor + '）' : '') });
+  }
+
+  // 即時電量
+  let bat = -1;
+  try { bat = bridge.getDeviceBattery && bridge.getDeviceBattery(); } catch(e) {}
+  if (typeof bat !== 'number') bat = parseInt(bat, 10);
+  if (isNaN(bat)) bat = -1;
+  if (bat >= 1 && bat <= 100) {
+    rows.push({ ok:true, label:'電量讀數', val: '✓ 已讀取（' + bat + '%，部分機種為固定值）' });
+  } else {
+    rows.push({ ok:false, label:'電量讀數', val: '✗ 無法讀取（腦波儀可能未開機或未配對）' });
+  }
+
+  // 連線狀態
+  let connected = false;
+  try { connected = bridge.isBrainwaveConnected && bridge.isBrainwaveConnected(); } catch(e) {}
+  rows.push({ ok: connected, label:'腦波儀連線', val: connected ? '✓ 已連線' : '✗ 未連線（請按下方「重新配對」）' });
+
+  list.innerHTML = rows.map(_ethcRowHtml).join('');
+
+  // 全部就緒才能開始測試
+  const allOk = rows.every(r => r.ok);
+  if (startBtn) {
+    startBtn.disabled = !allOk;
+    startBtn.style.opacity = allOk ? '1' : '0.4';
+    startBtn.textContent = allOk ? '✅ 開始 1 分鐘健康檢查 →' : '⚠️ 請先解決上方紅色項目';
+  }
+}
+
+function _ethcRowHtml(r) {
+  const color = r.ok ? '#2e7d32' : '#c62828';
+  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+    <span style="color:#555;flex-shrink:0;">${r.label}</span>
+    <span style="color:${color};font-weight:600;text-align:right;">${r.val}</span>
+  </div>`;
+}
+
+function _eegHealthReconnect() {
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.reconnectBrainwave === 'function') {
+      AndroidBridge.reconnectBrainwave();
+      alert('已嘗試重新配對腦波儀。請等待 3-5 秒後再檢查連線狀態。');
+    } else {
+      alert('此功能僅在 APP 內可用（瀏覽器無法操作藍牙）。');
+    }
+  } catch(e) { alert('重新配對失敗：' + e.message); }
+  setTimeout(_refreshEegHealthPreCheck, 1500);
+}
+
+// 開始 1 分鐘健康檢查採集
+function _startEegHealthCheckSession() {
+  // 清掉 PreCheck 輪詢
+  if (_ethcPreCheckTimer) { clearInterval(_ethcPreCheckTimer); _ethcPreCheckTimer = null; }
+
+  _ethcState = {
+    startTs: Date.now(),
+    sampleCount: 0,
+    signals: [],          // 訊號品質 ── 收到資料就 +1，這裡簡化用「有沒有資料」當訊號
+    batteries: [],        // 採集期間的電量讀數
+    lastSampleTs: 0,
+    abort: false,
+    durationSec: 60,
+    bridgeAvailable: typeof AndroidBridge !== 'undefined' && !!AndroidBridge,
+  };
+  window._eegHealthActive = true;  // 路由標記：JSBridge.onEegSample 會走健康檢查 sink
+
+  // 啟動串流（如果在 APP 內）
+  try {
+    if (_ethcState.bridgeAvailable && typeof AndroidBridge.startStreamingEeg === 'function') {
+      AndroidBridge.startStreamingEeg();
+    }
+  } catch(e) {}
+
+  goto('screen-eegtest-detect');
+
+  // 250ms 一次更新 UI
+  if (_ethcTimer) clearInterval(_ethcTimer);
+  _ethcTimer = setInterval(_tickEegHealthCheck, 250);
+  _tickEegHealthCheck();  // 立刻畫一次
+}
+
+function _tickEegHealthCheck() {
+  if (!_ethcState) return;
+  const elapsed = Math.floor((Date.now() - _ethcState.startTs) / 1000);
+  const remain = Math.max(0, _ethcState.durationSec - elapsed);
+
+  // 倒數
+  const mm = String(Math.floor(remain / 60)).padStart(2, '0');
+  const ss = String(remain % 60).padStart(2, '0');
+  const tEl = document.getElementById('ethc-timer');
+  if (tEl) tEl.textContent = mm + ':' + ss;
+
+  const pct = Math.min(100, (elapsed / _ethcState.durationSec) * 100);
+  const pBar = document.getElementById('ethc-progress');
+  if (pBar) pBar.style.width = pct + '%';
+  const pLbl = document.getElementById('ethc-progress-label');
+  if (pLbl) pLbl.textContent = `已採集 ${Math.min(elapsed, _ethcState.durationSec)} / ${_ethcState.durationSec} 秒`;
+
+  // 即時指標
+  const bridge = (typeof AndroidBridge !== 'undefined' && AndroidBridge) ? AndroidBridge : null;
+  let bt = false, conn = false, bat = -1;
+  if (bridge) {
+    try { bt = JSON.parse(bridge.getBleDebugInfo && bridge.getBleDebugInfo() || '{}').bt_enabled || false; } catch(e) {}
+    try { conn = bridge.isBrainwaveConnected && bridge.isBrainwaveConnected(); } catch(e) {}
+    try { bat = bridge.getDeviceBattery && bridge.getDeviceBattery(); } catch(e) {}
+    if (typeof bat !== 'number') bat = parseInt(bat, 10);
+    if (isNaN(bat)) bat = -1;
+    if (bat >= 1 && bat <= 100) _ethcState.batteries.push(bat);
+  }
+  _setText('ethc-stat-bt',   bridge ? (bt ? '✓ 已開啟' : '✗ 未開啟') : '⚠ 瀏覽器模式');
+  _setText('ethc-stat-conn', bridge ? (conn ? '✓ 已連線' : '✗ 未連線') : '⚠ 瀏覽器模式');
+  _setText('ethc-stat-samples', _ethcState.sampleCount + ' 筆');
+  const rate = elapsed > 0 ? (_ethcState.sampleCount / elapsed).toFixed(1) : '—';
+  _setText('ethc-stat-rate', rate + ' 筆/秒');
+
+  // 訊號品質
+  let signalLabel = '尚未接收';
+  if (_ethcState.sampleCount === 0 && elapsed > 5) {
+    signalLabel = '✗ 無訊號';
+  } else if (_ethcState.sampleCount > 0) {
+    const lastSec = (Date.now() - _ethcState.lastSampleTs) / 1000;
+    if (lastSec > 5) signalLabel = '⚠ 訊號中斷';
+    else if (_ethcState.sampleCount / Math.max(1, elapsed) >= 0.6) signalLabel = '✓ 良好';
+    else signalLabel = '⚠ 訊號弱';
+  }
+  _setText('ethc-stat-signal', signalLabel);
+
+  _setText('ethc-stat-bat', bat >= 1 && bat <= 100 ? bat + '%' : '— 無法讀取');
+
+  if (elapsed >= _ethcState.durationSec) {
+    _finishEegHealthCheck(false);
+  }
+}
+
+function _setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
+
+// 健康檢查樣本接收器（由 window.JSBridge.onEegSample 路由進來，主流程的 _ingestEegSample 不會被呼叫）
+function _eegHealthSampleSink(obj) {
+  if (!_ethcState) return;
+  _ethcState.sampleCount++;
+  _ethcState.lastSampleTs = Date.now();
+  // 若有 bat 欄位，採信腦波儀回報值
+  if (obj && typeof obj.bat === 'number' && obj.bat >= 1 && obj.bat <= 100) {
+    _ethcState.batteries.push(obj.bat);
+  }
+}
+
+// 結束（時間到或使用者點「提前結束」）
+function _finishEegHealthCheck(byUser) {
+  if (!_ethcState) return;
+  const state = _ethcState;
+  _ethcState = null;
+  window._eegHealthActive = false;
+  if (_ethcTimer) { clearInterval(_ethcTimer); _ethcTimer = null; }
+
+  // 停止串流
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.stopStreamingEeg === 'function') {
+      AndroidBridge.stopStreamingEeg();
+    }
+  } catch(e) {}
+
+  _renderEegHealthResult(state, byUser);
+  goto('screen-eegtest-result');
+}
+
+// 中途返回（按返回鍵）
+function _abortEegHealthCheck() {
+  if (!_ethcState) return;
+  _ethcState = null;
+  window._eegHealthActive = false;
+  if (_ethcTimer) { clearInterval(_ethcTimer); _ethcTimer = null; }
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.stopStreamingEeg === 'function') {
+      AndroidBridge.stopStreamingEeg();
+    }
+  } catch(e) {}
+}
+
+// 渲染結果頁
+function _renderEegHealthResult(state, byUser) {
+  const elapsed = Math.floor((Date.now() - state.startTs) / 1000);
+  const elapsedSec = Math.min(elapsed, state.durationSec);
+  const sampleCount = state.sampleCount;
+  const expectedSamples = elapsedSec; // 約每秒 1 筆
+  const sampleRate = elapsedSec > 0 ? (sampleCount / elapsedSec) : 0;
+  const batAvg = state.batteries.length ? Math.round(state.batteries.reduce((a,b)=>a+b,0) / state.batteries.length) : -1;
+  const batMin = state.batteries.length ? Math.min(...state.batteries) : -1;
+  const batMax = state.batteries.length ? Math.max(...state.batteries) : -1;
+
+  // 健康判斷
+  let overallStatus, summaryEmoji, summaryTitle, summaryDesc;
+  if (!state.bridgeAvailable) {
+    overallStatus = 'browser';
+    summaryEmoji = '⚠️';
+    summaryTitle = '瀏覽器模式';
+    summaryDesc = '此功能需在 APP 內執行才能檢測藍牙腦波儀。';
+  } else if (sampleCount === 0) {
+    overallStatus = 'no_signal';
+    summaryEmoji = '❌';
+    summaryTitle = '未接收到腦波資料';
+    summaryDesc = '可能原因：腦波儀未開機、未戴上、未配對成功，或藍牙連線中斷。請確認腦波儀電源燈是否亮起，並重新配對。';
+  } else if (sampleRate < 0.3) {
+    overallStatus = 'poor';
+    summaryEmoji = '⚠️';
+    summaryTitle = '訊號品質不良';
+    summaryDesc = `60 秒只收到 ${sampleCount} 筆資料（正常應約 60 筆）。可能腦波儀電極接觸不良，或距離手機過遠。請調整佩戴方式或縮短距離後重試。`;
+  } else if (sampleRate < 0.7) {
+    overallStatus = 'fair';
+    summaryEmoji = '🟡';
+    summaryTitle = '訊號品質尚可';
+    summaryDesc = `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），略低於預期。可正常使用但建議重新配戴腦波儀以獲得最佳訊號。`;
+  } else {
+    overallStatus = 'good';
+    summaryEmoji = '✅';
+    summaryTitle = '腦波儀運作正常';
+    summaryDesc = `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），訊號穩定，可以正常進行檢測作業。`;
+  }
+
+  _setText('ethr-summary-emoji', summaryEmoji);
+  _setText('ethr-summary-title', summaryTitle);
+  _setText('ethr-summary-desc', summaryDesc);
+
+  // 改背景色凸顯狀態
+  const card = document.getElementById('ethr-summary-card');
+  if (card) {
+    const bgMap = { good:'#e8f5e9', fair:'#fff8e1', poor:'#ffebee', no_signal:'#ffebee', browser:'#fff3e0' };
+    card.style.background = bgMap[overallStatus] || '#fff';
+  }
+
+  // 詳細檢查
+  const checks = [];
+  if (state.bridgeAvailable) {
+    let bt = false;
+    try { bt = JSON.parse(AndroidBridge.getBleDebugInfo() || '{}').bt_enabled || false; } catch(e) {}
+    checks.push({ ok: bt, label:'🔌 藍牙開啟', val: bt ? '已開啟' : '未開啟' });
+    let conn = false;
+    try { conn = AndroidBridge.isBrainwaveConnected(); } catch(e) {}
+    checks.push({ ok: conn, label:'🧠 腦波儀連線', val: conn ? '已連線' : '未連線' });
+  } else {
+    checks.push({ ok: false, label:'🔌 執行環境', val: '瀏覽器（無藍牙）' });
+  }
+  checks.push({
+    ok: sampleCount > 0,
+    label: '📥 接收到的腦波樣本',
+    val: sampleCount === 0 ? '0 筆（無資料）' : sampleCount + ' 筆',
+  });
+  checks.push({
+    ok: sampleRate >= 0.7,
+    label: '⚡ 平均接收頻率',
+    val: sampleCount === 0 ? '— 無資料' : sampleRate.toFixed(2) + ' 筆/秒（標準 ≈ 1.0）',
+  });
+  checks.push({
+    ok: sampleRate >= 0.7,
+    label: '📊 訊號品質判斷',
+    val: sampleCount === 0 ? '無訊號' :
+         sampleRate >= 0.7 ? '良好' :
+         sampleRate >= 0.3 ? '尚可' : '不良',
+  });
+  if (batAvg >= 1) {
+    const batRange = (batMin === batMax) ? batAvg + '%（固定值，可能韌體未提供真實量測）'
+                                         : `${batMin}%~${batMax}%（平均 ${batAvg}%）`;
+    checks.push({ ok: batAvg >= 20, label:'🔋 電量讀數', val: batRange });
+  } else {
+    checks.push({ ok: false, label:'🔋 電量讀數', val: '無法讀取' });
+  }
+  checks.push({
+    ok: byUser ? null : true,
+    label: '⏱️ 採集時間',
+    val: elapsedSec + ' / ' + state.durationSec + ' 秒' + (byUser ? '（提前結束）' : '（完成）'),
+  });
+
+  const checkBox = document.getElementById('ethr-checks');
+  if (checkBox) {
+    checkBox.innerHTML = checks.map(c => {
+      const icon = c.ok === null ? 'ℹ️' : (c.ok ? '✅' : '❌');
+      const color = c.ok === null ? '#1565c0' : (c.ok ? '#2e7d32' : '#c62828');
+      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 10px;background:#fafafa;border-radius:10px;">
+        <span style="color:#555;flex:1;">${icon} ${c.label}</span>
+        <span style="color:${color};font-weight:600;text-align:right;">${c.val}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+// 保留向後相容（舊頁面如返回首頁按鈕仍可能呼叫，但不再做任何主流程操作）
+function _exitEegTestMode() {
+  _abortEegHealthCheck();
+  if (_ethcPreCheckTimer) { clearInterval(_ethcPreCheckTimer); _ethcPreCheckTimer = null; }
 }
 
 // ── JS 版演算法（移植自 Python services/algorithms.py）──────────────────────
