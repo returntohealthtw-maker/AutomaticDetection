@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
@@ -77,6 +78,7 @@ public class CLS_BLE {
             String[] permissions = {
                     Manifest.permission.WRITE_EXTERNAL_STORAGE,
                     Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION};
             for (String str : permissions) {
                 if (_activity.checkSelfPermission(str) != PackageManager.PERMISSION_GRANTED) {
@@ -86,9 +88,33 @@ public class CLS_BLE {
             }
         }
 
-        mAdapter = BluetoothAdapter.getDefaultAdapter();
+        // 取得 BluetoothAdapter：API 31+ 走 BluetoothManager（getDefaultAdapter 已 deprecated）
+        // 小米 HyperOS 2 / Android 15 在 getDefaultAdapter() 可能回傳 null，必須改用 BluetoothManager
+        mAdapter = null;
+        try {
+            BluetoothManager btManager = (BluetoothManager) _activity.getSystemService(android.content.Context.BLUETOOTH_SERVICE);
+            if (btManager != null) mAdapter = btManager.getAdapter();
+        } catch (Throwable ignore) {}
+        if (mAdapter == null) {
+            try { mAdapter = BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+        }
+        if (mAdapter == null) {
+            android.util.Log.w("CLS_BLE", "BluetoothAdapter is null (device may not support BLE or HyperOS restriction)");
+            return;
+        }
+
         strMacAddress = "";
-        Set<BluetoothDevice> PairedDevices = mAdapter.getBondedDevices();
+        Set<BluetoothDevice> PairedDevices;
+        try {
+            PairedDevices = mAdapter.getBondedDevices();
+        } catch (SecurityException se) {
+            // Android 12+ 需要 BLUETOOTH_CONNECT 才能查 bonded devices
+            android.util.Log.w("CLS_BLE", "getBondedDevices SecurityException: " + se.getMessage());
+            return;
+        } catch (Throwable t) {
+            android.util.Log.w("CLS_BLE", "getBondedDevices error", t);
+            return;
+        }
         //BluetoothDevice btDevice = null;
 
         boolean bPass = true;

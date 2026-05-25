@@ -333,11 +333,100 @@ public class WebAppActivity extends Activity {
         /**
          * 回傳腦波儀目前電量（0-100）；未連線或無資料時回傳 -1。
          * HTML 每 10 秒輪詢一次，顯示在 status bar 右上角。
+         *
+         * 小米 Android 15 / HyperOS 2 修復：
+         *  - 若 ble 還沒初始化，主動建立並嘗試 Connect（避免 BLE 從未啟動）
+         *  - 若 BluetoothAdapter null，回傳 -1 並讓 JS 端 fallback
          */
         @JavascriptInterface
         public int getDeviceBattery() {
-            if (ble == null) return -1;
-            return ble.getBatteryLevel();
+            try {
+                if (ble == null) {
+                    ble = new CLS_BrainWave();
+                    ble.SetCallback((cmd, val) -> { /* idle */ });
+                    ble.Connect(WebAppActivity.this);
+                }
+                return ble.getBatteryLevel();
+            } catch (Throwable t) {
+                android.util.Log.w("WebAppActivity", "getDeviceBattery", t);
+                return -1;
+            }
+        }
+
+        /**
+         * 診斷用：回傳目前 BLE 狀態 JSON，方便排查特定機型問題（小米 A15 等）。
+         * 在 JS console 呼叫 AndroidBridge.getBleDebugInfo() 可看狀態。
+         */
+        @JavascriptInterface
+        public String getBleDebugInfo() {
+            try {
+                StringBuilder sb = new StringBuilder("{");
+                sb.append("\"sdk\":").append(Build.VERSION.SDK_INT).append(",");
+                sb.append("\"model\":\"").append(Build.MODEL).append("\",");
+                sb.append("\"manufacturer\":\"").append(Build.MANUFACTURER).append("\",");
+
+                // 用 BluetoothManager API 取得 adapter（Android 12+ 推薦）
+                android.bluetooth.BluetoothAdapter adapter = null;
+                try {
+                    android.bluetooth.BluetoothManager bm =
+                        (android.bluetooth.BluetoothManager) getSystemService(android.content.Context.BLUETOOTH_SERVICE);
+                    if (bm != null) adapter = bm.getAdapter();
+                } catch (Throwable ignore) {}
+                if (adapter == null) {
+                    try { adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+                }
+                sb.append("\"adapter_null\":").append(adapter == null).append(",");
+                sb.append("\"bt_enabled\":").append(adapter != null && adapter.isEnabled()).append(",");
+
+                // 權限狀態
+                boolean btConnect = true, btScan = true, fineLoc = true;
+                if (Build.VERSION.SDK_INT >= 31) {
+                    btConnect = checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                            == PackageManager.PERMISSION_GRANTED;
+                    btScan = checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
+                            == PackageManager.PERMISSION_GRANTED;
+                }
+                if (Build.VERSION.SDK_INT <= 30) {
+                    fineLoc = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                            == PackageManager.PERMISSION_GRANTED;
+                }
+                sb.append("\"perm_connect\":").append(btConnect).append(",");
+                sb.append("\"perm_scan\":").append(btScan).append(",");
+                sb.append("\"perm_fine_loc\":").append(fineLoc).append(",");
+
+                // 已配對裝置
+                int paired = 0;
+                String mindsensor = "";
+                try {
+                    if (adapter != null && btConnect) {
+                        java.util.Set<android.bluetooth.BluetoothDevice> bonded = adapter.getBondedDevices();
+                        paired = bonded.size();
+                        for (android.bluetooth.BluetoothDevice d : bonded) {
+                            String name = d.getName();
+                            if (name != null && name.contains("Mindsensor")) {
+                                mindsensor = name;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Throwable t) {
+                    sb.append("\"paired_err\":\"").append(t.getClass().getSimpleName()).append("\",");
+                }
+                sb.append("\"paired_count\":").append(paired).append(",");
+                sb.append("\"mindsensor\":\"").append(mindsensor).append("\",");
+
+                // CLS_BrainWave 狀態
+                sb.append("\"ble_obj\":").append(ble != null).append(",");
+                int bat = -1;
+                if (ble != null) {
+                    try { bat = ble.getBatteryLevel(); } catch (Throwable ignore) {}
+                }
+                sb.append("\"battery\":").append(bat);
+                sb.append("}");
+                return sb.toString();
+            } catch (Throwable t) {
+                return "{\"error\":\"" + t.getClass().getSimpleName() + ": " + t.getMessage() + "\"}";
+            }
         }
 
         /** 供 HTML 查詢顧問姓名 */
@@ -517,7 +606,17 @@ public class WebAppActivity extends Activity {
                 if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
                         != PackageManager.PERMISSION_GRANTED) return false;
             }
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            // 小米 Android 15 / HyperOS 2 修復：getDefaultAdapter() 可能回傳 null
+            // 優先使用 BluetoothManager（API 18+ 都支援，21+ 推薦，31+ 必須）
+            BluetoothAdapter adapter = null;
+            try {
+                android.bluetooth.BluetoothManager bm =
+                    (android.bluetooth.BluetoothManager) getSystemService(android.content.Context.BLUETOOTH_SERVICE);
+                if (bm != null) adapter = bm.getAdapter();
+            } catch (Throwable ignore) {}
+            if (adapter == null) {
+                try { adapter = BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+            }
             return adapter != null && adapter.isEnabled();
         } catch (Throwable t) {
             return false;
@@ -546,7 +645,14 @@ public class WebAppActivity extends Activity {
                                              final String reportType,
                                              final String orderId) {
         BluetoothAdapter adapter = null;
-        try { adapter = BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+        try {
+            android.bluetooth.BluetoothManager bm =
+                (android.bluetooth.BluetoothManager) getSystemService(android.content.Context.BLUETOOTH_SERVICE);
+            if (bm != null) adapter = bm.getAdapter();
+        } catch (Throwable ignore) {}
+        if (adapter == null) {
+            try { adapter = BluetoothAdapter.getDefaultAdapter(); } catch (Throwable ignore) {}
+        }
         boolean btOff = (adapter == null || !adapter.isEnabled());
         boolean noPerm = (Build.VERSION.SDK_INT >= 31)
                 && (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)

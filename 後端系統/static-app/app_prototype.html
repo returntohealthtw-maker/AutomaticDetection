@@ -56,6 +56,7 @@
   .eeg-battery {
     display:inline-flex; align-items:center; gap:3px;
     font-size:11px; font-weight:600; margin-left:4px;
+    cursor:pointer;
   }
   .eeg-battery.high  { color:#7CFC7C; }
   .eeg-battery.mid   { color:#FFD700; }
@@ -2808,35 +2809,101 @@
 })();
 
 // ── 腦波儀電量 Polling（每 10 秒更新一次所有 status bar 的電量圖示）────────
+// 修復小米 Android 15 / HyperOS 2 顯示問題：
+//   1. 用 try/catch 包覆每次 bridge 呼叫，避免 silent fail
+//   2. JS 端維護 last-known 快取，斷線時延續顯示（與 Java 端雙保險）
+//   3. 若 bridge 回傳 -1 但確實有 AndroidBridge 注入，視為「連線中」（🧠～）而非「沒有」（🧠--）
 (function startBatteryPolling() {
+  let _lastBatPct = -1;       // 上次成功讀到的電量
+  let _hasBridge  = false;     // 是否偵測過有 AndroidBridge
+  let _stale      = false;     // 目前顯示值是否為「停用快取」
+
   function updateBattery() {
     let pct = -1;
+    let bridgeAvailable = false;
     try {
       if (typeof AndroidBridge !== 'undefined' && AndroidBridge &&
           typeof AndroidBridge.getDeviceBattery === 'function') {
+        bridgeAvailable = true;
+        _hasBridge = true;
         pct = AndroidBridge.getDeviceBattery();
+        if (typeof pct !== 'number') pct = parseInt(pct, 10);
+        if (isNaN(pct)) pct = -1;
       }
-    } catch(e) { pct = -1; }
+    } catch(e) {
+      pct = -1;
+    }
+
+    // 有讀到合理值就更新快取
+    if (pct >= 1 && pct <= 100) {
+      _lastBatPct = pct;
+      _stale = false;
+    } else if (_lastBatPct > 0 && bridgeAvailable) {
+      // bridge 仍存在但讀取失敗 → 顯示快取（標 stale）
+      pct = _lastBatPct;
+      _stale = true;
+    }
 
     const els = document.querySelectorAll('.eeg-battery');
     els.forEach(function(el) {
       if (pct < 0) {
-        el.textContent = '🧠--';
-        el.className = 'eeg-battery off';
-      } else if (pct >= 60) {
-        el.textContent = '🧠' + pct + '%';
-        el.className = 'eeg-battery high';
-      } else if (pct >= 20) {
-        el.textContent = '🧠' + pct + '%';
-        el.className = 'eeg-battery mid';
+        // 真的取不到：若有 bridge 則顯示「連線中」，無 bridge 才顯示「--」
+        if (_hasBridge) {
+          el.textContent = '🧠連線中';
+          el.className = 'eeg-battery mid';
+        } else {
+          el.textContent = '🧠--';
+          el.className = 'eeg-battery off';
+        }
       } else {
-        el.textContent = '🧠' + pct + '%';
-        el.className = 'eeg-battery low';
+        const suffix = _stale ? '~' : '';
+        el.textContent = '🧠' + pct + '%' + suffix;
+        el.className = 'eeg-battery ' + (pct >= 60 ? 'high' : pct >= 20 ? 'mid' : 'low');
       }
     });
   }
   updateBattery();
   setInterval(updateBattery, 10000);
+
+  // 提供 console 診斷工具：在小米 A15 上長按狀態列電量圖示可呼叫此函式
+  window._diagBle = function() {
+    try {
+      if (typeof AndroidBridge !== 'undefined' && AndroidBridge &&
+          typeof AndroidBridge.getBleDebugInfo === 'function') {
+        const info = AndroidBridge.getBleDebugInfo();
+        // 將 JSON 美化呈現
+        let pretty;
+        try { pretty = JSON.stringify(JSON.parse(info), null, 2); }
+        catch(e) { pretty = info; }
+        alert('🔧 BLE 診斷資訊\n（請截圖回傳給技術人員）\n\n' + pretty);
+        return info;
+      }
+      alert('⚠️ AndroidBridge 未注入\n（在瀏覽器測試模式中或 WebView 異常）');
+      return null;
+    } catch(e) {
+      alert('診斷失敗: ' + e.message);
+      return null;
+    }
+  };
+
+  // 長按腦波儀電量圖示 1.5 秒 → 呼叫診斷
+  document.addEventListener('touchstart', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('eeg-battery')) {
+      e.target._diagTimer = setTimeout(() => window._diagBle(), 1500);
+    }
+  }, { passive: true });
+  document.addEventListener('touchend', function(e) {
+    if (e.target && e.target._diagTimer) {
+      clearTimeout(e.target._diagTimer);
+      e.target._diagTimer = null;
+    }
+  }, { passive: true });
+  // 桌面測試：點兩下也可觸發
+  document.addEventListener('dblclick', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('eeg-battery')) {
+      window._diagBle();
+    }
+  });
 })();
 
 // ── 狀態列即時時鐘 ─────────────────────────────────────────────────────
