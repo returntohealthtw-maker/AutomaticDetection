@@ -593,6 +593,9 @@
                        display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .et-strength-name { flex:1; font-size:13px; color:rgba(255,255,255,0.85); font-weight:600; }
   .et-strength-val { font-size:14px; font-weight:800; color:#4caf50; }
+  .et-section-desc { font-size:11.5px; line-height:1.7; color:rgba(255,255,255,0.55);
+                      margin-bottom:12px; padding:8px 10px; background:rgba(255,255,255,0.03);
+                      border-left:2px solid rgba(255,255,255,0.15); border-radius:4px; }
   /* ========== SCREEN 11: RESULTS（個人整合分析報告） ========== */
   #screen-results { --header-bg:#0d1729; background:#0d1729; }
   #screen-results .status-bar { background:#0d1729; }
@@ -2491,9 +2494,20 @@
             <div class="et-brain-sub" id="et-brain-color-desc"></div>
           </div>
 
+          <!-- 腦人顏色說明 -->
+          <div class="et-section">
+            <div class="et-section-title">🎨 腦人顏色 · 說明</div>
+            <div class="et-section-desc" style="margin-bottom:0;">
+              四色腦人由腦波 Gamma/Alpha 與 Gamma/Beta 兩個比值在二維座標上的相對位置決定，反映你長期的思考模式與行為偏好。橘腦人重感受、行動快；綠腦人善協調、重和諧；藍腦人重邏輯、目標導向；黃腦人重內省、富創意。
+            </div>
+          </div>
+
           <!-- 決策指標 -->
           <div class="et-section">
             <div class="et-section-title">🎯 決策指標</div>
+            <div class="et-section-desc">
+              決策指標綜合 High Beta、執行腦力與抗壓韌性，反映你在壓力情境下做出果斷判斷的能力。分數越高代表決策越快、行動越果決；分數較低時建議多取得資訊、放慢節奏，可降低衝動所帶來的風險。
+            </div>
             <div class="et-dec">
               <div class="et-dec-val" id="et-dec-val">--</div>
               <div class="et-dec-label" id="et-dec-desc">--</div>
@@ -2525,6 +2539,9 @@
           <!-- MBTI -->
           <div class="et-section">
             <div class="et-section-title">🔵 MBTI 性格傾向（由強到弱）</div>
+            <div class="et-section-desc">
+              MBTI 由四個維度組成：外向/內向、直覺/感官、理性/情感、計畫/彈性。系統依即時腦波的 β/α、θ/β、Low Beta/Low Gamma+θ、High Beta/θ 四個比值估算各維度傾向，並由強到弱排序，越上面代表這個性格特質在你身上越明顯。
+            </div>
             <div class="et-mbti-type" id="et-mbti-type">----</div>
             <div class="et-mbti-dims" id="et-mbti-dims"></div>
           </div>
@@ -2532,12 +2549,18 @@
           <!-- 五大優勢 -->
           <div class="et-section">
             <div class="et-section-title">⭐ 五大優勢</div>
+            <div class="et-section-desc">
+              從 20 個腦波指標中挑出本次得分最高的 5 項，代表你目前最強的能力面向。優勢項目可作為自我了解、職涯發展與團隊角色定位的重要參考；金/銀/銅排名顯示前三名的相對強度差距與差異。
+            </div>
             <div id="et-strengths"></div>
           </div>
 
           <!-- 腦波概況 -->
           <div class="et-section">
             <div class="et-section-title">📊 腦波頻帶概況</div>
+            <div class="et-section-desc">
+              腦波依頻率分為五大頻帶，各自反映不同心理狀態。Delta（深度休息）、Theta（直覺創意）、Alpha（放鬆專注）、Beta（思考執行）、Gamma（高階整合）。注意力與放鬆度則為 Mindwave 模組即時運算的綜合指數。
+            </div>
             <div id="et-bands"></div>
           </div>
 
@@ -2569,99 +2592,99 @@
             </div>
           </div>
 
-          <div class="report-body">
+          <!-- ── 腦波即時分析結果（取代原本的「腦波指標概覽」+ AI 報告區塊）── -->
+          <!-- 腦人顏色 Header -->
+          <div class="et-header" style="background:linear-gradient(160deg,#1a237e,#0d1729);">
+            <div class="et-badge">🧠 腦波即時分析結果</div>
+            <div class="et-brain-color" id="r2-brain-color-circle">🧠</div>
+            <div class="et-brain-label" id="r2-brain-color-name">分析中…</div>
+            <div class="et-brain-sub" id="r2-brain-color-desc"></div>
+          </div>
 
-            <!-- 能力指標 chips（檢測完成後動態填入受測者實際腦波）-->
-            <div class="report-chips" id="result-chips">
-              <span class="report-chip" data-key="intuition">直覺 —</span>
-              <span class="report-chip" data-key="meditation">放鬆 —</span>
-              <span class="report-chip" data-key="attention">專注 —</span>
-              <span class="report-chip" data-key="vitality">氣血 —</span>
-              <span class="report-chip" data-key="calmness">內在安定 —</span>
-              <span class="report-chip" data-key="hyperfocus">高度專注 —</span>
-              <span class="report-chip" data-key="logic">邏輯分析 —</span>
-              <span class="report-chip" data-key="observation">觀察環境 —</span>
-              <span class="report-chip" data-key="compassion">慈悲柔軟 —</span>
+          <!-- 腦人顏色說明 -->
+          <div class="et-section">
+            <div class="et-section-title">🎨 腦人顏色 · 說明</div>
+            <div class="et-section-desc" style="margin-bottom:0;">
+              四色腦人由腦波 Gamma/Alpha 與 Gamma/Beta 兩個比值在二維座標上的相對位置決定，反映你長期的思考模式與行為偏好。橘腦人重感受、行動快；綠腦人善協調、重和諧；藍腦人重邏輯、目標導向；黃腦人重內省、富創意。
             </div>
+          </div>
 
-            <!-- 腦波指標概覽（檢測完成後動態填入）-->
-            <div class="report-section">
-              <div class="report-section-title">腦波指標概覽</div>
-              <div id="result-bw-overview">
-                <div class="bw-row" data-key="intuition">
-                  <div class="bw-head"><span>直覺能力</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="vitality">
-                  <div class="bw-head"><span>氣血飽滿</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="calmness">
-                  <div class="bw-head"><span>內在安定</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="observation">
-                  <div class="bw-head"><span>觀察環境</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="meditation">
-                  <div class="bw-head"><span>放鬆能力</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="logic">
-                  <div class="bw-head"><span>邏輯分析</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
-                <div class="bw-row" data-key="compassion">
-                  <div class="bw-head"><span>慈悲柔軟</span><span class="bw-pct">—</span></div>
-                  <div class="bw-bar"><div class="bw-fill" style="width:0%;"></div></div>
-                </div>
+          <!-- 決策指標 -->
+          <div class="et-section">
+            <div class="et-section-title">🎯 決策指標</div>
+            <div class="et-section-desc">
+              決策指標綜合 High Beta、執行腦力與抗壓韌性，反映你在壓力情境下做出果斷判斷的能力。分數越高代表決策越快、行動越果決；分數較低時建議多取得資訊、放慢節奏，可降低衝動所帶來的風險。
+            </div>
+            <div class="et-dec">
+              <div class="et-dec-val" id="r2-dec-val">--</div>
+              <div class="et-dec-label" id="r2-dec-desc">--</div>
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+              <div class="et-bar-row">
+                <span class="et-bar-name">決策力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="r2-bar-dec" style="background:#ff9800;width:0%"></div></div>
+                <span class="et-bar-pct" id="r2-pct-dec">0%</span>
               </div>
-              <div id="result-bw-source" style="font-size:10px;color:#7d8aa8;margin-top:6px;text-align:right;">資料來源：剛採集的腦波（沒採集時顯示 —）</div>
-            </div>
-
-            <!-- 報告 AI 分析等待訊息 -->
-            <div class="report-section">
-              <div class="report-section-title">📄 報告內容</div>
-              <div class="report-text-box" style="text-align:center;color:#7d8aa8;line-height:1.8;">
-                完整報告（個性分析、職涯方向、性格盲點等 AI 解析章節）正在背景生成中，<br>
-                完成後管理員會在「📁 報告管理」核准後，自動寄送 PDF 下載連結至受測者 email。
+              <div class="et-bar-row">
+                <span class="et-bar-name">領導力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="r2-bar-ldr" style="background:#4caf50;width:0%"></div></div>
+                <span class="et-bar-pct" id="r2-pct-ldr">0%</span>
+              </div>
+              <div class="et-bar-row">
+                <span class="et-bar-name">執行腦力</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="r2-bar-ebi" style="background:#2196f3;width:0%"></div></div>
+                <span class="et-bar-pct" id="r2-pct-ebi">0%</span>
+              </div>
+              <div class="et-bar-row">
+                <span class="et-bar-name">抗壓韌性</span>
+                <div class="et-bar-track"><div class="et-bar-fill" id="r2-bar-res" style="background:#9c27b0;width:0%"></div></div>
+                <span class="et-bar-pct" id="r2-pct-res">0%</span>
               </div>
             </div>
+          </div>
 
-            <!-- ── 完整報告 AI 生成進度（背景任務、SSE 即時推送）─────────── -->
-            <div class="rg-progress-card" id="rg-progress-card" style="display:none;">
-              <div class="rg-progress-header">
-                <div class="rg-progress-title">📄 完整報告 AI 生成中</div>
-                <div class="rg-progress-stat" id="rg-progress-stat">0 / 0 節</div>
-              </div>
-              <div class="rg-progress-bar">
-                <div class="rg-progress-fill" id="rg-progress-fill" style="width:0%;"></div>
-              </div>
-              <div class="rg-progress-current" id="rg-progress-current">
-                <span class="rg-spin">⏳</span>
-                <span id="rg-progress-current-text">準備中...</span>
-              </div>
-              <div class="rg-chapter-list" id="rg-chapter-list"></div>
+          <!-- MBTI -->
+          <div class="et-section">
+            <div class="et-section-title">🔵 MBTI 性格傾向（由強到弱）</div>
+            <div class="et-section-desc">
+              MBTI 由四個維度組成：外向/內向、直覺/感官、理性/情感、計畫/彈性。系統依即時腦波的 β/α、θ/β、Low Beta/Low Gamma+θ、High Beta/θ 四個比值估算各維度傾向，並由強到弱排序，越上面代表這個性格特質在你身上越明顯。
             </div>
+            <div class="et-mbti-type" id="r2-mbti-type">----</div>
+            <div class="et-mbti-dims" id="r2-mbti-dims"></div>
+          </div>
 
-            <!-- ── 開發測試：立即生成單節（給「測試」按鈕用，可保留於正式版）─ -->
-            <div class="report-section" data-dev-only id="rg-test-card">
-              <div class="report-section-title">🧪 AI 報告生成測試</div>
-              <div style="font-size:11px;color:#7d8aa8;margin-bottom:10px;line-height:1.6;">
-                點下按鈕即時用 Gemini 2.5 Pro 生成第 1 章第 1 節，驗證後端生成流程是否正常。
-                約 30~60 秒；無 GEMINI_API_KEY 時回傳 mock 範例。
-              </div>
-              <button class="rg-test-btn" id="rg-test-btn" onclick="testGenerateOneSection()">
-                ▶ 測試生成第一節（第一章 - 第一節）
-              </button>
-              <div id="rg-test-result" class="rg-test-result" style="display:none;"></div>
+          <!-- 五大優勢 -->
+          <div class="et-section">
+            <div class="et-section-title">⭐ 五大優勢</div>
+            <div class="et-section-desc">
+              從 20 個腦波指標中挑出本次得分最高的 5 項，代表你目前最強的能力面向。優勢項目可作為自我了解、職涯發展與團隊角色定位的重要參考；金/銀/銅排名顯示前三名的相對強度差距與差異。
             </div>
+            <div id="r2-strengths"></div>
+          </div>
 
-            <div style="display:flex;gap:10px;margin-top:6px;">
-              <button class="btn btn-primary" style="flex:2;" onclick="goto('screen-home')">查看完整報告 →</button>
-              <button class="btn" style="flex:1;background:#22304d;color:#cfd9ee;border:1px solid #2f3f63;" onclick="startFullReportGeneration({brainwaveData: window._lastEegCapture || null})">▶ 啟動完整生成</button>
+          <!-- 腦波概況 -->
+          <div class="et-section" style="margin-bottom:24px;">
+            <div class="et-section-title">📊 腦波頻帶概況</div>
+            <div class="et-section-desc">
+              腦波依頻率分為五大頻帶，各自反映不同心理狀態。Delta（深度休息）、Theta（直覺創意）、Alpha（放鬆專注）、Beta（思考執行）、Gamma（高階整合）。注意力與放鬆度則為 Mindwave 模組即時運算的綜合指數。
             </div>
+            <div id="r2-bands"></div>
+          </div>
+
+          <!-- 隱藏：完整報告 AI 生成進度（背景仍然執行，但不顯示在 UI）-->
+          <div class="rg-progress-card" id="rg-progress-card" style="display:none;">
+            <div class="rg-progress-header">
+              <div class="rg-progress-title">📄 完整報告 AI 生成中</div>
+              <div class="rg-progress-stat" id="rg-progress-stat">0 / 0 節</div>
+            </div>
+            <div class="rg-progress-bar">
+              <div class="rg-progress-fill" id="rg-progress-fill" style="width:0%;"></div>
+            </div>
+            <div class="rg-progress-current" id="rg-progress-current">
+              <span class="rg-spin">⏳</span>
+              <span id="rg-progress-current-text">準備中...</span>
+            </div>
+            <div class="rg-chapter-list" id="rg-chapter-list"></div>
           </div>
         </div>
 
@@ -4880,53 +4903,10 @@ function _renderResultsFromEeg() {
     const sc   = stats?.sample_count ? `${stats.sample_count} 筆` : '尚未採集';
     meta.textContent = `${name}${age} · ${ts} · ${sc}`;
   }
-  if (!stats || !stats.sample_count) {
-    // 未採集 → 全部回 "—"
-    document.querySelectorAll('#result-chips .report-chip').forEach(el => {
-      const label = (el.textContent || '').split(' ')[0];
-      el.textContent = `${label} —`;
-    });
-    document.querySelectorAll('#result-bw-overview .bw-row').forEach(row => {
-      const pct = row.querySelector('.bw-pct'); if (pct) pct.textContent = '—';
-      const fill = row.querySelector('.bw-fill'); if (fill) fill.style.width = '0%';
-    });
-    const src = document.getElementById('result-bw-source');
-    if (src) src.textContent = '⚠️ 尚未採集腦波資料';
-    return;
+  // 用即時分析渲染（與「腦波儀測試」結果頁同款，但 ID 前綴為 r2-）
+  if (_eegLiveAccum && _eegLiveAccum.attn && _eegLiveAccum.attn.length) {
+    _renderBrainAnalysisInto('r2-');
   }
-  const b = stats.bands_avg || {};
-  const clamp = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
-  const values = {
-    intuition:   clamp(b.theta),
-    meditation:  clamp(stats.meditation_percentage),
-    attention:   clamp(stats.attention_percentage),
-    vitality:    clamp(Math.min(100, (b.alpha || 0) * 1.1)),
-    calmness:    clamp(Math.max(0,   (b.alpha || 0) * 0.9)),
-    hyperfocus:  clamp(Math.min(100, (b.beta  || 0) * 1.1)),
-    logic:       clamp(Math.max(0,   (b.beta  || 0) * 0.9)),
-    observation: clamp(Math.min(100, (b.gamma || 0) * 1.1)),
-    compassion:  clamp(Math.max(0,   (b.gamma || 0) * 0.9)),
-  };
-  const labelMap = {
-    intuition: '直覺', meditation: '放鬆', attention: '專注', vitality: '氣血',
-    calmness: '內在安定', hyperfocus: '高度專注', logic: '邏輯分析',
-    observation: '觀察環境', compassion: '慈悲柔軟',
-  };
-  document.querySelectorAll('#result-chips .report-chip').forEach(el => {
-    const k = el.dataset.key;
-    if (k != null && values[k] != null) {
-      el.textContent = `${labelMap[k]} ${values[k]}%`;
-    }
-  });
-  document.querySelectorAll('#result-bw-overview .bw-row').forEach(row => {
-    const k = row.dataset.key;
-    if (k != null && values[k] != null) {
-      const pct = row.querySelector('.bw-pct'); if (pct) pct.textContent = `${values[k]}%`;
-      const fill = row.querySelector('.bw-fill'); if (fill) fill.style.width = `${values[k]}%`;
-    }
-  });
-  const src = document.getElementById('result-bw-source');
-  if (src) src.textContent = `資料來源：本次採集 (${stats.sample_count} 筆) · attention=${values.attention} meditation=${values.meditation}`;
 }
 
 // 簡單隨機走勢模擬器（瀏覽器測試用）
@@ -5082,7 +5062,10 @@ const _ET_BRAIN_INFO = {
     desc:'創意直覺・重內在・善反思深思', traits:['深度思考','創意豐富','直覺靈感','內省安靜'] },
 };
 
-function _renderEegTestResult() {
+function _renderEegTestResult() { _renderBrainAnalysisInto('et-'); }
+
+// 將腦波分析結果渲染到帶有 prefix 的 DOM 元素（'et-' 給 eegtest-result，'r2-' 給 screen-results）
+function _renderBrainAnalysisInto(prefix) {
   if (!_eegLiveAccum) return;
   const acc = _eegLiveAccum;
   const indices = _etComputeAll(acc);
@@ -5090,33 +5073,31 @@ function _renderEegTestResult() {
   const colorKey= _etCalcBrainColor(acc);
   const info    = _ET_BRAIN_INFO[colorKey] || _ET_BRAIN_INFO.orange;
 
+  const $ = (id) => document.getElementById(prefix + id);
+  const setTxt = (id, v) => { const e=$(id); if(e) e.textContent=v; };
+  const setW   = (id, v) => { const e=$(id); if(e) e.style.width=v+'%'; };
+
   // ── 腦人顏色 ──
-  const circle = document.getElementById('et-brain-color-circle');
-  const bname  = document.getElementById('et-brain-color-name');
-  const bdesc  = document.getElementById('et-brain-color-desc');
+  const circle = $('brain-color-circle');
   if (circle) { circle.textContent = info.emoji; circle.style.background = info.bg;
                 circle.style.border = `3px solid ${info.color}`; }
-  if (bname)  bname.textContent = info.name;
-  if (bdesc)  bdesc.textContent = info.desc;
+  setTxt('brain-color-name', info.name);
+  setTxt('brain-color-desc', info.desc);
 
   // ── 決策指標 ──
   const dec = Math.round(indices.DEC.pct);
-  const setTxt = (id, v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
-  const setW   = (id, v) => { const e=document.getElementById(id); if(e) e.style.width=v+'%'; };
-  setTxt('et-dec-val', dec);
-  setTxt('et-dec-desc', dec>=75?'決策果斷・行動力強':dec>=50?'決策穩健・有主見':dec>=30?'傾向審慎・多方考量':'偏向緩慢・重複確認');
-  setW('et-bar-dec', dec); setTxt('et-pct-dec', dec+'%');
-  const ldr=Math.round(indices.LDR.pct); setW('et-bar-ldr', ldr); setTxt('et-pct-ldr', ldr+'%');
-  const ebi=Math.round(indices.EBI.pct); setW('et-bar-ebi', ebi); setTxt('et-pct-ebi', ebi+'%');
-  const res=Math.round(indices.RES.pct); setW('et-bar-res', res); setTxt('et-pct-res', res+'%');
+  setTxt('dec-val', dec);
+  setTxt('dec-desc', dec>=75?'決策果斷・行動力強':dec>=50?'決策穩健・有主見':dec>=30?'傾向審慎・多方考量':'偏向緩慢・重複確認');
+  setW('bar-dec', dec); setTxt('pct-dec', dec+'%');
+  const ldr=Math.round(indices.LDR.pct); setW('bar-ldr', ldr); setTxt('pct-ldr', ldr+'%');
+  const ebi=Math.round(indices.EBI.pct); setW('bar-ebi', ebi); setTxt('pct-ebi', ebi+'%');
+  const res=Math.round(indices.RES.pct); setW('bar-res', res); setTxt('pct-res', res+'%');
 
   // ── MBTI ──
-  setTxt('et-mbti-type', mbti.type);
-  const dimsEl = document.getElementById('et-mbti-dims');
+  setTxt('mbti-type', mbti.type);
+  const dimsEl = $('mbti-dims');
   if (dimsEl) {
-    const dimPairLabels = { 'E/I':['外向','內向'], 'N/S':['直覺','感官'], 'T/F':['理性','情感'], 'J/P':['計畫','彈性'] };
     dimsEl.innerHTML = mbti.dims.map((d,i) => {
-      const [lbl, rbl] = dimPairLabels[d.pair] || ['',''];
       const dominated = d.pct >= 50 ? d.pct : 100 - d.pct;
       const fillL = d.pct >= 50 ? d.pct : 0;
       const fillR = d.pct < 50  ? 100 - d.pct : 0;
@@ -5138,7 +5119,7 @@ function _renderEegTestResult() {
   const sorted = keys.map(k => ({ ...indices[k], key:k }))
                      .sort((a,b) => b.pct - a.pct).slice(0, 5);
   const strengthColors = ['#ffd700','#c0c0c0','#cd7f32','#4caf50','#2196f3'];
-  const strEl = document.getElementById('et-strengths');
+  const strEl = $('strengths');
   if (strEl) strEl.innerHTML = sorted.map((s, i) =>
     `<div class="et-strength-item">
       <div class="et-strength-rank" style="background:${strengthColors[i]}22;color:${strengthColors[i]};">${i+1}</div>
@@ -5158,7 +5139,7 @@ function _renderEegTestResult() {
     { name:'Gamma',  val:Math.round(bnd.g),    color:'#f44336' },
     { name:'Delta',  val:Math.round(bnd.d),    color:'#607d8b' },
   ];
-  const bandsEl = document.getElementById('et-bands');
+  const bandsEl = $('bands');
   if (bandsEl) bandsEl.innerHTML = bands.map(b =>
     `<div class="et-bar-row">
       <span class="et-bar-name">${b.name}</span>
