@@ -2813,10 +2813,16 @@
 //   1. 用 try/catch 包覆每次 bridge 呼叫，避免 silent fail
 //   2. JS 端維護 last-known 快取，斷線時延續顯示（與 Java 端雙保險）
 //   3. 若 bridge 回傳 -1 但確實有 AndroidBridge 注入，視為「連線中」（🧠～）而非「沒有」（🧠--）
+//   4. 🆕 智慧偵測「假電量值」：Mindsensor 等廉價 EEG 韌體常固定回報 88%，
+//        若連續讀數都相同（≥3 次 / 30 秒），自動切換為「✅ 已連線」避免誤導
 (function startBatteryPolling() {
   let _lastBatPct = -1;       // 上次成功讀到的電量
   let _hasBridge  = false;     // 是否偵測過有 AndroidBridge
   let _stale      = false;     // 目前顯示值是否為「停用快取」
+  // 假電量偵測：紀錄連續多次讀到「同一值」
+  let _sameVal    = -1;        // 連續觀察到的固定值
+  let _sameCount  = 0;         // 連續次數
+  let _fakeMode   = false;     // 已判定為假電量 → 改顯示「已連線」
 
   function updateBattery() {
     let pct = -1;
@@ -2838,6 +2844,17 @@
     if (pct >= 1 && pct <= 100) {
       _lastBatPct = pct;
       _stale = false;
+      // 假電量偵測：若連續 3 次（30 秒）讀到同一個值且該值 ≥ 60，視為韌體假數值
+      if (pct === _sameVal) {
+        _sameCount++;
+        if (_sameCount >= 3 && pct >= 60) {
+          _fakeMode = true;
+        }
+      } else {
+        _sameVal = pct;
+        _sameCount = 1;
+        _fakeMode = false;   // 數值有變動 → 設備真的有量測，恢復顯示百分比
+      }
     } else if (_lastBatPct > 0 && bridgeAvailable) {
       // bridge 仍存在但讀取失敗 → 顯示快取（標 stale）
       pct = _lastBatPct;
@@ -2847,7 +2864,6 @@
     const els = document.querySelectorAll('.eeg-battery');
     els.forEach(function(el) {
       if (pct < 0) {
-        // 真的取不到：若有 bridge 則顯示「連線中」，無 bridge 才顯示「--」
         if (_hasBridge) {
           el.textContent = '🧠連線中';
           el.className = 'eeg-battery mid';
@@ -2855,10 +2871,15 @@
           el.textContent = '🧠--';
           el.className = 'eeg-battery off';
         }
+      } else if (_fakeMode) {
+        el.textContent = '🧠 已連線';
+        el.className = 'eeg-battery high';
+        el.title = '此款腦波儀韌體未提供真實電量讀數，僅顯示連線狀態。若使用時間過長請充電。';
       } else {
         const suffix = _stale ? '~' : '';
         el.textContent = '🧠' + pct + '%' + suffix;
         el.className = 'eeg-battery ' + (pct >= 60 ? 'high' : pct >= 20 ? 'mid' : 'low');
+        el.title = '';
       }
     });
   }
