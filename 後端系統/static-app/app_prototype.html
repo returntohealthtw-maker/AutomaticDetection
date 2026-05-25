@@ -2536,7 +2536,7 @@
           <div class="et-section">
             <div class="et-section-title">🔵 MBTI 性格傾向</div>
             <div class="et-section-desc">
-              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源、直覺(N)/感官(S) 反映訊息處理方式、理性(T)/情感(F) 反映決策依據、計畫(J)/彈性(P) 反映生活方式。系統依即時腦波估算各維度傾向，數值越接近 100% 代表該特質在你身上越明顯。
+              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源是來自外在互動或內在思考、直覺(N)/感官(S) 反映訊息處理偏好抽象想像或具體現實、理性(T)/情感(F) 反映決策依據邏輯或人際感受、計畫(J)/彈性(P) 反映生活節奏喜歡規劃或隨機應變。系統依即時腦波估算各維度傾向強度。
             </div>
             <div class="et-mbti-type" id="et-mbti-type">----</div>
             <div class="et-mbti-dims" id="et-mbti-dims"></div>
@@ -2555,7 +2555,7 @@
           <div class="et-section">
             <div class="et-section-title">📊 腦波頻帶概況</div>
             <div class="et-section-desc">
-              腦波依頻率分為五大頻帶，各自反映不同心理狀態：深度休息（睡眠與潛意識）、直覺創意（靈感與放空）、放鬆專注（平靜清醒）、思考執行（理性思考）、高階整合（學習峰值）。注意力與放鬆度則為即時運算的綜合指數，可用來判讀當下的心理狀態。
+              腦波依頻率分為五大頻帶，各自反映不同心理狀態：深度休息（睡眠與潛意識修復）、直覺創意（靈感湧現與放空）、放鬆專注（平靜清醒的理想狀態）、思考執行（理性思考與決策）、高階整合（學習與整合資訊的峰值）。注意力與放鬆度則為即時綜合指數，呈現當下狀態。
             </div>
             <div id="et-bands"></div>
           </div>
@@ -2564,7 +2564,7 @@
             <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);padding:0 16px;">
               ⚠️ 本次分析僅供參考，未儲存至系統
             </div>
-            <button class="btn btn-primary" onclick="goto('screen-home')">返回首頁</button>
+            <button class="btn btn-primary" onclick="_exitEegTestMode(); goto('screen-home')">返回首頁</button>
             <button class="btn" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);" onclick="_startEegTestSession()">重新測試</button>
           </div>
         </div>
@@ -2639,7 +2639,7 @@
           <div class="et-section">
             <div class="et-section-title">🔵 MBTI 性格傾向</div>
             <div class="et-section-desc">
-              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源、直覺(N)/感官(S) 反映訊息處理方式、理性(T)/情感(F) 反映決策依據、計畫(J)/彈性(P) 反映生活方式。系統依即時腦波估算各維度傾向，數值越接近 100% 代表該特質在你身上越明顯。
+              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源是來自外在互動或內在思考、直覺(N)/感官(S) 反映訊息處理偏好抽象想像或具體現實、理性(T)/情感(F) 反映決策依據邏輯或人際感受、計畫(J)/彈性(P) 反映生活節奏喜歡規劃或隨機應變。系統依即時腦波估算各維度傾向強度。
             </div>
             <div class="et-mbti-type" id="r2-mbti-type">----</div>
             <div class="et-mbti-dims" id="r2-mbti-dims"></div>
@@ -2658,7 +2658,7 @@
           <div class="et-section" style="margin-bottom:24px;">
             <div class="et-section-title">📊 腦波頻帶概況</div>
             <div class="et-section-desc">
-              腦波依頻率分為五大頻帶，各自反映不同心理狀態：深度休息（睡眠與潛意識）、直覺創意（靈感與放空）、放鬆專注（平靜清醒）、思考執行（理性思考）、高階整合（學習峰值）。注意力與放鬆度則為即時運算的綜合指數，可用來判讀當下的心理狀態。
+              腦波依頻率分為五大頻帶，各自反映不同心理狀態：深度休息（睡眠與潛意識修復）、直覺創意（靈感湧現與放空）、放鬆專注（平靜清醒的理想狀態）、思考執行（理性思考與決策）、高階整合（學習與整合資訊的峰值）。注意力與放鬆度則為即時綜合指數，呈現當下狀態。
             </div>
             <div id="r2-bands"></div>
           </div>
@@ -4948,6 +4948,22 @@ function _startEegTestSession() {
   const subEl = document.getElementById('detect-subject');
   if (subEl) subEl.textContent = '🧠 腦波儀測試模式';
   goto('screen-detect');
+}
+
+// 結束「腦波儀測試」模式：返回首頁前清除 _eegTestMode 旗標、復原時長與受測者顯示，
+// 確保接下來進入正式報告流程不會被殘留狀態污染（修正：bug-2026-05-25）
+function _exitEegTestMode() {
+  _eegTestMode = false;
+  _eegLiveDurationSec = 180;  // 正式流程也是 180s，保持一致
+  _currentSubjectName = null;
+  try {
+    if (_eegLiveTimer) { clearInterval(_eegLiveTimer); _eegLiveTimer = null; }
+  } catch(e) {}
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopStreamingEeg === 'function') {
+      window.AndroidBridge.stopStreamingEeg();
+    }
+  } catch(e) {}
 }
 
 // ── JS 版演算法（移植自 Python services/algorithms.py）──────────────────────

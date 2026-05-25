@@ -66,11 +66,40 @@ public class CLS_BrainWave
         catch (Throwable t) { return false; }
     }
     //===================================================
-    /** 取得腦波儀電量（0-100）；未連線或無法取得時回傳 -1 */
+    /**
+     * 取得腦波儀電量（0-100）；未連線或無法取得時回傳 -1。
+     *
+     * 小米/紅米/OPPO/部分平板修正：
+     *  - 不再強制 bConnected()==true 才回傳
+     *    （某些 ROM 在 BLE 已連線但 ThinkGear 資料流尚未啟動的窗口會回報 false，
+     *    導致使用者一直看到「🧠--」即使腦波儀已正常連上）
+     *  - 用 static 快取最後一次有效讀數，BLE 暫時斷線時仍能顯示
+     *  - 只要曾經讀過一次合理電量（1~100），之後就持續顯示，不會跳回「--」
+     */
+    private static int sLastValidBattery = -1;     // 上次成功讀到的電量（never read = -1）
+    private static long sLastValidBatteryTs = 0L;  // 讀到的時間
+
     public int getBatteryLevel(){
         try {
-            if (!clsEeg.bConnected()) return -1;
-            return clsEeg.iBattery();
+            // 1) 嘗試取得即時值（無論 bConnected 狀態）
+            int now = -1;
+            try { now = clsEeg.iBattery(); } catch (Throwable ignore) {}
+
+            // 2) 合理範圍才採用作為快取
+            if (now >= 1 && now <= 100) {
+                sLastValidBattery   = now;
+                sLastValidBatteryTs = System.currentTimeMillis();
+                return now;
+            }
+
+            // 3) 即時值無效時，若快取仍在合理時間內（30 分鐘）就回傳快取
+            if (sLastValidBattery > 0 &&
+                (System.currentTimeMillis() - sLastValidBatteryTs) < 30L * 60 * 1000) {
+                return sLastValidBattery;
+            }
+
+            // 4) 從未讀到 → -1（UI 顯示「🧠--」）
+            return -1;
         } catch (Throwable t) { return -1; }
     }
     //===================================================

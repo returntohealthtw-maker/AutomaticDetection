@@ -8,9 +8,22 @@
 
     <uses-permission android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
+
+    <!--
+        ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION：
+        Android 6 ~ 11 做 BLE 掃描必須要 FINE_LOCATION，
+        否則在小米 / 紅米 / OPPO 等 OEM 上會 silently fail，無法取得電量。
+        Android 12+ 已用 BLUETOOTH_SCAN(neverForLocation) 取代，因此限制 maxSdkVersion=30。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30"/>
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />

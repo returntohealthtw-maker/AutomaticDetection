@@ -430,16 +430,32 @@ public class WebAppActivity extends Activity {
         try {
             if (Build.VERSION.SDK_INT < 23) return;
 
-            if (Build.VERSION.SDK_INT <= 29) {
+            java.util.List<String> need = new java.util.ArrayList<>();
+
+            // ── Android 6 ~ 11（API 23~30）：BLE 掃描需要 LOCATION 權限 ──
+            //   小米/紅米/OPPO 等 OEM 沒有這個權限會 silently fail，
+            //   getBondedDevices() 取得到裝置但 GATT 連線失敗 → 電量顯示「--」。
+            if (Build.VERSION.SDK_INT <= 30) {
+                if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    need.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                }
+                if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    need.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+                }
+            }
+
+            // ── 儲存權限（Android 9 及以下需要）──
+            if (Build.VERSION.SDK_INT <= 28) {
                 if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                         != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this, new String[]{
-                            Manifest.permission.READ_EXTERNAL_STORAGE,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                    }, REQ_PERMISSION_STORAGE);
+                    need.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
                 }
-            } else {
-                java.util.List<String> need = new java.util.ArrayList<>();
+            }
+
+            // ── Android 12+（API 31）BLE 新權限模型 ──
+            if (Build.VERSION.SDK_INT >= 31) {
                 if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
                         != PackageManager.PERMISSION_GRANTED) {
                     need.add(Manifest.permission.BLUETOOTH_CONNECT);
@@ -448,10 +464,11 @@ public class WebAppActivity extends Activity {
                         != PackageManager.PERMISSION_GRANTED) {
                     need.add(Manifest.permission.BLUETOOTH_SCAN);
                 }
-                if (!need.isEmpty()) {
-                    ActivityCompat.requestPermissions(this,
-                            need.toArray(new String[0]), REQ_PERMISSION_BLE);
-                }
+            }
+
+            if (!need.isEmpty()) {
+                ActivityCompat.requestPermissions(this,
+                        need.toArray(new String[0]), REQ_PERMISSION_BLE);
             }
         } catch (Throwable t) {
             android.util.Log.e("WebAppActivity", "ensureRuntimePermissions", t);
