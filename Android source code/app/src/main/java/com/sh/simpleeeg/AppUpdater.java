@@ -107,14 +107,28 @@ public class AppUpdater {
 
     private static void showUpdateDialog(final Context ctx, final int latest,
                                          final String apkUrl, final String notes) {
+        // 取得當前版本作為比對
+        int current = BuildConfig.VERSION_CODE;
+        String currentName = BuildConfig.VERSION_NAME;
+
+        String body = (notes.isEmpty()
+                ? "本次更新包含重要修正，建議立即升級。"
+                : notes);
+
+        // 多加一段「操作引導」，讓加盟商不會在「安裝」那個系統畫面卡住
+        String guide =
+                "\n\n📲 升級流程（共需 2 次點擊）：\n" +
+                "  ① 點下方【立即更新】按鈕\n" +
+                "  ② 等瀏覽器下載完成（約 30~60 秒）\n" +
+                "  ③ 系統會自動彈出安裝確認 → 點【安裝】即可\n" +
+                "\n💡 安裝後請重新打開「腦波檢測系統」APP，會自動啟動新版本。";
+
         new AlertDialog.Builder(ctx)
-                .setTitle("發現新版本 (v" + latest + ")")
-                .setMessage((notes.isEmpty()
-                        ? "有更新可用，建議立即更新以取得最新功能與修正。"
-                        : notes)
-                        + "\n\n點「立即更新」後會開啟瀏覽器下載，下載完請點安裝。")
+                .setTitle("🆕 發現新版本 v" + latest +
+                          "（目前 v" + current + " / " + currentName + "）")
+                .setMessage(body + guide)
                 .setCancelable(false)
-                .setPositiveButton("立即更新", (d, w) -> {
+                .setPositiveButton("立即更新（推薦）", (d, w) -> {
                     // 持久化記錄：已觸發下載，重開 App 不再重複彈
                     ctx.getSharedPreferences("EEGAppFile", Context.MODE_PRIVATE)
                             .edit().putInt(TRIGGERED_KEY, latest).apply();

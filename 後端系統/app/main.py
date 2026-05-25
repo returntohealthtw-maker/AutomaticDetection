@@ -11,11 +11,23 @@ import time
 APP_HTML_VERSION = "2026.05.25.7"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 1
-APK_LATEST_VERSION_NAME = "1.0.4"
+APK_LATEST_VERSION_CODE = 15
+APK_LATEST_VERSION_NAME = "1.1.4"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
-    "v1.1.2 更新內容：\n"
+    "v1.1.4 更新內容：\n"
+    "・修正小米 Android 15 / HyperOS 2 腦波儀電量無法顯示問題\n"
+    "・改用 BluetoothManager API（getDefaultAdapter 已淘汰）\n"
+    "・新增藍牙診斷工具（長按右上角 🧠 圖示 1.5 秒）\n"
+    "・電量斷線時顯示『連線中』而非『--』，操作更直覺\n"
+    "\n"
+    "v1.1.3 更新內容：\n"
+    "・補上 ACCESS_FINE_LOCATION 權限（Android 6~11 BLE 必須）\n"
+    "・電量讀取加入 30 分鐘快取機制，斷線時仍能顯示\n"
+    "・修正『腦波儀測試』模式可能污染正式檢測流程的 bug\n"
+    "・MBTI、腦波頻帶說明文字補足，避免顯示過短\n"
+    "\n"
+    "v1.1.2 歷史更新：\n"
     "・修正小米(MIUI)裝置更新彈窗重複問題\n"
     "・改用瀏覽器下載 APK，安裝更順暢\n"
     "\n"
