@@ -2580,7 +2580,7 @@
           <!-- 🧬 MBTI 八卦分析（採集到資料時才顯示）-->
           <div id="ethr-mbti-section" style="display:none;background:white;border-radius:18px;padding:18px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-              <div style="font-size:13px;font-weight:700;color:#1a237e;">🧬 MBTI 性格分析（八卦演算法）</div>
+              <div style="font-size:13px;font-weight:700;color:#1a237e;">🧬 MBTI 性格分析</div>
               <span id="ethr-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
             </div>
             <div id="ethr-mbti-summary" style="font-size:12px;color:#666;line-height:1.7;margin-bottom:14px;padding:10px;background:#f5f7ff;border-radius:10px;"></div>
@@ -2593,8 +2593,8 @@
               <button class="ethr-layer-tab" data-layer="peer">同儕關係</button>
             </div>
 
-            <!-- 16 種 MBTI 列表（依層次切換內容）-->
-            <div id="ethr-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:12px;"></div>
+            <!-- 受測者 MBTI 在 4 個性格層次下的描述（依上方 tab 切換）-->
+            <div id="ethr-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
           </div>
 
           <!-- 操作按鈕 -->
@@ -5866,23 +5866,30 @@ let _ethrMbtiActiveLayer = 'archetype';
 let _ethrMbtiCurrentType = '';
 
 function _renderEthrMbtiList() {
+  // 只渲染受測者本次推論出的 MBTI 類型，依目前 tab 顯示對應層次描述
   const listEl = document.getElementById('ethr-mbti-list');
   if (!listEl) return;
   const layer = _ethrMbtiActiveLayer;
-  const ordered = ['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP',
-                   'ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
-  listEl.innerHTML = ordered.map(id => {
-    const m = _ETHR_MBTI_TABLE[id];
-    if (!m) return '';
-    const isCur = (id === _ethrMbtiCurrentType);
-    return `<div class="ethr-mbti-card${isCur ? ' is-current' : ''}">
-      <div class="mbti-head">
-        <span class="mbti-id">${m.emoji} ${id}</span>
-        <span class="mbti-name">${m.name}</span>
-      </div>
-      <div class="mbti-desc">${m[layer] || '—'}</div>
-    </div>`;
-  }).join('');
+  const id = _ethrMbtiCurrentType;
+  const m = id ? _ETHR_MBTI_TABLE[id] : null;
+  if (!id || !m) {
+    listEl.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:14px;">尚未推論出性格類型</div>';
+    return;
+  }
+  const layerLabel = ({
+    archetype: '原型性格',
+    family:    '原生家庭',
+    social:    '社會化',
+    peer:      '同儕關係',
+  })[layer] || layer;
+  listEl.innerHTML = `<div class="ethr-mbti-card is-current">
+    <div class="mbti-head">
+      <span class="mbti-id">${m.emoji} ${id}</span>
+      <span class="mbti-name">${m.name}</span>
+    </div>
+    <div style="font-size:11px;color:#888;margin:6px 0 4px;">${layerLabel}</div>
+    <div class="mbti-desc">${m[layer] || '—'}</div>
+  </div>`;
 }
 
 function _bindEthrMbtiTabs() {
@@ -5935,7 +5942,7 @@ function _renderEthrMbtiAnalysis(state) {
     const dimText = mbti.dims.map(d =>
       `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#d32f2f' : '#1976d2'}">${d.dominant}</span> (${Math.round(d.pct)}%)`
     ).join(' · ');
-    summary.innerHTML = `本次 ${state.sampleCount} 筆腦波資料推論結果：<b style="color:#1a237e;">${cur.emoji} ${mbti.type} ${cur.name}</b><br>${dimText}<br><span style="font-size:11px;color:#888;">下方列出 16 種 MBTI 在 4 個性格層次下的對照說明，您可切換不同層次了解自己在不同情境下的表現。</span>`;
+    summary.innerHTML = `本次 ${state.sampleCount} 筆腦波資料推論結果：<b style="color:#1a237e;">${cur.emoji} ${mbti.type} ${cur.name}</b><br>${dimText}<br><span style="font-size:11px;color:#888;">您可切換下方 4 個層次，了解自己在不同情境（原型 / 家庭 / 社會 / 同儕）下的表現。</span>`;
   }
 
   _bindEthrMbtiTabs();
