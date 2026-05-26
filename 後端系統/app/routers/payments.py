@@ -756,65 +756,75 @@ def my_payments(
 
 @router.get("/admin/paid-not-detected")
 def admin_paid_not_detected(
-    days: int = 90,
+    days: int = 180,
     authorization: Optional[str] = Header(None),
     db: DbSession = Depends(get_db),
 ):
-    """🧾 列出「已付款但未完成檢測」的訂單（admin 專用）
+    """🧾 列出「已付款但缺少腦波資料」的訂單（admin 或顧問本人）
 
-    判斷規則：
-      - Payment.status == 'paid'
-      - 且：session_id is NULL，或 session_id 對應的 Session 不存在 / status != 1（成功）
-      - 且：該訂單沒有對應的 Report
+    判斷規則（任一條件成立 → 列入）：
+      1. Payment.status == 'paid'，且 session_id 為 NULL（從未開始）
+      2. 有 session 但 eeg_captures 資料筆數 == 0（有開始但沒採到資料）
+      3. 有 session 且有 eeg_captures，但報告未完成（pdf_url 為空）
 
-    用途：客戶付款後沒做檢測（如：人到一半離開、設備異常），admin 可在此分頁
-          看到所有「卡關」訂單，主動聯繫客戶安排補檢測或退款。
+    非 admin 只能看到自己負責的訂單。
     """
     user = require_user(authorization, db)
-    if user.role != "admin":
-        raise HTTPException(403, "僅 admin 可查看")
+    is_admin = (user.role == "admin")
 
     cutoff_ts = int(time.time()) - days * 86400
-    paid_rows = db.query(M.Payment).filter(
+    q = db.query(M.Payment).filter(
         M.Payment.status == "paid",
         M.Payment.created_at >= cutoff_ts,
-    ).order_by(M.Payment.created_at.desc()).all()
+    )
+    if not is_admin:
+        q = q.filter(M.Payment.consultant_id == user.consultant_id)
+    paid_rows = q.order_by(M.Payment.created_at.desc()).all()
 
     if not paid_rows:
         return {"ok": True, "count": 0, "orders": []}
 
-    # 預先撈出對應的 sessions / reports
+    # 預先撈出 sessions / reports / eeg_captures 計數
     sids = {r.session_id for r in paid_rows if r.session_id}
     sess_map: dict[int, M.Session] = {}
     rep_map_by_sess: dict[int, M.Report] = {}
+    eeg_count_by_sess: dict[int, int] = {}
     if sids:
-        for s in db.query(M.Session).filter(M.Session.session_id.in_(list(sids))).all():
+        sid_list = list(sids)
+        for s in db.query(M.Session).filter(M.Session.session_id.in_(sid_list)).all():
             sess_map[s.session_id] = s
-        for r in db.query(M.Report).filter(M.Report.session_id.in_(list(sids))).all():
+        for r in db.query(M.Report).filter(M.Report.session_id.in_(sid_list)).all():
             rep_map_by_sess[r.session_id] = r
+        # 計算每個 session 的 EEG 採集筆數
+        from sqlalchemy import func as sqlfunc
+        for sid, cnt in db.query(M.EegCapture.session_id, sqlfunc.count(M.EegCapture.capture_id))\
+                          .filter(M.EegCapture.session_id.in_(sid_list))\
+                          .group_by(M.EegCapture.session_id).all():
+            eeg_count_by_sess[sid] = cnt
 
     out = []
     for p in paid_rows:
         sess = sess_map.get(p.session_id) if p.session_id else None
         rep  = rep_map_by_sess.get(p.session_id) if p.session_id else None
+        eeg_cnt = eeg_count_by_sess.get(p.session_id, 0) if p.session_id else 0
 
-        # 已完成檢測且報告已生成 → 跳過
-        is_detected_ok = bool(sess and sess.status == 1)
-        is_report_done = bool(rep and rep.status == "completed" and rep.pdf_url)
-        if is_detected_ok and is_report_done:
+        # 有 session + 有 EEG 資料 + 報告已完成 → 完全正常，跳過
+        has_eeg      = eeg_cnt > 0
+        is_report_ok = bool(rep and rep.status == "completed" and rep.pdf_url)
+        if sess and has_eeg and is_report_ok:
             continue
 
         reason = []
         if not p.session_id:
             reason.append("尚未開始檢測（無關聯 session）")
         elif not sess:
-            reason.append("session 已遺失")
-        elif sess.status != 1:
-            reason.append(f"session 狀態 = {sess.status}（0=進行中 / 2=失敗）")
+            reason.append("session 紀錄已遺失")
+        elif not has_eeg:
+            reason.append(f"session 存在但無腦波採集資料（eeg_captures = 0）")
         if not rep:
             reason.append("尚未生成報告")
-        elif rep.status != "completed":
-            reason.append(f"報告狀態 = {rep.status}")
+        elif not rep.pdf_url:
+            reason.append(f"報告狀態 = {rep.status}，但 PDF 尚未完成")
 
         out.append({
             "payment_id":      p.payment_id,
@@ -824,6 +834,7 @@ def admin_paid_not_detected(
             "subject_name":    p.subject_name,
             "subject_email":   p.subject_email,
             "report_type":     p.report_type,
+            "report_variant":  p.description,   # trial / full / vip（記在 description）
             "description":     p.description,
             "amount":          p.amount,
             "provider":        p.provider,
@@ -831,6 +842,7 @@ def admin_paid_not_detected(
             "created_at":      p.created_at,
             "session_id":      p.session_id,
             "session_status":  (sess.status if sess else None),
+            "eeg_count":       eeg_cnt,
             "report_status":   (rep.status if rep else None),
             "blocked_reason":  " / ".join(reason) if reason else "未知",
             "days_since_paid": (int((time.time() - (p.paid_at or p.created_at)) / 86400) if p.paid_at or p.created_at else None),

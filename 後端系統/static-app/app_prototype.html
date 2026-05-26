@@ -9340,7 +9340,6 @@ function _filterRedetectList() {
 
 function _startRedetectFromOrder(idx) {
   const rows = _redetectCache;
-  // 搜尋時 idx 可能對不上，改用渲染順序
   const q = (document.getElementById('redetect-search')?.value || '').toLowerCase().trim();
   const filtered = q
     ? rows.filter(o =>
@@ -9350,7 +9349,13 @@ function _startRedetectFromOrder(idx) {
     : rows;
   const o = filtered[idx];
   if (!o) return;
-  _launchRedetect(o.subject_name, o.subject_email, o.report_type, o.report_variant || 'full', o.subject_age);
+  // 從 description 推斷 variant（description 例如「成人腦波 完整版 NT$3000」）
+  let variant = 'full';
+  const desc = (o.description || o.report_variant || '').toLowerCase();
+  if (desc.includes('trial') || desc.includes('體驗')) variant = 'trial';
+  else if (desc.includes('vip'))                        variant = 'vip';
+  else if (desc.includes('full') || desc.includes('完整')) variant = 'full';
+  _launchRedetect(o.subject_name, o.subject_email, o.report_type, variant, o.subject_age);
 }
 
 function _startRedetectManual() {
