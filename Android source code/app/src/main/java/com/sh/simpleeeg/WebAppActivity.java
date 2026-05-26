@@ -483,16 +483,23 @@ public class WebAppActivity extends Activity {
                 } catch (Throwable t) {
                     sb.append("\"paired_err\":\"").append(t.getClass().getSimpleName()).append("\",");
                 }
+                // 同時提供 paired 與 paired_count（向下相容；前端兩個 key 都讀過）
                 sb.append("\"paired_count\":").append(paired).append(",");
+                sb.append("\"paired\":").append(paired).append(",");
                 sb.append("\"mindsensor\":\"").append(mindsensor).append("\",");
 
-                // CLS_BrainWave 狀態
+                // CLS_BrainWave 狀態（含即時連線旗標）
                 sb.append("\"ble_obj\":").append(ble != null).append(",");
+                boolean bleConnected = false;
                 int bat = -1;
                 if (ble != null) {
+                    try { bleConnected = ble.bConnectedSafe(); } catch (Throwable ignore) {}
                     try { bat = ble.getBatteryLevel(); } catch (Throwable ignore) {}
                 }
-                sb.append("\"battery\":").append(bat);
+                sb.append("\"ble_connected\":").append(bleConnected).append(",");
+                sb.append("\"battery\":").append(bat).append(",");
+                // 即時診斷：若電量能讀到，BLE 在運作的可能性極高（資料層通了）
+                sb.append("\"battery_readable\":").append(bat >= 1 && bat <= 100);
                 sb.append("}");
                 return sb.toString();
             } catch (Throwable t) {

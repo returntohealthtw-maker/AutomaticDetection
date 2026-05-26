@@ -8,13 +8,19 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.9"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.26.10"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 18
-APK_LATEST_VERSION_NAME = "1.1.7"
+APK_LATEST_VERSION_CODE = 19
+APK_LATEST_VERSION_NAME = "1.1.8"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
+    "v1.1.8 更新內容：\n"
+    "・修正腦波儀健康檢查介面：明明連線中卻顯示「藍牙未開啟 / 0 台配對」\n"
+    "  ◎ getBleDebugInfo 多回傳 paired / ble_connected / battery_readable 旗標\n"
+    "  ◎ 前端反向推論：電量讀得到 ⇒ 藍牙必為開啟（修正 OEM isEnabled 偶爾誤報）\n"
+    "・健康檢查的「腦波儀連線」判讀升級為多源即時跡象判斷\n"
+    "\n"
     "v1.1.7 更新內容：\n"
     "・🩺 修正腦波儀健康檢查「明明已連線卻收 0 筆」嚴重 bug\n"
     "  原因：startStreamingEeg 重複 Connect 破壞既有 GATT 通道\n"
