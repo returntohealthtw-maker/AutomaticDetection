@@ -2496,7 +2496,7 @@
         <div class="detect-footer">
           <div class="warning">⚠️ 採集完成後系統將自動產生報告</div>
           <div class="detect-buttons">
-            <button class="btn-end" onclick="_stopEegLiveCapture(); goto('screen-results')">■ 結束採集</button>
+            <button class="btn-end" onclick="_manualStopAndValidate()">■ 結束採集</button>
           </div>
         </div>
       </div>
@@ -4477,6 +4477,54 @@ function _showRedetectModal(reason) {
   ov.style.display = 'flex';
 }
 
+// 採集結束時沒有收到真實腦波訊號 → 不跳到結果頁，直接在採集頁顯示錯誤並提供重新檢測選項
+function _showNoSignalAndRetry(reason) {
+  // 確保不會意外帶假資料進去
+  window._lastEegCapture = null;
+  window._lastEegSessionId = null;
+
+  const existing = document.getElementById('no-signal-overlay');
+  if (existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'no-signal-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML = `
+    <div style="background:white;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+      <div style="font-size:48px;margin-bottom:12px;">📡</div>
+      <div style="font-size:17px;font-weight:700;color:#c62828;margin-bottom:8px;">未收到腦波訊號</div>
+      <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:16px;">${reason || '採集期間未接收到任何有效的腦波資料'}</div>
+      <div style="background:#fff3e0;border-radius:10px;padding:10px 14px;font-size:12px;color:#e65100;margin-bottom:20px;text-align:left;line-height:1.6;">
+        ⚠️ <b>請確認：</b><br>
+        1. 腦波儀已開機並配戴正確<br>
+        2. APP 右上角顯示 🧠 已連線<br>
+        3. 頭帶電極接觸前額中央<br>
+        4. 重新進行採集
+      </div>
+      <div style="font-size:12px;color:#c62828;font-weight:600;margin-bottom:16px;">
+        ⛔ 系統不接受無腦波資料的報告，不會使用任何預設數值替代。
+      </div>
+      <button onclick="_retryDetection()" style="width:100%;padding:14px;background:#1a237e;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">
+        🔄 重新開始採集
+      </button>
+      <button onclick="goto('screen-home')" style="width:100%;padding:10px;background:#f5f5f5;color:#555;border:none;border-radius:12px;font-size:13px;cursor:pointer;">
+        返回首頁
+      </button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+function _retryDetection() {
+  const ov = document.getElementById('no-signal-overlay');
+  if (ov) ov.remove();
+  // 重設採集狀態
+  _eegLiveAccum = null;
+  window._lastEegCapture = null;
+  window._lastEegSessionId = null;
+  // 回到連線確認頁，讓使用者重新配對腦波儀
+  goto('screen-connect');
+}
+
 function _dismissRedetectModal() {
   const ov = document.getElementById('redetect-overlay');
   if (ov) ov.style.display = 'none';
@@ -5026,7 +5074,7 @@ function _startEegLiveCapture() {
     if (lbl)  lbl.textContent  = `已採集 ${Math.min(elapsedSec, _eegLiveDurationSec)} / ${_eegLiveDurationSec} 秒`;
     if (tm)   tm.textContent   = _formatMs(remain);
 
-    // 瀏覽器測試：每 ~1 秒模擬一筆 sample（4 tick 一筆）
+    // 瀏覽器測試（無 AndroidBridge）：每 ~1 秒模擬一筆 sample
     if (!window.AndroidBridge || typeof window.AndroidBridge.startStreamingEeg !== 'function') {
       _eegSimTick = (_eegSimTick || 0) + 1;
       if (_eegSimTick % 4 === 0) {
@@ -5035,9 +5083,42 @@ function _startEegLiveCapture() {
       }
     }
 
+    // ─── 早期無訊號警告（APK 模式，採集 30 秒後仍 0 筆）────────────
+    // 讓使用者儘早知道腦波儀沒有傳送資料，而不是等到採集結束才發現
+    if (window.AndroidBridge && elapsedSec === 30) {
+      const sc = (_eegLiveAccum && _eegLiveAccum.attn) ? _eegLiveAccum.attn.length : 0;
+      if (sc === 0) {
+        const stxt = document.getElementById('detect-status-text');
+        if (stxt) stxt.textContent = '⚠️ 尚未收到腦波訊號，請確認腦波儀已開機並連線';
+        // 顯示黃色提示卡（如果沒有的話建立一個）
+        const warnId = 'detect-no-signal-warn';
+        if (!document.getElementById(warnId)) {
+          const hint = document.getElementById('detect-hint-card') || document.querySelector('#screen-detect .detect-body');
+          if (hint) {
+            const warnEl = document.createElement('div');
+            warnEl.id = warnId;
+            warnEl.style.cssText = 'background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;font-size:12px;color:#e65100;line-height:1.6;margin:10px 16px;';
+            warnEl.innerHTML = '⚠️ <b>30 秒內未收到腦波資料</b><br>請確認：① 腦波儀已開機 ② APP 右上角🧠已連線 ③ 前額電極接觸良好<br>若仍無訊號採集結束後系統將要求重新檢測。';
+            hint.insertBefore(warnEl, hint.firstChild);
+          }
+        }
+      }
+    }
+
     if (elapsedSec >= _eegLiveDurationSec) {
       _stopEegLiveCapture();
       const stxt = document.getElementById('detect-status-text');
+
+      // ─── 採集結束後立即驗證：有沒有真實腦波資料 ────────────────
+      const bwCheck = _validateBrainwaveCapture(window._lastEegCapture);
+      if (!bwCheck.ok) {
+        // 無真實資料 → 不能顯示「採集完成」更不能生成報告
+        if (stxt) stxt.textContent = '⚠️ 未收到腦波資料';
+        // 回到採集頁顯示重測對話框（不跳到 screen-results）
+        _showNoSignalAndRetry(bwCheck.reason);
+        return;
+      }
+
       if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
       setTimeout(() => goto('screen-results'), 600);
     }
@@ -5058,6 +5139,17 @@ function _stopEegLiveCapture() {
     window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
     _persistEegStats(window._lastEegCapture);
   }
+}
+
+// 手動點「結束採集」— 先停再驗，有資料才能進結果頁
+function _manualStopAndValidate() {
+  _stopEegLiveCapture();
+  const bwCheck = _validateBrainwaveCapture(window._lastEegCapture);
+  if (!bwCheck.ok) {
+    _showNoSignalAndRetry(bwCheck.reason);
+    return;
+  }
+  goto('screen-results');
 }
 
 window._lastEegPersistPromise = null;
