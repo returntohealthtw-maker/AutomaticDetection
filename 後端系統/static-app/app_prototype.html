@@ -6095,25 +6095,81 @@ function _renderEthrMbtiAnalysis(state) {
 
   _ethrMbtiLayerResults = layers;
   _ethrMbtiCurrentType = layers.archetype.type;  // 主推論型 = 原型層次
-  const cur = _ETHR_MBTI_TABLE[layers.archetype.type] || { name:'?', emoji:'❓' };
+
+  // ─── 把 4 層按 MBTI 類型分組（找出不同 / 重複的層次）─────────────
+  // 例：4 層全部 INTJ → 1 種；2 層 INTJ + 2 層 ENFJ → 2 種；4 層各異 → 4 種
+  const layerOrder = ['archetype','family','social','peer'];
+  const groupsMap = {};  // { 'INTJ': ['archetype','family'], 'ENFJ': ['social','peer'] }
+  layerOrder.forEach(k => {
+    const t = layers[k] && layers[k].type;
+    if (!t) return;
+    if (!groupsMap[t]) groupsMap[t] = [];
+    groupsMap[t].push(k);
+  });
+
+  // 依照「該類型涵蓋的層次數」由多到少排序（最主導的人格樣貌排第一）
+  // 同票數時依層次優先順序：原型 > 原生家庭 > 社會化 > 同儕
+  const orderRank = (k) => layerOrder.indexOf(k);
+  const groups = Object.keys(groupsMap)
+    .map(type => ({
+      type,
+      layers: groupsMap[type].slice().sort((a,b) => orderRank(a) - orderRank(b)),
+      count: groupsMap[type].length,
+    }))
+    .sort((a,b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return orderRank(a.layers[0]) - orderRank(b.layers[0]);
+    });
+
+  const distinctCount = groups.length;  // 1 ~ 4
+
+  // 主推論型改為「涵蓋層次最多」的那個（不再死綁原型）
+  _ethrMbtiCurrentType = groups[0].type;
+  const cur = _ETHR_MBTI_TABLE[groups[0].type] || { name:'?', emoji:'❓' };
 
   section.style.display = 'block';
   const tag = document.getElementById('ethr-mbti-current');
-  if (tag) tag.textContent = `${cur.emoji} ${layers.archetype.type} · ${cur.name}`;
+  if (tag) tag.textContent = `${cur.emoji} ${groups[0].type} · ${cur.name}`;
+
+  // ─── 一致性描述 ───────────────────────────────────────────────────
+  const consistencyMsg = (() => {
+    if (distinctCount === 1) {
+      return `<div style="background:linear-gradient(90deg,#e8eaf6,#f3e5f5);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+        ✨ <b>性格高度一致</b>：您在所有 4 個情境下都展現同一種人格樣貌，內外言行如一。
+      </div>`;
+    }
+    if (distinctCount === 2) {
+      return `<div style="background:linear-gradient(90deg,#e3f2fd,#fff3e0);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+        🎭 <b>雙重人格樣貌</b>：您依情境切換 2 種人格，內在自我與對外形象之間有明顯差異。
+      </div>`;
+    }
+    if (distinctCount === 3) {
+      return `<div style="background:linear-gradient(90deg,#fff3e0,#fce4ec);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+        🌈 <b>多元性格層次</b>：您在不同情境下呈現 3 種人格樣貌，是適應性高的個體。
+      </div>`;
+    }
+    return `<div style="background:linear-gradient(90deg,#fce4ec,#e8eaf6);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+      🦋 <b>豐富多樣的性格</b>：您在 4 個情境下展現 4 種不同人格，內外世界有豐富的層次。
+    </div>`;
+  })();
+
+  // ─── 分組摘要：每個 MBTI 一行，後面接它代表的層次 ────────────────
+  const layerLabel = (k) => (_ETHR_MBTI_LAYERS[k] && _ETHR_MBTI_LAYERS[k].label) || k;
+  const groupSummary = groups.map(g => {
+    const mEntry = _ETHR_MBTI_TABLE[g.type] || { name:'?', emoji:'❓' };
+    const layersText = g.layers.map(layerLabel).join(' / ');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f5f7ff;border-radius:8px;margin-bottom:6px;border-left:3px solid #1a237e;">
+      <div>
+        <div style="font-weight:700;font-size:14px;color:#1a237e;">${mEntry.emoji} ${g.type} ${mEntry.name}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px;">適用於：${layersText}</div>
+      </div>
+      <span style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">${g.count}/4 層</span>
+    </div>`;
+  }).join('');
 
   const summary = document.getElementById('ethr-mbti-summary');
   if (summary) {
-    // 4 層摘要：每層各自的 MBTI（可能不同）
-    const layerSummary = ['archetype','family','social','peer'].map(k => {
-      const r = layers[k];
-      const meta = _ETHR_MBTI_LAYERS[k];
-      const mEntry = (r && _ETHR_MBTI_TABLE[r.type]) || { name:'?', emoji:'❓' };
-      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #e0e0e0;">
-        <span style="color:#1a237e;">${meta.icon} ${meta.label}</span>
-        <span style="font-weight:700;">${mEntry.emoji} ${r ? r.type : '—'} <span style="color:#888;font-weight:400;">${mEntry.name || ''}</span></span>
-      </div>`;
-    }).join('');
-    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 八卦演算法推論的 <b>4 層性格傾向</b>：</div>${layerSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 切換看各層次的詳細描述。每個層次反映您在不同情境下的人格樣貌。</div>`;
+    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 八卦演算法推論的 <b>${distinctCount} 種人格樣貌</b>：</div>${consistencyMsg}${groupSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 可看各層次（情境）下的詳細性格描述。</div>`;
   }
 
   _bindEthrMbtiTabs();
