@@ -9312,21 +9312,28 @@ function _filterRedetectList() {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
   listEl.innerHTML = rows.map((o, i) => {
-    const kindZh = REPORT_ZH[o.report_type] || o.report_type || '—';
-    const daysAgo = o.days_since_paid != null ? `${o.days_since_paid} 天前付款` : '';
+    const kindZh  = REPORT_ZH[o.report_type] || (o.report_type ? o.report_type : '（未選報告）');
+    const daysAgo = o.days_since_paid != null ? `${o.days_since_paid} 天前付款` : '未有付款紀錄';
     const reason  = o.blocked_reason || '';
+    const meta    = [o.subject_age ? `${o.subject_age}歲` : '', o.subject_gender || ''].filter(Boolean).join(' ');
+    const srcBadge = o.source === 'subject'
+      ? '<span style="font-size:9px;background:#e3f2fd;color:#1565c0;padding:1px 5px;border-radius:4px;font-weight:600;">受測者</span>'
+      : '<span style="font-size:9px;background:#fff3e0;color:#e65100;padding:1px 5px;border-radius:4px;font-weight:600;">付款紀錄</span>';
     return `
     <div style="background:#fffaf7;border:1px solid #ffe0b2;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:15px;font-weight:700;color:#bf360c;">👤 ${esc(o.subject_name || '(未知)')}</div>
+          <div style="font-size:15px;font-weight:700;color:#bf360c;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            👤 ${esc(o.subject_name || '(未知)')}
+            ${meta ? `<span style="font-size:11px;font-weight:400;color:#888;">${esc(meta)}</span>` : ''}
+            ${srcBadge}
+          </div>
           <div style="font-size:11px;color:#666;margin-top:3px;">
             📑 ${esc(kindZh)}
             ${o.subject_email ? ` · 📧 ${esc(o.subject_email)}` : ''}
-            ${o.consultant_name ? ` · 👔 ${esc(o.consultant_name)}` : ''}
           </div>
           <div style="font-size:10px;color:#e65100;margin-top:2px;font-weight:600;">
-            ⏰ ${daysAgo}${reason ? ` · ${esc(reason)}` : ''}
+            ⏰ ${esc(daysAgo)} · ${esc(reason)}
           </div>
         </div>
         <button onclick="_startRedetectFromOrder(${i})"
@@ -9349,28 +9356,32 @@ function _startRedetectFromOrder(idx) {
     : rows;
   const o = filtered[idx];
   if (!o) return;
-  // 從 description 推斷 variant（description 例如「成人腦波 完整版 NT$3000」）
+  // 從 description 推斷 variant
   let variant = 'full';
   const desc = (o.description || o.report_variant || '').toLowerCase();
   if (desc.includes('trial') || desc.includes('體驗')) variant = 'trial';
   else if (desc.includes('vip'))                        variant = 'vip';
   else if (desc.includes('full') || desc.includes('完整')) variant = 'full';
-  _launchRedetect(o.subject_name, o.subject_email, o.report_type, variant, o.subject_age);
+  _launchRedetect(
+    o.subject_name, o.subject_email, o.report_type, variant,
+    o.subject_age, o.subject_gender, o.subject_id
+  );
 }
 
 function _startRedetectManual() {
   const name = (document.getElementById('redetect-manual-name')?.value || '').trim();
   if (!name) { alert('請輸入客戶姓名'); return; }
   const type = document.getElementById('redetect-manual-type')?.value || 'life_script';
-  _launchRedetect(name, '', type, 'full', null);
+  _launchRedetect(name, '', type, 'full', null, '', null);
 }
 
-function _launchRedetect(subjectName, subjectEmail, reportType, variant, subjectAge) {
+function _launchRedetect(subjectName, subjectEmail, reportType, variant, subjectAge, subjectGender, subjectId) {
   // 填入全域變數，與正常付款後的流程完全一致
   _currentSubjectName   = subjectName || '受測者';
   _currentSubjectEmail  = subjectEmail || '';
   _currentSubjectAge    = (subjectAge != null && subjectAge !== '') ? parseInt(subjectAge, 10) : null;
-  _currentSubjectGender = '';
+  _currentSubjectGender = subjectGender || '';
+  _currentSubjectId     = subjectId || null;
   _currentReportType    = reportType || 'life_script';
   _currentReportVariant = variant || 'full';
   _currentReportSubType = reportType || 'life_script';

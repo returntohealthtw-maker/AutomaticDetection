@@ -756,95 +756,184 @@ def my_payments(
 
 @router.get("/admin/paid-not-detected")
 def admin_paid_not_detected(
-    days: int = 180,
+    days: int = 365,
     authorization: Optional[str] = Header(None),
     db: DbSession = Depends(get_db),
 ):
-    """🧾 列出「已付款但缺少腦波資料」的訂單（admin 或顧問本人）
+    """🧾 列出「缺少腦波資料」的受測者 + 付款記錄（admin 或顧問本人皆可查）
 
-    判斷規則（任一條件成立 → 列入）：
-      1. Payment.status == 'paid'，且 session_id 為 NULL（從未開始）
-      2. 有 session 但 eeg_captures 資料筆數 == 0（有開始但沒採到資料）
-      3. 有 session 且有 eeg_captures，但報告未完成（pdf_url 為空）
+    來源 A（受測者角度）：
+      - 該顧問名下所有 Subject
+      - 過去 365 天內沒有任何含 EEG 資料的 Session（eeg_captures == 0）
 
-    非 admin 只能看到自己負責的訂單。
+    來源 B（付款角度，補充）：
+      - Payment.status == 'paid'，且關聯的 session 沒有 EEG 資料
+
+    兩者合併去重後回傳。非 admin 只看自己帳號。
     """
+    from sqlalchemy import func as sqlfunc
+
     user = require_user(authorization, db)
     is_admin = (user.role == "admin")
 
+    # ── 來源 A：受測者角度 ────────────────────────────────────────────
+    subj_q = db.query(M.Subject)
+    if not is_admin:
+        subj_q = subj_q.filter(M.Subject.consultant_id == user.consultant_id)
+    all_subjects = subj_q.order_by(M.Subject.created_at.desc()).all()
+
+    # 每位受測者的 session_ids
+    subj_ids = [s.subject_id for s in all_subjects]
+    # sessions by subject_id
+    sess_by_subj: dict[int, list[M.Session]] = {}
+    if subj_ids:
+        for s in db.query(M.Session).filter(M.Session.subject_id.in_(subj_ids)).all():
+            sess_by_subj.setdefault(s.subject_id, []).append(s)
+
+    # eeg 計數 by session_id
+    all_sids = [s.session_id for ss in sess_by_subj.values() for s in ss]
+    eeg_count_by_sess: dict[int, int] = {}
+    if all_sids:
+        for sid, cnt in db.query(M.EegCapture.session_id, sqlfunc.count(M.EegCapture.capture_id))\
+                          .filter(M.EegCapture.session_id.in_(all_sids))\
+                          .group_by(M.EegCapture.session_id).all():
+            eeg_count_by_sess[sid] = cnt
+
+    # 最新 payment by subject_name（fallback）
+    pay_by_subj_name: dict[str, M.Payment] = {}
+    if not is_admin:
+        for p in db.query(M.Payment).filter(
+            M.Payment.consultant_id == user.consultant_id,
+            M.Payment.status == "paid",
+        ).order_by(M.Payment.created_at.desc()).all():
+            if p.subject_name and p.subject_name not in pay_by_subj_name:
+                pay_by_subj_name[p.subject_name] = p
+    else:
+        for p in db.query(M.Payment).filter(
+            M.Payment.status == "paid",
+        ).order_by(M.Payment.created_at.desc()).all():
+            if p.subject_name and p.subject_name not in pay_by_subj_name:
+                pay_by_subj_name[p.subject_name] = p
+
+    out = []
+    seen_subject_ids: set[int] = set()
+
+    for subj in all_subjects:
+        sessions = sess_by_subj.get(subj.subject_id, [])
+        # 是否有任何含 EEG 資料的 session
+        has_any_eeg = any(eeg_count_by_sess.get(s.session_id, 0) > 0 for s in sessions)
+        if has_any_eeg:
+            continue   # 已有腦波資料，不需重測
+
+        seen_subject_ids.add(subj.subject_id)
+
+        # 計算未完成原因
+        reason = []
+        if not sessions:
+            reason.append("從未進行過檢測")
+        else:
+            reason.append(f"有 {len(sessions)} 次 session，但全部無腦波採集資料")
+
+        # 嘗試從付款記錄取得報告類型
+        pay = pay_by_subj_name.get(subj.name)
+        report_type = ""
+        if pay:
+            rt = pay.report_type or ""
+            # life_full → life_script; child_full → child; marital_full → marital; parent_child_full → parent_child
+            if rt.startswith("life"):     report_type = "life_script"
+            elif rt.startswith("child"):  report_type = "child"
+            elif rt.startswith("marital"):report_type = "marital"
+            elif rt.startswith("parent"): report_type = "parent_child"
+            else:                         report_type = rt
+
+        # 算年齡
+        subj_age = None
+        if subj.birth_date:
+            try:
+                from datetime import date
+                by = int(subj.birth_date[:4])
+                subj_age = date.today().year - by
+            except Exception:
+                pass
+
+        out.append({
+            "source":          "subject",
+            "subject_id":      subj.subject_id,
+            "subject_name":    subj.name,
+            "subject_email":   subj.email,
+            "subject_age":     subj_age,
+            "subject_gender":  subj.gender,
+            "consultant_id":   subj.consultant_id,
+            "consultant_name": (pay.consultant_name if pay else None),
+            "report_type":     report_type,
+            "report_variant":  "full",
+            "session_count":   len(sessions),
+            "eeg_count":       0,
+            "blocked_reason":  " / ".join(reason),
+            "payment_id":      (pay.payment_id if pay else None),
+            "paid_at":         (pay.paid_at if pay else None),
+            "days_since_paid": (int((time.time() - pay.paid_at) / 86400) if pay and pay.paid_at else None),
+        })
+
+    # ── 來源 B：付款記錄角度（補抓 subject 沒有建檔但有付款的情況）─────
     cutoff_ts = int(time.time()) - days * 86400
-    q = db.query(M.Payment).filter(
+    pay_q = db.query(M.Payment).filter(
         M.Payment.status == "paid",
         M.Payment.created_at >= cutoff_ts,
     )
     if not is_admin:
-        q = q.filter(M.Payment.consultant_id == user.consultant_id)
-    paid_rows = q.order_by(M.Payment.created_at.desc()).all()
+        pay_q = pay_q.filter(M.Payment.consultant_id == user.consultant_id)
 
-    if not paid_rows:
-        return {"ok": True, "count": 0, "orders": []}
+    seen_names_from_subjects = {subj.name for subj in all_subjects}
+    for p in pay_q.order_by(M.Payment.created_at.desc()).all():
+        # 已經被來源 A 涵蓋的跳過
+        if p.subject_name and p.subject_name in seen_names_from_subjects:
+            continue
 
-    # 預先撈出 sessions / reports / eeg_captures 計數
-    sids = {r.session_id for r in paid_rows if r.session_id}
-    sess_map: dict[int, M.Session] = {}
-    rep_map_by_sess: dict[int, M.Report] = {}
-    eeg_count_by_sess: dict[int, int] = {}
-    if sids:
-        sid_list = list(sids)
-        for s in db.query(M.Session).filter(M.Session.session_id.in_(sid_list)).all():
-            sess_map[s.session_id] = s
-        for r in db.query(M.Report).filter(M.Report.session_id.in_(sid_list)).all():
-            rep_map_by_sess[r.session_id] = r
-        # 計算每個 session 的 EEG 採集筆數
-        from sqlalchemy import func as sqlfunc
-        for sid, cnt in db.query(M.EegCapture.session_id, sqlfunc.count(M.EegCapture.capture_id))\
-                          .filter(M.EegCapture.session_id.in_(sid_list))\
-                          .group_by(M.EegCapture.session_id).all():
-            eeg_count_by_sess[sid] = cnt
+        # 取 session eeg 計數
+        sess = None
+        eeg_cnt = 0
+        if p.session_id:
+            sess = db.query(M.Session).filter(M.Session.session_id == p.session_id).first()
+            eeg_cnt = eeg_count_by_sess.get(p.session_id, 0)
+            if eeg_cnt == 0 and p.session_id not in eeg_count_by_sess:
+                cnt_row = db.query(sqlfunc.count(M.EegCapture.capture_id))\
+                            .filter(M.EegCapture.session_id == p.session_id).scalar()
+                eeg_cnt = cnt_row or 0
 
-    out = []
-    for p in paid_rows:
-        sess = sess_map.get(p.session_id) if p.session_id else None
-        rep  = rep_map_by_sess.get(p.session_id) if p.session_id else None
-        eeg_cnt = eeg_count_by_sess.get(p.session_id, 0) if p.session_id else 0
-
-        # 有 session + 有 EEG 資料 + 報告已完成 → 完全正常，跳過
-        has_eeg      = eeg_cnt > 0
-        is_report_ok = bool(rep and rep.status == "completed" and rep.pdf_url)
-        if sess and has_eeg and is_report_ok:
+        # 有 EEG 資料 → 跳過
+        if eeg_cnt > 0:
             continue
 
         reason = []
         if not p.session_id:
-            reason.append("尚未開始檢測（無關聯 session）")
-        elif not sess:
-            reason.append("session 紀錄已遺失")
-        elif not has_eeg:
-            reason.append(f"session 存在但無腦波採集資料（eeg_captures = 0）")
-        if not rep:
-            reason.append("尚未生成報告")
-        elif not rep.pdf_url:
-            reason.append(f"報告狀態 = {rep.status}，但 PDF 尚未完成")
+            reason.append("尚未開始檢測")
+        elif eeg_cnt == 0:
+            reason.append("session 存在但無腦波採集資料")
+
+        rt = p.report_type or ""
+        if rt.startswith("life"):     report_type = "life_script"
+        elif rt.startswith("child"):  report_type = "child"
+        elif rt.startswith("marital"):report_type = "marital"
+        elif rt.startswith("parent"): report_type = "parent_child"
+        else:                         report_type = rt
 
         out.append({
-            "payment_id":      p.payment_id,
-            "order_id":        p.order_id,
-            "consultant_id":   p.consultant_id,
-            "consultant_name": p.consultant_name,
+            "source":          "payment",
+            "subject_id":      None,
             "subject_name":    p.subject_name,
             "subject_email":   p.subject_email,
-            "report_type":     p.report_type,
-            "report_variant":  p.description,   # trial / full / vip（記在 description）
-            "description":     p.description,
-            "amount":          p.amount,
-            "provider":        p.provider,
-            "paid_at":         p.paid_at,
-            "created_at":      p.created_at,
-            "session_id":      p.session_id,
-            "session_status":  (sess.status if sess else None),
+            "subject_age":     None,
+            "subject_gender":  None,
+            "consultant_id":   p.consultant_id,
+            "consultant_name": p.consultant_name,
+            "report_type":     report_type,
+            "report_variant":  "full",
+            "session_count":   (1 if sess else 0),
             "eeg_count":       eeg_cnt,
-            "report_status":   (rep.status if rep else None),
             "blocked_reason":  " / ".join(reason) if reason else "未知",
+            "payment_id":      p.payment_id,
+            "paid_at":         p.paid_at,
             "days_since_paid": (int((time.time() - (p.paid_at or p.created_at)) / 86400) if p.paid_at or p.created_at else None),
         })
 
