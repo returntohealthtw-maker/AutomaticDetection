@@ -477,12 +477,23 @@ async def payuni_notify(request: Request):
     print(f"[PayUni Notify] 訂單 {order_id} success={success}")
 
     if success:
+        now_ts = int(time.time())
+        # 1. 更新記憶體（供 APP 輪詢用）
         order = _payment_store.get(order_id)
         if order and order["status"] == "pending":
             order["status"]  = "paid"
-            order["paid_at"] = int(time.time())
+            order["paid_at"] = now_ts
             order["paid_via"] = "payuni"
-            print(f"[PayUni Notify] 訂單 {order_id} 已標記付款成功")
+        # 2. 無論記憶體是否存在，都持久化到 PostgreSQL（重啟後仍可查）
+        trade_no = data.get("TradeNo") or data.get("PayUniTradeNo") or ""
+        _db_update_payment(
+            order_id,
+            status="paid",
+            paid_at=now_ts,
+            provider_trade_no=trade_no or None,
+            payment_method=data.get("PayType") or None,
+        )
+        print(f"[PayUni Notify] 訂單 {order_id} 已標記付款成功（DB 已更新）")
 
     return "SUCCESS"
 
@@ -565,19 +576,38 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
             data = result["data"]
             real_no = data.get("MerTradeNo") or data.get("MerchantOrderNo") or real_no
             if result.get("success") or payuni_status_code == "SUCCESS":
+                now_ts = int(time.time())
                 order = _payment_store.get(real_no)
                 if order and order["status"] == "pending":
                     order["status"]  = "paid"
-                    order["paid_at"] = int(time.time())
+                    order["paid_at"] = now_ts
                     order["paid_via"] = "payuni"
                     paid_ok = True
                     print(f"[PayUni Return] 訂單 {real_no} 已立即確認付款成功")
                 elif order:
                     paid_ok = (order["status"] == "paid")
                 else:
-                    result_kind = "fail"
-                    err_detail = f"訂單 {real_no} 已從 PayUni 回報付款，但伺服器找不到（可能後端重啟，記憶體訂單已清）"
-                    print(f"[PayUni Return] {err_detail}")
+                    # 記憶體沒有（後端重啟）→ 查 DB 判斷是否已付
+                    from app.core.database import SessionLocal
+                    with SessionLocal() as _db:
+                        _row = _db.query(M.Payment).filter(M.Payment.order_id == real_no).first()
+                        if _row and _row.status == "paid":
+                            paid_ok = True
+                            print(f"[PayUni Return] 訂單 {real_no} DB 已是 paid，確認成功")
+                        else:
+                            paid_ok = True   # PayUni 回報成功，信任之
+                            print(f"[PayUni Return] 訂單 {real_no} 記憶體已清，依 PayUni 回報確認付款")
+                # 確保 DB 持久化（無論記憶體是否存在）
+                if paid_ok:
+                    trade_no = data.get("TradeNo") or data.get("PayUniTradeNo") or ""
+                    _db_update_payment(
+                        real_no,
+                        status="paid",
+                        paid_at=now_ts,
+                        provider_trade_no=trade_no or None,
+                        payment_method=data.get("PayType") or None,
+                    )
+                    print(f"[PayUni Return] 訂單 {real_no} DB 已更新為 paid")
             else:
                 result_kind = "fail"
                 err_detail = f"PayUni 回報付款未成功：data={data}"
