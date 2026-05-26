@@ -598,6 +598,21 @@ def sessions_with_status(
     )
     rep_by_sid = {r.session_id: r for r in reports}
 
+    # 🔑 預先撈出所有相關 Subject 的真實資料（雙來源：Session.subject_id 或 Report.subject_id）
+    subject_ids = set()
+    for s in sessions:
+        if s.subject_id:
+            subject_ids.add(s.subject_id)
+    for r in reports:
+        if r.subject_id:
+            subject_ids.add(r.subject_id)
+    subj_map: dict[int, M.Subject] = {}
+    if subject_ids:
+        for subj in db.query(M.Subject).filter(M.Subject.subject_id.in_(list(subject_ids))).all():
+            subj_map[subj.subject_id] = subj
+
+    PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+
     now_ms = int(time.time() * 1000)
     out = []
     missing_count = 0
@@ -635,10 +650,35 @@ def sessions_with_status(
         if is_missing:
             missing_count += 1
 
+        # 🔑 真實姓名解析：FK 優先 → 退到 Session.subject_name 字串
+        sid_resolved = s.subject_id or (r.subject_id if r else None)
+        subj_record  = subj_map.get(sid_resolved) if sid_resolved else None
+        if subj_record:
+            display_name = subj_record.name
+            display_age  = None
+            if subj_record.birth_date and len(subj_record.birth_date) >= 4:
+                try:
+                    from datetime import date
+                    y, m, d = subj_record.birth_date.split("-")
+                    b = date(int(y), int(m), int(d))
+                    t = date.today()
+                    display_age = t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+                except Exception:
+                    display_age = s.subject_age
+        else:
+            raw = s.subject_name or ""
+            # 沒關聯主檔且姓名是 placeholder → 顯示「(未填) 受測者」提示孤兒
+            if raw in PLACEHOLDER_NAMES or not raw:
+                display_name = f"⚠️ 受測者（未連結主檔，session #{s.session_id}）"
+            else:
+                display_name = raw
+            display_age = s.subject_age
+
         out.append({
             "session_id":   s.session_id,
-            "subject_name": s.subject_name,
-            "subject_age":  s.subject_age,
+            "subject_id":   sid_resolved,
+            "subject_name": display_name,
+            "subject_age":  display_age,
             "consultant":   s.consultant_name,
             "report_type":  s.report_type,
             "audience":     s.report_audience,
@@ -1451,7 +1491,9 @@ def admin_relink_orphan_reports(
     啟發式比對策略（依優先序）：
       1. Report.session_id → Session.subject_id（若 Session 已關聯）
       2. Report.session_id → Session.consultant_name + subject_name → Subject by name + consultant
-      3. Report.completed_at ± 24h，比對該時段內 consultant 建立的唯一 Subject
+      3. ⭐ Session.subject_name 是 placeholder（"受測者"等）→ 找該 consultant 在
+         Session 建檔時間 ± 7 天內擁有的「唯一」Subject（若多個則略過，避免亂連）
+      4. Report.completed_at ± 24h，比對該時段內 consultant 建立的唯一 Subject
 
     安全：只 UPDATE 不刪除；找不到的報告維持 subject_id=NULL，admin 仍可手動處理。
     """
@@ -1496,8 +1538,11 @@ def admin_relink_orphan_reports(
             chosen_sid = sess.subject_id
             method = "session.subject_id"
 
-        # 策略 2：Session.consultant + Session.subject_name → Subject
-        if chosen_sid is None and sess and sess.consultant_name and sess.subject_name:
+        PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST", "", None}
+
+        # 策略 2：Session.consultant + Session.subject_name → Subject（姓名是真名才比對）
+        if (chosen_sid is None and sess and sess.consultant_name
+                and sess.subject_name and sess.subject_name not in PLACEHOLDER_NAMES):
             cons_id = cons_name_to_id.get(sess.consultant_name)
             if cons_id:
                 cands = db.query(M.Subject).filter(
@@ -1508,7 +1553,21 @@ def admin_relink_orphan_reports(
                     chosen_sid = cands[0].subject_id
                     method = "consultant+name"
 
-        # 策略 3：completed_at ± 24h 內 consultant 建立的唯一 Subject（最後手段，謹慎）
+        # 策略 3 ⭐：placeholder 姓名 → 用「該顧問擁有的唯一 Subject」匹配
+        # 適用情境：admin 用「NT$1 測試」沒登錄受測者就生報告，但顧問
+        # （如「楊雲容」）名下其實只有一位受測者（如「蘇志明」），可推論為同一人。
+        if (chosen_sid is None and sess and sess.consultant_name
+                and (not sess.subject_name or sess.subject_name in PLACEHOLDER_NAMES)):
+            cons_id = cons_name_to_id.get(sess.consultant_name)
+            if cons_id:
+                cands = db.query(M.Subject).filter(
+                    M.Subject.consultant_id == cons_id
+                ).all()
+                if len(cands) == 1:
+                    chosen_sid = cands[0].subject_id
+                    method = "consultant has only 1 subject (placeholder)"
+
+        # 策略 4：completed_at ± 24h 內 consultant 建立的唯一 Subject（最後手段，謹慎）
         # （只在 session_id is null + 有 completed_at 時才嘗試，避免亂連）
         if (chosen_sid is None and rep.session_id is None and rep.completed_at and sess is None
                 and rep.client_summary):

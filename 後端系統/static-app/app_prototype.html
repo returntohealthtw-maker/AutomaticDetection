@@ -6849,7 +6849,11 @@ function _filterMissingList() {
   }
   listEl.innerHTML = rows.map(s => {
     const meta = _HEALTH_META[s.health] || { color: '#757575', label: s.health, border: false };
-    const created = s.created_at ? new Date(s.created_at).toLocaleString('zh-TW') : '';
+    // Session.created_at 後端是 Unix 秒（不是 ms），需 ×1000 才是正確的 JS Date
+    // 自動偵測：若數值 < 10^11 視為秒，否則當 ms（向下相容外部 callback 的 ms）
+    const _ts = s.created_at;
+    const _tsMs = (_ts && _ts > 0) ? (_ts < 1e11 ? _ts * 1000 : _ts) : 0;
+    const created = _tsMs ? new Date(_tsMs).toLocaleString('zh-TW') : '';
     const canRegen = (s.health !== 'ok' && s.health !== 'session_failed' && s.health !== 'in_progress');
     const checked = _missingSelected.has(s.session_id) ? 'checked' : '';
     const cb = canRegen
