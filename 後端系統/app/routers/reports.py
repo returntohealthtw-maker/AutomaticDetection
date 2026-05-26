@@ -384,14 +384,31 @@ def list_reports(
         except Exception:
             return None
 
+    # 預設姓名識別（這些是「資料遺失」的指標，不是真實受測者）
+    PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+
     out = []
     for rep, sess in rows:
         cons = cons_map.get(sess.consultant_name) if (sess and sess.consultant_name) else None
         fallback_name = _name_from_summary(rep.client_summary)
 
-        subject_name  = (sess.subject_name if sess else None) or fallback_name or "(無 session)"
+        raw_name      = (sess.subject_name if sess else None) or fallback_name
         subject_age   = (sess.subject_age if sess else None)
         subject_gender = (sess.subject_gender if sess else None)
+
+        # ── 孤兒/測試報告識別：當姓名是預設值或缺失時，標示為系統測試報告 ──
+        is_placeholder = (not raw_name) or (raw_name in PLACEHOLDER_NAMES)
+        if is_placeholder:
+            ts_label = rep.completed_at.strftime("%m/%d %H:%M") if rep.completed_at else f"#{rep.report_id}"
+            subject_name = f"🧪 系統測試報告 · {ts_label}"
+            is_test = True
+        elif raw_name and raw_name.startswith("🧪 管理員測試-"):
+            # 新版前端標記過的測試報告
+            subject_name = raw_name
+            is_test = True
+        else:
+            subject_name = raw_name
+            is_test = False
 
         out.append({
             "report_id":      rep.report_id,
@@ -410,6 +427,7 @@ def list_reports(
             "consultant_org": (cons.org if cons else None),
             "consultant_role": (cons.role if cons else None),
             "orphan":         (rep.session_id is None),
+            "is_test":        is_test,        # 🧪 admin 可用 is_test 過濾或一鍵清理
         })
     return {"ok": True, "count": len(out), "reports": out}
 
@@ -1382,6 +1400,72 @@ def admin_send_report_email(
         return {"ok": True, "report_id": report_id, "sent_to": to, "method": result.get("method", "")}
     else:
         raise HTTPException(502, f"寄信失敗：{result.get('error') or result}")
+
+
+@router.delete("/{report_id}/delete-test")
+def delete_test_report(
+    report_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：刪除「測試報告」（subject_name 為預設值的孤兒報告）。
+
+    安全檢查：
+      - 必須是 admin
+      - 報告的 subject_name 必須是預設值之一（受測者 / 陳小明 / 測試模式 / 🧪 管理員測試-* / 空）
+      - 即使是測試報告，session_id 為非空時不刪（避免誤刪有腦波資料的）
+
+    這個 API 不會去刪 GCS 上的 PDF（避免影響其他關聯），只刪 DB row。
+    """
+    import json as _json
+
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可刪除測試報告")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+
+    PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+
+    name_from_summary = None
+    if rep.client_summary:
+        try:
+            name_from_summary = _json.loads(rep.client_summary).get("subject_name")
+        except Exception:
+            pass
+    name_from_sess = None
+    if rep.session_id:
+        sess = db.query(M.Session).filter(M.Session.session_id == rep.session_id).first()
+        if sess:
+            name_from_sess = sess.subject_name
+
+    raw_name = name_from_sess or name_from_summary or ""
+    is_placeholder = (
+        (not raw_name)
+        or (raw_name in PLACEHOLDER_NAMES)
+        or raw_name.startswith("🧪 管理員測試-")
+    )
+
+    if not is_placeholder:
+        raise HTTPException(
+            400,
+            f"報告 #{report_id} 的受測者為「{raw_name}」，不是測試報告，禁止透過此 API 刪除。"
+            "若確實要刪除，請使用一般的報告刪除流程（含 GCS 與 Session 處理）。",
+        )
+
+    # 刪除前記錄
+    deleted_info = {
+        "report_id":     rep.report_id,
+        "session_id":    rep.session_id,
+        "raw_name":      raw_name,
+        "report_kind":   rep.talent_report_kind,
+        "completed_at":  rep.completed_at.isoformat() if rep.completed_at else None,
+    }
+    db.delete(rep)
+    db.commit()
+    return {"ok": True, "deleted": deleted_info}
 
 
 @router.delete("/events/{correlation_id}")

@@ -1255,13 +1255,14 @@
 
           <!-- 子分頁 1：DB 紀錄（已生成 + record callback 成功的）-->
           <div id="reports-subpane-db" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-            <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;">
-              <input id="admin-report-search" type="text" placeholder="搜尋受測者 / Email / 報告類型 / 顧問" style="flex:1;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminReports()">
+            <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input id="admin-report-search" type="text" placeholder="搜尋受測者 / Email / 報告類型 / 顧問" style="flex:1;min-width:160px;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminReports()">
               <span id="admin-report-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminReports()">🔄 重新載入</button>
+              <button class="btn btn-sm" style="background:#9c27b0;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_cleanupAllTestReports()" title="刪除所有姓名為預設值的孤兒測試報告">🧹 清理測試報告</button>
             </div>
             <div style="background:#e3f2fd;padding:8px 16px;border-bottom:1px solid #90caf9;font-size:11px;color:#0d47a1;line-height:1.6;">
-              💡 此處僅顯示「PDF 已上傳 GCS 且 callback 成功」的報告。若數量比預期少，請點上方「🧠 檢測 ↔ 報告」查看漏報告的檢測場次並批次重生。
+              💡 此處列出所有報告（含生成中）。<b>紫色框 🧪 系統測試報告</b>表示生成時受測者姓名缺失（預設「受測者」），無法回查；可點右側 🗑️ 刪除或上方「🧹 清理測試報告」一鍵批次刪除。
             </div>
             <div id="admin-report-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
           </div>
@@ -4319,12 +4320,32 @@ async function startFullReportGeneration(opts) {
     }
   }
 
+  // ⚠️ 受測者姓名驗證：不能使用預設「受測者」字串生成報告，否則會變成孤兒報告（無法關聯到受測者資料）
+  const subjectName = (opts.subjectName || _currentSubjectName || '').trim();
+  if (!subjectName || subjectName === '受測者' || subjectName === '陳小明' || subjectName === '測試模式') {
+    const proceedAsTest = confirm(
+      '⚠️ 受測者姓名缺失或為預設值！\n\n' +
+      '若繼續，這份報告會以「🧪 管理員測試報告」方式記錄，\n' +
+      '不會關聯到任何受測者資料，無法回查腦波資料。\n\n' +
+      '建議先到「開始新檢測 → 受測者資料」頁面填入真實姓名後再來。\n\n' +
+      '確定要以「測試報告」方式繼續嗎？'
+    );
+    if (!proceedAsTest) {
+      console.warn('[startFullReportGeneration] 已取消：受測者姓名缺失');
+      return;
+    }
+  }
+  // 自動為測試報告加上時間戳記，方便 admin 後續識別
+  const finalSubjectName = (subjectName && subjectName !== '受測者' && subjectName !== '陳小明' && subjectName !== '測試模式')
+    ? subjectName
+    : '🧪 管理員測試-' + new Date().toLocaleString('zh-TW', { hour12:false }).replace(/[\/:\s]/g, '').slice(0,12);
+
   try {
     const resp = await fetch(`${API_BASE}/report-gen/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subject_name:         opts.subjectName  || _currentSubjectName || '陳小明',
+        subject_name:         finalSubjectName,
         subject_email:        subjectEmail,
         subject_age:          _currentSubjectAge,
         subject_gender:       _currentSubjectGender || '',
@@ -6575,7 +6596,10 @@ function _renderAllSubjectCard(s) {
     : '<span style="color:#999;">（無）</span>';
 
   // 報告列表
-  let reportsHtml = '<div style="color:#999;font-size:11px;padding:6px 0;">尚無已生成報告</div>';
+  let reportsHtml = `<div style="background:#fff8e1;border:1px solid #ffd54f;border-radius:8px;padding:8px 12px;font-size:11px;color:#bf360c;line-height:1.6;margin:4px 0;">
+    <div style="font-weight:700;margin-bottom:2px;">⚠️ 尚未產生任何報告</div>
+    <div>可能原因：① 顧問尚未對此受測者進行檢測 ② 檢測完成時受測者姓名缺失（變成「🧪 系統測試報告」可在報告管理批次清理）</div>
+  </div>`;
   if (s.reports && s.reports.length) {
     reportsHtml = s.reports.map(r => {
       const statusBadge = r.email_sent
@@ -6599,7 +6623,10 @@ function _renderAllSubjectCard(s) {
   }
 
   // 腦波平均
-  let bwHtml = '<div style="color:#999;font-size:11px;padding:6px 0;">尚無腦波資料</div>';
+  let bwHtml = `<div style="background:#fff8e1;border:1px solid #ffd54f;border-radius:8px;padding:8px 12px;font-size:11px;color:#bf360c;line-height:1.6;margin:4px 0;">
+    <div style="font-weight:700;margin-bottom:2px;">⚠️ 尚未採集到腦波資料</div>
+    <div>此受測者已建檔但尚未完成腦波檢測。請通知顧問用此受測者「開始新檢測」流程，並務必在受測者資料畫面填妥姓名（不能留空），檢測完才會關聯到此筆。</div>
+  </div>`;
   if (s.latest_brainwave) {
     const bw = s.latest_brainwave;
     const ba = bw.bands_avg || {};
@@ -7086,13 +7113,17 @@ function _filterAdminReports() {
       ? `${esc(r.consultant)}${r.consultant_org ? ` · ${esc(r.consultant_org)}` : ''}`
       : '<span style="color:#bbb;">無資料</span>';
 
-    // 孤兒報告警告
-    const orphanWarn = r.orphan
-      ? '<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;">⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</div>'
-      : '';
+    // 孤兒/測試報告警告
+    let orphanWarn = '';
+    if (r.is_test) {
+      orphanWarn = '<div style="margin-top:4px;padding:4px 8px;background:#f3e5f5;border-left:3px solid #9c27b0;border-radius:4px;font-size:10px;color:#6a1b9a;">🧪 系統測試報告 · 受測者姓名缺失（生成時未填寫受測者資料），無法回查至任何受測者個人資料。建議刪除。</div>';
+    } else if (r.orphan) {
+      orphanWarn = '<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;">⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</div>';
+    }
 
-    const borderColor = isGenerating ? '#90caf9'
-                       : pendingSend ? '#ff9800'
+    const borderColor = r.is_test       ? '#ce93d8'
+                       : isGenerating   ? '#90caf9'
+                       : pendingSend    ? '#ff9800'
                        : 'transparent';
     const statusLabel = isGenerating ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中（等待 Vercel 完成）</span>'
                        : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
@@ -7124,10 +7155,47 @@ function _filterAdminReports() {
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
+          ${r.is_test ? `<button onclick="_deleteTestReport(${r.report_id})" style="background:#9c27b0;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🗑️ 刪除</button>` : ''}
         </div>
       </div>
     </div>
   `; }).join('');
+}
+
+// 刪除單筆測試報告
+async function _deleteTestReport(reportId) {
+  if (!confirm(`確定刪除測試報告 #${reportId}？\n（此報告的姓名為「受測者」等預設值，無法關聯到任何真實受測者）`)) return;
+  try {
+    const r = await apiFetch(`/reports/${reportId}/delete-test`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`刪除失敗：${err.detail || r.status}`);
+      return;
+    }
+    renderAdminReports();
+  } catch (e) {
+    alert(`刪除例外：${e.message}`);
+  }
+}
+
+// 一鍵批次刪除所有測試報告
+async function _cleanupAllTestReports() {
+  const tests = (_adminReportsCache || []).filter(r => r.is_test);
+  if (!tests.length) {
+    alert('沒有需要清理的測試報告。');
+    return;
+  }
+  if (!confirm(`即將刪除 ${tests.length} 筆測試報告（姓名為「受測者」等預設值，無法回查的孤兒報告）。\n\n這些報告無法關聯到任何真實受測者，刪除不會影響顧問與受測者資料。\n\n確定要繼續？`)) return;
+
+  let success = 0, fail = 0;
+  for (const r of tests) {
+    try {
+      const resp = await apiFetch(`/reports/${r.report_id}/delete-test`, { method: 'DELETE' });
+      if (resp.ok) success++; else fail++;
+    } catch(e) { fail++; }
+  }
+  alert(`清理完成 ✅\n成功：${success} 筆\n失敗：${fail} 筆`);
+  renderAdminReports();
 }
 
 async function _adminSendReportEmail(reportId) {
