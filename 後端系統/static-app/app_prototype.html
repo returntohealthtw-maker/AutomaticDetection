@@ -5754,91 +5754,158 @@ function _etComputeAll(acc) {
   };
 }
 
-function _etComputeMBTI(acc) {
-  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
-  const std = arr => {
-    if (arr.length < 2) return 0;
-    const m = avg(arr);
-    const v = arr.reduce((s,x)=> s + (x-m)*(x-m), 0) / arr.length;
-    return Math.sqrt(v);
-  };
-  // 取序列前/後半段平均，看「趨勢」（趨勢 > 0 = 注意力上升）
-  const trend = arr => {
-    if (arr.length < 4) return 0;
-    const half = Math.floor(arr.length / 2);
-    return avg(arr.slice(half)) - avg(arr.slice(0, half));
-  };
-
-  // 優先使用 ThinkGear 原始 8 頻段（範圍 10^4~10^7，能保留個體差異）
-  const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && avg(acc.r_lalpha) > 0);
-
-  // 對數軸 sigmoid（中心點 = 1，正負對稱）
-  const safeRatio = (num, den) => {
-    if (!(den > 1e-6) || !(num > 1e-6)) return 1;
-    return num / den;
-  };
-  const logSig = (ratio, slope) => {
-    const l = Math.log10(ratio);
-    const x = 1 / (1 + Math.exp(-(slope || 2) * l));
-    return _etClamp(x * 100, 0, 100);
-  };
-
-  let ei, ns, tf, jp;
-
-  if (hasRaw) {
-    // ===== 路徑 A：APK ≥ 1.1.9，有 8 個 ThinkGear 原始頻段 =====
-    const la = avg(acc.r_lalpha), ha = avg(acc.r_halpha);
-    const lb = avg(acc.r_lbeta),  hb = avg(acc.r_hbeta);
-    const lg = avg(acc.r_lgamma), hg = avg(acc.r_hgamma);
-    const d  = avg(acc.r_delta),  t  = avg(acc.r_theta);
-    const a = la + ha, b = lb + hb, g = lg + hg;
-    ei = logSig(safeRatio(b,     a));
-    ns = logSig(safeRatio(t + g, b));
-    tf = logSig(safeRatio(lb,    lg + t));
-    jp = logSig(safeRatio(hb,    t));
-  } else {
-    // ===== 路徑 B：APK ≤ 1.1.8 fallback — 用「個體訊號特徵」差異化 =====
-    // bandTo100 壓縮過的 5 頻段平均會收斂到 30~70 區間，無法區分人
-    // 改用 attn / medi 的【統計特徵】（平均、標準差、趨勢）+ 比例 → 個體差異夠
-    const aMean = avg(acc.alpha), bMean = avg(acc.beta), gMean = avg(acc.gamma);
-    const tMean = avg(acc.theta), dMean = avg(acc.delta);
-    const attnMean = avg(acc.attn || []), attnStd = std(acc.attn || []), attnTrend = trend(acc.attn || []);
-    const mediMean = avg(acc.medi || []), mediStd = std(acc.medi || []);
-
-    // E/I：注意力主動性（外向 = 對外刺激高反應）
-    //   高 attn 平均 + β 高 + attn 變動大 → E（活躍對外）
-    //   高 medi 平均 + α 高 + attn 穩定 → I（內收）
-    //   ratio：(attnMean + bMean + attnStd) / (mediMean + aMean + 20)
-    ei = logSig(safeRatio(attnMean + bMean + attnStd, mediMean + aMean + 20), 1.5);
-
-    // N/S：抽象 vs 具體
-    //   θ 高 + γ 高 + attn 趨勢有變化 → N
-    //   β 穩定 + δ 高 + 注意力變動小 → S
-    ns = logSig(safeRatio(tMean + gMean + Math.abs(attnTrend) * 2,
-                          bMean + dMean * 0.5 + 10), 1.5);
-
-    // T/F：邏輯切換 vs 情感共鳴
-    //   β 高 + attn 高 + medi 變動小 → T
-    //   γ 高 + medi 高 + medi 變動大（情緒起伏）→ F
-    tf = logSig(safeRatio(bMean + attnMean,
-                          gMean * 1.5 + mediMean + mediStd), 1.5);
-
-    // J/P：計畫穩定 vs 彈性流動
-    //   attn 高且穩 + β 高 → J（規律執行）
-    //   attn 變動大 + θ 高 → P（彈性探索）
-    const attnStability = attnStd > 0 ? (100 / attnStd) : 100;
-    jp = logSig(safeRatio(attnStability + bMean,
-                          attnStd * 2 + tMean), 1.5);
-  }
-
+// ─── 通用統計工具 ─────────────────────────────────────────────────
+function _etAvg(arr) { return arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+function _etStd(arr) {
+  if (!arr || arr.length < 2) return 0;
+  const m = _etAvg(arr);
+  const v = arr.reduce((s,x)=> s + (x-m)*(x-m), 0) / arr.length;
+  return Math.sqrt(v);
+}
+function _etTrend(arr) {
+  if (!arr || arr.length < 4) return 0;
+  const half = Math.floor(arr.length / 2);
+  return _etAvg(arr.slice(half)) - _etAvg(arr.slice(0, half));
+}
+function _etSafeRatio(num, den) {
+  if (!(den > 1e-6) || !(num > 1e-6)) return 1;
+  return num / den;
+}
+function _etLogSig(ratio, slope) {
+  const l = Math.log10(ratio);
+  const x = 1 / (1 + Math.exp(-(slope || 2) * l));
+  return _etClamp(x * 100, 0, 100);
+}
+function _etMakeMbtiResult(ei, ns, tf, jp) {
   const dims = [
     { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei },
     { pair:'N/S', score:ns, dominant: ns>=50?'N':'S', pct:ns },
     { pair:'T/F', score:tf, dominant: tf>=50?'T':'F', pct:tf },
     { pair:'J/P', score:jp, dominant: jp>=50?'J':'P', pct:jp },
   ];
-  const type = dims.map(d => d.dominant).join('');
-  return { type, dims };
+  return { type: dims.map(d => d.dominant).join(''), dims };
+}
+
+// ─── 4 層 MBTI 推論 ────────────────────────────────────────────────
+// 八卦演算法的精神：每個性格層次用不同的腦波特徵權重推論
+//   原型（archetype）：天生最深層 → δ θ 為主，配 α 安定（baseline brain）
+//   原生家庭（family）：童年形塑 → α θ + medi 穩定度（情感安定 / 警覺習慣）
+//   社會化（social）：對外面向 → β γ + attn 高（active engagement）
+//   同儕關係（peer）：人際情感 → γ + medi 變動 + attn 趨勢（情緒共鳴 / 互動敏銳）
+function _etComputeMBTILayers(acc) {
+  const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && _etAvg(acc.r_lalpha) > 0);
+
+  // 統計特徵
+  const aMean = _etAvg(acc.alpha), bMean = _etAvg(acc.beta), gMean = _etAvg(acc.gamma);
+  const tMean = _etAvg(acc.theta), dMean = _etAvg(acc.delta);
+  const attnMean = _etAvg(acc.attn || []), attnStd = _etStd(acc.attn || []), attnTrend = _etTrend(acc.attn || []);
+  const mediMean = _etAvg(acc.medi || []), mediStd = _etStd(acc.medi || []);
+
+  // 原始頻段（如果有）
+  let la=0, ha=0, lb=0, hb=0, lg=0, hg=0, dRaw=0, tRaw=0;
+  if (hasRaw) {
+    la = _etAvg(acc.r_lalpha); ha = _etAvg(acc.r_halpha);
+    lb = _etAvg(acc.r_lbeta);  hb = _etAvg(acc.r_hbeta);
+    lg = _etAvg(acc.r_lgamma); hg = _etAvg(acc.r_hgamma);
+    dRaw = _etAvg(acc.r_delta); tRaw = _etAvg(acc.r_theta);
+  }
+
+  // 為防止 4 層全部一樣，每層加上「擾動因子」(perturbation)
+  // 擾動來源：個人獨有的訊號特徵（attnTrend、mediStd 等）— 這些不會在 4 層之間共享
+  const attnSign = attnTrend >= 0 ? 1 : -1;
+  const mediVar  = mediStd / Math.max(1, mediMean);  // 情緒穩定度
+
+  // ===== 原型性格（archetype）：最深層腦波驅動 =====
+  // E/I：β/α 比 + attn 主動度（最少擾動）
+  // N/S：θ/β 比（直覺 vs 具體）
+  // T/F：γ/(α+δ) 比（高階聯結 vs 安定具體）
+  // J/P：β穩定度 / θ 流動（執行 vs 彈性）
+  const archetype = (() => {
+    if (hasRaw) {
+      const a=la+ha, b=lb+hb, g=lg+hg;
+      return _etMakeMbtiResult(
+        _etLogSig(_etSafeRatio(b, a), 2.0),
+        _etLogSig(_etSafeRatio(tRaw + g, b), 2.0),
+        _etLogSig(_etSafeRatio(lb, lg + tRaw), 2.0),
+        _etLogSig(_etSafeRatio(hb, tRaw), 2.0),
+      );
+    }
+    return _etMakeMbtiResult(
+      _etLogSig(_etSafeRatio(bMean + attnMean*0.5, aMean + 10), 1.6),
+      _etLogSig(_etSafeRatio(tMean + gMean, bMean + 10), 1.6),
+      _etLogSig(_etSafeRatio(bMean, gMean + tMean*0.7 + 5), 1.6),
+      _etLogSig(_etSafeRatio(bMean + 10, tMean + attnStd*0.5 + 5), 1.6),
+    );
+  })();
+
+  // ===== 原生家庭（family）：童年情感安定 + α θ 為主 =====
+  // 加入 medi 與 mediStd 的影響（早期形塑的安定／警覺）
+  // 每個維度用「不同重心」避免跟原型完全一樣
+  const family = (() => {
+    if (hasRaw) {
+      const a=la+ha, b=lb+hb, g=lg+hg;
+      return _etMakeMbtiResult(
+        _etLogSig(_etSafeRatio(b * 0.8 + attnMean, a + mediMean), 1.8),
+        _etLogSig(_etSafeRatio(tRaw + ha, b * 0.7 + dRaw * 0.5), 1.8),
+        _etLogSig(_etSafeRatio(la + lb, lg + tRaw + mediStd*0.01*tRaw), 1.8),
+        _etLogSig(_etSafeRatio(hb + attnMean*0.3, tRaw + mediStd*0.02*tRaw), 1.8),
+      );
+    }
+    return _etMakeMbtiResult(
+      _etLogSig(_etSafeRatio(bMean*0.9 + attnMean, aMean + mediMean + 10), 1.5),
+      _etLogSig(_etSafeRatio(tMean + aMean*0.5, bMean*0.7 + dMean*0.5 + 5), 1.5),
+      _etLogSig(_etSafeRatio(aMean + bMean*0.5, gMean + tMean*0.7 + mediStd + 5), 1.5),
+      _etLogSig(_etSafeRatio(bMean + attnMean*0.4, tMean + mediStd + 5), 1.5),
+    );
+  })();
+
+  // ===== 社會化（social）：β γ + 注意力主動 + 對外活躍 =====
+  // 整體往「外向 / 執行」偏移（因為對外場合通常更活躍）
+  const social = (() => {
+    if (hasRaw) {
+      const a=la+ha, b=lb+hb, g=lg+hg;
+      return _etMakeMbtiResult(
+        _etLogSig(_etSafeRatio(b + g + attnMean, a * 0.7 + 10), 1.8),
+        _etLogSig(_etSafeRatio(tRaw + g + Math.abs(attnTrend) * 5, b + dRaw*0.5), 1.8),
+        _etLogSig(_etSafeRatio(b + attnMean, lg + tRaw + mediMean), 1.8),
+        _etLogSig(_etSafeRatio(hb * 1.2 + attnMean, tRaw + attnStd*0.5), 1.8),
+      );
+    }
+    return _etMakeMbtiResult(
+      _etLogSig(_etSafeRatio(bMean + gMean + attnMean*1.3 + attnStd, aMean*0.7 + mediMean*0.5 + 10), 1.5),
+      _etLogSig(_etSafeRatio(tMean + gMean + Math.abs(attnTrend)*3, bMean + dMean*0.5 + 5), 1.5),
+      _etLogSig(_etSafeRatio(bMean*1.1 + attnMean, gMean + tMean*0.5 + mediMean + 5), 1.5),
+      _etLogSig(_etSafeRatio(bMean*1.2 + attnMean*0.7, tMean + attnStd + 5), 1.5),
+    );
+  })();
+
+  // ===== 同儕關係（peer）：γ + medi 起伏 + 情感共鳴 =====
+  // 整體往「F / 情感」偏移（朋友互動通常情感層面更強）
+  const peer = (() => {
+    if (hasRaw) {
+      const a=la+ha, b=lb+hb, g=lg+hg;
+      return _etMakeMbtiResult(
+        _etLogSig(_etSafeRatio(b + attnMean, a + mediMean + 10), 1.8),
+        _etLogSig(_etSafeRatio(tRaw + g * 1.3 + mediStd*0.01*tRaw, b * 0.8), 1.8),
+        _etLogSig(_etSafeRatio(lb * 0.7, lg * 1.4 + tRaw + mediStd*0.02*tRaw), 1.8),
+        _etLogSig(_etSafeRatio(hb * 0.7, tRaw + mediStd*0.02*tRaw), 1.8),
+      );
+    }
+    return _etMakeMbtiResult(
+      _etLogSig(_etSafeRatio(bMean + attnMean, aMean + mediMean*1.1 + 10), 1.4),
+      _etLogSig(_etSafeRatio(tMean + gMean*1.3 + mediStd*0.5, bMean*0.8 + 5), 1.5),
+      _etLogSig(_etSafeRatio(bMean*0.7 + attnMean*0.5, gMean*1.4 + mediMean + mediStd + 5), 1.5),
+      _etLogSig(_etSafeRatio(bMean*0.7, tMean + mediStd*1.2 + 5), 1.5),
+    );
+  })();
+
+  return { archetype, family, social, peer };
+}
+
+// 向下相容 wrapper：返回主推論型（原型層次）
+function _etComputeMBTI(acc) {
+  const layers = _etComputeMBTILayers(acc);
+  return layers.archetype;
 }
 
 // ─── MBTI × 四層性格說明文字（每段約 100 字）────────────────────────────────
@@ -5940,31 +6007,42 @@ const _ETHR_MBTI_LAYERS = {
 
 // 4 層 MBTI 顯示狀態
 let _ethrMbtiActiveLayer = 'archetype';
-let _ethrMbtiCurrentType = '';
+let _ethrMbtiCurrentType = '';                  // 主推論型（原型層次的 MBTI）
+let _ethrMbtiLayerResults = null;               // { archetype:{type,dims}, family:{}, social:{}, peer:{} }
 
 function _renderEthrMbtiList() {
-  // 只渲染受測者本次推論出的 MBTI 類型，依目前 tab 顯示對應層次描述
+  // 顯示「目前 tab 所對應層次」的獨立推論 MBTI（4 層可能 4 種不同 MBTI）
   const listEl = document.getElementById('ethr-mbti-list');
   if (!listEl) return;
   const layer = _ethrMbtiActiveLayer;
-  const id = _ethrMbtiCurrentType;
+  const layerMeta = _ETHR_MBTI_LAYERS[layer] || { label: layer, icon:'•', desc:'' };
+
+  // 取出該 layer 的推論結果；fallback 用主推論型
+  const layerResult = (_ethrMbtiLayerResults && _ethrMbtiLayerResults[layer]) || null;
+  const id = (layerResult && layerResult.type) || _ethrMbtiCurrentType;
   const m = id ? _ETHR_MBTI_TABLE[id] : null;
   if (!id || !m) {
     listEl.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:14px;">尚未推論出性格類型</div>';
     return;
   }
-  const layerLabel = ({
-    archetype: '原型性格',
-    family:    '原生家庭',
-    social:    '社會化',
-    peer:      '同儕關係',
-  })[layer] || layer;
+
+  // 該層次的維度百分比
+  let dimsHtml = '';
+  if (layerResult && layerResult.dims) {
+    dimsHtml = '<div style="font-size:11px;color:#666;margin:8px 0 6px;line-height:1.7;">'
+      + layerResult.dims.map(d =>
+          `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#d32f2f' : '#1976d2'};font-weight:700;">${d.dominant}</span> (${Math.round(d.pct)}%)`
+        ).join(' · ')
+      + '</div>';
+  }
+
   listEl.innerHTML = `<div class="ethr-mbti-card is-current">
+    <div style="font-size:11px;color:#1a237e;font-weight:700;margin-bottom:6px;">${layerMeta.icon} ${layerMeta.label}　<span style="color:#888;font-weight:400;">${layerMeta.desc}</span></div>
     <div class="mbti-head">
       <span class="mbti-id">${m.emoji} ${id}</span>
       <span class="mbti-name">${m.name}</span>
     </div>
-    <div style="font-size:11px;color:#888;margin:6px 0 4px;">${layerLabel}</div>
+    ${dimsHtml}
     <div class="mbti-desc">${m[layer] || '—'}</div>
   </div>`;
 }
@@ -6003,23 +6081,35 @@ function _renderEthrMbtiAnalysis(state) {
     return;
   }
 
-  let mbti;
-  try { mbti = _etComputeMBTI(acc); } catch(e) { mbti = null; }
-  if (!mbti || !mbti.type) { section.style.display = 'none'; return; }
+  // 計算 4 層獨立 MBTI（原型 / 原生家庭 / 社會化 / 同儕關係）
+  let layers;
+  try { layers = _etComputeMBTILayers(acc); } catch(e) { layers = null; }
+  if (!layers || !layers.archetype || !layers.archetype.type) {
+    section.style.display = 'none';
+    return;
+  }
 
-  _ethrMbtiCurrentType = mbti.type;
-  const cur = _ETHR_MBTI_TABLE[mbti.type] || { name:'?', emoji:'❓' };
+  _ethrMbtiLayerResults = layers;
+  _ethrMbtiCurrentType = layers.archetype.type;  // 主推論型 = 原型層次
+  const cur = _ETHR_MBTI_TABLE[layers.archetype.type] || { name:'?', emoji:'❓' };
 
   section.style.display = 'block';
   const tag = document.getElementById('ethr-mbti-current');
-  if (tag) tag.textContent = `${cur.emoji} ${mbti.type} · ${cur.name}`;
+  if (tag) tag.textContent = `${cur.emoji} ${layers.archetype.type} · ${cur.name}`;
 
   const summary = document.getElementById('ethr-mbti-summary');
   if (summary) {
-    const dimText = mbti.dims.map(d =>
-      `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#d32f2f' : '#1976d2'}">${d.dominant}</span> (${Math.round(d.pct)}%)`
-    ).join(' · ');
-    summary.innerHTML = `本次 ${state.sampleCount} 筆腦波資料推論結果：<b style="color:#1a237e;">${cur.emoji} ${mbti.type} ${cur.name}</b><br>${dimText}<br><span style="font-size:11px;color:#888;">您可切換下方 4 個層次，了解自己在不同情境（原型 / 家庭 / 社會 / 同儕）下的表現。</span>`;
+    // 4 層摘要：每層各自的 MBTI（可能不同）
+    const layerSummary = ['archetype','family','social','peer'].map(k => {
+      const r = layers[k];
+      const meta = _ETHR_MBTI_LAYERS[k];
+      const mEntry = (r && _ETHR_MBTI_TABLE[r.type]) || { name:'?', emoji:'❓' };
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #e0e0e0;">
+        <span style="color:#1a237e;">${meta.icon} ${meta.label}</span>
+        <span style="font-weight:700;">${mEntry.emoji} ${r ? r.type : '—'} <span style="color:#888;font-weight:400;">${mEntry.name || ''}</span></span>
+      </div>`;
+    }).join('');
+    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 八卦演算法推論的 <b>4 層性格傾向</b>：</div>${layerSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 切換看各層次的詳細描述。每個層次反映您在不同情境下的人格樣貌。</div>`;
   }
 
   _bindEthrMbtiTabs();
