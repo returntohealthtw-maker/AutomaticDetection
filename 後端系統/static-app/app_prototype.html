@@ -197,6 +197,31 @@
   .btn-sm { padding:10px 20px; width:auto; font-size:14px; border-radius:10px; }
   .btn-success { background:linear-gradient(135deg,#00C853,#00897B); color:white; }
 
+  /* MBTI layer tab buttons (ethr) */
+  .ethr-layer-tab {
+    flex:1; min-width:70px; padding:8px 6px; border:1px solid #c5cae9; background:white;
+    color:#3949ab; font-size:11px; font-weight:600; border-radius:8px; cursor:pointer;
+    transition:all 0.15s;
+  }
+  .ethr-layer-tab.active {
+    background:linear-gradient(135deg,#3949ab,#1a237e); color:white; border-color:#1a237e;
+  }
+  .ethr-layer-tab:active { transform:scale(0.97); }
+  .ethr-mbti-card {
+    border:1px solid #e8eaf6; border-radius:10px; padding:10px 12px; background:#fafbff;
+    transition:background 0.2s;
+  }
+  .ethr-mbti-card.is-current {
+    background:linear-gradient(135deg,#e8eaf6,#c5cae9); border-color:#3949ab;
+    box-shadow:0 2px 8px rgba(57,73,171,0.2);
+  }
+  .ethr-mbti-card .mbti-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+  .ethr-mbti-card .mbti-id { font-weight:700; color:#1a237e; font-size:13px; }
+  .ethr-mbti-card .mbti-name { font-size:11px; color:#666; }
+  .ethr-mbti-card .mbti-desc { font-size:11px; color:#444; line-height:1.7; }
+  .ethr-mbti-card.is-current .mbti-id { color:#1a237e; }
+  .ethr-mbti-card.is-current .mbti-id::after { content:' ⭐ 您的類型'; font-size:10px; color:#ff6b35; }
+
   /* Bottom Nav */
   .bottom-nav {
     background:white; display:flex; border-top:1px solid #f0f0f0;
@@ -2548,6 +2573,26 @@
             <div id="ethr-checks" style="display:flex;flex-direction:column;gap:10px;font-size:13px;"></div>
           </div>
 
+          <!-- 🧬 MBTI 八卦分析（採集到資料時才顯示）-->
+          <div id="ethr-mbti-section" style="display:none;background:white;border-radius:18px;padding:18px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <div style="font-size:13px;font-weight:700;color:#1a237e;">🧬 MBTI 性格分析（八卦演算法）</div>
+              <span id="ethr-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
+            </div>
+            <div id="ethr-mbti-summary" style="font-size:12px;color:#666;line-height:1.7;margin-bottom:14px;padding:10px;background:#f5f7ff;border-radius:10px;"></div>
+
+            <!-- 4 個性格層次 切換 -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;" id="ethr-mbti-layer-tabs">
+              <button class="ethr-layer-tab active" data-layer="archetype">原型性格</button>
+              <button class="ethr-layer-tab" data-layer="family">原生家庭</button>
+              <button class="ethr-layer-tab" data-layer="social">社會化</button>
+              <button class="ethr-layer-tab" data-layer="peer">同儕關係</button>
+            </div>
+
+            <!-- 16 種 MBTI 列表（依層次切換內容）-->
+            <div id="ethr-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:12px;"></div>
+          </div>
+
           <!-- 操作按鈕 -->
           <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
             <button class="btn btn-primary" onclick="goto('screen-home')">返回首頁</button>
@@ -2555,7 +2600,7 @@
           </div>
 
           <div style="text-align:center;font-size:11px;color:#aaa;padding:16px;line-height:1.6;">
-            本檢查不採集分析、不寫入資料庫、不生成報告，僅檢測腦波儀本身的健康狀態。
+            本檢查不採集分析、不寫入資料庫、不生成報告。MBTI 性格分析僅供個人參考，不構成醫療或心理諮詢建議。
           </div>
         </div>
       </div>
@@ -5297,6 +5342,8 @@ function _startEegHealthCheckSession() {
     bridgeAvailable: typeof AndroidBridge !== 'undefined' && !!AndroidBridge,
   };
   window._eegHealthActive = true;  // 路由標記：JSBridge.onEegSample 會走健康檢查 sink
+  // 重置 MBTI 分析資料累積器（每次健康檢查獨立）
+  window._ethrAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] };
 
   // 啟動串流（如果在 APP 內）
   try {
@@ -5377,6 +5424,19 @@ function _eegHealthSampleSink(obj) {
   if (obj && typeof obj.bat === 'number' && obj.bat >= 1 && obj.bat <= 100) {
     _ethcState.batteries.push(obj.bat);
   }
+  // 累積各頻段資料給 MBTI 分析使用（不寫入 DB / 不傳到後端，純前端計算）
+  if (!window._ethrAccum) {
+    window._ethrAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] };
+  }
+  const acc = window._ethrAccum;
+  const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+  acc.attn.push(num(obj && obj.attn));
+  acc.medi.push(num(obj && obj.medi));
+  acc.delta.push(num(obj && obj.delta));
+  acc.theta.push(num(obj && obj.theta));
+  acc.alpha.push(num(obj && obj.alpha));
+  acc.beta .push(num(obj && obj.beta));
+  acc.gamma.push(num(obj && obj.gamma));
 }
 
 // 結束（時間到或使用者點「提前結束」）
@@ -5570,6 +5630,9 @@ function _renderEegHealthResult(state, byUser) {
     }
     checkBox.innerHTML = html;
   }
+
+  // 🧬 MBTI 分析（採集到資料才會渲染，0 筆會自動隱藏整段）
+  try { _renderEthrMbtiAnalysis(state); } catch(e) { console.warn('mbti render', e); }
 }
 
 // 保留向後相容（舊頁面如返回首頁按鈕仍可能呼叫，但不再做任何主流程操作）
@@ -5660,6 +5723,185 @@ function _etComputeMBTI(acc) {
   const type = dims.map(d => d.dominant).join('');
   return { type, dims };
 }
+
+// ─── MBTI × 四層性格說明文字（每段約 100 字）────────────────────────────────
+// 四層性格定義（心理動力學模型）：
+//   archetype  原型性格  ── 天生本質、最深層的驅動傾向
+//   family     原生家庭  ── 在父母 / 手足關係中形塑的角色性格
+//   social     社會化    ── 在職場 / 公共場合的對外形象
+//   peer       同儕關係  ── 在朋友圈 / 親密同伴間的真實樣貌
+const _ETHR_MBTI_TABLE = {
+  INTJ: { name:'建築師', emoji:'🏛️',
+    archetype:'內在世界結構嚴謹的策略家，習慣以長遠藍圖思考人生。獨處時思緒最清晰，喜歡探索抽象概念與系統性原理。對效率與邏輯有近乎執著的追求，不滿於表面答案。',
+    family:'在家中常被視為「冷靜可靠的孩子」，從小習慣自己處理問題不依賴他人。可能因父母情感表達有限而學會內斂，把情感包在理性外殼中保護自己。',
+    social:'在職場展現高度專業與目標導向，善於規劃與系統化執行。對無效率與情緒化決策不耐煩，傾向用結果說話，言語精簡但有分量，常被視為「值得信任的策略夥伴」。',
+    peer:'朋友少而精，重質不重量。對少數親近朋友會展現幽默與深度，但對表面社交感到疲憊。願意為朋友提供精準建議，不擅長噓寒問暖型的情感支持。' },
+  INTP: { name:'邏輯學家', emoji:'🔬',
+    archetype:'天生的思辨者，對「為什麼」的追問永不停止。沉浸於概念世界，享受推理與假設的純粹遊戲。對既定權威保持懷疑，更相信內在邏輯一致的真理體系。',
+    family:'在家中可能是「特立獨行的孩子」，常因問題太多或想法太怪而被誤解。傾向退縮到自己的房間或書本中找避風港，與父母的情感連結偏淡但思想交流可深刻。',
+    social:'職場上展現獨特的問題解決能力，常在他人卡住時提出意外解法。對例行公事與政治角力感到厭倦，更願意深耕專業領域，不擅長自我推銷。',
+    peer:'朋友圈以共同興趣為核心（程式、科幻、哲學討論）。願意花數小時深入討論一個主題，但對閒聊感到疲乏。對少數知音可以非常忠誠開放。' },
+  ENTJ: { name:'指揮官', emoji:'⚔️',
+    archetype:'天生的領導者人格，內在驅力強勁且目標明確。看見不效率的系統就想重組，看見停滯的局面就想打破。對自己與他人都要求高，認為「能力證明價值」。',
+    family:'在家中常扮演「掌控全局的長子/長女」角色，無論排行如何都會主導家庭決策。可能與父母在權威議題上有衝突，但也是家裡最終解決問題的那一個。',
+    social:'職場上是天然的指揮中心，能快速整合資源並推動專案。決策果斷不拖泥帶水，期待團隊跟上節奏。可能被誤認為強勢，但實際追求的是團隊整體勝利而非個人風采。',
+    peer:'朋友圈中常是「召集人」，活動由你發起、地點由你決定。對朋友重情義也重承諾，但較少表達細膩情感。會用實際幫忙與機會引介取代言語安慰。' },
+  ENTP: { name:'辯論家', emoji:'💡',
+    archetype:'天生的點子製造機，對任何規則的合理性都好奇。腦中同時跑著數個假設，享受智力上的對撞與翻轉。容易感到無聊，需要新鮮刺激維持動能。',
+    family:'在家中常是「最會頂嘴的孩子」，但其實是真心想討論而非反抗。父母可能覺得難以管教，但你只是天生不接受「我說了算」這種無理由的權威。',
+    social:'職場上是創意爆發點與既定流程的挑戰者。能在會議上一句話翻轉討論方向，但執行細節與長期維護不是強項。適合創新階段勝過營運階段。',
+    peer:'朋友圈中是話題中心，金句製造機。喜歡用辯論與玩笑連結朋友，互嗆是表達親密的方式。對能跟上你思考速度的朋友會特別珍惜。' },
+  INFJ: { name:'提倡者', emoji:'🌌',
+    archetype:'罕見的直覺型理想主義者，能感知到他人感知不到的潛在意義。內在有深刻的價值體系與使命感，常思考「人為什麼而活」這類大哉問。',
+    family:'在家中常是「敏感且體貼的孩子」，從小察覺父母情緒並試圖調和。可能因為太懂事而提早承擔情感責任，需要學會劃清界線。',
+    social:'職場上展現深度同理與洞察力，特別適合教學、諮詢、創作領域。對淺層社交與職場政治感到耗能，需要獨處時間恢復。常被同事視為「值得信任的傾訴對象」。',
+    peer:'朋友圈不大但極深，能與少數朋友建立靈魂層次的連結。對偽善敏感，一旦感受到不真誠會默默拉開距離。對親近朋友會展現出意外的幽默與堅定。' },
+  INFP: { name:'調停者', emoji:'🌸',
+    archetype:'內在情感世界豐富的理想主義者，價值觀比現實考量更重要。對美、藝術、人性懷有深刻信念，願意為理想而戰但討厭直接衝突。',
+    family:'在家中常是「敏感且容易受傷的孩子」，會把父母的情緒當成自己的責任。可能因為太溫和而被忽視意見，內心其實有強烈主張只是不擅表達。',
+    social:'職場上展現獨特創意與人文關懷，適合寫作、設計、教育、心理輔導等領域。對量化指標與冷酷競爭感到疲憊，需要工作有意義感才能持續投入。',
+    peer:'朋友圈精挑細選，與朋友的連結偏深度心靈交流。願意花時間聆聽朋友的痛苦，但自己的痛苦較少向外說。對虛假與背叛特別難釋懷。' },
+  ENFJ: { name:'主人公', emoji:'🌟',
+    archetype:'天生的人類連結者，能感受群體中每個人的需要並主動回應。對人潛能的相信幾乎是信仰，傾向把陌生人變成朋友、把朋友變成家人。',
+    family:'在家中常是「家庭的情感黏著劑」，主動調解父母手足間的衝突。可能因為太關注他人需要而忽略自己感受，需要學習說「不」。',
+    social:'職場上自然成為團隊的精神領袖，能激勵他人發揮潛能。擅長溝通協調與輔導後輩，但對被孤立或不被信任特別敏感。決策時會把人的因素放在數字之前。',
+    peer:'朋友圈廣大但用心經營，每個朋友都覺得自己被特別對待。常是聚會的核心人物，記得每個人的生日與近況。需要回饋確認自己被在意。' },
+  ENFP: { name:'競選者', emoji:'🎉',
+    archetype:'熱情奔放的可能性追逐者，對人生抱持高度好奇與樂觀。內在有源源不絕的想法與情感能量，但也容易因事物失去新鮮感而轉移注意。',
+    family:'在家中常是「家裡的太陽」，帶來歡笑與活力。可能因為太外放而被父母期待「穩重一點」，但你天生需要自由揮灑的空間才能發光。',
+    social:'職場上是團隊的火花與創新催化劑，適合銷售、行銷、培訓、人力資源等需要熱情的崗位。對重複性事務感到窒息，在能發揮影響力的角色中表現最好。',
+    peer:'朋友圈龐大且多元，從不同領域吸收各種人脈。對朋友的熱情真誠且持久，但因關注面太廣，深度連結需要朋友主動投入才能維持。' },
+  ISTJ: { name:'物流師', emoji:'📋',
+    archetype:'務實可靠的傳統守護者，相信「該做的事就要做好」。對細節、規則、責任有近乎本能的尊重，是社會運作的中堅骨幹。',
+    family:'在家中常是「最聽話、最負責的孩子」，從小理解「家裡靠你」的重量。可能因為太早成熟而錯過任性的時光，內心其實渴望被照顧而不只是照顧人。',
+    social:'職場上是默默扛起例行運作的核心，產品交期、財務帳目、流程合規都靠你穩住。不喜歡誇耀但不容被忽視，對破壞規則的人會堅持原則。',
+    peer:'朋友圈穩定不變動，二十年的朋友還是二十年的朋友。對朋友的承諾必達，但較少參與大型熱鬧聚會，更喜歡兩三知交安靜聚餐。' },
+  ISFJ: { name:'守衛者', emoji:'🛡️',
+    archetype:'溫暖的傳統照顧者，把守護所愛之人視為人生意義。對他人需要敏銳且記憶力驚人，能記得所有重要日子與細節。',
+    family:'在家中常是「最體貼的孩子」，主動關心父母身體、記得手足喜好。可能因為太照顧別人而忽略自己，學會表達需求是重要功課。',
+    social:'職場上是團隊的溫柔後盾，記得每個同事的咖啡口味、孩子年齡。在護理、教育、服務、行政等需要細膩照顧的領域發光。對劇烈衝突高度敏感。',
+    peer:'朋友圈精挑且長久，對朋友會默默做許多小事。生日記得、節日問候、生病送湯，這些都是你表達在乎的方式，並不期待大張旗鼓的回報。' },
+  ESTJ: { name:'總經理', emoji:'🏢',
+    archetype:'天生的組織者與秩序維持者，相信「正確流程帶來正確結果」。對效率、責任、層級結構有清晰偏好，是任務驅動的執行高手。',
+    family:'在家中常是「掌握規則的孩子」，會主動安排家庭活動、提醒家人責任。可能因為太強調對錯而與較感性的家人衝突，學會柔軟很重要。',
+    social:'職場上是天然的管理階層人選，擅長把混亂變秩序、把目標變交期。決策果斷不拖泥帶水，重視承諾與KPI。對「想法很多但不執行」的人最沒耐心。',
+    peer:'朋友圈中常是「總召」，飯局誰來、地點哪裡、時間幾點都由你定。對朋友重情義也重原則，會直接點出朋友的問題，是「諍友」型人物。' },
+  ESFJ: { name:'執政官', emoji:'🤝',
+    archetype:'熱心的社群連結者，在和諧的人際網中找到自我價值。對他人感受高度敏感，習慣主動付出維繫關係。',
+    family:'在家中常是「家庭的核心黏合劑」，主動安排聚餐、節日、生日。可能因為太投入家庭關係而把自我擺後面，學會自我照顧很重要。',
+    social:'職場上是溝通協調的高手，能讓不同部門順利合作。在客服、人力資源、社區工作、教育等強調人際的領域發光。對被排擠或被誤解特別痛苦。',
+    peer:'朋友圈廣且活躍，是聚會永遠的發起人。會記得每個朋友的細節與近況，主動關心問候。需要回饋確認被在意，否則容易感到孤單。' },
+  ISTP: { name:'鑑賞家', emoji:'🛠️',
+    archetype:'冷靜的實用主義者，動手解決問題的本能比說話強。對機械、運作原理、危機處理有天然興趣，行動敏捷且不情緒化。',
+    family:'在家中常是「安靜不黏人的孩子」，喜歡自己拆解玩具或機器。可能因為話少被誤解為冷漠，但其實是用「修好東西」表達關心。',
+    social:'職場上是技術型問題解決者，工程、維修、現場操作、緊急應變都能勝任。不擅長辦公室政治也不想參與，更看重「做出來、修好它」。',
+    peer:'朋友圈精且實用，以共同活動（運動、騎車、修車、桌遊）連結。較少深入情感對話但行動力強，朋友有事你會默默到場幫忙。' },
+  ISFP: { name:'探險家', emoji:'🎨',
+    archetype:'安靜的藝術靈魂，活在當下的感官世界。對美、自由、自我表達有強烈渴望，討厭被規則或標籤束縛。',
+    family:'在家中常是「不引起麻煩但有自己世界的孩子」，對父母的情感需求敏感但不擅言說。可能因為太溫和被忽略，內心其實有強烈個性。',
+    social:'職場上展現獨特美感與細膩手感，在設計、攝影、廚藝、護理、寵物等領域發光。對僵化制度感到窒息，需要工作有自由揮灑空間才能持續。',
+    peer:'朋友圈精且重質感，與朋友的連結偏體驗式（一起旅行、看展、做菜）。較少口頭表達感受，但會用行動或作品傳達在意。' },
+  ESTP: { name:'企業家', emoji:'⚡',
+    archetype:'敏捷果決的行動派，活在當下且不畏挑戰。對風險評估有天然直覺，最擅長在動態局勢中即時決策。',
+    family:'在家中常是「最會帶氣氛但也最會闖禍的孩子」，活力外放且敢於嘗試。可能因為衝動而與較保守的家人衝突，但你只是反應比別人快。',
+    social:'職場上是現場應變高手，在業務、運動產業、急救、創業初期等需要當機立斷的場合發光。對靜態長期規劃缺乏耐心，靠衝刺而非馬拉松取勝。',
+    peer:'朋友圈廣大且熱鬧，是party的靈魂人物。對朋友義氣相挺、樂於分享資源。較少深入情感對話，但會用「一起做點瘋狂的事」表達親密。' },
+  ESFP: { name:'表演者', emoji:'🎭',
+    archetype:'天生的快樂製造機，活在感官與當下的豐富體驗中。對人、色彩、音樂、食物有高度敏銳，是天然的氣氛製造者。',
+    family:'在家中常是「最有趣最會撒嬌的孩子」，把家裡的氣氛變輕鬆。可能因為太活潑而被父母期望「認真一點」，但你的生命力本身就是禮物。',
+    social:'職場上是團隊的歡樂能量，在表演、業務、活動、餐飲、零售等強調體驗的領域發光。對長時間獨處與抽象規劃感到窒息，需要與人互動才能充電。',
+    peer:'朋友圈龐大且熱情，每場聚會你都是焦點。對朋友的感情表達直接且強烈，討厭冷戰，遇衝突會立即想辦法化解。' },
+};
+
+// 4 層性格的元資訊
+const _ETHR_MBTI_LAYERS = {
+  archetype: { label:'原型性格',   icon:'🌱', desc:'天生本質、最深層的人格驅動傾向' },
+  family:    { label:'原生家庭',   icon:'🏠', desc:'在父母/手足關係中形塑的角色性格' },
+  social:    { label:'社會化',     icon:'💼', desc:'在職場/公共場合對外的形象與行為' },
+  peer:      { label:'同儕關係',   icon:'👥', desc:'在朋友圈/親密同伴間的真實樣貌' },
+};
+
+// 4 層 MBTI 顯示狀態
+let _ethrMbtiActiveLayer = 'archetype';
+let _ethrMbtiCurrentType = '';
+
+function _renderEthrMbtiList() {
+  const listEl = document.getElementById('ethr-mbti-list');
+  if (!listEl) return;
+  const layer = _ethrMbtiActiveLayer;
+  const ordered = ['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP',
+                   'ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
+  listEl.innerHTML = ordered.map(id => {
+    const m = _ETHR_MBTI_TABLE[id];
+    if (!m) return '';
+    const isCur = (id === _ethrMbtiCurrentType);
+    return `<div class="ethr-mbti-card${isCur ? ' is-current' : ''}">
+      <div class="mbti-head">
+        <span class="mbti-id">${m.emoji} ${id}</span>
+        <span class="mbti-name">${m.name}</span>
+      </div>
+      <div class="mbti-desc">${m[layer] || '—'}</div>
+    </div>`;
+  }).join('');
+}
+
+function _bindEthrMbtiTabs() {
+  const tabs = document.querySelectorAll('.ethr-layer-tab');
+  if (!tabs.length) return;
+  tabs.forEach(btn => {
+    btn.onclick = () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _ethrMbtiActiveLayer = btn.dataset.layer;
+      _renderEthrMbtiList();
+    };
+  });
+}
+
+// 把採集到的腦波資料計算出 MBTI 並渲染到健康檢查結果頁
+function _renderEthrMbtiAnalysis(state) {
+  const section = document.getElementById('ethr-mbti-section');
+  if (!section) return;
+
+  // 沒採集到任何資料 → 整段隱藏
+  if (!state || (state.sampleCount || 0) === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  // 把健康檢查 sink 收到的樣本轉成 _etComputeMBTI 預期的 acc 結構
+  // _eegHealthSampleSink 會直接把樣本累計，但只記 sampleCount。
+  // 這裡用 state.signals/batteries 之外的全域 acc — 採集期間我們需把樣本進階累積。
+  // 實際資料來自 window._ethrAccum（下方 sink 會填入）
+  const acc = window._ethrAccum || null;
+  if (!acc || acc.attn.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  let mbti;
+  try { mbti = _etComputeMBTI(acc); } catch(e) { mbti = null; }
+  if (!mbti || !mbti.type) { section.style.display = 'none'; return; }
+
+  _ethrMbtiCurrentType = mbti.type;
+  const cur = _ETHR_MBTI_TABLE[mbti.type] || { name:'?', emoji:'❓' };
+
+  section.style.display = 'block';
+  const tag = document.getElementById('ethr-mbti-current');
+  if (tag) tag.textContent = `${cur.emoji} ${mbti.type} · ${cur.name}`;
+
+  const summary = document.getElementById('ethr-mbti-summary');
+  if (summary) {
+    const dimText = mbti.dims.map(d =>
+      `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#d32f2f' : '#1976d2'}">${d.dominant}</span> (${Math.round(d.pct)}%)`
+    ).join(' · ');
+    summary.innerHTML = `本次 ${state.sampleCount} 筆腦波資料推論結果：<b style="color:#1a237e;">${cur.emoji} ${mbti.type} ${cur.name}</b><br>${dimText}<br><span style="font-size:11px;color:#888;">下方列出 16 種 MBTI 在 4 個性格層次下的對照說明，您可切換不同層次了解自己在不同情境下的表現。</span>`;
+  }
+
+  _bindEthrMbtiTabs();
+  _renderEthrMbtiList();
+}
+// ─── /MBTI ──────────────────────────────────────────────────────────────────
 
 function _etCalcBrainColor(acc) {
   // 簡化版 MindColorAlgorithm.calc()（僅需 gamma/alpha, gamma/beta 兩個因子）

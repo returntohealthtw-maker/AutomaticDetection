@@ -40,14 +40,18 @@ public class AppUpdater {
     private static final String VERSION_URL =
             "https://backend-production-2da61.up.railway.app/api/v1/app/version";
 
-    private static final String SKIP_KEY      = "skip_apk_version";
-    private static final String TRIGGERED_KEY = "update_triggered_version";
+    private static final String SKIP_KEY        = "skip_apk_version";
+    private static final String TRIGGERED_KEY   = "update_triggered_version";
+    private static final String LAST_SHOWN_TS   = "update_dialog_last_shown_ts";
+    private static final String LAST_SHOWN_VER  = "update_dialog_last_shown_version";
+    /** 同一版本 30 分鐘內只彈一次（跨 Activity 重建 / 進程重啟都生效） */
+    private static final long COOLDOWN_MS       = 30L * 60 * 1000;
 
     /** process 內只彈一次 */
     private static volatile boolean sDialogShownThisSession = false;
 
     /**
-     * @param force true = 忽略 skip/triggered 記錄，強制顯示（給「檢查更新」按鈕用）
+     * @param force true = 忽略 skip/triggered/cooldown，強制顯示（給「檢查更新」按鈕用）
      */
     public static void checkForUpdate(final Context ctx, final boolean force) {
         if (!force && sDialogShownThisSession) return;
@@ -93,9 +97,24 @@ public class AppUpdater {
                             Log.i(TAG, "已觸發下載版本 " + triggered + "，不重複彈");
                             return;
                         }
+                        // 🆕 持久化 cooldown：同版本 30 分鐘內已彈過 → 不再彈
+                        // 解決：平板旋轉重建 Activity / 系統 kill process 後重複彈
+                        long lastShownTs   = prefs.getLong(LAST_SHOWN_TS, 0L);
+                        int  lastShownVer  = prefs.getInt(LAST_SHOWN_VER, 0);
+                        long now           = System.currentTimeMillis();
+                        if (lastShownVer == latest && (now - lastShownTs) < COOLDOWN_MS) {
+                            long remainSec = (COOLDOWN_MS - (now - lastShownTs)) / 1000;
+                            Log.i(TAG, "版本 " + latest + " 在 cooldown 內（剩 " + remainSec + " 秒），不重複彈");
+                            return;
+                        }
                     }
 
                     sDialogShownThisSession = true;
+                    // 寫入持久化 cooldown 戳記
+                    prefs.edit()
+                         .putLong(LAST_SHOWN_TS, System.currentTimeMillis())
+                         .putInt(LAST_SHOWN_VER, latest)
+                         .apply();
                     new Handler(Looper.getMainLooper()).post(() ->
                             showUpdateDialog(ctx, latest, apkUrl, notes));
                 }
