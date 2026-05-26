@@ -1433,20 +1433,66 @@
               </span>
               <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
             </button>
-            <button class="start-btn" style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 14px;" onclick="startEegTest()">
-              <span class="icon" style="font-size:20px;">🧠</span>
-              <span class="text">
-                <div class="title" style="font-size:14px;">腦波儀健康檢查</div>
-                <div class="sub">1 分鐘檢測訊號/電量/連線狀態</div>
-              </span>
-              <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
-            </button>
+            <div style="display:flex;gap:10px;">
+              <button class="start-btn" style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 14px;flex:1;" onclick="startEegTest()">
+                <span class="icon" style="font-size:20px;">🧠</span>
+                <span class="text">
+                  <div class="title" style="font-size:14px;">腦波儀健康檢查</div>
+                  <div class="sub">1 分鐘檢測訊號/電量/連線狀態</div>
+                </span>
+                <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
+              </button>
+              <button onclick="openPaidRedetectModal()" style="background:linear-gradient(135deg,#e65100,#bf360c);color:white;border:none;border-radius:16px;padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:72px;box-shadow:0 2px 8px rgba(230,81,0,0.3);">
+                <span style="font-size:20px;">🔁</span>
+                <span style="font-size:11px;line-height:1.2;text-align:center;">付款<br>重測</span>
+              </button>
+            </div>
           </div>
 
           <div class="section-title" id="home-recent-title">最近的受測者</div>
           <div id="home-recent-list">
             <div class="history-item" style="opacity:0.6;">
               <div class="hi-top"><span class="hi-name">載入中…</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 付款重測 Modal ===== -->
+        <div id="paid-redetect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-end;justify-content:center;padding:0;">
+          <div style="background:white;width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+            <!-- 標題 -->
+            <div style="background:linear-gradient(135deg,#e65100,#bf360c);color:white;padding:16px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+              <span style="font-size:22px;">🔁</span>
+              <div style="flex:1;">
+                <div style="font-size:16px;font-weight:700;">付款重測</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:2px;">為已付款但尚未完成檢測的客戶補做腦波採集</div>
+              </div>
+              <button onclick="closePaidRedetectModal()" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;flex-shrink:0;">×</button>
+            </div>
+            <!-- 搜尋框 -->
+            <div style="padding:12px 16px 8px;border-bottom:1px solid #eee;flex-shrink:0;">
+              <input id="redetect-search" type="text" placeholder="搜尋客戶姓名 / Email / 報告類型…" oninput="_filterRedetectList()"
+                style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ddd;border-radius:10px;font-size:13px;">
+              <div id="redetect-count" style="font-size:11px;color:#999;margin-top:6px;text-align:right;">載入中…</div>
+            </div>
+            <!-- 清單 -->
+            <div id="redetect-list" style="flex:1;overflow-y:auto;padding:8px 16px 16px;">
+              <div style="text-align:center;padding:24px;color:#999;">🔄 載入中…</div>
+            </div>
+            <!-- 手動輸入備用 -->
+            <div style="padding:10px 16px 16px;border-top:1px solid #eee;flex-shrink:0;background:#fafafa;">
+              <div style="font-size:11px;color:#888;margin-bottom:6px;">找不到客戶？手動輸入姓名直接進行重測：</div>
+              <div style="display:flex;gap:8px;">
+                <input id="redetect-manual-name" type="text" placeholder="輸入客戶姓名"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:10px;font-size:13px;">
+                <select id="redetect-manual-type" style="padding:9px 8px;border:1px solid #ddd;border-radius:10px;font-size:12px;color:#333;">
+                  <option value="life_script">成人腦波</option>
+                  <option value="child">兒童腦波</option>
+                  <option value="marital">夫妻關係</option>
+                  <option value="parent_child">親子關係</option>
+                </select>
+                <button onclick="_startRedetectManual()" style="background:#e65100;color:white;border:none;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">開始 →</button>
+              </div>
             </div>
           </div>
         </div>
@@ -9208,6 +9254,144 @@ function _maybePromptInitialPwdChange() {
     }
   } catch (e) { /* 沒網路也不影響使用 */ }
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔁 付款重測（開啟 Modal → 選客戶 → 直接進採集流程）
+// ───────────────────────────────────────────────────────────────────────────
+let _redetectCache = [];
+
+async function openPaidRedetectModal() {
+  const modal = document.getElementById('paid-redetect-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  _redetectCache = [];
+  document.getElementById('redetect-list').innerHTML =
+    '<div style="text-align:center;padding:24px;color:#999;">🔄 載入已付款未完成檢測名單…</div>';
+  document.getElementById('redetect-count').textContent = '載入中…';
+  try {
+    const r = await apiFetch('/payments/admin/paid-not-detected?days=180');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    _redetectCache = data.orders || [];
+    document.getElementById('redetect-count').textContent =
+      `共 ${_redetectCache.length} 筆待重測`;
+    _filterRedetectList();
+  } catch (e) {
+    document.getElementById('redetect-list').innerHTML =
+      `<div style="text-align:center;padding:24px;color:#c00;">❌ 載入失敗：${e.message}</div>`;
+    document.getElementById('redetect-count').textContent = '載入失敗';
+  }
+}
+
+function closePaidRedetectModal() {
+  const modal = document.getElementById('paid-redetect-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function _filterRedetectList() {
+  const listEl = document.getElementById('redetect-list');
+  if (!listEl) return;
+  const q = (document.getElementById('redetect-search')?.value || '').toLowerCase().trim();
+  const rows = q
+    ? _redetectCache.filter(o =>
+        (o.subject_name || '').toLowerCase().includes(q) ||
+        (o.subject_email || '').toLowerCase().includes(q) ||
+        (o.report_type || '').toLowerCase().includes(q))
+    : _redetectCache;
+
+  if (!rows.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:#999;">✅ 沒有待重測的客戶</div>';
+    return;
+  }
+
+  const REPORT_ZH = {
+    life_script: '成人腦波分析', child: '兒童腦波天賦',
+    marital: '夫妻關係報告', parent_child: '親子關係報告',
+  };
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  listEl.innerHTML = rows.map((o, i) => {
+    const kindZh = REPORT_ZH[o.report_type] || o.report_type || '—';
+    const daysAgo = o.days_since_paid != null ? `${o.days_since_paid} 天前付款` : '';
+    const reason  = o.blocked_reason || '';
+    return `
+    <div style="background:#fffaf7;border:1px solid #ffe0b2;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:15px;font-weight:700;color:#bf360c;">👤 ${esc(o.subject_name || '(未知)')}</div>
+          <div style="font-size:11px;color:#666;margin-top:3px;">
+            📑 ${esc(kindZh)}
+            ${o.subject_email ? ` · 📧 ${esc(o.subject_email)}` : ''}
+            ${o.consultant_name ? ` · 👔 ${esc(o.consultant_name)}` : ''}
+          </div>
+          <div style="font-size:10px;color:#e65100;margin-top:2px;font-weight:600;">
+            ⏰ ${daysAgo}${reason ? ` · ${esc(reason)}` : ''}
+          </div>
+        </div>
+        <button onclick="_startRedetectFromOrder(${i})"
+          style="background:#e65100;color:white;border:none;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+          🔁 開始重測
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _startRedetectFromOrder(idx) {
+  const rows = _redetectCache;
+  // 搜尋時 idx 可能對不上，改用渲染順序
+  const q = (document.getElementById('redetect-search')?.value || '').toLowerCase().trim();
+  const filtered = q
+    ? rows.filter(o =>
+        (o.subject_name || '').toLowerCase().includes(q) ||
+        (o.subject_email || '').toLowerCase().includes(q) ||
+        (o.report_type || '').toLowerCase().includes(q))
+    : rows;
+  const o = filtered[idx];
+  if (!o) return;
+  _launchRedetect(o.subject_name, o.subject_email, o.report_type, o.report_variant || 'full', o.subject_age);
+}
+
+function _startRedetectManual() {
+  const name = (document.getElementById('redetect-manual-name')?.value || '').trim();
+  if (!name) { alert('請輸入客戶姓名'); return; }
+  const type = document.getElementById('redetect-manual-type')?.value || 'life_script';
+  _launchRedetect(name, '', type, 'full', null);
+}
+
+function _launchRedetect(subjectName, subjectEmail, reportType, variant, subjectAge) {
+  // 填入全域變數，與正常付款後的流程完全一致
+  _currentSubjectName   = subjectName || '受測者';
+  _currentSubjectEmail  = subjectEmail || '';
+  _currentSubjectAge    = (subjectAge != null && subjectAge !== '') ? parseInt(subjectAge, 10) : null;
+  _currentSubjectGender = '';
+  _currentReportType    = reportType || 'life_script';
+  _currentReportVariant = variant || 'full';
+  _currentReportSubType = reportType || 'life_script';
+  _eegTestMode          = false;   // 確保走正式流程（存 DB + 觸發報告生成）
+
+  closePaidRedetectModal();
+
+  // 顯示確認提示
+  const REPORT_ZH = {
+    life_script:'成人腦波分析', child:'兒童腦波天賦',
+    marital:'夫妻關係報告', parent_child:'親子關係報告',
+  };
+  const kindZh = REPORT_ZH[reportType] || reportType;
+  const confirmed = confirm(
+    `📋 付款重測確認\n\n` +
+    `客戶：${_currentSubjectName}\n` +
+    `報告：${kindZh}（${variant}）\n\n` +
+    `確認後將直接進入腦波採集畫面，\n` +
+    `採集完成後系統自動存入資料庫並生成報告。\n\n` +
+    `請確認腦波儀已開機並配戴在客戶頭上後點「確定」。`
+  );
+  if (!confirmed) return;
+
+  // 直接跳入連線畫面（與付款成功後相同路徑）
+  goto('screen-connect');
+}
 </script>
 </body>
 </html>
