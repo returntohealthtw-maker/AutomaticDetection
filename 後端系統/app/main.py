@@ -8,13 +8,19 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.7"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.26.8"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 17
-APK_LATEST_VERSION_NAME = "1.1.6"
+APK_LATEST_VERSION_CODE = 18
+APK_LATEST_VERSION_NAME = "1.1.7"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
+    "v1.1.7 更新內容：\n"
+    "・🩺 修正腦波儀健康檢查「明明已連線卻收 0 筆」嚴重 bug\n"
+    "  原因：startStreamingEeg 重複 Connect 破壞既有 GATT 通道\n"
+    "・健康檢查結果頁加入「工程診斷資料」明確顯示 BLE callback 次數\n"
+    "・新增 getStreamingDiag bridge 方法供診斷使用\n"
+    "\n"
     "v1.1.6 更新內容：\n"
     "・修正平板橫向 ↔ 直向切換時重複跳出『發現新版本』對話框\n"
     "・修正旋轉螢幕後必須重新登入的問題（同時持久化登入狀態到 Android 端）\n"

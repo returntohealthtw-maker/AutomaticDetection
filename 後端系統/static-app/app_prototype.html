@@ -5462,15 +5462,40 @@ function _renderEegHealthResult(state, byUser) {
     card.style.background = bgMap[overallStatus] || '#fff';
   }
 
+  // 取得 Java 端串流期間的真實診斷資料（包含 connected_ticks、disconnected_ticks）
+  let streamDiag = null;
+  if (state.bridgeAvailable) {
+    try {
+      if (typeof AndroidBridge.getStreamingDiag === 'function') {
+        streamDiag = JSON.parse(AndroidBridge.getStreamingDiag() || '{}');
+      }
+    } catch(e) {}
+  }
+
   // 詳細檢查
   const checks = [];
   if (state.bridgeAvailable) {
     let bt = false;
     try { bt = JSON.parse(AndroidBridge.getBleDebugInfo() || '{}').bt_enabled || false; } catch(e) {}
     checks.push({ ok: bt, label:'🔌 藍牙開啟', val: bt ? '已開啟' : '未開啟' });
+    // 連線狀態：優先用串流期間的 connected_ticks 來判斷（更準確）
+    // 「現在已連線」可能是握手後又斷掉，所以串流時的 ticks 才是真實狀況
     let conn = false;
     try { conn = AndroidBridge.isBrainwaveConnected(); } catch(e) {}
-    checks.push({ ok: conn, label:'🧠 腦波儀連線', val: conn ? '已連線' : '未連線' });
+    if (streamDiag) {
+      const wasConnectedDuringCapture = (streamDiag.connected_ticks || 0) > 0;
+      checks.push({
+        ok: wasConnectedDuringCapture,
+        label:'🧠 採集期間連線狀態',
+        val: wasConnectedDuringCapture
+          ? `✓ 連線正常（${streamDiag.connected_ticks} 次回報）`
+          : (streamDiag.disconnected_ticks > 0
+              ? `✗ 採集期間斷線（${streamDiag.disconnected_ticks} 次斷線回報）`
+              : `✗ 整段都未收到 BLE 回呼（資料通道未啟動）`)
+      });
+    } else {
+      checks.push({ ok: conn, label:'🧠 腦波儀連線', val: conn ? '已連線' : '未連線' });
+    }
   } else {
     checks.push({ ok: false, label:'🔌 執行環境', val: '瀏覽器（無藍牙）' });
   }
@@ -5506,7 +5531,7 @@ function _renderEegHealthResult(state, byUser) {
 
   const checkBox = document.getElementById('ethr-checks');
   if (checkBox) {
-    checkBox.innerHTML = checks.map(c => {
+    let html = checks.map(c => {
       const icon = c.ok === null ? 'ℹ️' : (c.ok ? '✅' : '❌');
       const color = c.ok === null ? '#1565c0' : (c.ok ? '#2e7d32' : '#c62828');
       return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 10px;background:#fafafa;border-radius:10px;">
@@ -5514,6 +5539,36 @@ function _renderEegHealthResult(state, byUser) {
         <span style="color:${color};font-weight:600;text-align:right;">${c.val}</span>
       </div>`;
     }).join('');
+
+    // 🔬 真實診斷區塊：給工程師看細節，避免「明明連得到但拿不到資料」的疑惑
+    if (streamDiag || sampleCount === 0) {
+      html += '<div style="margin-top:12px;padding:10px;background:#f3e5f5;border-left:4px solid #9c27b0;border-radius:8px;font-size:11px;color:#4a148c;line-height:1.7;">';
+      html += '<b>🔬 工程診斷資料（協助排查）</b><br>';
+      if (streamDiag) {
+        html += `· Java 推送樣本數：${streamDiag.samples || 0} 筆<br>`;
+        html += `· BrainwaveValue callback：${streamDiag.connected_ticks || 0} 次<br>`;
+        html += `· BrainwaveDisconnected callback：${streamDiag.disconnected_ticks || 0} 次<br>`;
+        html += `· Java 計時：${streamDiag.elapsed_sec || 0} 秒<br>`;
+        html += `· 結束時 BLE bConnected：${streamDiag.connected_now ? 'true ✓' : 'false ✗'}<br>`;
+      } else {
+        html += '· 無法讀取 Java 端統計（舊版 APK，請先升級到 v1.1.7+）<br>';
+      }
+      html += `· JS 端收到 onEegSample：${sampleCount} 次<br>`;
+      // 判讀結論
+      if (streamDiag) {
+        if ((streamDiag.connected_ticks || 0) === 0 && (streamDiag.disconnected_ticks || 0) === 0) {
+          html += '<br>📌 <b>判讀</b>：BLE 從未觸發 callback。常見原因：藍牙在採集期間被關閉、進程被系統殺、ble 物件未初始化。';
+        } else if ((streamDiag.disconnected_ticks || 0) > 0 && (streamDiag.connected_ticks || 0) === 0) {
+          html += '<br>📌 <b>判讀</b>：BLE 整段都回報「未連線」。腦波儀可能斷電、距離過遠、或 ThinkGear 資料通道沒啟動。請確認電源燈亮起並重新配對。';
+        } else if ((streamDiag.connected_ticks || 0) > 0 && (streamDiag.samples || 0) === 0) {
+          html += '<br>📌 <b>判讀</b>：BLE 連線正常但所有樣本都沒推進 WebView。可能是 webView.evaluateJavascript 失敗，需檢視 logcat。';
+        } else if ((streamDiag.samples || 0) > 0 && sampleCount === 0) {
+          html += '<br>📌 <b>判讀</b>：Java 有推樣本但 JS 端沒收到。window.JSBridge.onEegSample 可能被覆寫或拋例外。';
+        }
+      }
+      html += '</div>';
+    }
+    checkBox.innerHTML = html;
   }
 }
 

@@ -52,6 +52,12 @@ public class WebAppActivity extends Activity {
      *  但 m_Callback / clsEeg 可能被 GC，導致連線資訊遺失。 */
     private CLS_BrainWave ble;
 
+    // 串流診斷計數器（給 getStreamingDiag 讀取，讓使用者在結果頁看到真實狀態）
+    private static volatile int  sStreamDiagSampleCount = 0;
+    private static volatile int  sStreamDiagConnectedTicks = 0;
+    private static volatile int  sStreamDiagDisconnectedTicks = 0;
+    private static volatile long sStreamDiagStartMs = 0L;
+
     private static final int REQ_PERMISSION_BLE     = 1111;
     private static final int REQ_PERMISSION_STORAGE = 1;
 
@@ -312,9 +318,22 @@ public class WebAppActivity extends Activity {
             new Handler(Looper.getMainLooper()).post(() -> {
                 try {
                     if (ble == null) ble = new CLS_BrainWave();
+                    final long startMs = System.currentTimeMillis();
+                    final int[] sampleCount = { 0 };
+                    final int[] callbackCount = { 0 };
+                    final int[] connectedTickCount = { 0 };
+                    final int[] disconnectedTickCount = { 0 };
+                    sStreamDiagSampleCount = 0;
+                    sStreamDiagConnectedTicks = 0;
+                    sStreamDiagDisconnectedTicks = 0;
+                    sStreamDiagStartMs = startMs;
+
                     ble.SetCallback((cmd, val) -> {
+                        callbackCount[0]++;
                         CLS_PARAM sp = new CLS_PARAM();
                         if (cmd == sp.BrainwaveValue) {
+                            connectedTickCount[0]++;
+                            sStreamDiagConnectedTicks++;
                             int attn  = CLS_DATA.iAttention;
                             int medi  = CLS_DATA.iMeditation;
                             int delta = bandTo100(CLS_DATA.iDelta);
@@ -323,19 +342,51 @@ public class WebAppActivity extends Activity {
                             int beta  = bandTo100((CLS_DATA.iLowBeta  + CLS_DATA.iHighBeta)  / 2);
                             int gamma = bandTo100((CLS_DATA.iLowGamma + CLS_DATA.iHighGamma) / 2);
                             int bat   = ble.getBatteryLevel();
+                            sampleCount[0]++;
+                            sStreamDiagSampleCount++;
                             String json = String.format(
                                 "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
                                 "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d}",
                                 attn, medi, delta, theta, alpha, beta, gamma, bat);
                             webView.post(() -> webView.evaluateJavascript(
                                 "window.JSBridge&&window.JSBridge.onEegSample('" + json + "')", null));
+                        } else if (cmd == sp.BrainwaveDisconnected) {
+                            disconnectedTickCount[0]++;
+                            sStreamDiagDisconnectedTicks++;
                         }
                     });
-                    ble.Connect(WebAppActivity.this);
+
+                    // ⚠️ 重要：已連線就不要再 Connect()，避免破壞既有 GATT 通道
+                    // 之前的 bug：每次進入 detect 畫面都 Connect → 重新 BLE 握手 →
+                    // 60 秒內可能來不及完成 ThinkGear 資料通道，導致 0 筆樣本
+                    boolean alreadyConnected = false;
+                    try { alreadyConnected = ble.bConnectedSafe(); } catch (Throwable ignore) {}
+                    android.util.Log.i("WebAppActivity", "startStreamingEeg: alreadyConnected=" + alreadyConnected);
+                    if (!alreadyConnected) {
+                        ble.Connect(WebAppActivity.this);
+                    }
                 } catch (Throwable t) {
                     android.util.Log.e("WebAppActivity", "startStreamingEeg", t);
                 }
             });
+        }
+
+        /**
+         * 健康檢查結果頁專用：回傳本次串流期間實際收到的樣本/狀態統計
+         * 解決：UI 顯示「未連線」但實際採集中 BLE 在運作 → 提供真實診斷數據。
+         */
+        @JavascriptInterface
+        public String getStreamingDiag() {
+            try {
+                long elapsed = sStreamDiagStartMs > 0
+                    ? (System.currentTimeMillis() - sStreamDiagStartMs) / 1000 : 0;
+                return String.format(
+                    "{\"samples\":%d,\"connected_ticks\":%d,\"disconnected_ticks\":%d,\"elapsed_sec\":%d,\"connected_now\":%s}",
+                    sStreamDiagSampleCount, sStreamDiagConnectedTicks, sStreamDiagDisconnectedTicks,
+                    elapsed,
+                    (ble != null && ble.bConnectedSafe()) ? "true" : "false"
+                );
+            } catch (Throwable t) { return "{\"samples\":0,\"error\":\"" + t.getMessage() + "\"}"; }
         }
 
         /** screen-detect 離開（結束採集）時呼叫，停止推送並恢復空 callback。 */
