@@ -223,6 +223,26 @@ public class WebAppActivity extends Activity {
         });
     }
 
+    /**
+     * Configuration change（包含 rotation / 折疊 / 字級 / 暗色模式 / 語言）：
+     * 因為 AndroidManifest 已經宣告 `configChanges`，系統不會重建 Activity，
+     * 而是把變更交給 onConfigurationChanged 處理。
+     *
+     * 我們什麼都不做（保留所有狀態：WebView 內容、登入 token、AppUpdater 旗標、
+     * 檢測中的腦波串流），只把事件丟回 super 即可。
+     *
+     * 主要解決：
+     *   - 平板橫向 ↔ 直向切換時，重複跳出「發現新版本」對話框
+     *   - 旋轉後使用者必須重新登入
+     *   - 旋轉時正在進行的檢測被中斷
+     */
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        android.util.Log.i("WebAppActivity", "onConfigurationChanged: orientation=" + newConfig.orientation
+                + " (Activity 不重建，所有狀態保留)");
+    }
+
     // ── Android Bridge：讓 HTML 付款成功後呼叫原生腦波檢測 ─────────────────────
     private class AndroidBridge {
 
@@ -476,6 +496,41 @@ public class WebAppActivity extends Activity {
                 return "versionName=" + BuildConfig.VERSION_NAME
                      + ";versionCode=" + BuildConfig.VERSION_CODE;
             } catch (Throwable t) { return ""; }
+        }
+
+        /**
+         * 持久化登入 token（解決：WebView localStorage 偶爾被 OEM 清掉
+         * → 加盟商每次重開 APP 都被踢回登入頁的問題）。
+         *
+         * HTML 在 _saveAuth() 成功後會呼叫此方法把 JSON token 寫到 Android 的
+         * SharedPreferences。重開 APP 時若 localStorage 是空的，HTML 會反向
+         * 呼叫 getSavedAuth() 把 token 拿回來，避免重新輸入帳號密碼。
+         */
+        @JavascriptInterface
+        public void saveAuth(String authJson) {
+            try {
+                SharedPreferences prefs = getSharedPreferences("EEGAppFile", MODE_PRIVATE);
+                prefs.edit().putString("eeg_auth_json", authJson == null ? "" : authJson).apply();
+                android.util.Log.i("WebAppActivity", "saveAuth: " + (authJson == null ? "null" : authJson.length() + " chars"));
+            } catch (Throwable t) { android.util.Log.w("WebAppActivity", "saveAuth", t); }
+        }
+
+        /** 讀回先前持久化的登入 token（HTML 開機時呼叫，作為 localStorage 失效的備援） */
+        @JavascriptInterface
+        public String getSavedAuth() {
+            try {
+                SharedPreferences prefs = getSharedPreferences("EEGAppFile", MODE_PRIVATE);
+                return prefs.getString("eeg_auth_json", "");
+            } catch (Throwable t) { return ""; }
+        }
+
+        /** 使用者主動登出時清除 */
+        @JavascriptInterface
+        public void clearSavedAuth() {
+            try {
+                SharedPreferences prefs = getSharedPreferences("EEGAppFile", MODE_PRIVATE);
+                prefs.edit().remove("eeg_auth_json").apply();
+            } catch (Throwable t) {}
         }
     }
 

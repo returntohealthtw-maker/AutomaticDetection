@@ -8,13 +8,18 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.6"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.26.7"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 16
-APK_LATEST_VERSION_NAME = "1.1.5"
+APK_LATEST_VERSION_CODE = 17
+APK_LATEST_VERSION_NAME = "1.1.6"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
+    "v1.1.6 更新內容：\n"
+    "・修正平板橫向 ↔ 直向切換時重複跳出『發現新版本』對話框\n"
+    "・修正旋轉螢幕後必須重新登入的問題（同時持久化登入狀態到 Android 端）\n"
+    "・腦波儀健康檢查：電量讀不到不再阻擋開始檢測（韌體不提供電量是正常情況）\n"
+    "\n"
     "v1.1.5 更新內容：\n"
     "・升級流程加入「升級進行中」追蹤對話框\n"
     "・點立即更新後會持續顯示『下載中』狀態，不再讓加盟商困惑\n"

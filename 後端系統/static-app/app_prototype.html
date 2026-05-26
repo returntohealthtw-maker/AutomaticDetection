@@ -4149,20 +4149,52 @@ function _toHalfWidth(s) {
 }
 
 function _getAuth() {
-  try { return JSON.parse(localStorage.getItem(_AUTH_KEY) || 'null'); }
-  catch (e) { return null; }
+  // 1) 先試 localStorage
+  try {
+    const raw = localStorage.getItem(_AUTH_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  // 2) localStorage 失敗 / 空 → 試 Android 端 SharedPreferences 備份
+  //    （某些 OEM 系統會在 APP 進背景後清 WebView 資料）
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.getSavedAuth === 'function') {
+      const backup = AndroidBridge.getSavedAuth();
+      if (backup && backup.length > 5) {
+        const parsed = JSON.parse(backup);
+        if (parsed && parsed.token) {
+          // 順手寫回 localStorage 加速下次讀取
+          try { localStorage.setItem(_AUTH_KEY, backup); } catch (e2) {}
+          console.log('[auth] 從 Android SharedPreferences 還原登入狀態');
+          return parsed;
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
 }
 function _syncAdminDevMode() {
   const isAdmin = !!((_currentUser || {}).role === 'admin');
   document.documentElement.classList.toggle('is-admin-user', isAdmin);
 }
 function _saveAuth(obj) {
-  try { localStorage.setItem(_AUTH_KEY, JSON.stringify(obj)); } catch (e) {}
+  const json = JSON.stringify(obj);
+  try { localStorage.setItem(_AUTH_KEY, json); } catch (e) {}
+  // 雙重備援：同時寫到 Android SharedPreferences（重開 APP 也找得回來）
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.saveAuth === 'function') {
+      AndroidBridge.saveAuth(json);
+    }
+  } catch (e) {}
   _currentUser = obj;
   _syncAdminDevMode();
 }
 function _clearAuth() {
   try { localStorage.removeItem(_AUTH_KEY); } catch (e) {}
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.clearSavedAuth === 'function') {
+      AndroidBridge.clearSavedAuth();
+    }
+  } catch (e) {}
   _currentUser = null;
   _syncAdminDevMode();
 }

@@ -65,7 +65,14 @@
             android:name=".WebAppActivity"
             android:exported="true"
             android:label="腦波檢測系統"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|locale|fontScale|navigation|density">
+            <!--
+                configChanges：把所有 configuration change 都自己處理，
+                避免 Activity 被系統重建 → WebView 重新載入 → 重複彈「發現新版本」
+                + 主程式記憶體狀態（顧問登入、檢測中資料）被清空。
+                平板從橫向轉直向 / 折疊裝置變形 / 系統字級 / 暗色模式 都不會重建 Activity。
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
