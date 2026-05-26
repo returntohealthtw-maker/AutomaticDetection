@@ -5323,8 +5323,13 @@ function _refreshEegHealthPreCheck() {
   );
   if (startBtn) {
     startBtn.disabled = !blockingOk;
-    startBtn.style.opacity = blockingOk ? '1' : '0.4';
-    startBtn.textContent = blockingOk ? '✅ 開始 1 分鐘健康檢查 →' : '⚠️ 請先確認腦波儀已連線（藍牙 / 權限 / 配對）';
+    startBtn.style.opacity = blockingOk ? '1' : '0.55';
+    // 永遠顯示「1 分鐘」字樣，避免使用者誤以為功能消失
+    // 未通過時 → 主標題保留 + 副標題提示需要先排除的問題
+    startBtn.innerHTML = blockingOk
+      ? '<div style="font-size:18px;font-weight:700;">✅ 開始 1 分鐘健康檢查 →</div>'
+      : '<div style="font-size:18px;font-weight:700;">⏱️ 開始 1 分鐘健康檢查</div>'
+        + '<div style="font-size:12px;font-weight:500;margin-top:4px;opacity:0.95;">⚠️ 請先確認腦波儀已連線（藍牙 / 權限 / 配對）</div>';
   }
 }
 
