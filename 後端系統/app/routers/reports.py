@@ -268,22 +268,49 @@ def record_report(
     if payload.session_id:
         rep = db.query(M.Report).filter(M.Report.session_id == payload.session_id).first()
 
+    # 🔑 受測者 FK 解析（避免 callback 寫入孤兒）
+    # 1. 若 session 已有 subject_id → 直接用
+    # 2. 否則用 subject_name + subject_email 在 Subject 表找
+    resolved_sid = None
+    sess_for_record = None
+    if payload.session_id:
+        sess_for_record = db.query(M.Session).filter(
+            M.Session.session_id == payload.session_id
+        ).first()
+        if sess_for_record and sess_for_record.subject_id:
+            resolved_sid = sess_for_record.subject_id
+
+    if resolved_sid is None and (payload.subject_email or payload.subject_name):
+        try:
+            sq = db.query(M.Subject)
+            if payload.subject_email:
+                cand = sq.filter(M.Subject.email == payload.subject_email).order_by(M.Subject.subject_id.desc()).first()
+                if cand:
+                    resolved_sid = cand.subject_id
+            if resolved_sid is None and payload.subject_name:
+                # name 比對：避免 placeholder 誤命中
+                PLACEHOLDER = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+                if payload.subject_name not in PLACEHOLDER:
+                    cands = db.query(M.Subject).filter(M.Subject.name == payload.subject_name).all()
+                    if len(cands) == 1:
+                        resolved_sid = cands[0].subject_id
+        except Exception:
+            pass
+
     # pending_send=1 表示外部系統尚未寄信，留給後台手動觸發
     email_sent_value = 0 if payload.pending_send else 1
 
     # ── 系統級規則：所有報告都必須走 admin 人工審核才能寄信 ──
-    # 不論 payload.pending_send 是 0 或 1，一律當成 pending（email_sent=0）。
-    # 即使外部 React app 仍嘗試發信（過渡期），DB 仍紀錄 email_sent=0，
-    # admin 在「報告管理」介面看到後才手動點「📨 預覽後寄信」。
     if rep is None:
         rep = M.Report(
             session_id     = payload.session_id,
+            subject_id     = resolved_sid,        # 🔑 寫入 FK
             status         = "completed",
             pdf_url        = payload.pdf_url,
             notify_email   = payload.subject_email or None,
             email_sent     = 0,  # 強制：等待 admin 核准
             talent_report_kind = f"{payload.report_type}_{payload.variant}",
-            client_summary = f'{{"subject_name":"{payload.subject_name}","source":"{payload.source}"}}',
+            client_summary = f'{{"subject_name":"{payload.subject_name}","source":"{payload.source}","subject_id":{resolved_sid or "null"}}}',
             completed_at   = func.now(),
         )
         db.add(rep)
@@ -291,10 +318,16 @@ def record_report(
         rep.pdf_url = payload.pdf_url
         rep.status = "completed"
         rep.notify_email = payload.subject_email or rep.notify_email
+        if resolved_sid and not rep.subject_id:
+            rep.subject_id = resolved_sid    # 🔑 補寫 FK
         # 強制 reset 為待核准（即使之前已寄過，重新生成後也必須重審）
         rep.email_sent = 0
         rep.talent_report_kind = f"{payload.report_type}_{payload.variant}"
         rep.completed_at = func.now()
+
+    # 順便補強 Session.subject_id（如果還沒寫）
+    if sess_for_record and resolved_sid and not sess_for_record.subject_id:
+        sess_for_record.subject_id = resolved_sid
 
     db.commit()
     db.refresh(rep)
@@ -999,9 +1032,25 @@ def import_from_gcs(
             "report_id": existing.report_id,
         }
 
-    # 4) 建立 Report row（孤兒：session_id=NULL）
+    # 🔑 在建立前嘗試解析 subject_id（避免變孤兒報告）
+    resolved_sid = None
+    try:
+        PLACEHOLDER = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+        if payload.subject_email:
+            cand = db.query(M.Subject).filter(M.Subject.email == payload.subject_email).first()
+            if cand:
+                resolved_sid = cand.subject_id
+        if resolved_sid is None and subject_name and subject_name not in PLACEHOLDER:
+            cands = db.query(M.Subject).filter(M.Subject.name == subject_name).all()
+            if len(cands) == 1:
+                resolved_sid = cands[0].subject_id
+    except Exception:
+        pass
+
+    # 4) 建立 Report row（孤兒：session_id=NULL；但盡可能寫入 subject_id）
     rep = M.Report(
         session_id     = None,
+        subject_id     = resolved_sid,           # 🔑 寫入 FK
         status         = "completed",
         pdf_url        = signed,
         notify_email   = payload.subject_email or None,
@@ -1009,6 +1058,7 @@ def import_from_gcs(
         talent_report_kind = f"{payload.report_type}_{payload.variant}",
         client_summary = (
             '{"subject_name":"' + (subject_name or "") + '",'
+            '"subject_id":' + (str(resolved_sid) if resolved_sid else "null") + ','
             '"source":"manual_import_from_gcs",'
             '"object_name":"' + obj + '",'
             '"imported_by":"' + (user.name or "") + '",'
@@ -1090,9 +1140,10 @@ def all_subjects_overview(
       - 該受測者最新一次檢測的腦波平均（attention / meditation /
         bands_avg: theta/alpha/beta/gamma）
 
-    比對策略：先用 Subject.email、Subject.name 同時對應到 Session（
-      sessions 表沒有 subject_id 欄位，所以靠 subject_name 做次要比對）。
-      Report 透過 session_id 反查。
+    比對策略（雙軌）：
+      A. 主軌：用 Subject.subject_id 反查 Session.subject_id 與 Report.subject_id
+      B. 副軌（向下相容）：對於還沒回填 subject_id 的舊 Session/Report，
+         才退到 subject_name 字串比對。
     """
     user = require_user(authorization, db)
     if user.role != "admin":
@@ -1110,33 +1161,54 @@ def all_subjects_overview(
         ))
     subjects = subj_q.order_by(M.Subject.subject_id.desc()).limit(limit).all()
 
-    # 2) 顧問清單：subject.consultant_id → Consultant
+    # 2) 顧問清單
     cons_ids = {s.consultant_id for s in subjects if s.consultant_id}
     cons_map: dict[int, M.Consultant] = {}
     if cons_ids:
         for c in db.query(M.Consultant).filter(M.Consultant.consultant_id.in_(cons_ids)).all():
             cons_map[c.consultant_id] = c
 
-    # 3) 取得所有相關 Session（先用 email/name 雙向比對）
-    #    為避免一次拉太多，只取最近 N 筆 session，再 in-memory 比對
+    subject_id_set = {s.subject_id for s in subjects}
     name_set  = {s.name for s in subjects if s.name}
-    email_set = {s.email for s in subjects if s.email}
-    sessions_q = db.query(M.Session).order_by(M.Session.session_id.desc())
-    sessions = sessions_q.limit(5000).all()
-    # 用 (name, age) 不夠穩，用 name 為主、email 為輔
-    sess_by_name: dict[str, list[M.Session]] = {}
-    for s in sessions:
-        if s.subject_name in name_set:
-            sess_by_name.setdefault(s.subject_name, []).append(s)
+
+    # 3A) 主軌：subject_id 直接命中（含 NULL 過濾）
+    sess_by_subj: dict[int, list[M.Session]] = {}
+    if subject_id_set:
+        sess_rows_fk = db.query(M.Session).filter(
+            M.Session.subject_id.in_(list(subject_id_set))
+        ).order_by(M.Session.session_id.desc()).all()
+        for s in sess_rows_fk:
+            sess_by_subj.setdefault(s.subject_id, []).append(s)
+
+    # 3B) 副軌：對於 subject_id IS NULL 的舊 Session，用 name 比對補齊
+    sess_by_name_legacy: dict[str, list[M.Session]] = {}
+    if name_set:
+        legacy_sessions = db.query(M.Session).filter(
+            M.Session.subject_id.is_(None),
+            M.Session.subject_name.in_(list(name_set)),
+        ).order_by(M.Session.session_id.desc()).limit(5000).all()
+        for s in legacy_sessions:
+            sess_by_name_legacy.setdefault(s.subject_name, []).append(s)
 
     # 4) 取得這些 session 對應的 Report
     all_sess_ids = []
-    for arr in sess_by_name.values():
+    for arr in sess_by_subj.values():
+        all_sess_ids.extend([x.session_id for x in arr])
+    for arr in sess_by_name_legacy.values():
         all_sess_ids.extend([x.session_id for x in arr])
     rep_map: dict[int, M.Report] = {}
     if all_sess_ids:
         for r in db.query(M.Report).filter(M.Report.session_id.in_(all_sess_ids)).all():
             rep_map[r.session_id] = r
+
+    # 4B) 還要把「Report.subject_id 直接連到的 orphan reports」（沒有 session_id）撈進來
+    orphan_reps_by_sid: dict[int, list[M.Report]] = {}
+    if subject_id_set:
+        for r in db.query(M.Report).filter(
+            M.Report.subject_id.in_(list(subject_id_set)),
+            M.Report.session_id.is_(None),
+        ).order_by(M.Report.report_id.desc()).all():
+            orphan_reps_by_sid.setdefault(r.subject_id, []).append(r)
 
     # 5) helper：年齡計算
     def _age_from_birth(birth: str) -> Optional[int]:
@@ -1154,15 +1226,29 @@ def all_subjects_overview(
     out = []
     for s in subjects:
         cons = cons_map.get(s.consultant_id) if s.consultant_id else None
-        sess_list = sess_by_name.get(s.name, [])
+        # 🔑 雙軌合併：FK 命中的 + 舊資料 name 命中的
+        sess_list_fk     = sess_by_subj.get(s.subject_id, [])
+        sess_list_legacy = sess_by_name_legacy.get(s.name, [])
+        # 用 session_id 去重
+        seen_sids = set()
+        sess_list: list = []
+        for ss in (sess_list_fk + sess_list_legacy):
+            if ss.session_id in seen_sids:
+                continue
+            seen_sids.add(ss.session_id)
+            sess_list.append(ss)
+        sess_list.sort(key=lambda x: x.session_id, reverse=True)
         latest = sess_list[0] if sess_list else None
 
-        # 該受測者所有報告（最近 20 筆）
+        # 該受測者所有報告（含 orphan reports，最多 20 筆）
         rep_list = []
+        seen_rids = set()
+        # 透過 session 連結的
         for ss in sess_list[:20]:
             r = rep_map.get(ss.session_id)
-            if not r:
+            if not r or r.report_id in seen_rids:
                 continue
+            seen_rids.add(r.report_id)
             rep_list.append({
                 "report_id":    r.report_id,
                 "session_id":   r.session_id,
@@ -1175,6 +1261,25 @@ def all_subjects_overview(
                 "report_type":  ss.report_type,
                 "session_at":   ss.created_at if hasattr(ss, "created_at") else None,
             })
+        # Report.subject_id 直接連到、但 session_id IS NULL 的孤兒報告
+        for r in orphan_reps_by_sid.get(s.subject_id, [])[:20]:
+            if r.report_id in seen_rids:
+                continue
+            seen_rids.add(r.report_id)
+            rep_list.append({
+                "report_id":    r.report_id,
+                "session_id":   None,
+                "report_kind":  r.talent_report_kind,
+                "status":       r.status,
+                "pdf_url":      r.pdf_url,
+                "email_sent":   r.email_sent,
+                "notify_email": r.notify_email,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "report_type":  None,
+                "session_at":   None,
+                "no_session":   True,
+            })
+        rep_list = rep_list[:20]
 
         # 最新一次檢測的腦波平均
         bw = None

@@ -273,6 +273,23 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
             },
         )
 
+    # 🔑 受測者真實姓名解析：若 subject_id 有傳，從 Subject 主檔取真名，避免 PDF 顯示「受測者」
+    PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+    resolved_name = req.subject_name
+    resolved_email = req.subject_email
+    if req.subject_id:
+        try:
+            subj = db.query(M.Subject).filter(M.Subject.subject_id == req.subject_id).first()
+            if subj:
+                if not resolved_name or resolved_name in PLACEHOLDER_NAMES:
+                    resolved_name = subj.name
+                    logger.info("[report-gen/start] 用 subject_id=%s 反查真名: %s -> %s",
+                                req.subject_id, req.subject_name, resolved_name)
+                if not resolved_email:
+                    resolved_email = subj.email
+        except Exception as e:
+            logger.warning("[report-gen/start] 反查 Subject 失敗: %s", e)
+
     use_ext = req.use_external
     if use_ext is None:
         use_ext = report_orchestrator.is_external_available(req.report_type)
@@ -328,14 +345,14 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
 
         result = report_orchestrator.trigger_external_report(
             report_type=req.report_type,
-            subject_name=req.subject_name,
-            subject_email=req.subject_email or "",
+            subject_name=resolved_name,                # 🔑 用解析後的真名（不是 placeholder）
+            subject_email=resolved_email or "",
             subject_age=req.subject_age,
             subject_gender=req.subject_gender or "",
             variant=req.variant,
             chapters_to_generate=req.chapters_to_generate,
             brainwave_data=bw,
-            extra={"session_id": req.session_id},  # 給外部 React App 在 callback /reports/record 時帶上
+            extra={"session_id": req.session_id, "subject_id": req.subject_id},
         )
 
         # ── 夫妻 / 親子 REST 模式：外部系統不回呼 /reports/record，主動寫 DB ──
@@ -393,14 +410,13 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         }
 
     # 內建 Gemini 生成（背景任務）→ 生 PDF → 上傳 GCS → 寄 email 連結
-    # 這是「方案 C」的核心：使用者下單後可以離開頁面，後端默默跑，完成寄信
     job_id = report_generator.start_full_report(
-        subject_name=req.subject_name,
+        subject_name=resolved_name,                  # 🔑 用真名
         report_type=req.report_type,
         variant=req.variant,
         brainwave_data=bw,
         chapters_to_generate=req.chapters_to_generate,
-        subject_email=req.subject_email,
+        subject_email=resolved_email,
         subject_age=req.subject_age,
         subject_gender=req.subject_gender,
         session_id=req.session_id,
