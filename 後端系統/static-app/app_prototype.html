@@ -5256,72 +5256,76 @@ function _refreshEegHealthPreCheck() {
     }
   } catch(e) {}
 
-  // 即時電量（advisory）
+  // 即時電量（純資訊用 — 不作為連線判斷依據）
+  // 部分機型（小米/某些 BLE 驅動）在沒裝置時也會回固定 100，所以電量不能作為連線證據
   let bat = -1;
   try { bat = bridge.getDeviceBattery && bridge.getDeviceBattery(); } catch(e) {}
   if (typeof bat !== 'number') bat = parseInt(bat, 10);
   if (isNaN(bat)) bat = -1;
   const batReadable = (bat >= 1 && bat <= 100);
 
-  // 連線狀態（硬性條件）
+  // 連線狀態（硬性條件 — 來自 ThinkGear 連線旗標）
   let connected = false;
   try { connected = bridge.isBrainwaveConnected && bridge.isBrainwaveConnected(); } catch(e) {}
 
-  // 反向推論：若電量讀得到 / BLE 已連線，藍牙必然是開的
-  // （這層推論修正 OEM 系統 isEnabled() 偶爾回 false 但實際運作正常的情況）
-  const liveSignals = batReadable || connected || (dbg && dbg.ble_connected) || (dbg && dbg.battery_readable);
+  // 已配對裝置數（最關鍵的反向過濾條件）
   const pairedCount = (dbg && (dbg.paired || dbg.paired_count)) || 0;
+  const hasMindsensor = !!(dbg && dbg.mindsensor);
+
+  // ── 真正連線判定（嚴格）──
+  // 必要條件：(1) BLE 連線旗標為 true  且  (2) Android 系統內有配對裝置
+  // 不允許單憑「電量讀得到」推論為已連線（前述機型 false-positive）
+  const trulyConnected = !!(connected && (pairedCount > 0 || hasMindsensor));
 
   if (dbg) {
-    const btReallyOn = !!dbg.bt_enabled || liveSignals;
     rows.push({ ok: !dbg.adapter_null, label:'藍牙模組', val: dbg.adapter_null ? '✗ 系統未提供藍牙服務' : '✓ 可用' });
     rows.push({
-      ok: btReallyOn,
+      ok: !!dbg.bt_enabled,
       label:'藍牙開啟',
-      val: dbg.bt_enabled
-        ? '✓ 已開啟'
-        : (liveSignals ? '✓ 已開啟（已偵測到腦波儀活動）' : '✗ 未開啟（請到系統設定開啟）')
+      val: dbg.bt_enabled ? '✓ 已開啟' : '✗ 未開啟（請到系統設定開啟）'
     });
     rows.push({ ok: !!dbg.perm_connect, label:'連線權限', val: dbg.perm_connect ? '✓ 已授權' : '✗ 未授權（請允許 APP 取得藍牙權限）' });
     rows.push({ ok: !!dbg.perm_scan,    advisory:true, label:'掃描權限',   val: dbg.perm_scan    ? '✓ 已授權' : 'ℹ️ 未授權（已連線即可，下次重連需要）' });
     if (dbg.perm_fine_loc !== undefined) {
       rows.push({ ok: !!dbg.perm_fine_loc, advisory:true, label:'位置權限',   val: dbg.perm_fine_loc ? '✓ 已授權' : 'ℹ️ 未授權（部分 Android 需要）' });
     }
-    // 已配對裝置 — 修正 paired vs paired_count 欄位名不一致 bug
     rows.push({
       ok: pairedCount > 0,
-      advisory:true,
       label:'已配對裝置',
-      val: pairedCount + ' 台' + (dbg.mindsensor ? '（含：' + dbg.mindsensor + '）' : (liveSignals ? '（系統未列出但已偵測到活動）' : ''))
+      val: pairedCount > 0
+        ? (pairedCount + ' 台' + (dbg.mindsensor ? '（含：' + dbg.mindsensor + '）' : ''))
+        : '✗ 未配對（請到系統藍牙設定先配對腦波儀）'
     });
   }
 
-  // 腦波儀連線：用「即時跡象」而非單一 isBrainwaveConnected 判斷
-  // 即時跡象 = 電量可讀 OR isBrainwaveConnected OR ble_connected 旗標 OR battery_readable
+  // 腦波儀連線：硬性條件，不再被電量誤導
   rows.push({
-    ok: connected || liveSignals,
+    ok: trulyConnected,
     label:'腦波儀連線',
-    val: (connected || liveSignals)
-      ? (connected ? '✓ 已連線' : '✓ 已偵測到腦波儀活動')
-      : '✗ 未連線（請按下方「重新配對」）'
+    val: trulyConnected
+      ? '✓ 已連線'
+      : (connected && pairedCount === 0
+          ? '✗ 未連線（藍牙旗標為連線但無配對裝置；請先在系統設定配對腦波儀）'
+          : '✗ 未連線（請確認腦波儀已開機並完成配對）')
   });
 
-  // 即時電量
-  if (batReadable) {
-    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ 已讀取（' + bat + '%，部分機種為固定值）' });
-  } else if (connected) {
-    rows.push({ ok:true, advisory:true, label:'電量讀數', val: 'ℹ️ 韌體未提供（連線正常即可使用）' });
+  // 即時電量（純資訊用）
+  if (batReadable && trulyConnected) {
+    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ ' + bat + '%' });
+  } else if (batReadable && !trulyConnected) {
+    // 機型/驅動回傳的固定假值，不應顯示為綠色
+    rows.push({ ok:false, advisory:true, label:'電量讀數', val: 'ℹ️ 讀到 ' + bat + '%（無連線時為機型固定值，非真實電量）' });
   } else {
-    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（裝置可能未開機，請先確認連線）' });
+    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（請先連線腦波儀）' });
   }
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
 
-  // ✅ 開始按鈕條件：腦波儀有任何活動跡象（連線 OR 電量可讀）+ 基本權限 OK
-  const blockingOk = (connected || liveSignals) && (
+  // ✅ 開始按鈕條件：必須「真的連線」且基本權限 OK
+  const blockingOk = trulyConnected && (
     !dbg || (
       !dbg.adapter_null &&
-      (!!dbg.bt_enabled || liveSignals) &&
+      !!dbg.bt_enabled &&
       dbg.perm_connect
     )
   );
