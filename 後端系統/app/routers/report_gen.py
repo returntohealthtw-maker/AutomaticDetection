@@ -93,6 +93,7 @@ class StartRequest(BaseModel):
     subject_name:         str  = "受測者"
     subject_age:          Optional[int] = None
     subject_gender:       Optional[str] = ""
+    subject_id:           Optional[int] = None        # 🔑 受測者主檔 FK，避免報告變孤兒
     report_type:          str  = "life_script"
     variant:              str  = "full"
     brainwave_data:       Optional[Dict[str, Any]] = None
@@ -290,12 +291,26 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                     M.Report.session_id == req.session_id
                 ).first()
             if existing_rep is None:
+                # 🔑 解析 subject_id：前端有傳 → 直接用；否則從 session 反查
+                resolved_sid = req.subject_id
+                if resolved_sid is None and req.session_id:
+                    try:
+                        sess = db.query(M.Session).filter(
+                            M.Session.session_id == req.session_id
+                        ).first()
+                        if sess and sess.subject_id:
+                            resolved_sid = sess.subject_id
+                    except Exception:
+                        pass
+
                 pending_summary = _json.dumps({
                     "subject_name": req.subject_name,
+                    "subject_id": resolved_sid,
                     "source": "report-gen/start (pending)",
                 }, ensure_ascii=False)
                 pending_rep = M.Report(
                     session_id          = req.session_id,
+                    subject_id          = resolved_sid,    # ← 雙保險 FK
                     status              = "generating",
                     pdf_url             = None,
                     notify_email        = req.subject_email or None,
@@ -306,8 +321,8 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                 )
                 db.add(pending_rep)
                 db.commit()
-                logger.info("[report-gen/start] 建立 pending Report (session_id=%s, kind=%s_%s)",
-                            req.session_id, req.report_type, req.variant)
+                logger.info("[report-gen/start] 建立 pending Report (session_id=%s, subject_id=%s, kind=%s_%s)",
+                            req.session_id, resolved_sid, req.report_type, req.variant)
         except Exception as pe:
             logger.warning("[report-gen/start] 建立 pending Report 失敗: %s", pe)
 

@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.2"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.26.3"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 16
@@ -200,6 +200,42 @@ async def http_exc_handler(request: Request, exc: StarletteHTTPException):
     ), status_code=exc.status_code)
 
 
+def _run_lightweight_migrations():
+    """新增缺失欄位（SQLAlchemy create_all 不會 ALTER 既存表）
+
+    冪等：每次都檢查欄位是否存在，不存在才 ADD COLUMN。
+    支援 SQLite / PostgreSQL / MySQL（檢查 information_schema 或 PRAGMA）。
+    """
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+
+    def has_column(table: str, col: str) -> bool:
+        try:
+            cols = [c["name"] for c in insp.get_columns(table)]
+            return col in cols
+        except Exception:
+            return False
+
+    pending = []
+    if not has_column("sessions", "subject_id"):
+        pending.append("ALTER TABLE sessions ADD COLUMN subject_id INTEGER NULL")
+    if not has_column("reports", "subject_id"):
+        pending.append("ALTER TABLE reports ADD COLUMN subject_id INTEGER NULL")
+
+    if not pending:
+        print("[DB-MIGRATE] all columns up-to-date, nothing to do")
+        return
+
+    with engine.connect() as conn:
+        for sql in pending:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+                print(f"[DB-MIGRATE] ✅ {sql}")
+            except Exception as e:
+                print(f"[DB-MIGRATE] ⚠️ {sql} → {e}")
+
+
 @app.on_event("startup")
 async def startup():
     """
@@ -209,6 +245,7 @@ async def startup():
     """
     try:
         Base.metadata.create_all(bind=engine)
+        _run_lightweight_migrations()
         ok = check_connection()
         print(f"[DB] {'OK' if ok else 'ERROR'}")
     except Exception as e:

@@ -66,9 +66,28 @@ def save_eeg_stats(
     bands = payload.bands_avg or {}
     now_ts = int(time.time())
 
-    # 1. 建一個 Session
+    # 🔑 受測者 FK 解析（核心修正：避免報告變孤兒）
+    # 1. 優先用前端傳來的 subject_id
+    # 2. 若沒帶，依 (consultant_id + name + birth_date) 比對既存 Subject 記錄
+    # 3. 仍找不到就 NULL（admin 可在「報告管理」事後手動關聯）
+    resolved_subject_id = payload.subject_id
+    if resolved_subject_id is None and payload.subject_name:
+        try:
+            q = db.query(M.Subject).filter(M.Subject.name == payload.subject_name)
+            if user.role != "admin":
+                q = q.filter(M.Subject.consultant_id == user.consultant_id)
+            if payload.subject_birthday:
+                q = q.filter(M.Subject.birth_date == payload.subject_birthday)
+            cand = q.order_by(M.Subject.subject_id.desc()).first()
+            if cand:
+                resolved_subject_id = cand.subject_id
+        except Exception:
+            resolved_subject_id = None
+
+    # 1. 建一個 Session（同時寫入 subject_id FK）
     sess = M.Session(
         consultant_name = user.name,
+        subject_id      = resolved_subject_id,           # ← 新增 FK
         subject_name    = payload.subject_name,
         subject_birthday= payload.subject_birthday,
         subject_gender  = payload.subject_gender,

@@ -23,7 +23,9 @@ class Session(Base):
 
     session_id       = Column(Integer, primary_key=True, autoincrement=True)
     consultant_name  = Column(String(50), nullable=True)     # 執行檢測的顧問
-    subject_name     = Column(String(50))
+    # 真正的受測者主檔 FK（核心欄位；舊資料 NULL 表示未關聯，可由 admin 手動指派）
+    subject_id       = Column(Integer, ForeignKey("subjects.subject_id", ondelete="SET NULL"), nullable=True, index=True)
+    subject_name     = Column(String(50))    # 仍保留 snapshot，但顯示時優先用 subject_id JOIN 結果
     subject_birthday = Column(String(10))
     subject_gender   = Column(String(1))
     subject_age      = Column(Integer, default=0)
@@ -74,6 +76,8 @@ class Report(Base):
 
     report_id    = Column(Integer, primary_key=True, autoincrement=True)
     session_id   = Column(Integer, ForeignKey("sessions.session_id", ondelete="CASCADE"), unique=True)
+    # 受測者主檔 FK（雙保險：即使 session_id 是 NULL，仍可定位到受測者）
+    subject_id   = Column(Integer, ForeignKey("subjects.subject_id", ondelete="SET NULL"), nullable=True, index=True)
     status       = Column(String(20), default="pending")  # pending/processing/completed/failed
     pdf_url      = Column(Text, nullable=True)
     # 企業專案：客戶掃描用公開頁 token、五段摘要 JSON、Email 通知

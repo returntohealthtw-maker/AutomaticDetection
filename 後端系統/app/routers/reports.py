@@ -387,36 +387,74 @@ def list_reports(
     # 預設姓名識別（這些是「資料遺失」的指標，不是真實受測者）
     PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
 
+    # 🔑 預先撈出所有相關 subject_id 的 Subject 真實資料
+    subject_ids = set()
+    for rep, sess in rows:
+        if rep.subject_id:
+            subject_ids.add(rep.subject_id)
+        if sess and sess.subject_id:
+            subject_ids.add(sess.subject_id)
+    subj_map: dict[int, M.Subject] = {}
+    if subject_ids:
+        for s in db.query(M.Subject).filter(M.Subject.subject_id.in_(list(subject_ids))).all():
+            subj_map[s.subject_id] = s
+
+    def _calc_age(birth_date: Optional[str]) -> Optional[int]:
+        if not birth_date or len(birth_date) < 4:
+            return None
+        try:
+            from datetime import date
+            y, m, d = birth_date.split("-")
+            b = date(int(y), int(m), int(d))
+            t = date.today()
+            return t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+        except Exception:
+            return None
+
     out = []
     for rep, sess in rows:
         cons = cons_map.get(sess.consultant_name) if (sess and sess.consultant_name) else None
         fallback_name = _name_from_summary(rep.client_summary)
 
-        raw_name      = (sess.subject_name if sess else None) or fallback_name
-        subject_age   = (sess.subject_age if sess else None)
-        subject_gender = (sess.subject_gender if sess else None)
+        # 🔑 解析受測者：FK 優先 → Session.subject_name → client_summary
+        subj_record = None
+        sid = rep.subject_id or (sess.subject_id if sess else None)
+        if sid:
+            subj_record = subj_map.get(sid)
 
-        # ── 孤兒/測試報告識別：當姓名是預設值或缺失時，標示為系統測試報告 ──
-        is_placeholder = (not raw_name) or (raw_name in PLACEHOLDER_NAMES)
+        if subj_record:
+            # ✅ 已關聯到主檔，顯示真實姓名與年齡
+            raw_name        = subj_record.name
+            subject_age     = _calc_age(subj_record.birth_date)
+            subject_gender  = subj_record.gender
+            subject_email_real = subj_record.email
+        else:
+            raw_name        = (sess.subject_name if sess else None) or fallback_name
+            subject_age     = (sess.subject_age if sess else None)
+            subject_gender  = (sess.subject_gender if sess else None)
+            subject_email_real = None
+
+        # ── 孤兒/測試報告識別：未關聯主檔 + 姓名為預設值 ──
+        is_placeholder = (not subj_record) and ((not raw_name) or (raw_name in PLACEHOLDER_NAMES))
         if is_placeholder:
             ts_label = rep.completed_at.strftime("%m/%d %H:%M") if rep.completed_at else f"#{rep.report_id}"
             subject_name = f"🧪 系統測試報告 · {ts_label}"
             is_test = True
         elif raw_name and raw_name.startswith("🧪 管理員測試-"):
-            # 新版前端標記過的測試報告
             subject_name = raw_name
             is_test = True
         else:
-            subject_name = raw_name
+            subject_name = raw_name or "(無 session)"
             is_test = False
 
         out.append({
             "report_id":      rep.report_id,
             "session_id":     rep.session_id,
+            "subject_id":     sid,                          # 🔑 顯示是否已連結
             "subject_name":   subject_name,
             "subject_age":    subject_age,
             "subject_gender": subject_gender,
-            "subject_email":  rep.notify_email,
+            "subject_email":  rep.notify_email or subject_email_real,
             "report_kind":    rep.talent_report_kind,
             "report_kind_zh": _kind_zh(rep.talent_report_kind),
             "pdf_url":        rep.pdf_url,
@@ -427,7 +465,8 @@ def list_reports(
             "consultant_org": (cons.org if cons else None),
             "consultant_role": (cons.role if cons else None),
             "orphan":         (rep.session_id is None),
-            "is_test":        is_test,        # 🧪 admin 可用 is_test 過濾或一鍵清理
+            "is_test":        is_test,                      # 🧪 admin 可用 is_test 過濾或一鍵清理
+            "linked_to_subject": subj_record is not None,   # 🔗 是否已連結到 Subject 主檔
         })
     return {"ok": True, "count": len(out), "reports": out}
 
@@ -1400,6 +1439,153 @@ def admin_send_report_email(
         return {"ok": True, "report_id": report_id, "sent_to": to, "method": result.get("method", "")}
     else:
         raise HTTPException(502, f"寄信失敗：{result.get('error') or result}")
+
+
+@router.post("/admin/relink-orphan-reports")
+def admin_relink_orphan_reports(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """🔗 一鍵嘗試把孤兒報告（subject_id IS NULL）關聯回 Subject 主檔。
+
+    啟發式比對策略（依優先序）：
+      1. Report.session_id → Session.subject_id（若 Session 已關聯）
+      2. Report.session_id → Session.consultant_name + subject_name → Subject by name + consultant
+      3. Report.completed_at ± 24h，比對該時段內 consultant 建立的唯一 Subject
+
+    安全：只 UPDATE 不刪除；找不到的報告維持 subject_id=NULL，admin 仍可手動處理。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅 admin 可執行")
+
+    # 1) 撈所有 subject_id=NULL 的 Report
+    orphans = db.query(M.Report).filter(M.Report.subject_id.is_(None)).all()
+    if not orphans:
+        return {"ok": True, "scanned": 0, "linked": 0, "still_orphan": 0, "details": []}
+
+    # 預先準備 lookup table
+    sess_map: dict[int, M.Session] = {}
+    sess_ids = {r.session_id for r in orphans if r.session_id}
+    if sess_ids:
+        for s in db.query(M.Session).filter(M.Session.session_id.in_(list(sess_ids))).all():
+            sess_map[s.session_id] = s
+
+    # 顧問 name → consultant_id
+    cons_name_set = set()
+    for s in sess_map.values():
+        if s.consultant_name:
+            cons_name_set.add(s.consultant_name)
+    cons_name_to_id: dict[str, int] = {}
+    if cons_name_set:
+        for c in db.query(M.Consultant).filter(M.Consultant.name.in_(list(cons_name_set))).all():
+            cons_name_to_id[c.name] = c.consultant_id
+
+    linked = 0
+    still_orphan = 0
+    details = []
+
+    for rep in orphans:
+        chosen_sid = None
+        method = ""
+
+        sess = sess_map.get(rep.session_id) if rep.session_id else None
+
+        # 策略 1：Session 自己有 subject_id
+        if sess and sess.subject_id:
+            chosen_sid = sess.subject_id
+            method = "session.subject_id"
+
+        # 策略 2：Session.consultant + Session.subject_name → Subject
+        if chosen_sid is None and sess and sess.consultant_name and sess.subject_name:
+            cons_id = cons_name_to_id.get(sess.consultant_name)
+            if cons_id:
+                cands = db.query(M.Subject).filter(
+                    M.Subject.consultant_id == cons_id,
+                    M.Subject.name == sess.subject_name,
+                ).all()
+                if len(cands) == 1:
+                    chosen_sid = cands[0].subject_id
+                    method = "consultant+name"
+
+        # 策略 3：completed_at ± 24h 內 consultant 建立的唯一 Subject（最後手段，謹慎）
+        # （只在 session_id is null + 有 completed_at 時才嘗試，避免亂連）
+        if (chosen_sid is None and rep.session_id is None and rep.completed_at and sess is None
+                and rep.client_summary):
+            try:
+                import json as _json
+                cs = _json.loads(rep.client_summary)
+                guess_name = cs.get("subject_name", "")
+                # 不在 PLACEHOLDER 才嘗試（PLACEHOLDER 直接視為孤兒測試報告，不關聯）
+                PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+                if guess_name and guess_name not in PLACEHOLDER_NAMES and not guess_name.startswith("🧪 "):
+                    cands = db.query(M.Subject).filter(M.Subject.name == guess_name).all()
+                    if len(cands) == 1:
+                        chosen_sid = cands[0].subject_id
+                        method = "client_summary.name (unique)"
+            except Exception:
+                pass
+
+        if chosen_sid:
+            rep.subject_id = chosen_sid
+            # 同時更新 Session.subject_id 補強連結
+            if sess and not sess.subject_id:
+                sess.subject_id = chosen_sid
+            linked += 1
+            details.append({
+                "report_id":   rep.report_id,
+                "linked_to":   chosen_sid,
+                "method":      method,
+            })
+        else:
+            still_orphan += 1
+            details.append({
+                "report_id":   rep.report_id,
+                "linked_to":   None,
+                "method":      "no match (manual link required)",
+            })
+
+    db.commit()
+    return {
+        "ok": True,
+        "scanned":      len(orphans),
+        "linked":       linked,
+        "still_orphan": still_orphan,
+        "details":      details[:50],
+    }
+
+
+@router.post("/{report_id}/manual-link-subject")
+def admin_manual_link_subject(
+    report_id: int,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """admin 手動把單筆 Report 連到指定 subject_id（覆蓋既有連結）"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅 admin 可執行")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+
+    sid = body.get("subject_id")
+    if not isinstance(sid, int) or sid <= 0:
+        raise HTTPException(400, "subject_id 必須是正整數")
+
+    subj = db.query(M.Subject).filter(M.Subject.subject_id == sid).first()
+    if not subj:
+        raise HTTPException(404, f"找不到 Subject #{sid}")
+
+    rep.subject_id = sid
+    if rep.session_id:
+        sess = db.query(M.Session).filter(M.Session.session_id == rep.session_id).first()
+        if sess:
+            sess.subject_id = sid
+    db.commit()
+    return {"ok": True, "report_id": report_id, "linked_to": sid, "subject_name": subj.name}
 
 
 @router.delete("/{report_id}/delete-test")

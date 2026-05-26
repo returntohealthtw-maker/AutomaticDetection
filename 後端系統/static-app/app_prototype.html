@@ -1259,10 +1259,12 @@
               <input id="admin-report-search" type="text" placeholder="搜尋受測者 / Email / 報告類型 / 顧問" style="flex:1;min-width:160px;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAdminReports()">
               <span id="admin-report-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminReports()">🔄 重新載入</button>
+              <button class="btn btn-sm" style="background:#388e3c;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_relinkOrphanReports()" title="對 subject_id=NULL 的舊報告，依姓名+顧問自動匹配回受測者主檔">🔗 一鍵修復孤兒報告</button>
               <button class="btn btn-sm" style="background:#9c27b0;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_cleanupAllTestReports()" title="刪除所有姓名為預設值的孤兒測試報告">🧹 清理測試報告</button>
+              <button class="btn btn-sm" style="background:#f57c00;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_showPaidNotDetected()" title="列出已付款但未完成檢測 / 報告的訂單">💳 已付款未檢測</button>
             </div>
             <div style="background:#e3f2fd;padding:8px 16px;border-bottom:1px solid #90caf9;font-size:11px;color:#0d47a1;line-height:1.6;">
-              💡 此處列出所有報告（含生成中）。<b>紫色框 🧪 系統測試報告</b>表示生成時受測者姓名缺失（預設「受測者」），無法回查；可點右側 🗑️ 刪除或上方「🧹 清理測試報告」一鍵批次刪除。
+              💡 此處列出所有報告（含生成中）。<b>紫色框 🧪 系統測試報告</b>表示<b>姓名缺失（孤兒）</b>；可先點上方「🔗 一鍵修復孤兒報告」嘗試自動關聯回受測者主檔，無法修復的再「🧹 清理測試報告」批次刪除。
             </div>
             <div id="admin-report-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
           </div>
@@ -4434,6 +4436,7 @@ async function startFullReportGeneration(opts) {
         subject_email:        subjectEmail,
         subject_age:          _currentSubjectAge,
         subject_gender:       _currentSubjectGender || '',
+        subject_id:           _currentSubjectId || null,  // 🔑 受測者主檔 FK，避免報告變孤兒
         report_type:          opts.reportType   || _currentReportSubType || 'life_script',
         variant:              opts.variant      || _currentReportVariant || 'full',
         chapters_to_generate: chaptersToGen,
@@ -7271,6 +7274,99 @@ async function _deleteTestReport(reportId) {
     renderAdminReports();
   } catch (e) {
     alert(`刪除例外：${e.message}`);
+  }
+}
+
+// 🔗 一鍵修復孤兒報告：呼叫 /reports/admin/relink-orphan-reports
+async function _relinkOrphanReports() {
+  if (!confirm('系統將嘗試把舊的「孤兒報告」（姓名缺失）依顧問+姓名+時間自動關聯回受測者主檔。\n\n這個動作只 UPDATE 不刪除，安全可重複執行。\n\n確定要繼續？')) return;
+
+  try {
+    const r = await apiFetch('/reports/admin/relink-orphan-reports', { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`❌ 修復失敗：${err.detail || r.status}`);
+      return;
+    }
+    const data = await r.json();
+    const lines = [
+      `✅ 修復完成`,
+      ``,
+      `掃描總數：${data.scanned} 筆`,
+      `🔗 成功關聯：${data.linked} 筆`,
+      `⚠️ 仍是孤兒（無法自動匹配）：${data.still_orphan} 筆`,
+      ``,
+      `💡 仍是孤兒的報告通常是：`,
+      `  · 顧問姓名 + 受測者姓名 完全沒登錄過受測者主檔`,
+      `  · 同名同姓且同顧問有多個受測者（無法判斷）`,
+      `  → 可手動到「受測者資訊」分頁建檔後再執行一次，或直接刪除。`,
+    ];
+    alert(lines.join('\n'));
+    renderAdminReports();
+  } catch (e) {
+    alert(`修復例外：${e.message}`);
+  }
+}
+
+// 💳 已付款未檢測：列出 admin 需主動處理的訂單
+async function _showPaidNotDetected() {
+  try {
+    const r = await apiFetch('/payments/admin/paid-not-detected');
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`❌ 載入失敗：${err.detail || r.status}`);
+      return;
+    }
+    const data = await r.json();
+    if (!data.count) {
+      alert('🎉 目前沒有「已付款但未完成檢測」的訂單。\n\n所有付款都已對應到完整的檢測+報告流程。');
+      return;
+    }
+
+    let html = `
+      <div style="background:white;border-radius:12px;max-width:90vw;width:760px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+        <div style="background:linear-gradient(135deg,#f57c00,#ff9800);color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:16px;font-weight:bold;">💳 已付款但未完成檢測訂單</div>
+            <div style="font-size:11px;opacity:0.9;margin-top:2px;">共 ${data.count} 筆 · 近 90 天</div>
+          </div>
+          <button onclick="this.closest('.paid-modal-bg').remove()" style="background:rgba(255,255,255,0.25);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+        </div>
+        <div style="padding:8px 16px;background:#fff3e0;font-size:11px;color:#e65100;border-bottom:1px solid #ffcc80;line-height:1.6;">
+          💡 客戶已付款但因檢測中斷／設備異常／未完成等原因，導致無法生成報告。請主動聯繫客戶安排「補檢測」（沿用同一筆付款）或退款。
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:12px 16px 24px;background:#fafafa;">
+          ${data.orders.map(o => `
+            <div style="background:white;border-left:4px solid #f57c00;padding:12px 14px;margin-bottom:10px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+              <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:6px;">
+                <div style="font-weight:bold;color:#333;font-size:14px;">${o.subject_name || '(未填姓名)'} · NT$${o.amount}</div>
+                <div style="font-size:10px;color:#999;">${o.order_id}</div>
+              </div>
+              <div style="font-size:11px;color:#666;margin-top:4px;line-height:1.6;">
+                📅 付款時間：${o.paid_at ? new Date(o.paid_at*1000).toLocaleString('zh-TW') : '?'}
+                ${o.days_since_paid != null ? ` <b style="color:${o.days_since_paid > 14 ? '#d32f2f' : '#f57c00'};">(已 ${o.days_since_paid} 天)</b>` : ''}<br>
+                👤 顧問：${o.consultant_name || '(無)'} ${o.consultant_id ? '#'+o.consultant_id : ''}<br>
+                📦 ${o.description || o.report_type} · ${o.provider}<br>
+                📧 ${o.subject_email || '(未填 email)'}<br>
+                <span style="color:#d32f2f;">⚠️ 卡關原因：${o.blocked_reason}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="padding:10px 16px;background:#f5f5f5;font-size:10px;color:#666;border-top:1px solid #ddd;">
+          🔧 處理方式：聯繫客戶 → 由顧問用同一帳號重新進入 App → 開始新檢測（系統會自動繼續使用此筆已付款訂單）。如需退款請走後台金流系統手動處理。
+        </div>
+      </div>
+    `;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'paid-modal-bg';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = html;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  } catch (e) {
+    alert(`載入例外：${e.message}`);
   }
 }
 

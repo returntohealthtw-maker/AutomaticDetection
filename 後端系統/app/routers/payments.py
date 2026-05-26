@@ -752,3 +752,88 @@ def my_payments(
             "notes":             r.notes,
         })
     return {"ok": True, "count": len(out), "payments": out}
+
+
+@router.get("/admin/paid-not-detected")
+def admin_paid_not_detected(
+    days: int = 90,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """🧾 列出「已付款但未完成檢測」的訂單（admin 專用）
+
+    判斷規則：
+      - Payment.status == 'paid'
+      - 且：session_id is NULL，或 session_id 對應的 Session 不存在 / status != 1（成功）
+      - 且：該訂單沒有對應的 Report
+
+    用途：客戶付款後沒做檢測（如：人到一半離開、設備異常），admin 可在此分頁
+          看到所有「卡關」訂單，主動聯繫客戶安排補檢測或退款。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅 admin 可查看")
+
+    cutoff_ts = int(time.time()) - days * 86400
+    paid_rows = db.query(M.Payment).filter(
+        M.Payment.status == "paid",
+        M.Payment.created_at >= cutoff_ts,
+    ).order_by(M.Payment.created_at.desc()).all()
+
+    if not paid_rows:
+        return {"ok": True, "count": 0, "orders": []}
+
+    # 預先撈出對應的 sessions / reports
+    sids = {r.session_id for r in paid_rows if r.session_id}
+    sess_map: dict[int, M.Session] = {}
+    rep_map_by_sess: dict[int, M.Report] = {}
+    if sids:
+        for s in db.query(M.Session).filter(M.Session.session_id.in_(list(sids))).all():
+            sess_map[s.session_id] = s
+        for r in db.query(M.Report).filter(M.Report.session_id.in_(list(sids))).all():
+            rep_map_by_sess[r.session_id] = r
+
+    out = []
+    for p in paid_rows:
+        sess = sess_map.get(p.session_id) if p.session_id else None
+        rep  = rep_map_by_sess.get(p.session_id) if p.session_id else None
+
+        # 已完成檢測且報告已生成 → 跳過
+        is_detected_ok = bool(sess and sess.status == 1)
+        is_report_done = bool(rep and rep.status == "completed" and rep.pdf_url)
+        if is_detected_ok and is_report_done:
+            continue
+
+        reason = []
+        if not p.session_id:
+            reason.append("尚未開始檢測（無關聯 session）")
+        elif not sess:
+            reason.append("session 已遺失")
+        elif sess.status != 1:
+            reason.append(f"session 狀態 = {sess.status}（0=進行中 / 2=失敗）")
+        if not rep:
+            reason.append("尚未生成報告")
+        elif rep.status != "completed":
+            reason.append(f"報告狀態 = {rep.status}")
+
+        out.append({
+            "payment_id":      p.payment_id,
+            "order_id":        p.order_id,
+            "consultant_id":   p.consultant_id,
+            "consultant_name": p.consultant_name,
+            "subject_name":    p.subject_name,
+            "subject_email":   p.subject_email,
+            "report_type":     p.report_type,
+            "description":     p.description,
+            "amount":          p.amount,
+            "provider":        p.provider,
+            "paid_at":         p.paid_at,
+            "created_at":      p.created_at,
+            "session_id":      p.session_id,
+            "session_status":  (sess.status if sess else None),
+            "report_status":   (rep.status if rep else None),
+            "blocked_reason":  " / ".join(reason) if reason else "未知",
+            "days_since_paid": (int((time.time() - (p.paid_at or p.created_at)) / 86400) if p.paid_at or p.created_at else None),
+        })
+
+    return {"ok": True, "count": len(out), "orders": out}
