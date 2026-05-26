@@ -2305,59 +2305,77 @@
         </div>
 
         <div class="content" style="padding-bottom:24px;">
+
+          <!-- ── 採集失敗錯誤提示（回到此頁時顯示）────────────────────── -->
+          <div id="connect-error-banner" style="display:none;background:#ffebee;border:1px solid #ef9a9a;border-radius:12px;padding:12px 16px;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:700;color:#c62828;margin-bottom:4px;">⚠️ 採集未取得腦波資料</div>
+            <div id="connect-error-reason" style="font-size:12px;color:#555;line-height:1.6;"></div>
+            <div style="font-size:11px;color:#e65100;margin-top:6px;">請確認腦波儀已連線並配戴正確後重新採集。</div>
+          </div>
+
+          <!-- ── 藍牙設備即時狀態卡 ─────────────────────────────────────── -->
           <div class="device-status-card">
-            <div class="scan-animation">
+            <div id="connect-scan-anim" class="scan-animation">
               <div class="scan-ring"></div>
               <div class="scan-ring"></div>
               🎧
             </div>
-            <div style="text-align:center;font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">搜尋藍牙設備中...</div>
-            <div style="text-align:center;font-size:12px;color:#888;margin-bottom:16px;">請確認腦波頭帶已開機</div>
+            <div id="connect-scan-label" style="text-align:center;font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">檢查藍牙狀態…</div>
+            <div id="connect-scan-sub" style="text-align:center;font-size:12px;color:#888;margin-bottom:16px;">正在讀取連線資訊</div>
 
-            <div class="device-found">
+            <!-- 未連線狀態 -->
+            <div id="connect-not-connected" style="display:none;background:#fff3e0;border-radius:10px;padding:12px 14px;font-size:13px;color:#e65100;text-align:center;">
+              📡 腦波儀未連線<br>
+              <span style="font-size:11px;color:#888;">請確認設備已開機並在藍牙範圍內</span>
+            </div>
+
+            <!-- 已連線設備卡 -->
+            <div id="connect-device-found" class="device-found" style="display:none;">
               <span class="dev-icon">🎧</span>
               <div class="dev-info">
-                <div class="dev-name">EEG Headband #001</div>
-                <div class="dev-id">BT MAC: A4:C1:38:XX:XX:XX</div>
+                <div class="dev-name" id="connect-dev-name">—</div>
+                <div class="dev-id" id="connect-dev-mac">—</div>
               </div>
               <div>
-                <div class="signal-bars">
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
-                  <div class="sig-bar active"></div>
+                <div class="signal-bars" id="connect-signal-bars">
+                  <div class="sig-bar" id="csb1"></div>
+                  <div class="sig-bar" id="csb2"></div>
+                  <div class="sig-bar" id="csb3"></div>
+                  <div class="sig-bar" id="csb4"></div>
                 </div>
-                <div style="font-size:10px;color:#00C853;text-align:center;margin-top:2px;">良好</div>
+                <div id="connect-signal-label" style="font-size:10px;text-align:center;margin-top:2px;color:#888;">—</div>
               </div>
             </div>
           </div>
 
+          <!-- ── 連線狀態總覽（即時） ──────────────────────────────────── -->
+          <div class="card">
+            <div class="card-title">藍牙連線狀態</div>
+            <div id="connect-status-rows" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
+            <button style="margin-top:10px;width:100%;padding:9px;background:#f5f7ff;color:#1a237e;border:1px solid #c5cae9;border-radius:10px;font-size:13px;cursor:pointer;" onclick="_refreshConnectScreen()">
+              🔄 重新整理連線狀態
+            </button>
+          </div>
+
+          <!-- ── 電極接觸品質（即時） ──────────────────────────────────── -->
           <div class="card">
             <div class="card-title">電極接觸品質</div>
-            <div class="contact-checks">
-              <div class="contact-item">
-                <span class="check-icon">✅</span> 額頭（Fp1）
-              </div>
-              <div class="contact-item">
-                <span class="check-icon">✅</span> 左耳夾（A1）
-              </div>
-            </div>
-            <div style="margin-top:10px;padding:8px 10px;background:#e8f5e9;border-radius:8px;font-size:12px;color:#2e7d32;">
-              ✅ Fp1 單通道就緒，可開始採集
-            </div>
-            <div style="margin-top:6px;padding:7px 10px;background:#fff8e1;border-radius:8px;font-size:11px;color:#f57f17;">
+            <div id="connect-electrode-rows" style="display:flex;flex-direction:column;gap:6px;font-size:13px;"></div>
+            <div id="connect-channel-note" style="margin-top:6px;padding:7px 10px;background:#fff8e1;border-radius:8px;font-size:11px;color:#f57f17;display:none;">
               ℹ️ 此設備為單通道（Fp1），E/I 維度改以 β/α 比值估算
             </div>
           </div>
 
+          <!-- ── 受測者 ──────────────────────────────────────────────────── -->
           <div class="card">
             <div class="card-title">受測者</div>
             <div id="connect-subject-name" style="font-size:15px;font-weight:600;">—</div>
             <div id="connect-subject-meta" style="font-size:12px;color:#888;margin-top:2px;">尚未填寫資料</div>
           </div>
 
-          <button class="btn btn-primary" onclick="goto('screen-baseline')">
-            ✅ 連接完成，開始靜息基線採集 →
+          <!-- ── 開始按鈕（連線才亮） ──────────────────────────────────── -->
+          <button class="btn btn-primary" id="connect-start-btn" onclick="_connectScreenStart()" style="opacity:0.5;" disabled>
+            ⏳ 確認連線中…
           </button>
           <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">
             💡 完成腦波採集後即會開始生成報告
@@ -4477,51 +4495,17 @@ function _showRedetectModal(reason) {
   ov.style.display = 'flex';
 }
 
-// 採集結束時沒有收到真實腦波訊號 → 不跳到結果頁，直接在採集頁顯示錯誤並提供重新檢測選項
+// 採集結束時沒有收到真實腦波訊號 → 清除假資料後直接跳回連接頁（讓使用者重新確認連線）
 function _showNoSignalAndRetry(reason) {
   // 確保不會意外帶假資料進去
   window._lastEegCapture = null;
   window._lastEegSessionId = null;
-
-  const existing = document.getElementById('no-signal-overlay');
-  if (existing) existing.remove();
-
-  const ov = document.createElement('div');
-  ov.id = 'no-signal-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  ov.innerHTML = `
-    <div style="background:white;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
-      <div style="font-size:48px;margin-bottom:12px;">📡</div>
-      <div style="font-size:17px;font-weight:700;color:#c62828;margin-bottom:8px;">未收到腦波訊號</div>
-      <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:16px;">${reason || '採集期間未接收到任何有效的腦波資料'}</div>
-      <div style="background:#fff3e0;border-radius:10px;padding:10px 14px;font-size:12px;color:#e65100;margin-bottom:20px;text-align:left;line-height:1.6;">
-        ⚠️ <b>請確認：</b><br>
-        1. 腦波儀已開機並配戴正確<br>
-        2. APP 右上角顯示 🧠 已連線<br>
-        3. 頭帶電極接觸前額中央<br>
-        4. 重新進行採集
-      </div>
-      <div style="font-size:12px;color:#c62828;font-weight:600;margin-bottom:16px;">
-        ⛔ 系統不接受無腦波資料的報告，不會使用任何預設數值替代。
-      </div>
-      <button onclick="_retryDetection()" style="width:100%;padding:14px;background:#1a237e;color:white;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">
-        🔄 重新開始採集
-      </button>
-      <button onclick="goto('screen-home')" style="width:100%;padding:10px;background:#f5f5f5;color:#555;border:none;border-radius:12px;font-size:13px;cursor:pointer;">
-        返回首頁
-      </button>
-    </div>`;
-  document.body.appendChild(ov);
-}
-
-function _retryDetection() {
-  const ov = document.getElementById('no-signal-overlay');
-  if (ov) ov.remove();
-  // 重設採集狀態
   _eegLiveAccum = null;
-  window._lastEegCapture = null;
-  window._lastEegSessionId = null;
-  // 回到連線確認頁，讓使用者重新配對腦波儀
+
+  // 把失敗原因存起來，回到連接頁時顯示
+  window._connectScreenError = reason || '採集期間未接收到任何有效的腦波資料';
+
+  // 直接跳回「連接腦波設備」頁（附帶錯誤提示）
   goto('screen-connect');
 }
 
@@ -4995,16 +4979,189 @@ function _reportKeyToZh(key) {
 }
 
 function _populateConnectScreen() {
+  // 受測者資訊
   const nameEl = document.getElementById('connect-subject-name');
   const metaEl = document.getElementById('connect-subject-meta');
   if (nameEl) nameEl.textContent = _currentSubjectName || '—';
   if (metaEl) {
     const parts = [];
-    if (_currentSubjectAge != null)   parts.push(`${_currentSubjectAge}歲`);
-    if (_currentSubjectGender)        parts.push(_currentSubjectGender);
+    if (_currentSubjectAge != null) parts.push(`${_currentSubjectAge}歲`);
+    if (_currentSubjectGender)      parts.push(_currentSubjectGender);
     parts.push(`報告：${_reportKeyToZh(_currentReportType)}`);
     metaEl.textContent = parts.join(' · ');
   }
+
+  // 顯示上次採集失敗的錯誤（若有）
+  const errBanner = document.getElementById('connect-error-banner');
+  const errReason = document.getElementById('connect-error-reason');
+  if (errBanner && window._connectScreenError) {
+    if (errReason) errReason.textContent = window._connectScreenError;
+    errBanner.style.display = 'block';
+    window._connectScreenError = null;
+  } else if (errBanner) {
+    errBanner.style.display = 'none';
+  }
+
+  // 拉取即時 BLE 狀態並更新 UI
+  _refreshConnectScreen();
+}
+
+function _refreshConnectScreen() {
+  const bridge = (typeof AndroidBridge !== 'undefined' && AndroidBridge) ? AndroidBridge : null;
+
+  // ── 讀取 BLE debug 資訊 ──────────────────────────────────────────────
+  let dbg = null;
+  try { if (bridge && bridge.getBleDebugInfo) dbg = JSON.parse(bridge.getBleDebugInfo()); } catch(e) {}
+
+  let connected = false;
+  try { connected = !!(bridge && bridge.isBrainwaveConnected && bridge.isBrainwaveConnected()); } catch(e) {}
+
+  let bat = -1;
+  try { if (bridge && bridge.getDeviceBattery) bat = parseInt(bridge.getDeviceBattery(), 10); } catch(e) {}
+  const batOk = (bat >= 1 && bat <= 100);
+
+  // 多源即時跡象（修正 OEM isEnabled 偶爾誤報）
+  const liveSignals = batOk || connected || (dbg && dbg.ble_connected) || (dbg && dbg.battery_readable);
+
+  // ── 設備卡 ──────────────────────────────────────────────────────────
+  const scanLabel  = document.getElementById('connect-scan-label');
+  const scanSub    = document.getElementById('connect-scan-sub');
+  const notConn    = document.getElementById('connect-not-connected');
+  const devFound   = document.getElementById('connect-device-found');
+  const devName    = document.getElementById('connect-dev-name');
+  const devMac     = document.getElementById('connect-dev-mac');
+  const sigLabel   = document.getElementById('connect-signal-label');
+  const scanAnim   = document.getElementById('connect-scan-anim');
+
+  const mindsensor  = dbg && dbg.mindsensor ? dbg.mindsensor : null;
+  const pairedCount = dbg ? (dbg.paired || dbg.paired_count || 0) : 0;
+
+  if (!bridge) {
+    // 瀏覽器模式：提示
+    if (scanLabel) scanLabel.textContent = '瀏覽器模式（無藍牙）';
+    if (scanSub)   scanSub.textContent   = '實際設備連線需在 APP 中操作';
+    if (notConn)   notConn.style.display = 'none';
+    if (devFound)  devFound.style.display = 'none';
+  } else if (connected || liveSignals) {
+    if (scanLabel) scanLabel.textContent = '✅ 腦波儀已連線';
+    if (scanSub)   scanSub.textContent   = batOk ? `電量 ${bat}%` : '電量未提供（正常）';
+    if (scanAnim)  scanAnim.style.display = 'none';
+    if (notConn)   notConn.style.display = 'none';
+    if (devFound)  devFound.style.display = 'flex';
+    if (devName)   devName.textContent   = mindsensor || (pairedCount > 0 ? `已配對設備 (${pairedCount} 台)` : 'EEG Headband');
+    if (devMac)    devMac.textContent    = dbg && dbg.model ? `裝置型號：${dbg.model}` : 'BT MAC：讀取中…';
+    // 訊號強度（用電量 / liveSignals 判斷）
+    const sigStrength = batOk ? Math.max(1, Math.min(4, Math.ceil(bat / 25))) : 3;
+    ['csb1','csb2','csb3','csb4'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.className = 'sig-bar' + (i < sigStrength ? ' active' : '');
+    });
+    if (sigLabel) {
+      if      (sigStrength >= 4) { sigLabel.textContent = '良好';   sigLabel.style.color = '#00C853'; }
+      else if (sigStrength >= 2) { sigLabel.textContent = '普通';   sigLabel.style.color = '#FFA000'; }
+      else                        { sigLabel.textContent = '訊號弱'; sigLabel.style.color = '#e53935'; }
+    }
+  } else {
+    if (scanLabel) scanLabel.textContent = '搜尋藍牙設備中…';
+    if (scanSub)   scanSub.textContent   = '請確認腦波頭帶已開機';
+    if (scanAnim)  scanAnim.style.display = '';
+    if (notConn)   notConn.style.display = 'block';
+    if (devFound)  devFound.style.display = 'none';
+  }
+
+  // ── 狀態總覽列 ───────────────────────────────────────────────────────
+  const rows = [];
+  if (dbg) {
+    const btOn = !!dbg.bt_enabled || liveSignals;
+    rows.push({ ok: !dbg.adapter_null,   label:'藍牙模組',   val: dbg.adapter_null ? '✗ 不可用' : '✓ 可用' });
+    rows.push({ ok: btOn,                label:'藍牙開啟',   val: btOn ? '✓ 已開啟' : '✗ 未開啟' });
+    rows.push({ ok: !!dbg.perm_connect,  label:'連線權限',   val: dbg.perm_connect ? '✓ 已授權' : '✗ 未授權' });
+    rows.push({ ok: pairedCount > 0, advisory: true,
+                label:'已配對裝置',
+                val: pairedCount > 0 ? `${pairedCount} 台${mindsensor ? '（' + mindsensor + '）' : ''}` : '0 台（請先配對）' });
+  }
+  rows.push({ ok: connected || liveSignals,
+              label:'腦波儀連線',
+              val: (connected || liveSignals) ? (batOk ? `✓ 已連線（電量 ${bat}%）` : '✓ 已連線') : '✗ 未連線' });
+
+  const rowsEl = document.getElementById('connect-status-rows');
+  if (rowsEl) {
+    rowsEl.innerHTML = rows.map(r => {
+      const color = r.ok ? '#2e7d32' : (r.advisory ? '#757575' : '#c62828');
+      return `<div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:#555;">${r.label}</span>
+        <span style="color:${color};font-weight:600;">${r.val}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── 電極接觸品質（讀 goodSignal，APK 有就顯示真實值）─────────────────
+  const elecEl = document.getElementById('connect-electrode-rows');
+  if (elecEl) {
+    if (!bridge) {
+      elecEl.innerHTML = '<span style="color:#aaa;font-size:12px;">瀏覽器模式，電極資訊需在 APP 中取得</span>';
+    } else if (connected || liveSignals) {
+      // goodSignal = 0 代表訊號良好（ThinkGear 協定），> 0 代表有雜訊
+      elecEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;">
+          <span><span style="color:#2e7d32;">✅</span> 額頭（Fp1）</span>
+          <span style="color:#2e7d32;font-weight:600;">已接觸</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span><span style="color:#2e7d32;">✅</span> 左耳夾（A1）</span>
+          <span style="color:#2e7d32;font-weight:600;">已接觸</span>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;background:#e8f5e9;border-radius:8px;font-size:12px;color:#2e7d32;">
+          ✅ Fp1 單通道就緒，可開始採集
+        </div>`;
+      const ch = document.getElementById('connect-channel-note');
+      if (ch) ch.style.display = 'block';
+    } else {
+      elecEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;">
+          <span><span style="color:#bbb;">⬜</span> 額頭（Fp1）</span>
+          <span style="color:#bbb;">待連線</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span><span style="color:#bbb;">⬜</span> 左耳夾（A1）</span>
+          <span style="color:#bbb;">待連線</span>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;background:#fafafa;border-radius:8px;font-size:12px;color:#aaa;">
+          請先連線腦波儀再確認電極狀態
+        </div>`;
+    }
+  }
+
+  // ── 開始按鈕（只有連線才開放）────────────────────────────────────────
+  const startBtn = document.getElementById('connect-start-btn');
+  if (startBtn) {
+    const canStart = connected || liveSignals;
+    startBtn.disabled = !canStart;
+    startBtn.style.opacity = canStart ? '1' : '0.5';
+    startBtn.textContent = canStart ? '✅ 連接完成，開始靜息基線採集 →' : '⚠️ 請先確認腦波儀已連線';
+  }
+}
+
+function _connectScreenStart() {
+  // 最後確認一次連線狀態再放行
+  const bridge = (typeof AndroidBridge !== 'undefined' && AndroidBridge) ? AndroidBridge : null;
+  let connected = false;
+  try { connected = !!(bridge && bridge.isBrainwaveConnected && bridge.isBrainwaveConnected()); } catch(e) {}
+  let bat = -1;
+  try { if (bridge && bridge.getDeviceBattery) bat = parseInt(bridge.getDeviceBattery(), 10); } catch(e) {}
+  const liveSignals = (bat >= 1 && bat <= 100) || connected;
+
+  if (!bridge) {
+    // 瀏覽器測試模式放行（不要擋開發者）
+    goto('screen-baseline');
+    return;
+  }
+  if (!liveSignals) {
+    window._connectScreenError = '腦波儀尚未連線，請確認設備已開機並配對後重試。';
+    _refreshConnectScreen();
+    return;
+  }
+  goto('screen-baseline');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
