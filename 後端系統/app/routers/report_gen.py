@@ -40,7 +40,13 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]:
-    """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。"""
+    """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。
+
+    重要：
+      - 必須帶 sample_count（前端 / validator 會檢查 ≥ 30）
+      - 不能用 `x or 50` 假裝有資料（會把 0 變 50 → 全部 50% bug）
+      - 0 / None 用實際讀到的 capture 行數推 sample_count
+    """
     caps = db.query(M.EegCapture).filter(
         M.EegCapture.session_id == session_id,
         M.EegCapture.is_baseline == 0,
@@ -52,18 +58,39 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     if not caps:
         return None
     n = len(caps)
-    def avg(attr): return round(sum(getattr(c, attr, 0) or 0 for c in caps) / n)
-    return {
-        "attention_percentage":  avg("attention"),
-        "meditation_percentage": avg("meditation"),
+
+    def avg_nz(attr):
+        """只把『非 None』的值納入平均，避免被 NULL 拉低到 0"""
+        vals = [getattr(c, attr, None) for c in caps]
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return None
+        return round(sum(vals) / len(vals), 2)
+
+    def pair_avg(lo_attr, hi_attr):
+        a = avg_nz(lo_attr); b = avg_nz(hi_attr)
+        if a is None and b is None: return None
+        if a is None: return b
+        if b is None: return a
+        return round((a + b) / 2, 2)
+
+    # 如果 EegCapture 表是空殼（seq_num=0 那種 deduped 平均），sample_count 應該用 session.total_captures
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    sample_count = (sess.total_captures if (sess and sess.total_captures) else n) or n
+
+    bw = {
+        "attention_percentage":  avg_nz("attention"),
+        "meditation_percentage": avg_nz("meditation"),
+        "sample_count":          int(sample_count),
         "bands_avg": {
-            "delta": avg("delta"),
-            "theta": avg("theta"),
-            "alpha": round((avg("low_alpha") + avg("high_alpha")) / 2),
-            "beta":  round((avg("low_beta")  + avg("high_beta"))  / 2),
-            "gamma": round((avg("low_gamma") + avg("high_gamma")) / 2),
+            "delta": avg_nz("delta"),
+            "theta": avg_nz("theta"),
+            "alpha": pair_avg("low_alpha", "high_alpha"),
+            "beta":  pair_avg("low_beta",  "high_beta"),
+            "gamma": pair_avg("low_gamma", "high_gamma"),
         },
     }
+    return bw
 
 
 @router.get("/pdf/{job_id}")

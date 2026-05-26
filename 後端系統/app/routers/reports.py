@@ -244,6 +244,72 @@ def _verify_ingest_secret(authorization: Optional[str], explicit_secret: Optiona
 
 # ─── 端點 ────────────────────────────────────────────────────────────────────
 
+@router.get("/headless/brainwave/{session_id}")
+def headless_get_brainwave(
+    session_id:    int,
+    authorization: Optional[str] = Header(default=None),
+    secret:        Optional[str] = Query(default=None, description="REPORTS_INGEST_SECRET（URL 帶 query）"),
+    db:            Session = Depends(get_db),
+):
+    """
+    Vercel React App 在 ?auto=1 流程中可呼叫此 endpoint，
+    用 session_id 直接拿到完整 brainwave_data — 避免 URL query string 命名漂移 / 截斷。
+
+    認證：Bearer token 或 ?secret= query。
+    回應結構：
+        {
+          "ok": true,
+          "session_id": 25,
+          "brainwave_data": {
+            "attention_percentage": 48,
+            "meditation_percentage": 36,
+            "sample_count": 180,
+            "bands_avg": {"delta":54, "theta":57, "alpha":55, "beta":40, "gamma":44},
+            "bands_7": {
+              "theta":57, "alpha_high":60, "alpha_low":49,
+              "beta_high":44, "beta_low":36, "gamma_high":48, "gamma_low":39
+            }
+          },
+          "subject": { "name": "...", "age": 26, "gender": "F" }
+        }
+    """
+    _verify_ingest_secret(authorization, secret)
+
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(404, "Session 不存在")
+
+    bw = _session_to_brainwave_data(db, session_id)
+    if not bw:
+        raise HTTPException(404, "找不到腦波資料（EegCapture 為空）")
+
+    ba = bw.get("bands_avg") or {}
+    def _cap(v): return max(0, min(100, int(v)))
+    alpha = float(ba.get("alpha") or 50)
+    beta  = float(ba.get("beta")  or 50)
+    gamma = float(ba.get("gamma") or 50)
+    bw["bands_7"] = {
+        "theta":      _cap(ba.get("theta") or 50),
+        "alpha_high": _cap(alpha * 1.1),
+        "alpha_low":  _cap(alpha * 0.9),
+        "beta_high":  _cap(beta  * 1.1),
+        "beta_low":   _cap(beta  * 0.9),
+        "gamma_high": _cap(gamma * 1.1),
+        "gamma_low":  _cap(gamma * 0.9),
+    }
+
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "brainwave_data": bw,
+        "subject": {
+            "name":   sess.subject_name,
+            "age":    sess.subject_age,
+            "gender": sess.subject_gender,
+        },
+    }
+
+
 @router.post("/record")
 def record_report(
     payload: RecordReportIn,
@@ -780,16 +846,42 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         return None
 
     avg = compute_averages(detection)
-    return {
-        "attention_percentage":  int(avg.attention or 50),
-        "meditation_percentage": int(avg.meditation or 50),
+    # 修正：不能用 `x or 50`（會把合法的 0 / 0.0 / 接近 0 的低值替換成 50）
+    # 改成只在「真的是 None」時才 fallback，且 fallback 改為由前端決定（這裡若有資料一律帶實際值）
+    def _safe_int(v, fallback=50):
+        try:
+            return int(v) if v is not None else int(fallback)
+        except Exception:
+            return int(fallback)
+    def _safe_float(v, fallback=50.0):
+        try:
+            return float(v) if v is not None else float(fallback)
+        except Exception:
+            return float(fallback)
+
+    # 5-band 重組（low + high 取平均；deduped 寫入時兩值相同，平均 = 該 band 原值）
+    def _band_avg(lo, hi):
+        a = _safe_float(lo, None)
+        b = _safe_float(hi, None)
+        if a is None and b is None:
+            return 50.0
+        if a is None:  return b
+        if b is None:  return a
+        return (a + b) / 2.0
+
+    bw = {
+        "attention_percentage":  _safe_int(avg.attention),
+        "meditation_percentage": _safe_int(avg.meditation),
+        "sample_count":          len(captures),
         "bands_avg": {
-            "theta": float(avg.theta or 50),
-            "alpha": float((avg.low_alpha + avg.high_alpha) / 2 or 50),
-            "beta":  float((avg.low_beta  + avg.high_beta)  / 2 or 50),
-            "gamma": float((avg.low_gamma + avg.high_gamma) / 2 or 50),
+            "delta": _safe_float(avg.delta),
+            "theta": _safe_float(avg.theta),
+            "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
+            "beta":  _band_avg(avg.low_beta,  avg.high_beta),
+            "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
         },
     }
+    return bw
 
 
 def _do_regenerate_one(

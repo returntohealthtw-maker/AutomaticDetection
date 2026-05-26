@@ -104,11 +104,14 @@ def _bw_to_seven_indices(bw: Dict[str, Any]) -> Dict[str, float]:
       ... 類似
     """
     def cap(v): return max(0, min(100, int(v)))
+    def _g(d, k, fallback=50):
+        v = d.get(k)
+        return fallback if v is None else v
     ba = (bw or {}).get("bands_avg") or {}
-    alpha  = ba.get("alpha", 50)
-    theta  = ba.get("theta", 50)
-    beta   = ba.get("beta",  50)
-    gamma  = ba.get("gamma", 50)
+    alpha  = _g(ba, "alpha")
+    theta  = _g(ba, "theta")
+    beta   = _g(ba, "beta")
+    gamma  = _g(ba, "gamma")
     return {
         "high_alpha": cap(alpha * 1.1),
         "low_alpha":  cap(alpha * 0.9),
@@ -240,16 +243,24 @@ def _call_parent_child(
 def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
     """把 AutomaticDetection 的 bands_avg 轉成 HomeAnalysisReport metrics 結構"""
     def cap(v): return max(0, min(100, int(v)))
+    def _g(d, k, fallback=50):
+        v = d.get(k)
+        return fallback if v is None else v
     ba = (bw or {}).get("bands_avg") or {}
+    delta = _g(ba, "delta")
+    theta = _g(ba, "theta")
+    alpha = _g(ba, "alpha")
+    beta  = _g(ba, "beta")
+    gamma = _g(ba, "gamma")
     return {
-        "Delta":  cap(ba.get("delta", 50)),
-        "Theta":  cap(ba.get("theta", 50)),
-        "High α": cap(ba.get("alpha", 50) * 1.1),
-        "Low α":  cap(ba.get("alpha", 50) * 0.9),
-        "High β": cap(ba.get("beta",  50) * 1.1),
-        "Low β":  cap(ba.get("beta",  50) * 0.9),
-        "High γ": cap(ba.get("gamma", 50) * 1.1),
-        "Low γ":  cap(ba.get("gamma", 50) * 0.9),
+        "Delta":  cap(delta),
+        "Theta":  cap(theta),
+        "High α": cap(alpha * 1.1),
+        "Low α":  cap(alpha * 0.9),
+        "High β": cap(beta  * 1.1),
+        "Low β":  cap(beta  * 0.9),
+        "High γ": cap(gamma * 1.1),
+        "Low γ":  cap(gamma * 0.9),
     }
 
 
@@ -308,7 +319,14 @@ def _call_vite_prefill(
 
     # Fallback：原本的 vite_prefill（讓使用者瀏覽器自己跑）
     from urllib.parse import urlencode
+    def _g(d, k, fallback=50):
+        v = d.get(k)
+        return fallback if v is None else v
     ba = (brainwave_data or {}).get("bands_avg") or {}
+    attn = _g(brainwave_data or {}, "attention_percentage")
+    medi = _g(brainwave_data or {}, "meditation_percentage")
+    delta = _g(ba, "delta"); theta = _g(ba, "theta")
+    alpha = _g(ba, "alpha"); beta = _g(ba, "beta"); gamma = _g(ba, "gamma")
     params = {
         "auto":       "1",
         "name":       subject_name or "",
@@ -316,15 +334,25 @@ def _call_vite_prefill(
         "variant":    variant,
         "api_base":   api_base or "",
         "session_id": str(session_id or ""),
-        "focus":      int((brainwave_data or {}).get("attention_percentage", 50)),
-        "relaxation": int((brainwave_data or {}).get("meditation_percentage", 50)),
-        "theta":      int(ba.get("theta", 50)),
-        "highAlpha":  int(min(100, ba.get("alpha", 50) * 1.1)),
-        "lowAlpha":   int(max(0,   ba.get("alpha", 50) * 0.9)),
-        "highBeta":   int(min(100, ba.get("beta",  50) * 1.1)),
-        "lowBeta":    int(max(0,   ba.get("beta",  50) * 0.9)),
-        "highGamma":  int(min(100, ba.get("gamma", 50) * 1.1)),
-        "lowGamma":   int(max(0,   ba.get("gamma", 50) * 0.9)),
+        # camelCase
+        "focus":      int(attn),
+        "relaxation": int(medi),
+        "theta":      int(theta),
+        "highAlpha":  int(min(100, alpha * 1.1)),
+        "lowAlpha":   int(max(0,   alpha * 0.9)),
+        "highBeta":   int(min(100, beta  * 1.1)),
+        "lowBeta":    int(max(0,   beta  * 0.9)),
+        "highGamma":  int(min(100, gamma * 1.1)),
+        "lowGamma":   int(max(0,   gamma * 0.9)),
+        # snake_case 別名（符合設計文件）
+        "alpha_high": int(min(100, alpha * 1.1)),
+        "alpha_low":  int(max(0,   alpha * 0.9)),
+        "beta_high":  int(min(100, beta  * 1.1)),
+        "beta_low":   int(max(0,   beta  * 0.9)),
+        "gamma_high": int(min(100, gamma * 1.1)),
+        "gamma_low":  int(max(0,   gamma * 0.9)),
+        "attention":  int(attn), "meditation": int(medi),
+        "delta": int(delta), "alpha": int(alpha), "beta": int(beta), "gamma": int(gamma),
     }
     qs = urlencode(params)
     redirect_url = f"{base}/?{qs}"

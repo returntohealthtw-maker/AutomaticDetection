@@ -139,64 +139,136 @@ def start_headless_job(
     import uuid
     job_id = job_id or f"hl-{uuid.uuid4().hex[:12]}"
 
-    # 組裝 ?auto=1&... URL（與舊 vite_prefill 相同 schema）
+    # 組裝 ?auto=1&... URL（同時支援 camelCase + snake_case，避免命名漂移）
     bw_present = bool(brainwave_data and (brainwave_data.get("bands_avg") or brainwave_data.get("attention_percentage")))
     ba = (brainwave_data or {}).get("bands_avg") or {}
 
-    # 取值函式：有資料就用實際值（不允許 0 被預設覆蓋），無資料時 fallback=50
-    def _v(d, k, default=50):
+    # 取值函式：有資料就用實際值，無資料時回傳 None（明確區分「缺資料」vs「值為 0」）
+    def _opt(d, k):
         try:
             x = d.get(k) if isinstance(d, dict) else None
             if x is None or x == "":
-                return int(default)
+                return None
             return int(round(float(x)))
         except Exception:
-            return int(default)
+            return None
 
-    attn_val  = _v(brainwave_data, "attention_percentage")
-    medi_val  = _v(brainwave_data, "meditation_percentage")
-    delta_val = _v(ba, "delta")
-    theta_val = _v(ba, "theta")
-    alpha_val = _v(ba, "alpha")
-    beta_val  = _v(ba, "beta")
-    gamma_val = _v(ba, "gamma")
+    def _val_or_50(v):
+        """只在 None 時 fallback 為 50（0 是合法值，不替換）"""
+        return 50 if v is None else max(0, min(100, int(v)))
 
+    attn_opt  = _opt(brainwave_data, "attention_percentage")
+    medi_opt  = _opt(brainwave_data, "meditation_percentage")
+    delta_opt = _opt(ba, "delta")
+    theta_opt = _opt(ba, "theta")
+    alpha_opt = _opt(ba, "alpha")
+    beta_opt  = _opt(ba, "beta")
+    gamma_opt = _opt(ba, "gamma")
+
+    attn_val  = _val_or_50(attn_opt)
+    medi_val  = _val_or_50(medi_opt)
+    delta_val = _val_or_50(delta_opt)
+    theta_val = _val_or_50(theta_opt)
+    alpha_val = _val_or_50(alpha_opt)
+    beta_val  = _val_or_50(beta_opt)
+    gamma_val = _val_or_50(gamma_opt)
+
+    # 醒目記錄真正進入 URL 的值（防止下次再被指控不知資料跑去哪了）
+    missing_keys = [
+        k for k, v in [
+            ("attention", attn_opt), ("meditation", medi_opt),
+            ("delta", delta_opt), ("theta", theta_opt), ("alpha", alpha_opt),
+            ("beta", beta_opt), ("gamma", gamma_opt),
+        ] if v is None
+    ]
+    if missing_keys:
+        logger.warning(
+            "[headless] brainwave_data 缺欄位 %s（將用 50% 替代）— session=%s",
+            missing_keys, session_id,
+        )
     logger.info(
-        "[headless] brainwave_data %s → attn=%d, medi=%d, bands(δ/θ/α/β/γ)=%d/%d/%d/%d/%d",
-        "received" if bw_present else "MISSING (defaults=50)",
-        attn_val, medi_val, delta_val, theta_val, alpha_val, beta_val, gamma_val,
+        "[headless] session=%s URL 帶腦波：attn=%d medi=%d δ=%d θ=%d α=%d β=%d γ=%d (bw_present=%s)",
+        session_id, attn_val, medi_val, delta_val, theta_val,
+        alpha_val, beta_val, gamma_val, "1" if bw_present else "0",
     )
 
-    params = {
-        "auto":       "1",
-        "name":       subject_name or "",
-        "email":      subject_email or "",
-        "variant":    variant,
-        "api_base":   api_base or "",
-        "session_id": str(session_id or ""),
-        "report_type": report_type,
-        # 主要欄位（舊 schema）
-        "focus":      attn_val,
-        "relaxation": medi_val,
-        "theta":      theta_val,
-        "highAlpha":  min(100, int(alpha_val * 1.1)),
-        "lowAlpha":   max(0,   int(alpha_val * 0.9)),
-        "highBeta":   min(100, int(beta_val  * 1.1)),
-        "lowBeta":    max(0,   int(beta_val  * 0.9)),
-        "highGamma":  min(100, int(gamma_val * 1.1)),
-        "lowGamma":   max(0,   int(gamma_val * 0.9)),
-        # 別名 aliases（防止 Vercel React App 改名後仍能讀到資料 → 不再 fallback 50）
-        "attention":            attn_val,
-        "attention_percentage": attn_val,
-        "concentration":        attn_val,
-        "meditation":           medi_val,
+    # 同時把整包 brainwave_data 以 base64-encoded JSON 塞進 URL
+    # → 即使單獨 key 命名漂移，Vercel 仍可從這裡解出完整 payload
+    import base64, json as _json
+    bw_payload = {
+        "attention_percentage":  attn_val,
         "meditation_percentage": medi_val,
-        "delta":                delta_val,
-        "alpha":                alpha_val,
-        "beta":                 beta_val,
-        "gamma":                gamma_val,
-        # 也把整包 brainwave_data 用 JSON 形式塞進去（base64 避免特殊字元）
-        "bw_present":           "1" if bw_present else "0",
+        # 5-band 平均
+        "bands_avg": {
+            "delta": delta_val, "theta": theta_val, "alpha": alpha_val,
+            "beta":  beta_val,  "gamma": gamma_val,
+        },
+        # 7 子頻帶（依設計文件 06）
+        "bands_7": {
+            "theta":      theta_val,
+            "alpha_high": min(100, int(alpha_val * 1.1)),
+            "alpha_low":  max(0,   int(alpha_val * 0.9)),
+            "beta_high":  min(100, int(beta_val  * 1.1)),
+            "beta_low":   max(0,   int(beta_val  * 0.9)),
+            "gamma_high": min(100, int(gamma_val * 1.1)),
+            "gamma_low":  max(0,   int(gamma_val * 0.9)),
+        },
+        "attention":      attn_val,
+        "relaxation":     medi_val,
+        "sample_count":   (brainwave_data or {}).get("sample_count"),
+        "session_id":     session_id,
+        "bw_present":     bw_present,
+    }
+    bw_b64 = base64.urlsafe_b64encode(_json.dumps(bw_payload).encode("utf-8")).decode("ascii")
+
+    params = {
+        "auto":        "1",
+        "name":        subject_name or "",
+        "email":       subject_email or "",
+        "variant":     variant,
+        "api_base":    api_base or "",
+        "session_id":  str(session_id or ""),
+        "report_type": report_type,
+
+        # ── 主要欄位（舊 camelCase schema，保留向下相容）──
+        "focus":       attn_val,
+        "relaxation":  medi_val,
+        "theta":       theta_val,
+        "highAlpha":   min(100, int(alpha_val * 1.1)),
+        "lowAlpha":    max(0,   int(alpha_val * 0.9)),
+        "highBeta":    min(100, int(beta_val  * 1.1)),
+        "lowBeta":     max(0,   int(beta_val  * 0.9)),
+        "highGamma":   min(100, int(gamma_val * 1.1)),
+        "lowGamma":    max(0,   int(gamma_val * 0.9)),
+
+        # ── snake_case 別名（符合設計文件 06_腦波資料格式規格）──
+        "alpha_high":  min(100, int(alpha_val * 1.1)),
+        "alpha_low":   max(0,   int(alpha_val * 0.9)),
+        "beta_high":   min(100, int(beta_val  * 1.1)),
+        "beta_low":    max(0,   int(beta_val  * 0.9)),
+        "gamma_high":  min(100, int(gamma_val * 1.1)),
+        "gamma_low":   max(0,   int(gamma_val * 0.9)),
+
+        # ── 通用別名（attention / meditation / 5-band 平均）──
+        "attention":             attn_val,
+        "attention_percentage":  attn_val,
+        "attention_score":       attn_val,
+        "concentration":         attn_val,
+        "concentration_pct":     attn_val,
+        "meditation":            medi_val,
+        "meditation_percentage": medi_val,
+        "meditation_score":      medi_val,
+        "relaxation_pct":        medi_val,
+        "relaxation_score":      medi_val,
+        "delta":                 delta_val,
+        "alpha":                 alpha_val,
+        "beta":                  beta_val,
+        "gamma":                 gamma_val,
+
+        # ── 結構化 payload（最強保障：URL key 漂移時這個還在）──
+        "brainwave_data":  bw_b64,
+        "bw_b64":          bw_b64,
+        "bw_present":      "1" if bw_present else "0",
     }
     # 把 REPORTS_INGEST_SECRET 一併帶到 URL，讓 React app 在 callback /events 與 /record 時
     # 能加上 X-Ingest-Secret header（否則後端有設 secret 時會被 401 擋掉，導致監看 + 報告管理都看不到資料）
