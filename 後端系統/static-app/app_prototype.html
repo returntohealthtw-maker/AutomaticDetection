@@ -5179,42 +5179,58 @@ function _refreshEegHealthPreCheck() {
     rows.push({ ok: !dbg.adapter_null,            label:'藍牙模組',   val: dbg.adapter_null ? '✗ 系統未提供藍牙服務' : '✓ 可用' });
     rows.push({ ok: !!dbg.bt_enabled,             label:'藍牙開啟',   val: dbg.bt_enabled ? '✓ 已開啟' : '✗ 未開啟（請到系統設定開啟）' });
     rows.push({ ok: !!dbg.perm_connect,           label:'連線權限',   val: dbg.perm_connect ? '✓ 已授權' : '✗ 未授權（請允許 APP 取得藍牙權限）' });
-    rows.push({ ok: !!dbg.perm_scan,              label:'掃描權限',   val: dbg.perm_scan    ? '✓ 已授權' : '✗ 未授權' });
+    // 掃描權限 / 位置權限 / 已配對裝置 → advisory（已連線就代表這些 OK 過了，後續可有可無）
+    rows.push({ ok: !!dbg.perm_scan,    advisory:true, label:'掃描權限',   val: dbg.perm_scan    ? '✓ 已授權' : 'ℹ️ 未授權（已連線即可，下次重連需要）' });
     if (dbg.perm_fine_loc !== undefined) {
-      rows.push({ ok: !!dbg.perm_fine_loc,        label:'位置權限',   val: dbg.perm_fine_loc ? '✓ 已授權' : '⚠ 未授權（部分 Android 需要）' });
+      rows.push({ ok: !!dbg.perm_fine_loc, advisory:true, label:'位置權限',   val: dbg.perm_fine_loc ? '✓ 已授權' : 'ℹ️ 未授權（部分 Android 需要）' });
     }
-    rows.push({ ok: (dbg.paired || 0) > 0,        label:'已配對裝置', val: (dbg.paired || 0) + ' 台' + (dbg.mindsensor ? '（含：' + dbg.mindsensor + '）' : '') });
+    rows.push({ ok: (dbg.paired || 0) > 0, advisory:true, label:'已配對裝置', val: (dbg.paired || 0) + ' 台' + (dbg.mindsensor ? '（含：' + dbg.mindsensor + '）' : '') });
   }
 
-  // 即時電量
+  // 連線狀態（這才是「能不能開始檢測」的唯一硬性條件）
+  let connected = false;
+  try { connected = bridge.isBrainwaveConnected && bridge.isBrainwaveConnected(); } catch(e) {}
+  rows.push({ ok: connected, label:'腦波儀連線', val: connected ? '✓ 已連線' : '✗ 未連線（請按下方「重新配對」）' });
+
+  // 即時電量（advisory 只供參考，不擋下檢測）
+  // 部分 Mindsensor / NeuroSky 韌體本身不提供電量 API，回 -1 屬正常情況
   let bat = -1;
   try { bat = bridge.getDeviceBattery && bridge.getDeviceBattery(); } catch(e) {}
   if (typeof bat !== 'number') bat = parseInt(bat, 10);
   if (isNaN(bat)) bat = -1;
   if (bat >= 1 && bat <= 100) {
-    rows.push({ ok:true, label:'電量讀數', val: '✓ 已讀取（' + bat + '%，部分機種為固定值）' });
+    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ 已讀取（' + bat + '%，部分機種為固定值）' });
+  } else if (connected) {
+    // 連線正常但電量讀不到 → 韌體限制，不擋下開始按鈕
+    rows.push({ ok:true, advisory:true, label:'電量讀數', val: 'ℹ️ 韌體未提供（連線正常即可使用）' });
   } else {
-    rows.push({ ok:false, label:'電量讀數', val: '✗ 無法讀取（腦波儀可能未開機或未配對）' });
+    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（裝置可能未開機，請先確認連線）' });
   }
-
-  // 連線狀態
-  let connected = false;
-  try { connected = bridge.isBrainwaveConnected && bridge.isBrainwaveConnected(); } catch(e) {}
-  rows.push({ ok: connected, label:'腦波儀連線', val: connected ? '✓ 已連線' : '✗ 未連線（請按下方「重新配對」）' });
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
 
-  // 全部就緒才能開始測試
-  const allOk = rows.every(r => r.ok);
+  // ✅ 開始按鈕條件：「腦波儀連線」必須通過；其他項目都是 advisory
+  // 之前因為電量讀不到就擋住整個檢測流程是過度嚴格 — 已修正
+  const blockingOk = connected && (
+    !dbg || (
+      !dbg.adapter_null &&
+      dbg.bt_enabled &&
+      dbg.perm_connect
+    )
+  );
   if (startBtn) {
-    startBtn.disabled = !allOk;
-    startBtn.style.opacity = allOk ? '1' : '0.4';
-    startBtn.textContent = allOk ? '✅ 開始 1 分鐘健康檢查 →' : '⚠️ 請先解決上方紅色項目';
+    startBtn.disabled = !blockingOk;
+    startBtn.style.opacity = blockingOk ? '1' : '0.4';
+    startBtn.textContent = blockingOk ? '✅ 開始 1 分鐘健康檢查 →' : '⚠️ 請先確認腦波儀已連線（藍牙 / 權限 / 配對）';
   }
 }
 
 function _ethcRowHtml(r) {
-  const color = r.ok ? '#2e7d32' : '#c62828';
+  // advisory 失敗（非阻擋）→ 灰色；硬性失敗 → 紅色；OK → 綠色
+  let color;
+  if (r.ok) color = '#2e7d32';
+  else if (r.advisory) color = '#757575';
+  else color = '#c62828';
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
     <span style="color:#555;flex-shrink:0;">${r.label}</span>
     <span style="color:${color};font-weight:600;text-align:right;">${r.val}</span>
