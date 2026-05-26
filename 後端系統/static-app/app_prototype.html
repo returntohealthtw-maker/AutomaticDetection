@@ -2485,7 +2485,11 @@
             📡 嘗試重新配對腦波儀
           </button>
           <button class="btn btn-primary" id="ethc-start-btn" onclick="_startEegHealthCheckSession()">
-            ✅ 開始 1 分鐘健康檢查 →
+            ⏱️ 開始 1 分鐘健康檢查 →
+          </button>
+          <!-- 強制開始：避免精檢誤判（如 OEM isEnabled() bug）把使用者鎖在精檢頁出不去 -->
+          <button class="btn" id="ethc-force-start-btn" style="background:transparent;color:#1a237e;border:1px dashed #9fa8da;font-size:13px;margin-top:6px;display:none;" onclick="_startEegHealthCheckSession()">
+            🔓 我確認腦波儀已就緒，強制開始 1 分鐘倒數 →
           </button>
         </div>
       </div>
@@ -5330,6 +5334,11 @@ function _refreshEegHealthPreCheck() {
       ? '<div style="font-size:18px;font-weight:700;">✅ 開始 1 分鐘健康檢查 →</div>'
       : '<div style="font-size:18px;font-weight:700;">⏱️ 開始 1 分鐘健康檢查</div>'
         + '<div style="font-size:12px;font-weight:500;margin-top:4px;opacity:0.95;">⚠️ 請先確認腦波儀已連線（藍牙 / 權限 / 配對）</div>';
+  }
+  // 強制開始備援：只在主按鈕不通過時顯示，給使用者「我確定 OK」的逃生口
+  const forceBtn = document.getElementById('ethc-force-start-btn');
+  if (forceBtn) {
+    forceBtn.style.display = blockingOk ? 'none' : 'block';
   }
 }
 
