@@ -5756,50 +5756,80 @@ function _etComputeAll(acc) {
 
 function _etComputeMBTI(acc) {
   const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const std = arr => {
+    if (arr.length < 2) return 0;
+    const m = avg(arr);
+    const v = arr.reduce((s,x)=> s + (x-m)*(x-m), 0) / arr.length;
+    return Math.sqrt(v);
+  };
+  // 取序列前/後半段平均，看「趨勢」（趨勢 > 0 = 注意力上升）
+  const trend = arr => {
+    if (arr.length < 4) return 0;
+    const half = Math.floor(arr.length / 2);
+    return avg(arr.slice(half)) - avg(arr.slice(0, half));
+  };
 
   // 優先使用 ThinkGear 原始 8 頻段（範圍 10^4~10^7，能保留個體差異）
-  // 若原始值不存在（瀏覽器測試 / 舊韌體），才退回壓縮後的 0-100 值
   const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && avg(acc.r_lalpha) > 0);
-  let la, ha, lb, hb, lg, hg, d, t;
-  if (hasRaw) {
-    la = avg(acc.r_lalpha);  ha = avg(acc.r_halpha);
-    lb = avg(acc.r_lbeta);   hb = avg(acc.r_hbeta);
-    lg = avg(acc.r_lgamma);  hg = avg(acc.r_hgamma);
-    d  = avg(acc.r_delta);   t  = avg(acc.r_theta);
-  } else {
-    // Fallback：壓縮後值（會在窄區內，但至少能算）
-    const a_ = avg(acc.alpha), b_ = avg(acc.beta), g_ = avg(acc.gamma);
-    la = a_ * 0.6; ha = a_ * 0.4;
-    lb = b_ * 0.6; hb = b_ * 0.4;
-    lg = g_ * 0.6; hg = g_ * 0.4;
-    d  = avg(acc.delta); t = avg(acc.theta);
-  }
-  const a = la + ha;  // 完整 alpha
-  const b = lb + hb;  // 完整 beta
-  const g = lg + hg;  // 完整 gamma
 
   // 對數軸 sigmoid（中心點 = 1，正負對稱）
-  // log10(ratio) > 0 → 分子大 → 接近 100%；log10(ratio) < 0 → 分母大 → 接近 0%
-  // slope=2 在 log 軸上代表「分子比分母大 10 倍時 ≈ 88%」，差異感顯著
   const safeRatio = (num, den) => {
-    if (!(den > 1e-6) || !(num > 1e-6)) return 1;  // 0/0 視為 1（中性）
+    if (!(den > 1e-6) || !(num > 1e-6)) return 1;
     return num / den;
   };
-  const logSig = (ratio) => {
+  const logSig = (ratio, slope) => {
     const l = Math.log10(ratio);
-    const x = 1 / (1 + Math.exp(-2 * l));
+    const x = 1 / (1 + Math.exp(-(slope || 2) * l));
     return _etClamp(x * 100, 0, 100);
   };
 
-  // 八卦 / MBTI 維度公式（用真實高低頻段計算，個體差異不再被抹平）
-  // E/I：β（思考活躍） vs α（休息）— β 高傾向 E，α 高傾向 I
-  // N/S：θ（直覺）+ γ（高階聯結） vs β（具體分析）— θ+γ 高傾向 N
-  // T/F：低 β（邏輯切換） vs 低 γ（情感共鳴）+ θ — T 高傾向 lβ；F 高傾向 lγ+θ
-  // J/P：高 β（執行落實） vs θ（彈性聯想）— J 高傾向 hβ；P 高傾向 θ
-  const ei = logSig(safeRatio(b,        a));
-  const ns = logSig(safeRatio(t + g,    b));
-  const tf = logSig(safeRatio(lb,       lg + t));
-  const jp = logSig(safeRatio(hb,       t));
+  let ei, ns, tf, jp;
+
+  if (hasRaw) {
+    // ===== 路徑 A：APK ≥ 1.1.9，有 8 個 ThinkGear 原始頻段 =====
+    const la = avg(acc.r_lalpha), ha = avg(acc.r_halpha);
+    const lb = avg(acc.r_lbeta),  hb = avg(acc.r_hbeta);
+    const lg = avg(acc.r_lgamma), hg = avg(acc.r_hgamma);
+    const d  = avg(acc.r_delta),  t  = avg(acc.r_theta);
+    const a = la + ha, b = lb + hb, g = lg + hg;
+    ei = logSig(safeRatio(b,     a));
+    ns = logSig(safeRatio(t + g, b));
+    tf = logSig(safeRatio(lb,    lg + t));
+    jp = logSig(safeRatio(hb,    t));
+  } else {
+    // ===== 路徑 B：APK ≤ 1.1.8 fallback — 用「個體訊號特徵」差異化 =====
+    // bandTo100 壓縮過的 5 頻段平均會收斂到 30~70 區間，無法區分人
+    // 改用 attn / medi 的【統計特徵】（平均、標準差、趨勢）+ 比例 → 個體差異夠
+    const aMean = avg(acc.alpha), bMean = avg(acc.beta), gMean = avg(acc.gamma);
+    const tMean = avg(acc.theta), dMean = avg(acc.delta);
+    const attnMean = avg(acc.attn || []), attnStd = std(acc.attn || []), attnTrend = trend(acc.attn || []);
+    const mediMean = avg(acc.medi || []), mediStd = std(acc.medi || []);
+
+    // E/I：注意力主動性（外向 = 對外刺激高反應）
+    //   高 attn 平均 + β 高 + attn 變動大 → E（活躍對外）
+    //   高 medi 平均 + α 高 + attn 穩定 → I（內收）
+    //   ratio：(attnMean + bMean + attnStd) / (mediMean + aMean + 20)
+    ei = logSig(safeRatio(attnMean + bMean + attnStd, mediMean + aMean + 20), 1.5);
+
+    // N/S：抽象 vs 具體
+    //   θ 高 + γ 高 + attn 趨勢有變化 → N
+    //   β 穩定 + δ 高 + 注意力變動小 → S
+    ns = logSig(safeRatio(tMean + gMean + Math.abs(attnTrend) * 2,
+                          bMean + dMean * 0.5 + 10), 1.5);
+
+    // T/F：邏輯切換 vs 情感共鳴
+    //   β 高 + attn 高 + medi 變動小 → T
+    //   γ 高 + medi 高 + medi 變動大（情緒起伏）→ F
+    tf = logSig(safeRatio(bMean + attnMean,
+                          gMean * 1.5 + mediMean + mediStd), 1.5);
+
+    // J/P：計畫穩定 vs 彈性流動
+    //   attn 高且穩 + β 高 → J（規律執行）
+    //   attn 變動大 + θ 高 → P（彈性探索）
+    const attnStability = attnStd > 0 ? (100 / attnStd) : 100;
+    jp = logSig(safeRatio(attnStability + bMean,
+                          attnStd * 2 + tMean), 1.5);
+  }
 
   const dims = [
     { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei },
