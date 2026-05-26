@@ -336,18 +336,34 @@ public class WebAppActivity extends Activity {
                             sStreamDiagConnectedTicks++;
                             int attn  = CLS_DATA.iAttention;
                             int medi  = CLS_DATA.iMeditation;
-                            int delta = bandTo100(CLS_DATA.iDelta);
-                            int theta = bandTo100(CLS_DATA.iTheta);
-                            int alpha = bandTo100((CLS_DATA.iLowAlpha + CLS_DATA.iHighAlpha) / 2);
-                            int beta  = bandTo100((CLS_DATA.iLowBeta  + CLS_DATA.iHighBeta)  / 2);
-                            int gamma = bandTo100((CLS_DATA.iLowGamma + CLS_DATA.iHighGamma) / 2);
+                            // 原始 8 頻段（ThinkGear 提供的 raw band power，範圍可能達 10^7）
+                            // 同時送 raw 與 0-100 壓縮版，前端可選擇用哪一種做計算
+                            int rDelta  = CLS_DATA.iDelta;
+                            int rTheta  = CLS_DATA.iTheta;
+                            int rLAlpha = CLS_DATA.iLowAlpha;
+                            int rHAlpha = CLS_DATA.iHighAlpha;
+                            int rLBeta  = CLS_DATA.iLowBeta;
+                            int rHBeta  = CLS_DATA.iHighBeta;
+                            int rLGamma = CLS_DATA.iLowGamma;
+                            int rHGamma = CLS_DATA.iHighGamma;
+                            int delta = bandTo100(rDelta);
+                            int theta = bandTo100(rTheta);
+                            int alpha = bandTo100((rLAlpha + rHAlpha) / 2);
+                            int beta  = bandTo100((rLBeta  + rHBeta)  / 2);
+                            int gamma = bandTo100((rLGamma + rHGamma) / 2);
                             int bat   = ble.getBatteryLevel();
                             sampleCount[0]++;
                             sStreamDiagSampleCount++;
+                            // raw_* 為 ThinkGear 原始值（用於 MBTI 等需要保留個體差異的計算）
                             String json = String.format(
                                 "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
-                                "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d}",
-                                attn, medi, delta, theta, alpha, beta, gamma, bat);
+                                "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d," +
+                                "\"raw_delta\":%d,\"raw_theta\":%d," +
+                                "\"raw_lalpha\":%d,\"raw_halpha\":%d," +
+                                "\"raw_lbeta\":%d,\"raw_hbeta\":%d," +
+                                "\"raw_lgamma\":%d,\"raw_hgamma\":%d}",
+                                attn, medi, delta, theta, alpha, beta, gamma, bat,
+                                rDelta, rTheta, rLAlpha, rHAlpha, rLBeta, rHBeta, rLGamma, rHGamma);
                             webView.post(() -> webView.evaluateJavascript(
                                 "window.JSBridge&&window.JSBridge.onEegSample('" + json + "')", null));
                         } else if (cmd == sp.BrainwaveDisconnected) {

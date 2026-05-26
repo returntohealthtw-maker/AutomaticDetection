@@ -5466,7 +5466,13 @@ function _eegHealthSampleSink(obj) {
   }
   // 累積各頻段資料給 MBTI 分析使用（不寫入 DB / 不傳到後端，純前端計算）
   if (!window._ethrAccum) {
-    window._ethrAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] };
+    window._ethrAccum = {
+      attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
+      r_delta:[], r_theta:[],
+      r_lalpha:[], r_halpha:[],
+      r_lbeta:[],  r_hbeta:[],
+      r_lgamma:[], r_hgamma:[],
+    };
   }
   const acc = window._ethrAccum;
   const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
@@ -5477,6 +5483,15 @@ function _eegHealthSampleSink(obj) {
   acc.alpha.push(num(obj && obj.alpha));
   acc.beta .push(num(obj && obj.beta));
   acc.gamma.push(num(obj && obj.gamma));
+  // 原始 ThinkGear 8 頻段（保留個體差異，用於 MBTI 計算）
+  acc.r_delta .push(num(obj && obj.raw_delta));
+  acc.r_theta .push(num(obj && obj.raw_theta));
+  acc.r_lalpha.push(num(obj && obj.raw_lalpha));
+  acc.r_halpha.push(num(obj && obj.raw_halpha));
+  acc.r_lbeta .push(num(obj && obj.raw_lbeta));
+  acc.r_hbeta .push(num(obj && obj.raw_hbeta));
+  acc.r_lgamma.push(num(obj && obj.raw_lgamma));
+  acc.r_hgamma.push(num(obj && obj.raw_hgamma));
 }
 
 // 結束（時間到或使用者點「提前結束」）
@@ -5741,19 +5756,51 @@ function _etComputeAll(acc) {
 
 function _etComputeMBTI(acc) {
   const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
-  const la = avg(acc.alpha) * 0.5;
-  const ha = avg(acc.alpha) * 0.5;
-  const lb = avg(acc.beta)  * 0.5;
-  const hb = avg(acc.beta)  * 0.5;
-  const lg = avg(acc.gamma) * 0.5;
-  const t  = avg(acc.theta);
-  const a  = la + ha; const b  = lb + hb;
-  const sig = (raw) => _etClamp(_etSigmoid(raw) * 100, 0, 100);
-  const ei = sig(_etSafeDiv(b, a));
-  const ns = sig(_etSafeDiv(t, b));
-  const tf = sig(_etSafeDiv(lb, lg + t));
-  const jp = sig(_etSafeDiv(hb, t));
-  // 固定順序：外向/內向、直覺/感官、理性/情感、計畫/彈性（不依強弱排序）
+
+  // 優先使用 ThinkGear 原始 8 頻段（範圍 10^4~10^7，能保留個體差異）
+  // 若原始值不存在（瀏覽器測試 / 舊韌體），才退回壓縮後的 0-100 值
+  const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && avg(acc.r_lalpha) > 0);
+  let la, ha, lb, hb, lg, hg, d, t;
+  if (hasRaw) {
+    la = avg(acc.r_lalpha);  ha = avg(acc.r_halpha);
+    lb = avg(acc.r_lbeta);   hb = avg(acc.r_hbeta);
+    lg = avg(acc.r_lgamma);  hg = avg(acc.r_hgamma);
+    d  = avg(acc.r_delta);   t  = avg(acc.r_theta);
+  } else {
+    // Fallback：壓縮後值（會在窄區內，但至少能算）
+    const a_ = avg(acc.alpha), b_ = avg(acc.beta), g_ = avg(acc.gamma);
+    la = a_ * 0.6; ha = a_ * 0.4;
+    lb = b_ * 0.6; hb = b_ * 0.4;
+    lg = g_ * 0.6; hg = g_ * 0.4;
+    d  = avg(acc.delta); t = avg(acc.theta);
+  }
+  const a = la + ha;  // 完整 alpha
+  const b = lb + hb;  // 完整 beta
+  const g = lg + hg;  // 完整 gamma
+
+  // 對數軸 sigmoid（中心點 = 1，正負對稱）
+  // log10(ratio) > 0 → 分子大 → 接近 100%；log10(ratio) < 0 → 分母大 → 接近 0%
+  // slope=2 在 log 軸上代表「分子比分母大 10 倍時 ≈ 88%」，差異感顯著
+  const safeRatio = (num, den) => {
+    if (!(den > 1e-6) || !(num > 1e-6)) return 1;  // 0/0 視為 1（中性）
+    return num / den;
+  };
+  const logSig = (ratio) => {
+    const l = Math.log10(ratio);
+    const x = 1 / (1 + Math.exp(-2 * l));
+    return _etClamp(x * 100, 0, 100);
+  };
+
+  // 八卦 / MBTI 維度公式（用真實高低頻段計算，個體差異不再被抹平）
+  // E/I：β（思考活躍） vs α（休息）— β 高傾向 E，α 高傾向 I
+  // N/S：θ（直覺）+ γ（高階聯結） vs β（具體分析）— θ+γ 高傾向 N
+  // T/F：低 β（邏輯切換） vs 低 γ（情感共鳴）+ θ — T 高傾向 lβ；F 高傾向 lγ+θ
+  // J/P：高 β（執行落實） vs θ（彈性聯想）— J 高傾向 hβ；P 高傾向 θ
+  const ei = logSig(safeRatio(b,        a));
+  const ns = logSig(safeRatio(t + g,    b));
+  const tf = logSig(safeRatio(lb,       lg + t));
+  const jp = logSig(safeRatio(hb,       t));
+
   const dims = [
     { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei },
     { pair:'N/S', score:ns, dominant: ns>=50?'N':'S', pct:ns },

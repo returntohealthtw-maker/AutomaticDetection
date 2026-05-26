@@ -8,13 +8,21 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.13"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.26.14"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 19
-APK_LATEST_VERSION_NAME = "1.1.8"
+APK_LATEST_VERSION_CODE = 20
+APK_LATEST_VERSION_NAME = "1.1.9"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
+    "v1.1.9 更新內容：\n"
+    "・修正所有人 MBTI 結果都一樣的嚴重 bug\n"
+    "  ◎ 原本 Java 端把 8 個 ThinkGear 頻段壓成 5 個（高低 alpha/beta/gamma 平均後遺失）\n"
+    "  ◎ 加上 bandTo100 log 壓縮把腦波拉到窄區，個體差異被抹平\n"
+    "  ◎ JS 端 la=ha=0.5*alpha 自我抵消 → 多數人卡在 INFP / INFJ\n"
+    "・修法：Android 多送 raw_lalpha / raw_halpha 等 8 個原始頻段\n"
+    "  ◎ JS 改用對數軸 sigmoid 計算，個體差異有效保留\n"
+    "\n"
     "v1.1.8 更新內容：\n"
     "・修正腦波儀健康檢查介面：明明連線中卻顯示「藍牙未開啟 / 0 台配對」\n"
     "  ◎ getBleDebugInfo 多回傳 paired / ble_connected / battery_readable 旗標\n"
