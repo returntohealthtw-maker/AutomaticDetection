@@ -2774,6 +2774,34 @@
   </div>
 </div>
 
+<!-- 🚨 重新檢測 Overlay（無有效腦波資料時阻擋報告生成）-->
+<div id="redetect-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.78);z-index:10000;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:white;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="font-size:64px;margin-bottom:8px;">⚠️</div>
+    <div style="font-size:20px;font-weight:800;color:#c62828;margin-bottom:10px;">無法生成報告</div>
+    <div style="font-size:14px;color:#1a1a2e;line-height:1.7;margin-bottom:8px;">
+      <b>尚未採集到有效的腦波資料</b><br>
+      系統已自動阻擋報告產生，避免產生數據不實的假報告。
+    </div>
+    <div id="redetect-reason" style="font-size:12px;color:#bf360c;background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:8px 12px;margin-bottom:16px;line-height:1.6;text-align:left;">原因載入中…</div>
+    <div style="font-size:13px;color:#555;line-height:1.7;margin-bottom:18px;text-align:left;background:#f5f7fa;border-radius:10px;padding:10px 12px;">
+      <b style="color:#1a3a6e;">請依照下列順序操作：</b><br>
+      1. 點下方「返回首頁」<br>
+      2. 確認腦波儀已開機並戴在頭上<br>
+      3. 點「腦波儀健康檢查」確認連線正常<br>
+      4. 重新「開始新檢測」並完成至少 30 秒採集<br>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button onclick="_dismissRedetectModal(); goto('screen-home');" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#f7462a);color:white;font-size:16px;font-weight:700;border:none;cursor:pointer;">
+        🏠 返回首頁重新檢測
+      </button>
+      <button onclick="_dismissRedetectModal(); goto('screen-eegtest-connect');" style="width:100%;padding:12px;border-radius:12px;background:rgba(26,35,126,0.1);color:#1a237e;font-size:14px;font-weight:600;border:none;cursor:pointer;">
+        🧠 先做腦波儀健康檢查
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Nav Buttons — outside phone-wrap so zoom doesn't affect positioning -->
 <div class="flow-nav">
   <button class="flow-btn flow-btn-prev" onclick="navPrev()" title="上一個畫面">‹</button>
@@ -3007,16 +3035,23 @@ function gotoIndex(idx) {
   // 進入「檢測結果」頁時：
   //   1. 把本次採集的腦波填進各 chip / bw-row（取代寫死的 demo 數字）
   //   2. 自動啟動完整報告 AI 生成（背景任務 + SSE 進度）
+  //   ⚠️ 但若沒有有效的腦波資料，必須擋下並顯示「重新檢測」對話框
   if (screens[current].id === 'screen-results') {
     try {
       if (typeof _renderResultsFromEeg === 'function') _renderResultsFromEeg();
     } catch (e) { console.error('填入腦波失敗', e); }
 
     if (!_rgJobId) {
+      const bwCheck = _validateBrainwaveCapture(window._lastEegCapture);
+      if (!bwCheck.ok) {
+        // 不啟動報告生成，跳出明確錯誤對話框
+        _showRedetectModal(bwCheck.reason);
+        return;  // ⚠️ 阻擋後續流程
+      }
       if (typeof startFullReportGeneration === 'function') {
         try {
           startFullReportGeneration({
-            brainwaveData: window._lastEegCapture || null,
+            brainwaveData: window._lastEegCapture,
           });
         } catch (e) { console.error('啟動報告生成失敗', e); }
       }
@@ -4276,6 +4311,48 @@ async function testGenerateOneSection() {
 //   subjectName     收件人姓名（預設 _currentSubjectName）
 //   subjectEmail    收件人 email（預設 _currentSubjectEmail；有給就會自動寄信）
 //   reportType      life_script / child / parent_child / marital（預設 life_script）
+// ═══════════════════════════════════════════════════════════════════════════
+// 🚨 腦波資料完整性驗證（前後端規則一致：避免產生「全部數據都是 50」的假報告）
+//
+// 通過條件（任一不滿足即拒絕）：
+//   - bw 物件存在
+//   - sample_count >= 30 （≈30 秒以上有效檢測）
+//   - 至少有一個非零的腦波數值（attn / medi / 任一頻段 > 0）
+// ═══════════════════════════════════════════════════════════════════════════
+function _validateBrainwaveCapture(bw) {
+  if (!bw || typeof bw !== 'object') {
+    return { ok: false, reason: 'brainwave_data 缺失（從未採集過）' };
+  }
+  const sc = Number(bw.sample_count) || 0;
+  if (sc < 30) {
+    return { ok: false, reason: `檢測樣本數不足（${sc} 筆，至少需 30 筆即約 30 秒以上的有效檢測）` };
+  }
+  const att = Number(bw.attention_percentage) || 0;
+  const med = Number(bw.meditation_percentage) || 0;
+  const bands = bw.bands_avg || {};
+  const bandsTotal = Object.values(bands).reduce((s, v) => s + (Number(v) || 0), 0);
+  if (att === 0 && med === 0 && bandsTotal === 0) {
+    return { ok: false, reason: '腦波數值全為零（疑似未真正接收到腦波儀資料）' };
+  }
+  return { ok: true };
+}
+
+function _showRedetectModal(reason) {
+  const ov = document.getElementById('redetect-overlay');
+  if (!ov) {
+    alert('⚠️ 無法生成報告：' + reason + '\n\n請返回首頁重新檢測。');
+    return;
+  }
+  const r = document.getElementById('redetect-reason');
+  if (r) r.textContent = '原因：' + (reason || '未知');
+  ov.style.display = 'flex';
+}
+
+function _dismissRedetectModal() {
+  const ov = document.getElementById('redetect-overlay');
+  if (ov) ov.style.display = 'none';
+}
+
 //   variant         trial / full / vip（預設 full）
 //   chaptersToGenerate  例 [1] 表示只生成第一章（最快測試）；null = 全部
 //   brainwaveData   EEG 計算後的數值 dict；null = 用 demo 資料
@@ -4320,7 +4397,15 @@ async function startFullReportGeneration(opts) {
     }
   }
 
-  // ⚠️ 受測者姓名驗證：不能使用預設「受測者」字串生成報告，否則會變成孤兒報告（無法關聯到受測者資料）
+  // 🚨 第一道硬擋：腦波資料完整性驗證（與 backend 規則一致）
+  const bwCheck = _validateBrainwaveCapture(opts.brainwaveData);
+  if (!bwCheck.ok) {
+    console.warn('[startFullReportGeneration] 已取消：', bwCheck.reason);
+    _showRedetectModal(bwCheck.reason);
+    return;
+  }
+
+  // 🚨 第二道：受測者姓名驗證（同樣不能是預設值，否則會變成孤兒報告）
   const subjectName = (opts.subjectName || _currentSubjectName || '').trim();
   if (!subjectName || subjectName === '受測者' || subjectName === '陳小明' || subjectName === '測試模式') {
     const proceedAsTest = confirm(
@@ -4356,7 +4441,18 @@ async function startFullReportGeneration(opts) {
         session_id:           window._lastEegSessionId || null,  // 讓外部 React App callback /reports/record 時帶上
       }),
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      // 🚨 後端硬擋：INVALID_BRAINWAVE 等業務錯誤要展開 modal，不要讓使用者看到 raw error
+      let errBody = null;
+      try { errBody = await resp.json(); } catch(e) {}
+      const detail = errBody && errBody.detail;
+      if (resp.status === 400 && detail && typeof detail === 'object' && detail.code === 'INVALID_BRAINWAVE') {
+        _showRedetectModal(detail.reason || detail.message || '腦波資料不完整');
+        return;
+      }
+      const msg = (detail && (detail.message || detail.reason)) || (typeof detail === 'string' ? detail : `HTTP ${resp.status}`);
+      throw new Error(msg);
+    }
     const data = await resp.json();
     if (data.mode === 'external') {
       // ── 外部系統處理（不走內部 SSE）─────────────────────────────────

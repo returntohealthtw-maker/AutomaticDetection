@@ -230,6 +230,48 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         except Exception as e:
             logger.warning("[report-gen/start] DB 補充 brainwave_data 失敗: %s", e)
 
+    # ─────────────────────────────────────────────────────────────────────
+    # 🚨 硬擋：拒絕無效的報告生成請求（避免再產生「全部數據都是 50」的假報告）
+    # 規則（任一不通過即拒絕）：
+    #   1. 必須有 brainwave_data，且 sample_count >= 30
+    #   2. 必須有 attention_percentage 或 bands_avg（其中之一非 0）
+    # 這一步擋下：① 前端漏帶資料 ② 主程式被誤觸發 ③ 第三方測試呼叫
+    # ─────────────────────────────────────────────────────────────────────
+    def _is_valid_bw(d) -> tuple[bool, str]:
+        if not d or not isinstance(d, dict):
+            return False, "brainwave_data 缺失（None 或非物件）"
+        sc = d.get("sample_count") or 0
+        try:
+            sc = int(sc)
+        except Exception:
+            sc = 0
+        if sc < 30:
+            return False, f"檢測樣本數不足（sample_count={sc}，至少需 30 筆即約 30 秒以上的有效檢測）"
+        att = d.get("attention_percentage") or 0
+        med = d.get("meditation_percentage") or 0
+        bands = d.get("bands_avg") or {}
+        bands_total = sum(int(v or 0) for v in bands.values()) if bands else 0
+        if (int(att or 0) == 0) and (int(med or 0) == 0) and bands_total == 0:
+            return False, "腦波數值全為零（疑似未真正接收到腦波儀資料）"
+        return True, ""
+
+    valid, why = _is_valid_bw(bw)
+    if not valid:
+        logger.warning("[report-gen/start] 拒絕生成（資料不完整）: %s | session_id=%s | name=%s",
+                       why, req.session_id, req.subject_name)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "ok": False,
+                "code": "INVALID_BRAINWAVE",
+                "reason": why,
+                "message": "尚未採集到有效的腦波資料，無法生成報告。請使用腦波儀完成至少 30 秒的有效檢測後再試。",
+                "subject_name": req.subject_name,
+                "session_id": req.session_id,
+                "sample_count": (bw or {}).get("sample_count", 0),
+            },
+        )
+
     use_ext = req.use_external
     if use_ext is None:
         use_ext = report_orchestrator.is_external_available(req.report_type)
