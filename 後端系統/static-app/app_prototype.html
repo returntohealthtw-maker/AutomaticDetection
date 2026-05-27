@@ -8178,7 +8178,9 @@ function _filterAdminReports() {
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   listEl.innerHTML = rows.map(r => {
-    const isGenerating = !r.pdf_url;                       // 還沒收到 Vercel callback
+    const dbStatus     = r.status || (r.pdf_url ? 'completed' : 'pending');
+    const isGenerating = (dbStatus === 'generating' || dbStatus === 'pending') && !r.pdf_url;
+    const isFailed     = dbStatus === 'failed';
     const pendingSend  = !r.email_sent && r.pdf_url;       // PDF 好了但 admin 尚未核准寄信
     const sendBtn = pendingSend
       ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
@@ -8208,12 +8210,26 @@ function _filterAdminReports() {
     }
 
     const borderColor = r.is_test       ? '#ce93d8'
-                       : isGenerating   ? '#90caf9'
-                       : pendingSend    ? '#ff9800'
+                       : isFailed      ? '#f44336'
+                       : isGenerating  ? '#90caf9'
+                       : pendingSend   ? '#ff9800'
                        : 'transparent';
-    const statusLabel = isGenerating ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中（等待 Vercel 完成）</span>'
-                       : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
-                                        : '<span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>');
+
+    // 從 client_summary 取出 headless_error（若有）
+    let headlessErrTxt = '';
+    try {
+      const cs = r.client_summary ? JSON.parse(r.client_summary) : {};
+      if (cs.headless_error) {
+        headlessErrTxt = `<div style="margin-top:4px;padding:4px 8px;background:#ffebee;border-left:3px solid #f44336;border-radius:4px;font-size:10px;color:#b71c1c;word-break:break-all;">🔴 失敗原因：${esc(cs.headless_error)}</div>`;
+      }
+    } catch(e) {}
+
+    const statusLabel = isFailed
+      ? '<span style="color:#f44336;font-weight:700;">❌ 生成失敗</span>'
+      : isGenerating
+        ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中（等待 Vercel 完成）</span>'
+        : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
+                        : '<span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>');
 
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${borderColor !== 'transparent' ? `border-left:4px solid ${borderColor};` : ''}">
@@ -8237,15 +8253,35 @@ function _filterAdminReports() {
             · ${statusLabel}
           </div>
           ${orphanWarn}
+          ${headlessErrTxt}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
+          ${isFailed && r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}')" style="background:#f44336;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新生成</button>` : ''}
           ${r.is_test ? `<button onclick="_deleteTestReport(${r.report_id})" style="background:#9c27b0;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🗑️ 刪除</button>` : ''}
         </div>
       </div>
     </div>
   `; }).join('');
+}
+
+// 從「資料庫紀錄」tab 直接重新生成失敗報告
+async function _regenFromDbRecords(sessionId, email) {
+  if (!confirm(`確定要重新生成 Session #${sessionId} 的報告？`)) return;
+  try {
+    const r = await apiFetch('/reports/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_ids: [sessionId], notify_email: email || undefined }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`重新生成失敗：${data.detail || r.status}`); return; }
+    alert(`已送出重新生成指令，請稍候 20-30 分鐘後刷新查看結果。`);
+    renderAdminReports();
+  } catch (e) {
+    alert(`例外：${e.message}`);
+  }
 }
 
 // 刪除單筆測試報告

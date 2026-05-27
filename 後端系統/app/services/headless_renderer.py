@@ -328,7 +328,8 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         "--disable-dev-shm-usage",
                         "--disable-gpu",
                         "--no-zygote",
-                        "--single-process",          # 減少子程序，降低記憶體用量
+                        # ⚠️ 不要加 --single-process：Linux 不支援此 flag，
+                        #    會讓 Chromium 在啟動時直接 SIGABRT/SIGILL crash
                         "--disable-extensions",
                         "--disable-background-networking",
                         "--disable-background-timer-throttling",
@@ -336,8 +337,8 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         "--disable-default-apps",
                         "--disable-sync",
                         "--no-first-run",
-                        # ⚠️ 移除 --js-flags=--max-old-space-size=3072
-                        # 原本設 3GB V8 heap，Railway 只有 512MB → OOM Killer 直接 kill Chromium
+                        "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+                        "--memory-pressure-off",
                     ],
                 )
                 ctx = await browser.new_context(
@@ -356,7 +357,6 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     raise RuntimeError(f"無法打開 Vercel 頁面：{e}")
 
                 # 等待「✅ 已寄送」或「✅ 報告已上傳」這類完成訊號
-                # 也接受「✅」開頭的 status 訊息，或寄信成功（藉由監聽 page.url 不會變動）
                 # 策略：每 5 秒 poll 一次 page.evaluate 看 document.body.innerText 是否有完成字串
                 deadline = time.time() + timeout_sec
                 done_keywords = [
@@ -369,13 +369,18 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     "本頁可關閉",       # 新版：「...本頁可關閉。」
                     "已完成",
                 ]
-                err_keywords = [
-                    "❌",
-                    "失敗",
+                # 遇到這些關鍵字 → Vercel app 明確失敗，立即停止等待
+                fatal_err_keywords = [
                     "GEMINI_API_KEY 未設定",
-                    "AI 模型未能",
+                    "AI 模型未能初始化",
+                    "GCS 設定錯誤",
+                    "上傳 GCS 失敗",
+                    "API key not valid",
+                    "quota exceeded",
                 ]
                 final_msg = ""
+                fatal_err_msg = ""
+                page_snapshot = ""
                 while time.time() < deadline:
                     try:
                         txt = await page.evaluate("() => document.body && document.body.innerText || ''")
@@ -388,8 +393,18 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                             break
                     if final_msg:
                         break
-                    # 早期失敗偵測（但 ❌ 可能只是 UI 提示，不一定 fatal — 仍續等）
+                    # 致命錯誤偵測 → 立即放棄，不要空等到 30 分鐘
+                    for ekw in fatal_err_keywords:
+                        if ekw in txt:
+                            fatal_err_msg = f"Vercel app 回報錯誤：{ekw}"
+                            page_snapshot = txt[:800]
+                            break
+                    if fatal_err_msg:
+                        break
                     await asyncio.sleep(5)
+
+                if fatal_err_msg:
+                    raise RuntimeError(f"{fatal_err_msg}\n頁面片段：{page_snapshot}")
 
                 if not final_msg:
                     raise TimeoutError(f"等待 Vercel App 完成超時（{timeout_sec}s）")
@@ -412,9 +427,10 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 _active_jobs[job_id]["ended_at"] = time.time()
                 _active_jobs[job_id]["error"]    = err_msg
             # ── 立即把 DB 的 generating/pending Report 標記為 failed ──
-            # 否則管理員永遠看到「⏳ 生成中」，卻沒有任何錯誤提示
+            # 同時把錯誤原因塞進 client_summary，讓管理員後台能看到
             if session_id:
                 try:
+                    import json as _json
                     from app.core.database import SessionLocal
                     from app.core import models as _M
                     with SessionLocal() as _db:
@@ -423,8 +439,15 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         ).first()
                         if rep and rep.status in ("generating", "pending"):
                             rep.status = "failed"
-                            rep.notes  = err_msg[:500] if hasattr(rep, 'notes') else None
+                            # 把失敗原因寫入 client_summary（這欄有存在）
+                            try:
+                                existing = _json.loads(rep.client_summary or "{}")
+                            except Exception:
+                                existing = {}
+                            existing["headless_error"] = err_msg[:600]
+                            existing["headless_failed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                            rep.client_summary = _json.dumps(existing, ensure_ascii=False)
                             _db.commit()
-                            logger.info("[%s] DB Report(session=%s) 已標記 failed", job_id, session_id)
+                            logger.info("[%s] DB Report(session=%s) 已標記 failed（原因：%s）", job_id, session_id, err_msg[:120])
                 except Exception as db_err:
                     logger.warning("[%s] 更新 DB failed 狀態失敗: %s", job_id, db_err)
