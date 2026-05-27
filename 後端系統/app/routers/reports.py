@@ -930,8 +930,37 @@ def _do_regenerate_one(
 
     # 觸發外部 React App（漂亮版報告）
     from app.services import report_orchestrator
-    # report_type 對應：Session.report_type 是 "adult"/"child"，但 orchestrator 用 life_script/child
-    ext_report_type = "child" if (s.report_type or "").lower() == "child" else "life_script"
+
+    # ── 從 Report.talent_report_kind 解析正確的 report_type/variant ──
+    # talent_report_kind 格式："life_script_full" / "child_trial" / "marital_full" 等
+    # 優先用 Report 已記錄的種類，fallback 到 Session.report_type 推算
+    kind_str = (r.talent_report_kind or "").lower()
+    if "child" in kind_str:
+        ext_report_type = "child"
+    elif "marital" in kind_str:
+        ext_report_type = "marital"
+    elif "parent_child" in kind_str or "parent" in kind_str:
+        ext_report_type = "parent_child"
+    else:
+        # fallback：從 Session.report_type 推算
+        sess_rt = (s.report_type or "").lower()
+        if "child" in sess_rt:
+            ext_report_type = "child"
+        elif "marital" in sess_rt:
+            ext_report_type = "marital"
+        elif "parent" in sess_rt:
+            ext_report_type = "parent_child"
+        else:
+            ext_report_type = "life_script"
+
+    # ── 從 Report.talent_report_kind 解析 variant ──
+    if "vip" in kind_str:
+        resolved_variant = "vip"
+    elif "trial" in kind_str:
+        resolved_variant = "trial"
+    else:
+        resolved_variant = variant  # 使用呼叫端傳入的（預設 "full"）
+
     try:
         result = report_orchestrator.trigger_external_report(
             report_type=ext_report_type,
@@ -939,7 +968,7 @@ def _do_regenerate_one(
             subject_email=r.notify_email or "",
             subject_age=s.subject_age,
             subject_gender=s.subject_gender or "",
-            variant=variant,
+            variant=resolved_variant,
             brainwave_data=bw,
             extra={"session_id": session_id},
         )
@@ -1034,6 +1063,40 @@ def regenerate_report_batch(
         "failed":   len(results) - ok_count,
         "results":  results,
         "note":     "全部完成後須由 admin 在『報告管理 → 💾 資料庫紀錄』預覽後手動寄信。",
+    }
+
+
+@router.post("/reset-stuck")
+def reset_stuck_reports(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員手動觸發：把所有卡在 generating/pending 的 Report 重設為 failed。
+
+    適用場景：
+      - Railway 重新部署後孤兒報告沒有自動清除
+      - 按「重新生成」沒反應、一直顯示「⏳ 生成中」
+      - 需要讓「檢測 ↔ 報告」頁面顯示 failed 狀態，才能再次點「重新生成」
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可重設")
+
+    stuck = db.query(M.Report).filter(
+        M.Report.status.in_(["generating", "pending"])
+    ).all()
+
+    reset_ids = []
+    for rep in stuck:
+        rep.status = "failed"
+        reset_ids.append(rep.report_id)
+    db.commit()
+
+    return {
+        "ok":    True,
+        "count": len(reset_ids),
+        "reset_report_ids": reset_ids,
+        "note":  f"已將 {len(reset_ids)} 筆卡住的報告重設為 failed。請至「報告管理 → 檢測↔報告」點「🔄 重新生成」。",
     }
 
 

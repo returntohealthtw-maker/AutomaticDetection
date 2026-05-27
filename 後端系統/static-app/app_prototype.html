@@ -1311,6 +1311,7 @@
               <span style="font-size:11px;color:#666;">已選 <span id="missing-selected-count" style="font-weight:700;color:#1a3a6e;">0</span> 筆</span>
               <div style="flex:1;"></div>
               <button id="missing-batch-btn" onclick="_openBatchRegenerateModal()" disabled style="background:#7e57c2;color:white;border:none;font-size:12px;padding:7px 14px;border-radius:6px;font-weight:600;cursor:not-allowed;opacity:0.5;">🔄 批次重新生成</button>
+              <button onclick="_resetStuckReports()" style="background:#c62828;color:white;border:none;font-size:12px;padding:7px 14px;border-radius:6px;font-weight:600;cursor:pointer;" title="把所有卡在'生成中'的報告重設為 failed，讓管理員可重新觸發">⚠️ 重置卡住</button>
             </div>
             <div id="admin-missing-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
           </div>
@@ -7868,6 +7869,20 @@ async function _regenerateSessionReport(sessionId, subjectName) {
     }
     alert(`✅ 已重新觸發 Session #${sessionId}\nReport #${data.report_id}\n\n${data.note || ''}`);
     renderAdminMissing();
+  } catch (e) {
+    alert(`❌ 例外：${e.message}`);
+  }
+}
+
+// ─── 重置卡住的報告 ──────────────────────────────────────────────────────
+async function _resetStuckReports() {
+  if (!confirm('⚠️ 重置卡住的報告\n\n這會把所有狀態為「生成中 / 待處理」的報告重設為「失敗」，\n讓你可以在「檢測↔報告」頁面重新點「🔄 重新生成」。\n\n確定執行？')) return;
+  try {
+    const r = await apiFetch('/reports/reset-stuck', { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`❌ 重置失敗：${data.detail || r.status}`); return; }
+    alert(`✅ 已重置 ${data.count} 筆卡住的報告。\n\n${data.note || ''}\n\n請至「報告管理 → 檢測↔報告」找到失敗的報告，點「🔄 重新生成」。`);
+    renderAdminMissing();   // 重新載入清單
   } catch (e) {
     alert(`❌ 例外：${e.message}`);
   }

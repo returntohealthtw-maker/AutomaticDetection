@@ -48,9 +48,9 @@ def _max_concurrent() -> int:
 
 def _timeout_sec() -> int:
     try:
-        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "2700")))  # 預設 45 分鐘
+        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "1800")))  # 預設 30 分鐘
     except ValueError:
-        return 2700
+        return 1800
 
 
 # ── 模組級狀態（單一 event loop 跨 thread 共用）──────────────────────
@@ -328,11 +328,16 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         "--disable-dev-shm-usage",
                         "--disable-gpu",
                         "--no-zygote",
+                        "--single-process",          # 減少子程序，降低記憶體用量
                         "--disable-extensions",
                         "--disable-background-networking",
                         "--disable-background-timer-throttling",
                         "--disable-renderer-backgrounding",
-                        "--js-flags=--max-old-space-size=3072",
+                        "--disable-default-apps",
+                        "--disable-sync",
+                        "--no-first-run",
+                        # ⚠️ 移除 --js-flags=--max-old-space-size=3072
+                        # 原本設 3GB V8 heap，Railway 只有 512MB → OOM Killer 直接 kill Chromium
                     ],
                 )
                 ctx = await browser.new_context(
@@ -401,7 +406,25 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
             logger.info("[%s] ✅ headless 完成 (%s)", job_id, final_msg)
         except Exception as e:
             logger.exception("[%s] headless 失敗", job_id)
+            err_msg = f"{type(e).__name__}: {e}"
             with _active_lock:
                 _active_jobs[job_id]["status"]   = "failed"
                 _active_jobs[job_id]["ended_at"] = time.time()
-                _active_jobs[job_id]["error"]    = f"{type(e).__name__}: {e}"
+                _active_jobs[job_id]["error"]    = err_msg
+            # ── 立即把 DB 的 generating/pending Report 標記為 failed ──
+            # 否則管理員永遠看到「⏳ 生成中」，卻沒有任何錯誤提示
+            if session_id:
+                try:
+                    from app.core.database import SessionLocal
+                    from app.core import models as _M
+                    with SessionLocal() as _db:
+                        rep = _db.query(_M.Report).filter(
+                            _M.Report.session_id == session_id
+                        ).first()
+                        if rep and rep.status in ("generating", "pending"):
+                            rep.status = "failed"
+                            rep.notes  = err_msg[:500] if hasattr(rep, 'notes') else None
+                            _db.commit()
+                            logger.info("[%s] DB Report(session=%s) 已標記 failed", job_id, session_id)
+                except Exception as db_err:
+                    logger.warning("[%s] 更新 DB failed 狀態失敗: %s", job_id, db_err)

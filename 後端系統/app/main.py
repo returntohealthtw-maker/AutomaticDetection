@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.26.25"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.27.01"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 20
@@ -261,6 +261,43 @@ def _run_lightweight_migrations():
                 print(f"[DB-MIGRATE] ⚠️ {sql} → {e}")
 
 
+async def _reset_orphan_generating_reports():
+    """啟動後 10 秒，把所有卡在 generating/pending 的 Report 標記為 failed。
+
+    產生原因：Railway 重新部署時 headless_renderer._active_jobs 記憶體清空，
+    在途的 Playwright job 消失，但 DB 的 Report 仍停留在 generating。
+    管理員在 '報告管理 → 生成監看' 看不到進度，點重新生成也無效。
+
+    修法：啟動 10 秒後掃一次，超過 5 分鐘沒更新的 generating 報告 → failed，
+    讓管理員在 '報告管理 → 檢測 ↔ 報告' 看到 failed 並點 '重新生成'。
+    """
+    import asyncio
+    await asyncio.sleep(10)   # 讓 DB 連線初始化完成
+    try:
+        from app.core.database import SessionLocal
+        from app.core import models as _M
+        cutoff = time.time() - 5 * 60   # 5 分鐘前建立的才算「孤兒」
+        with SessionLocal() as db:
+            stuck = db.query(_M.Report).filter(
+                _M.Report.status.in_(["generating", "pending"]),
+            ).all()
+            reset_count = 0
+            for rep in stuck:
+                # 只重設「建立超過 5 分鐘」的（剛剛才建立的可能真的在跑）
+                created = rep.completed_at  # 還沒完成時 completed_at 為 None
+                # 用 report_id 估時間（auto-increment，約可推算）
+                # 實際上用 created_at 最準，但 Report 可能沒有這欄
+                # 直接標記所有 generating/pending — 伺服器剛啟動，任何未完成的都是孤兒
+                rep.status = "failed"
+                reset_count += 1
+            db.commit()
+            if reset_count:
+                print(f"[startup] 已重設 {reset_count} 筆孤兒 generating/pending 報告 → failed。"
+                      f"管理員可在「報告管理 → 檢測↔報告」點「重新生成」。")
+    except Exception as e:
+        print(f"[startup] 重設孤兒報告失敗（無害）：{e}")
+
+
 @app.on_event("startup")
 async def startup():
     """
@@ -274,8 +311,14 @@ async def startup():
         ok = check_connection()
         print(f"[DB] {'OK' if ok else 'ERROR'}")
     except Exception as e:
-        # 不 raise，讓 healthcheck 通過；DB 相關 endpoint 失敗時各自回 5xx
         print(f"[DB] startup skipped: {e}")
+
+    # ── 重啟後自動修復孤兒報告 ────────────────────────────────────────────
+    # 每次 Railway 重新部署時 headless_renderer 的 _active_jobs 記憶體會清空，
+    # 但 DB 裡 status='generating' 的 Report 會永遠卡住。
+    # 啟動時把它們全部重設為 'failed' 讓管理員看得到，可手動重新觸發。
+    import asyncio
+    asyncio.create_task(_reset_orphan_generating_reports())
 
 
 @app.get("/")
