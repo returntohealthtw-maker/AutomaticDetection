@@ -246,27 +246,37 @@ async def send_email_proxy(request: Request):
     if not to:
         return JSONResponse({"error": "缺少 to 欄位"}, status_code=400, headers=_cors_headers())
 
-    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
-    if not resend_key:
-        return JSONResponse({"error": "RESEND_API_KEY 未設定"}, status_code=503, headers=_cors_headers())
+    gmail_user = os.environ.get("GMAIL_USER", "").strip()
+    gmail_pass = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
+    from_name  = os.environ.get("GMAIL_FROM_NAME", "onlineReport 線上腦波分析系統")
+
+    if not gmail_user or not gmail_pass:
+        # 沒設定 Gmail 就靜默成功（後端 /reports/record callback 另外處理寄信）
+        logger.warning("[report_app_api/sendEmail] GMAIL_USER/GMAIL_APP_PASSWORD 未設定，跳過寄信")
+        return JSONResponse({"ok": True, "skipped": True, "reason": "email_not_configured"}, headers=_cors_headers())
 
     html = f"""<p>您好，</p>
 <p>您的腦波分析報告已生成完成。</p>
-<p><a href="{pdf_url}" style="background:#2D3561;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">📄 點此查看/下載報告</a></p>
+<p><a href="{pdf_url}" style="background:#2D3561;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">點此查看/下載報告</a></p>
 <p>連結有效期限為 7 天。</p>
-<p>— 腦波分析系統</p>"""
+<p>— {from_name}</p>"""
 
     try:
-        async with httpx.AsyncClient(timeout=30) as cli:
-            r = await cli.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
-                json={"from": "noreply@returntohealthtw.com", "to": [to], "subject": subject, "html": html},
-            )
-        if r.status_code >= 400:
-            return JSONResponse({"error": f"Resend 錯誤 {r.status_code}: {r.text[:200]}"},
-                                status_code=r.status_code, headers=_cors_headers())
-        return JSONResponse({"ok": True, "id": r.json().get("id")}, headers=_cors_headers())
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = f"{from_name} <{gmail_user}>"
+        msg["To"]      = to
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(gmail_user, gmail_pass)
+            smtp.sendmail(gmail_user, [to], msg.as_string())
+
+        return JSONResponse({"ok": True}, headers=_cors_headers())
     except Exception as e:
         logger.exception("[report_app_api/sendEmail]")
         return JSONResponse({"error": str(e)}, status_code=500, headers=_cors_headers())

@@ -65,15 +65,35 @@ def _url_for(report_type: str) -> Optional[str]:
     return DEFAULT_URLS.get(report_type)
 
 
-def _is_local(report_type: str) -> bool:
-    """life_script 現在走本機 /report-app/，不走外部 Vercel"""
-    return _url_for(report_type) == "__local__"
-
-
 def _local_base_url() -> str:
     """本機 Railway 的根 URL（headless browser 用）"""
     port = int(os.environ.get("PORT", 8000))
     return f"http://127.0.0.1:{port}"
+
+
+def _is_local(report_type: str) -> bool:
+    """life_script 是否走本機 /report-app/（優先用本機，穩定且不依賴 Vercel）
+
+    判斷順序：
+    1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1 → 強制走外部 Vercel
+    2. 本機 /report-app/ 目錄存在 → 走本機
+    3. 否則走外部
+    """
+    if report_type != "life_script":
+        return False
+    if os.environ.get("USE_EXTERNAL_LIFE_SCRIPT", "").strip() == "1":
+        return False
+    # 檢查本機 report-app 目錄是否存在（只要有 index.html 就算）
+    import importlib.util
+    port = int(os.environ.get("PORT", 8000))
+    local_index_candidates = [
+        "/app/static-app/report-app/index.html",     # Docker / Railway
+        "static-app/report-app/index.html",           # 本地開發
+    ]
+    for c in local_index_candidates:
+        if os.path.isfile(c):
+            return True
+    return False
 
 
 def is_external_available(report_type: str) -> bool:
