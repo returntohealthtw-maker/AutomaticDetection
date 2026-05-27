@@ -336,13 +336,49 @@ def _run_full_generation(
         else:
             logger.info("📋 報告已產生（未填收件 email）")
 
-        job["status"] = "completed"
+        # ── 最終狀態：若 PDF 沒成功上傳/產生，就是失敗（不能讓 status=completed 卻 pdf_url=NULL）─
+        if pdf_url:
+            job["status"] = "completed"
+        else:
+            job["status"] = "error"
+            job["error_message"] = job.get("pdf_error") or "PDF 生成或上傳失敗"
+            _mark_db_failed(job.get("session_id"), job["error_message"])
         job["finished_at"] = time.time()
 
     except Exception as e:
         logger.exception("背景任務崩潰")
+        err_msg = f"{type(e).__name__}: {e}"
         job["status"] = "error"
-        job["error_message"] = f"{type(e).__name__}: {e}"
+        job["error_message"] = err_msg
+        _mark_db_failed(job.get("session_id"), err_msg)
+
+
+def _mark_db_failed(session_id: Optional[int], err_msg: str):
+    """把內建 Gemini 失敗的訊息寫回 DB Report，讓管理員看到具體原因。"""
+    if not session_id:
+        return
+    try:
+        import json as _jsf
+        from app.core.database import SessionLocal
+        from app.core import models as _M
+        with SessionLocal() as _db:
+            rep = _db.query(_M.Report).filter(
+                _M.Report.session_id == session_id
+            ).first()
+            if rep and rep.status in ("generating", "pending"):
+                rep.status = "failed"
+                try:
+                    existing = _jsf.loads(rep.client_summary or "{}")
+                except Exception:
+                    existing = {}
+                existing["internal_error"] = (err_msg or "")[:600]
+                existing["internal_failed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                rep.client_summary = _jsf.dumps(existing, ensure_ascii=False)
+                _db.commit()
+                logger.info("DB Report(session=%s) 已標記 failed（內建 Gemini 失敗：%s）",
+                            session_id, err_msg[:120])
+    except Exception as e:
+        logger.warning("[_mark_db_failed] 更新 DB 失敗: %s", e)
 
 
 def start_full_report(

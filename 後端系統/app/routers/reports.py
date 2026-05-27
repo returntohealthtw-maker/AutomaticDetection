@@ -796,14 +796,15 @@ def sessions_with_status(
                 display_name = raw
             display_age = s.subject_age
 
-        # 從 client_summary 取出 headless_error 讓前端顯示失敗原因
+        # 從 client_summary 取出失敗原因讓前端顯示
         # 只在 status=failed 時才回傳，避免生成中時顯示舊的失敗訊息
         headless_error_sw = None
         if r and r.status == "failed" and r.client_summary:
             try:
                 import json as _jsw
                 cs_sw = _jsw.loads(r.client_summary)
-                headless_error_sw = cs_sw.get("headless_error")
+                # 優先用內建 Gemini 錯誤，否則用 headless 錯誤
+                headless_error_sw = cs_sw.get("internal_error") or cs_sw.get("headless_error")
             except Exception:
                 pass
 
@@ -963,6 +964,19 @@ def _do_regenerate_one(
         r.completed_at = None
         if notify_email:
             r.notify_email = notify_email
+        # 🧹 清掉 client_summary 裡的舊失敗訊息，避免「重新生成中」仍顯示上次的錯誤
+        if r.client_summary:
+            try:
+                import json as _jclr
+                _cs_clr = _jclr.loads(r.client_summary or "{}")
+                if isinstance(_cs_clr, dict):
+                    _cs_clr.pop("headless_error", None)
+                    _cs_clr.pop("headless_failed_at", None)
+                    _cs_clr.pop("internal_error", None)
+                    _cs_clr.pop("internal_failed_at", None)
+                    r.client_summary = _jclr.dumps(_cs_clr, ensure_ascii=False)
+            except Exception:
+                pass
     db.commit()
     db.refresh(r)
 
