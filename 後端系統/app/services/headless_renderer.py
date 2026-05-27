@@ -48,9 +48,9 @@ def _max_concurrent() -> int:
 
 def _timeout_sec() -> int:
     try:
-        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "1800")))  # 預設 30 分鐘
+        return max(60, int(os.environ.get("HEADLESS_TIMEOUT_SEC", "3600")))  # 預設 60 分鐘（BrianaveReportImage Imagen 生成需時）
     except ValueError:
-        return 1800
+        return 3600
 
 
 # ── 模組級狀態（單一 event loop 跨 thread 共用）──────────────────────
