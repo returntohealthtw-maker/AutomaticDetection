@@ -4930,6 +4930,9 @@ function startPaymentPolling(orderId, qrScreenId) {
       clearInterval(_pollTimer);
       clearInterval(_countdownTimer);
       showPaymentResult("paid", qrScreenId);
+      // 保底：2 秒後強制跳轉（防止 overlay 在 Android 上卡住不跳）
+      const _targetPaid = (qrScreenId || '').startsWith('screen-qr-up-') ? 'screen-upgrade-done' : 'screen-connect';
+      setTimeout(() => { _forceCloseAllOverlays(); goto(_targetPaid); }, 2000);
     } else if (status === "expired" || status === "failed") {
       clearInterval(_pollTimer);
       clearInterval(_countdownTimer);
@@ -9093,15 +9096,29 @@ function _toggleEarnGroup(gi) {
 
 async function simulatePaid(qrScreenId) {
   if (_currentOrderId) {
-    // 呼叫後端模擬 API
+    // 呼叫後端模擬 API（設 3 秒 timeout 避免卡住）
     try {
-      await fetch(`${API_BASE}/payments/simulate-paid/${_currentOrderId}`, { method: "POST" });
-    } catch (e) { /* 後端未啟動時忽略，直接顯示成功 */ }
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 3000);
+      await fetch(`${API_BASE}/payments/simulate-paid/${_currentOrderId}`, { method: "POST", signal: ctrl.signal });
+      clearTimeout(tid);
+    } catch (e) { /* 後端未啟動或 timeout 時忽略，直接顯示成功 */ }
   }
-  // 直接顯示付款成功彈窗
   clearInterval(_pollTimer);
   clearInterval(_countdownTimer);
+
+  // 判斷是否加購升級（不需腦波檢測）
+  const isUpgrade = (qrScreenId || '').startsWith('screen-qr-up-');
+  const targetScreen = isUpgrade ? 'screen-upgrade-done' : 'screen-connect';
+
+  // 顯示付款成功彈窗（同時設兩道保底）
   showPaymentResult("paid", qrScreenId);
+
+  // 保底 1：2 秒後強制跳轉（防止 overlay setTimeout 在某些 Android 裝置失效）
+  setTimeout(() => {
+    _forceCloseAllOverlays();
+    goto(targetScreen);
+  }, 2000);
 }
 
 // Init title
