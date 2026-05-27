@@ -2886,7 +2886,7 @@
 </div><!-- /phone-wrap -->
 
 <!-- 付款結果 Overlay（phone-wrap 外，不受 zoom 影響）-->
-<div id="payment-result-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+<div id="payment-result-overlay" style="display:none;pointer-events:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this){this.style.display='none';this.style.pointerEvents='none';}">
   <div style="background:white;border-radius:24px;padding:32px 28px;max-width:320px;width:88%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
     <div id="payment-result-icon" style="font-size:64px;margin-bottom:12px;">✅</div>
     <div id="payment-result-title" style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">付款成功！</div>
@@ -3141,9 +3141,31 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
+// 強制清除所有 position:fixed overlay（Android WebView 硬體加速 bug：
+// overlay 可能視覺上透明但仍攔截所有觸控，導致畫面按鈕全部失效）
+function _forceCloseAllOverlays() {
+  const overlayIds = [
+    'payment-result-overlay',
+    'redetect-overlay',
+    'paid-redetect-modal',
+    'batch-regen-modal',
+  ];
+  overlayIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'none';
+      el.style.pointerEvents = 'none';  // 雙重保險：即使 display 沒生效也不攔截觸控
+    }
+  });
+  // 同時清除任何動態插入的 overlay（如 _showExternalPreview）
+  document.querySelectorAll('[data-dynamic-overlay]').forEach(el => el.remove());
+}
+
 function goto(id) {
   // 2026-05：MBTI 問卷已停用，任何 goto('screen-mbti') 一律重導到「連接腦波設備」
   if (id === 'screen-mbti') id = 'screen-connect';
+  // 每次切換畫面都強制清除可能殘留的 overlay，防止 Android 渲染 bug 導致按鈕失效
+  _forceCloseAllOverlays();
   const idx = screens.findIndex(s => s.id === id);
   if (idx >= 0) gotoIndex(idx);
 }
@@ -4932,8 +4954,8 @@ function showPaymentResult(status, qrScreenId) {
     msg.textContent   = "正在生成升級後的新版本報告…";
     btn.textContent   = "查看升級結果 →";
     btn.style.display = '';
-    btn.onclick = () => { overlay.style.display = "none"; goto("screen-upgrade-done"); };
-    setTimeout(() => { overlay.style.display = "none"; goto("screen-upgrade-done"); }, 1500);
+    btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-upgrade-done"); };
+    setTimeout(() => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-upgrade-done"); }, 1500);
     overlay.style.display = "flex";
     return;
   }
@@ -4949,22 +4971,23 @@ function showPaymentResult(status, qrScreenId) {
     // screen-detect 進入後會呼叫 AndroidBridge.startStreamingEeg()，
     // 由 Java 層每秒把真實腦波資料推進 window.JSBridge.onEegSample()，
     // WebApp 顯示圖1的自訂檢測畫面，不再跳 test.class（圖2廠商原始畫面）。
-    btn.onclick = () => { overlay.style.display = "none"; goto("screen-connect"); };
-    setTimeout(() => { overlay.style.display = "none"; goto("screen-connect"); }, 1500);
+    btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-connect"); };
+    setTimeout(() => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-connect"); }, 1500);
   } else if (status === "expired") {
     icon.textContent  = "⏰";
     title.textContent = "付款逾時";
     msg.textContent   = "QR Code 已失效，請重新選擇報告";
     btn.textContent   = "重新選擇";
-    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-reports"); };
+    btn.onclick       = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-reports"); };
   } else {
     icon.textContent  = "❌";
     title.textContent = "付款失敗";
     msg.textContent   = "請重試或聯絡客服";
     btn.textContent   = "返回";
-    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-reports"); };
+    btn.onclick       = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-reports"); };
   }
   overlay.style.display = "flex";
+  overlay.style.pointerEvents = "auto";  // 重新啟用觸控（隱藏時設為 none）
 }
 
 // ─────────────────────────────────────────────────────────────────────────
