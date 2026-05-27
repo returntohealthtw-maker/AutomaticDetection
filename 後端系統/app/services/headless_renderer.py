@@ -323,22 +323,15 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 browser = await pw.chromium.launch(
                     headless=True,
                     args=[
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-gpu",
-                        "--no-zygote",
-                        # ⚠️ 不要加 --single-process：Linux 不支援此 flag，
-                        #    會讓 Chromium 在啟動時直接 SIGABRT/SIGILL crash
-                        "--disable-extensions",
-                        "--disable-background-networking",
-                        "--disable-background-timer-throttling",
-                        "--disable-renderer-backgrounding",
-                        "--disable-default-apps",
-                        "--disable-sync",
-                        "--no-first-run",
-                        "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-                        "--memory-pressure-off",
+                        # 在 Docker / Railway Linux 容器中最穩定的最小 flag 組合：
+                        "--no-sandbox",             # 容器內必須（無 root isolation）
+                        "--disable-setuid-sandbox", # 同上
+                        "--disable-dev-shm-usage",  # /dev/shm 小時的容器必須
+                        "--disable-gpu",            # headless 不需 GPU
+                        # ⚠️ 移除所有可能造成 crash 的 flags：
+                        # --no-zygote      → 某些 kernel 版本會 SIGILL
+                        # --single-process → Linux 完全不支援，必 crash
+                        # --memory-pressure-off → 非標準 flag
                     ],
                 )
                 ctx = await browser.new_context(

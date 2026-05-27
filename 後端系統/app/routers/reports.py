@@ -546,6 +546,14 @@ def list_reports(
             subject_name = raw_name or "(無 session)"
             is_test = False
 
+        # 從 client_summary 取出 headless_error（若有）讓前端顯示
+        headless_error = None
+        try:
+            cs_data = _json.loads(rep.client_summary or "{}")
+            headless_error = cs_data.get("headless_error")
+        except Exception:
+            pass
+
         out.append({
             "report_id":      rep.report_id,
             "session_id":     rep.session_id,
@@ -566,6 +574,7 @@ def list_reports(
             "orphan":         (rep.session_id is None),
             "is_test":        is_test,                      # 🧪 admin 可用 is_test 過濾或一鍵清理
             "linked_to_subject": subj_record is not None,   # 🔗 是否已連結到 Subject 主檔
+            "headless_error": headless_error,               # 失敗原因（來自 headless_renderer）
         })
     return {"ok": True, "count": len(out), "reports": out}
 

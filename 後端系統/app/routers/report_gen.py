@@ -200,6 +200,50 @@ def health():
     }
 
 
+@router.get("/headless-diag")
+def headless_diag(authorization: str = Header(None), db=Depends(get_db)):
+    """完整診斷 headless Chromium 環境（admin 專用）。
+    回傳：playwright 是否安裝、Chromium 路徑是否存在、能否成功啟動 browser。
+    """
+    from app.services.auth import require_user
+    from app.services import headless_renderer
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可使用")
+
+    info = headless_renderer.diag()
+
+    # 嘗試真正啟動 Chromium（同步）
+    launch_ok = False
+    launch_err = None
+    if info.get("playwright_installed"):
+        try:
+            import asyncio as _asyncio
+            from playwright.async_api import async_playwright as _apw
+
+            async def _try_launch():
+                async with _apw() as pw:
+                    b = await pw.chromium.launch(
+                        headless=True,
+                        args=["--no-sandbox", "--disable-setuid-sandbox",
+                              "--disable-dev-shm-usage", "--disable-gpu"],
+                    )
+                    ver = b.version
+                    await b.close()
+                    return ver
+
+            loop = _asyncio.new_event_loop()
+            ver = loop.run_until_complete(_try_launch())
+            loop.close()
+            launch_ok = True
+            info["chromium_version"] = ver
+        except Exception as e:
+            launch_err = f"{type(e).__name__}: {e}"
+    info["launch_ok"]  = launch_ok
+    info["launch_err"] = launch_err
+    return {"ok": True, "diag": info}
+
+
 @router.get("/active-jobs")
 def active_headless_jobs():
     """列出目前在 Railway 背景執行的 headless Playwright 任務（含狀態 / 耗時 / session_id）。

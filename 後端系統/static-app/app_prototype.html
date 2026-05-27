@@ -1406,6 +1406,7 @@
               <input type="checkbox" id="monitor-autorefresh" checked onchange="_toggleMonitorAutorefresh()"> 自動更新 (5s)
             </label>
             <span id="monitor-status" style="font-size:11px;opacity:0.7;flex:1;text-align:right;"></span>
+            <button onclick="_runHeadlessDiag()" style="background:#4caf50;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;flex-shrink:0;">🔬 Chromium診斷</button>
             <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminMonitor()">🔄 立即更新</button>
           </div>
           <div id="admin-monitor-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
@@ -7889,6 +7890,30 @@ async function _regenerateSessionReport(sessionId, subjectName) {
 let _activeJobsCache = [];
 let _activeJobsTimer = null;
 
+async function _runHeadlessDiag() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '🔬 診斷中…';
+  try {
+    const r = await apiFetch('/report-gen/headless-diag');
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`診斷失敗：${data.detail || r.status}`); return; }
+    const d = data.diag || {};
+    const lines = [
+      `Playwright 已安裝：${d.playwright_installed ? '✅' : '❌'}`,
+      `Chromium 路徑：${d.chromium_path || d.chromium_error || '—'}`,
+      `啟動測試：${d.launch_ok ? `✅ 成功 (v${d.chromium_version})` : `❌ 失敗：${d.launch_err}`}`,
+      `目前活躍任務：${d.active_jobs}`,
+      `最大並發：${d.max_concurrent}`,
+      `Timeout：${d.timeout_sec}s`,
+    ];
+    alert('🔬 Headless Chromium 診斷結果\n\n' + lines.join('\n'));
+  } catch(e) {
+    alert(`診斷例外：${e.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔬 Chromium診斷';
+  }
+}
+
 async function _pollActiveJobs() {
   try {
     const r = await apiFetch('/report-gen/active-jobs');
@@ -8215,14 +8240,10 @@ function _filterAdminReports() {
                        : pendingSend   ? '#ff9800'
                        : 'transparent';
 
-    // 從 client_summary 取出 headless_error（若有）
-    let headlessErrTxt = '';
-    try {
-      const cs = r.client_summary ? JSON.parse(r.client_summary) : {};
-      if (cs.headless_error) {
-        headlessErrTxt = `<div style="margin-top:4px;padding:4px 8px;background:#ffebee;border-left:3px solid #f44336;border-radius:4px;font-size:10px;color:#b71c1c;word-break:break-all;">🔴 失敗原因：${esc(cs.headless_error)}</div>`;
-      }
-    } catch(e) {}
+    // 顯示 headless 失敗原因（由後端 API 直接回傳）
+    const headlessErrTxt = r.headless_error
+      ? `<div style="margin-top:4px;padding:4px 8px;background:#ffebee;border-left:3px solid #f44336;border-radius:4px;font-size:10px;color:#b71c1c;word-break:break-all;">🔴 失敗原因：${esc(r.headless_error)}</div>`
+      : '';
 
     const statusLabel = isFailed
       ? '<span style="color:#f44336;font-weight:700;">❌ 生成失敗</span>'
