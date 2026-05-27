@@ -200,6 +200,38 @@ def health():
     }
 
 
+@router.get("/active-jobs")
+def active_headless_jobs():
+    """列出目前在 Railway 背景執行的 headless Playwright 任務（含狀態 / 耗時 / session_id）。
+
+    若清單是空的，表示目前沒有報告正在被 headless 渲染（可能已完成、失敗、或伺服器重啟後消失）。
+    """
+    from app.services import headless_renderer
+    jobs = headless_renderer.list_jobs()
+    now = time.time()
+    result = []
+    for j in jobs:
+        started = j.get("started_at") or now
+        elapsed_sec = int(now - started)
+        result.append({
+            "job_id":       j.get("job_id"),
+            "report_type":  j.get("report_type"),
+            "subject_name": j.get("subject_name"),
+            "status":       j.get("status"),         # queued / running / completed / failed
+            "elapsed_sec":  elapsed_sec,
+            "elapsed_min":  round(elapsed_sec / 60, 1),
+            "error":        j.get("error"),
+            "vercel_url":   (j.get("vercel_url") or "")[:120],  # 截短，URL 很長
+        })
+    return {
+        "ok":         True,
+        "count":      len(result),
+        "jobs":       result,
+        "playwright": headless_renderer.is_available(),
+        "note":       "伺服器重啟後 jobs 會清空（in-memory）。若清單是空的但 DB 仍顯示 generating，請點「⚠️ 重置卡住」再重新生成。"
+    }
+
+
 @router.get("/chapters")
 def list_chapters(report_type: str = "life_script", variant: str = "full"):
     """列出章節結構，給前端 UI 顯示進度清單用"""

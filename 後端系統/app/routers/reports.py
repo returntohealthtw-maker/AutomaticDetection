@@ -734,8 +734,22 @@ def sessions_with_status(
             health = "ok"
             is_missing = False
         else:
-            # pending / processing — 看時間
-            age_ms = now_ms - (s.created_at or now_ms)
+            # pending / generating — 看 Report.created_at（比 Session.created_at 更準確：
+            # 每次 regenerate 都會更新 r.created_at，Session.created_at 是昨天建立的不變）
+            ref_ts = None
+            if r and r.created_at:
+                try:
+                    import datetime as _dt
+                    rc = r.created_at
+                    if hasattr(rc, "timestamp"):
+                        ref_ts = int(rc.timestamp() * 1000)
+                    else:
+                        ref_ts = int(float(rc)) * 1000
+                except Exception:
+                    ref_ts = None
+            if ref_ts is None:
+                ref_ts = s.created_at or now_ms
+            age_ms = now_ms - ref_ts
             if age_ms > 30 * 60 * 1000:
                 health = "stale_pending"
                 is_missing = True
@@ -912,7 +926,7 @@ def _do_regenerate_one(
         import uuid
         r = M.Report(
             session_id   = session_id,
-            status       = "pending",
+            status       = "generating",
             qr_token     = uuid.uuid4().hex,
             notify_email = notify_email or None,
             email_sent   = 0,
@@ -920,9 +934,12 @@ def _do_regenerate_one(
         db.add(r)
         db.flush()
     else:
-        r.status     = "pending"
-        r.pdf_url    = None
-        r.email_sent = 0
+        from datetime import datetime as _dt
+        r.status       = "generating"   # 用 generating 讓前端顯示「⏳ 生成中」
+        r.pdf_url      = None
+        r.email_sent   = 0
+        r.created_at   = _dt.now()      # ← 重置計時器，避免立刻顯示「卡住 >30 分鐘」
+        r.completed_at = None
         if notify_email:
             r.notify_email = notify_email
     db.commit()
