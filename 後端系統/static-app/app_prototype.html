@@ -4927,12 +4927,8 @@ function startPaymentPolling(orderId, qrScreenId) {
     console.log(`[付款輪詢] 訂單 ${orderId} 狀態：${status}`);
 
     if (status === "paid") {
-      clearInterval(_pollTimer);
-      clearInterval(_countdownTimer);
-      showPaymentResult("paid", qrScreenId);
-      // 保底：2 秒後強制跳轉（防止 overlay 在 Android 上卡住不跳）
-      const _targetPaid = (qrScreenId || '').startsWith('screen-qr-up-') ? 'screen-upgrade-done' : 'screen-connect';
-      setTimeout(() => { _forceCloseAllOverlays(); goto(_targetPaid); }, 2000);
+      // ✅ 使用統一函式（與 simulatePaid 完全相同路徑）
+      _onPaymentPaid(qrScreenId);
     } else if (status === "expired" || status === "failed") {
       clearInterval(_pollTimer);
       clearInterval(_countdownTimer);
@@ -4951,31 +4947,30 @@ function showPaymentResult(status, qrScreenId) {
   // 是否為「加購升級」流程：付款成功不開腦波檢測，直接顯示升級成功
   const isUpgrade = (qrScreenId || '').startsWith('screen-qr-up-');
 
+  // paid 路徑的目標畫面
+  const targetScreen = isUpgrade ? 'screen-upgrade-done' : 'screen-connect';
+
   if (status === "paid" && isUpgrade) {
     icon.textContent  = "🎉";
     title.textContent = "升級付款成功！";
     msg.textContent   = "正在生成升級後的新版本報告…";
     btn.textContent   = "查看升級結果 →";
     btn.style.display = '';
-    btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-upgrade-done"); };
-    setTimeout(() => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-upgrade-done"); }, 1500);
+    btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto(targetScreen); };
+    // 升級路徑：也設 pointerEvents=auto（修正升級 overlay 按鈕無法點擊的 bug）
     overlay.style.display = "flex";
+    overlay.style.pointerEvents = "auto";
     return;
   }
 
   if (status === "paid") {
     icon.textContent  = "✅";
     title.textContent = "付款成功！";
-    msg.innerHTML     = "正在準備腦波檢測…<br><span style='font-size:13px;color:#666;'>請確認腦波儀已配戴並開機</span>";
-    btn.textContent   = "開始檢測 →";
+    msg.innerHTML     = "正在準備腦波檢測…<br><span style='font-size:13px;color:#666;'>請確認腦波儀已配戴並開機</span><br><span style='font-size:11px;color:#aaa;'>（2 秒後自動進入下一步）</span>";
+    btn.textContent   = "立即開始檢測 →";
     btn.style.display = '';
-
-    // ── 統一走 WebApp screen-connect 流程（Android / 瀏覽器相同路徑）──
-    // screen-detect 進入後會呼叫 AndroidBridge.startStreamingEeg()，
-    // 由 Java 層每秒把真實腦波資料推進 window.JSBridge.onEegSample()，
-    // WebApp 顯示圖1的自訂檢測畫面，不再跳 test.class（圖2廠商原始畫面）。
-    btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-connect"); };
-    setTimeout(() => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto("screen-connect"); }, 1500);
+    // 手動點按鈕也能立即跳轉
+    btn.onclick = () => { _forceCloseAllOverlays(); goto(targetScreen); };
   } else if (status === "expired") {
     icon.textContent  = "⏰";
     title.textContent = "付款逾時";
@@ -9094,31 +9089,37 @@ function _toggleEarnGroup(gi) {
   if (btn) btn.textContent = hidden ? '−' : '+';
 }
 
-async function simulatePaid(qrScreenId) {
-  if (_currentOrderId) {
-    // 呼叫後端模擬 API（設 3 秒 timeout 避免卡住）
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 3000);
-      await fetch(`${API_BASE}/payments/simulate-paid/${_currentOrderId}`, { method: "POST", signal: ctrl.signal });
-      clearTimeout(tid);
-    } catch (e) { /* 後端未啟動或 timeout 時忽略，直接顯示成功 */ }
-  }
+// 付款成功後的統一跳轉邏輯（模擬 + 真實付款共用）
+let _payNavTimer = null;
+function _onPaymentPaid(qrScreenId) {
   clearInterval(_pollTimer);
   clearInterval(_countdownTimer);
+  // 清除舊的保底 timer（防止多次觸發堆疊）
+  if (_payNavTimer) { clearTimeout(_payNavTimer); _payNavTimer = null; }
 
-  // 判斷是否加購升級（不需腦波檢測）
   const isUpgrade = (qrScreenId || '').startsWith('screen-qr-up-');
   const targetScreen = isUpgrade ? 'screen-upgrade-done' : 'screen-connect';
 
-  // 顯示付款成功彈窗（同時設兩道保底）
+  // 立即顯示付款成功畫面
   showPaymentResult("paid", qrScreenId);
 
-  // 保底 1：2 秒後強制跳轉（防止 overlay setTimeout 在某些 Android 裝置失效）
-  setTimeout(() => {
+  // 保底：2 秒後強制跳轉（防止 showPaymentResult 內部 setTimeout 失效）
+  _payNavTimer = setTimeout(() => {
+    _payNavTimer = null;
     _forceCloseAllOverlays();
     goto(targetScreen);
   }, 2000);
+}
+
+async function simulatePaid(qrScreenId) {
+  // ✅ 立即呼叫統一邏輯 → 覆蓋立即出現，不等 API
+  _onPaymentPaid(qrScreenId);
+
+  // API 呼叫在背景執行（fire-and-forget，不 await）
+  if (_currentOrderId) {
+    fetch(`${API_BASE}/payments/simulate-paid/${_currentOrderId}`, { method: "POST" })
+      .catch(() => { /* 後端未啟動時忽略 */ });
+  }
 }
 
 // Init title
