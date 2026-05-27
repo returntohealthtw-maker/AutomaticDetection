@@ -796,6 +796,16 @@ def sessions_with_status(
                 display_name = raw
             display_age = s.subject_age
 
+        # 從 client_summary 取出 headless_error 讓前端顯示失敗原因
+        headless_error_sw = None
+        if r and r.client_summary:
+            try:
+                import json as _jsw
+                cs_sw = _jsw.loads(r.client_summary)
+                headless_error_sw = cs_sw.get("headless_error")
+            except Exception:
+                pass
+
         out.append({
             "session_id":   s.session_id,
             "subject_id":   sid_resolved,
@@ -816,6 +826,7 @@ def sessions_with_status(
             "completed_at": r.completed_at.isoformat() if (r and r.completed_at) else None,
             "health":       health,
             "is_missing":   is_missing,
+            "headless_error": headless_error_sw,   # 失敗原因（headless_renderer 寫入）
         })
 
     return {
@@ -987,27 +998,43 @@ def _do_regenerate_one(
     else:
         resolved_variant = variant  # 使用呼叫端傳入的（預設 "full"）
 
+    # 🔑 受測者真實姓名解析（與 start_full 相同邏輯）
+    PLACEHOLDER_NAMES_REGEN = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
+    resolved_regen_name  = s.subject_name or ""
+    resolved_regen_email = r.notify_email or ""
+    resolved_regen_sid   = s.subject_id or (r.subject_id if r else None)
+    if resolved_regen_sid:
+        try:
+            subj_r = db.query(M.Subject).filter(M.Subject.subject_id == resolved_regen_sid).first()
+            if subj_r:
+                if not resolved_regen_name or resolved_regen_name in PLACEHOLDER_NAMES_REGEN:
+                    resolved_regen_name = subj_r.name
+                if not resolved_regen_email:
+                    resolved_regen_email = subj_r.email or ""
+        except Exception as _e:
+            logger.warning("[_do_regenerate_one] 反查 Subject 失敗: %s", _e)
+
     try:
         result = report_orchestrator.trigger_external_report(
             report_type=ext_report_type,
-            subject_name=s.subject_name or "",
-            subject_email=r.notify_email or "",
+            subject_name=resolved_regen_name or s.subject_name or "",
+            subject_email=resolved_regen_email,
             subject_age=s.subject_age,
             subject_gender=s.subject_gender or "",
             variant=resolved_variant,
             brainwave_data=bw,
-            extra={"session_id": session_id},
+            extra={"session_id": session_id, "subject_id": resolved_regen_sid},
         )
     except Exception as e:
         return {"ok": False, "session_id": session_id,
-                "subject_name": s.subject_name,
+                "subject_name": resolved_regen_name or s.subject_name,
                 "error": f"trigger 失敗：{type(e).__name__}: {e}"}
 
     return {
         "ok":            bool(result.get("ok", False)),
         "session_id":    session_id,
         "report_id":     r.report_id,
-        "subject_name":  s.subject_name,
+        "subject_name":  resolved_regen_name or s.subject_name,
         "notify_email":  r.notify_email,
         "external_mode": result.get("mode"),
         "job_id":        result.get("job_id"),

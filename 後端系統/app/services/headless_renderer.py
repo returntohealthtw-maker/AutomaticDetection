@@ -353,14 +353,29 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 # 策略：每 5 秒 poll 一次 page.evaluate 看 document.body.innerText 是否有完成字串
                 deadline = time.time() + timeout_sec
                 done_keywords = [
+                    # ── 主要完成訊號 ──
                     "✅ 報告下載連結已寄送至",
-                    "報告已上傳：",
                     "✅ 報告下載連結已寄送",
+                    "報告已上傳：",
+                    "報告已上傳",
                     "Email 已寄送",
                     "已寄送",
-                    "待管理員",        # 新版：「待管理員後台預覽核准後寄送至」
-                    "本頁可關閉",       # 新版：「...本頁可關閉。」
+                    # ── 待管理員核准模式（新版 callback flow）──
+                    "待管理員",
+                    "本頁可關閉",
                     "已完成",
+                    # ── 英文版 Vercel app 可能出現的訊號 ──
+                    "Report generated",
+                    "Report uploaded",
+                    "Email sent",
+                    "completed",
+                    "Generation complete",
+                    # ── 寬鬆捕捉：任何「上傳」或「GCS」成功訊號 ──
+                    "上傳成功",
+                    "GCS 上傳",
+                    "gs://",              # GCS URL 出現代表上傳成功
+                    "/reports/record",    # callback 已送出
+                    "callback",
                 ]
                 # 遇到這些關鍵字 → Vercel app 明確失敗，立即停止等待
                 fatal_err_keywords = [
