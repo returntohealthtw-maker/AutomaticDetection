@@ -402,14 +402,17 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     except Exception:
                         txt = ""
 
-                    # 每 60 秒記錄一次頁面狀態，方便 Railway log 診斷
+                    # 更新 active_jobs 的頁面快照（可被 /headless/jobs 端點查詢）
                     _now = time.time()
+                    _elapsed = int(_now - (deadline - timeout_sec))
+                    _preview = txt[:400].replace('\n', ' ') if txt else "(empty)"
+                    with _active_lock:
+                        _active_jobs[job_id]["page_text_preview"] = _preview
+                        _active_jobs[job_id]["elapsed_sec"] = _elapsed
+                    # 每 60 秒記錄一次頁面狀態到 log
                     if _now - _last_txt_log >= 60:
                         _last_txt_log = _now
-                        _elapsed = int(_now - (deadline - timeout_sec))
-                        # 只記錄前 300 字，避免 log 爆炸
-                        _preview = txt[:300].replace('\n', ' | ') if txt else "(empty)"
-                        logger.info("[%s] ⏱ %ds 頁面狀態: %s", job_id, _elapsed, _preview)
+                        logger.info("[%s] ⏱ %ds 頁面狀態: %s", job_id, _elapsed, _preview[:300])
 
                     for kw in done_keywords:
                         if kw in txt:
