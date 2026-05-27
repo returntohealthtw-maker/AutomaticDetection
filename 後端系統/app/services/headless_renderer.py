@@ -357,17 +357,23 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 # 致命錯誤：Vercel app 頁面出現已知的失敗字串 → 立即放棄。
 
                 deadline = time.time() + timeout_sec
+                # ⚠️  關鍵字必須足夠具體，避免 Gemini 生成的章節文字（含「已完成」「待管理員」等普通詞語）
+                #     誤觸發提前退出。只比對出現在 status bar 的特定格式字串。
                 done_keywords = [
-                    "✅ 報告下載連結已寄送至", "✅ 報告下載連結已寄送",
-                    "報告已上傳：", "報告已上傳", "Email 已寄送", "已寄送",
-                    "待管理員", "本頁可關閉", "已完成",
-                    "Report generated", "Report uploaded", "Email sent",
-                    "上傳成功", "GCS 上傳", "gs://",
+                    # React app auto-mode 成功完成後的最終 status 訊息
+                    "本頁可關閉。\n連結：",          # App.tsx 唯一出現此格式的地方
+                    "本頁可關閉。",                   # 備用（無換行版）
+                    "✅ 報告下載連結已寄送至",         # 舊 Vercel app 完成訊息
+                    "✅ 報告下載連結已寄送",
+                    "報告已上傳：https://",           # 含 https 確保不是章節內文
+                    "Report uploaded: https://",
                 ]
                 fatal_err_keywords = [
                     "GEMINI_API_KEY 未設定", "AI 模型未能初始化",
                     "GCS 設定錯誤", "上傳 GCS 失敗",
                     "API key not valid", "quota exceeded",
+                    "上傳雲端失敗",                   # React app GCS 失敗訊息
+                    "❌ PDF 渲染失敗",
                 ]
                 final_msg = ""
                 fatal_err_msg = ""
@@ -418,8 +424,11 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     raise TimeoutError(f"等待 Vercel App 完成超時（{timeout_sec}s）")
 
                 logger.info("[%s] ✅ 完成訊號：%s", job_id, final_msg)
-                # 多等 5 秒讓 Vercel app 完成 callback
-                await asyncio.sleep(5)
+                # 若是頁面文字觸發（非 DB poll），多等 15 秒讓 React app 完成 callback
+                if "頁面文字" in final_msg:
+                    await asyncio.sleep(15)
+                else:
+                    await asyncio.sleep(3)
 
                 await ctx.close()
                 await browser.close()
