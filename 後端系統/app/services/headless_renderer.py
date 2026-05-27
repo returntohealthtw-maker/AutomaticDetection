@@ -349,75 +349,76 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 except Exception as e:
                     raise RuntimeError(f"無法打開 Vercel 頁面：{e}")
 
-                # 等待「✅ 已寄送」或「✅ 報告已上傳」這類完成訊號
-                # 策略：每 5 秒 poll 一次 page.evaluate 看 document.body.innerText 是否有完成字串
+                # ── 完成偵測策略（雙軌並行，任一先到即視為完成）────────────────
+                # 主軌：輪詢 DB — Vercel app 完成後會 POST /reports/record，
+                #        DB 裡 Report.status 會從 generating → completed。
+                #        這個訊號 100% 可靠，不依賴頁面文字。
+                # 副軌：頁面文字關鍵字 — 作為額外保險，匹配舊版 Vercel app。
+                # 致命錯誤：Vercel app 頁面出現已知的失敗字串 → 立即放棄。
+
                 deadline = time.time() + timeout_sec
                 done_keywords = [
-                    # ── 主要完成訊號 ──
-                    "✅ 報告下載連結已寄送至",
-                    "✅ 報告下載連結已寄送",
-                    "報告已上傳：",
-                    "報告已上傳",
-                    "Email 已寄送",
-                    "已寄送",
-                    # ── 待管理員核准模式（新版 callback flow）──
-                    "待管理員",
-                    "本頁可關閉",
-                    "已完成",
-                    # ── 英文版 Vercel app 可能出現的訊號 ──
-                    "Report generated",
-                    "Report uploaded",
-                    "Email sent",
-                    "completed",
-                    "Generation complete",
-                    # ── 寬鬆捕捉：任何「上傳」或「GCS」成功訊號 ──
-                    "上傳成功",
-                    "GCS 上傳",
-                    "gs://",              # GCS URL 出現代表上傳成功
-                    "/reports/record",    # callback 已送出
-                    "callback",
+                    "✅ 報告下載連結已寄送至", "✅ 報告下載連結已寄送",
+                    "報告已上傳：", "報告已上傳", "Email 已寄送", "已寄送",
+                    "待管理員", "本頁可關閉", "已完成",
+                    "Report generated", "Report uploaded", "Email sent",
+                    "上傳成功", "GCS 上傳", "gs://",
                 ]
-                # 遇到這些關鍵字 → Vercel app 明確失敗，立即停止等待
                 fatal_err_keywords = [
-                    "GEMINI_API_KEY 未設定",
-                    "AI 模型未能初始化",
-                    "GCS 設定錯誤",
-                    "上傳 GCS 失敗",
-                    "API key not valid",
-                    "quota exceeded",
+                    "GEMINI_API_KEY 未設定", "AI 模型未能初始化",
+                    "GCS 設定錯誤", "上傳 GCS 失敗",
+                    "API key not valid", "quota exceeded",
                 ]
                 final_msg = ""
                 fatal_err_msg = ""
-                page_snapshot = ""
+                poll_interval = 15   # 每 15 秒查一次 DB
+
                 while time.time() < deadline:
+                    # ── 主軌：DB 輪詢 ──────────────────────────────────────
+                    if session_id:
+                        try:
+                            from app.core.database import SessionLocal
+                            from app.core import models as _M
+                            with SessionLocal() as _db:
+                                rep = _db.query(_M.Report).filter(
+                                    _M.Report.session_id == session_id
+                                ).first()
+                                if rep and rep.status == "completed" and rep.pdf_url:
+                                    final_msg = f"DB callback 確認完成 (pdf_url={rep.pdf_url[:60]})"
+                                    break
+                        except Exception as _dbe:
+                            logger.debug("[%s] DB poll 例外: %s", job_id, _dbe)
+
+                    # ── 副軌：頁面文字 ─────────────────────────────────────
                     try:
                         txt = await page.evaluate("() => document.body && document.body.innerText || ''")
                     except Exception:
                         txt = ""
-                    # 完成偵測
+
                     for kw in done_keywords:
                         if kw in txt:
-                            final_msg = kw
+                            final_msg = f"頁面文字：{kw}"
                             break
                     if final_msg:
                         break
-                    # 致命錯誤偵測 → 立即放棄，不要空等到 30 分鐘
+
                     for ekw in fatal_err_keywords:
                         if ekw in txt:
                             fatal_err_msg = f"Vercel app 回報錯誤：{ekw}"
-                            page_snapshot = txt[:800]
                             break
                     if fatal_err_msg:
                         break
-                    await asyncio.sleep(5)
+
+                    await asyncio.sleep(poll_interval)
 
                 if fatal_err_msg:
-                    raise RuntimeError(f"{fatal_err_msg}\n頁面片段：{page_snapshot}")
+                    raise RuntimeError(fatal_err_msg)
 
                 if not final_msg:
                     raise TimeoutError(f"等待 Vercel App 完成超時（{timeout_sec}s）")
 
-                # 多等 5 秒讓 Vercel app 完成 callback /reports/record + sendEmail
+                logger.info("[%s] ✅ 完成訊號：%s", job_id, final_msg)
+                # 多等 5 秒讓 Vercel app 完成 callback
                 await asyncio.sleep(5)
 
                 await ctx.close()
