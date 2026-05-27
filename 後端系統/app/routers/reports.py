@@ -797,8 +797,9 @@ def sessions_with_status(
             display_age = s.subject_age
 
         # 從 client_summary 取出 headless_error 讓前端顯示失敗原因
+        # 只在 status=failed 時才回傳，避免生成中時顯示舊的失敗訊息
         headless_error_sw = None
-        if r and r.client_summary:
+        if r and r.status == "failed" and r.client_summary:
             try:
                 import json as _jsw
                 cs_sw = _jsw.loads(r.client_summary)
