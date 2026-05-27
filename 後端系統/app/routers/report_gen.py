@@ -18,7 +18,7 @@ from typing import Optional, List, Dict, Any
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DbSession
