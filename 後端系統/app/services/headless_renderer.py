@@ -340,8 +340,8 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 )
                 page = await ctx.new_page()
 
-                # 把 console log 也吐到我們的 logger，方便 debug
-                page.on("console", lambda msg: logger.debug("[%s][page] %s", job_id, msg.text))
+                # 把 console log 吐到 logger，INFO 層級方便在 Railway 查看
+                page.on("console", lambda msg: logger.info("[%s][console] %s", job_id, msg.text[:300]))
                 page.on("pageerror", lambda err: logger.warning("[%s][pageerror] %s", job_id, err))
 
                 try:
@@ -378,6 +378,7 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 final_msg = ""
                 fatal_err_msg = ""
                 poll_interval = 15   # 每 15 秒查一次 DB
+                _last_txt_log = 0    # 上次記錄頁面文字的時間
 
                 while time.time() < deadline:
                     # ── 主軌：DB 輪詢 ──────────────────────────────────────
@@ -400,6 +401,15 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         txt = await page.evaluate("() => document.body && document.body.innerText || ''")
                     except Exception:
                         txt = ""
+
+                    # 每 60 秒記錄一次頁面狀態，方便 Railway log 診斷
+                    _now = time.time()
+                    if _now - _last_txt_log >= 60:
+                        _last_txt_log = _now
+                        _elapsed = int(_now - (deadline - timeout_sec))
+                        # 只記錄前 300 字，避免 log 爆炸
+                        _preview = txt[:300].replace('\n', ' | ') if txt else "(empty)"
+                        logger.info("[%s] ⏱ %ds 頁面狀態: %s", job_id, _elapsed, _preview)
 
                     for kw in done_keywords:
                         if kw in txt:
