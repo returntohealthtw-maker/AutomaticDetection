@@ -396,16 +396,23 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         except Exception as _dbe:
                             logger.debug("[%s] DB poll 例外: %s", job_id, _dbe)
 
-                    # ── 副軌：頁面文字 ─────────────────────────────────────
+                    # ── 副軌：頁面文字 + title（_pdfLog 會更新 document.title，ASCII 可讀）
+                    try:
+                        title = await page.title()
+                    except Exception:
+                        title = ""
                     try:
                         txt = await page.evaluate("() => document.body && document.body.innerText || ''")
+                        if title and title.startswith('PDF_LOG:'):
+                            txt = title + ' ||| ' + txt
                     except Exception:
-                        txt = ""
+                        txt = title if title else ""
 
                     # 更新 active_jobs 的頁面快照（可被 /headless/jobs 端點查詢）
                     _now = time.time()
                     _elapsed = int(_now - (deadline - timeout_sec))
-                    _preview = txt[:400].replace('\n', ' ') if txt else "(empty)"
+                    # 增大預覽長度並嘗試抓取 ASCII 狀態標記
+                    _preview = txt[:800].replace('\n', ' ') if txt else "(empty)"
                     with _active_lock:
                         _active_jobs[job_id]["page_text_preview"] = _preview
                         _active_jobs[job_id]["elapsed_sec"] = _elapsed
