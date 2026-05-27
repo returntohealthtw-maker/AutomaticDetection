@@ -1014,6 +1014,36 @@ def _do_regenerate_one(
         except Exception as _e:
             logger.warning("[_do_regenerate_one] 反查 Subject 失敗: %s", _e)
 
+    # life_script / child → 走後端內建（穩定），不再依賴 Vercel headless
+    if ext_report_type in ("life_script", "child"):
+        try:
+            from app.services import ai_report as _ar
+            job_id_internal = _ar.start_full_report(
+                subject_name  = resolved_regen_name or s.subject_name or "",
+                report_type   = ext_report_type,
+                variant       = resolved_variant,
+                brainwave_data= bw,
+                subject_email = resolved_regen_email or None,
+                subject_age   = s.subject_age,
+                subject_gender= s.subject_gender or "",
+                session_id    = session_id,
+            )
+            return {
+                "ok":            True,
+                "session_id":    session_id,
+                "report_id":     r.report_id,
+                "subject_name":  resolved_regen_name or s.subject_name,
+                "notify_email":  resolved_regen_email,
+                "external_mode": "internal_gemini",
+                "job_id":        job_id_internal,
+                "error":         None,
+            }
+        except Exception as e:
+            return {"ok": False, "session_id": session_id,
+                    "subject_name": resolved_regen_name or s.subject_name,
+                    "error": f"內建生成失敗：{type(e).__name__}: {e}"}
+
+    # marital / parent_child → 仍走外部 REST API
     try:
         result = report_orchestrator.trigger_external_report(
             report_type=ext_report_type,

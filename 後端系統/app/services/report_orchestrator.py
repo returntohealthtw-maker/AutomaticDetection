@@ -61,15 +61,20 @@ def _url_for(report_type: str) -> Optional[str]:
 
 
 def is_external_available(report_type: str) -> bool:
-    """是否預設用外部系統。
-    全部都走外部 — Vercel React App 已內建 ?auto=1 完整自動模式
-    （Gemini → 原設計 PDF → GCS → email → 回呼 /reports/record）。
+    """是否走外部 Vercel 系統生成報告。
 
-    為了 UX（使用者不應看到 Vercel UI 也不應被迫保持瀏覽器開啟），
-    我們會在主後端用 Playwright headless Chromium 在背景啟動 Vercel 頁面，
-    使用者完全感覺不到。
+    life_script / child → 強制走後端內建 Gemini + pdf_builder（穩定、無 Vercel 依賴）
+    marital / parent_child → 有自己的 REST API，繼續走外部
+
+    背景：headless Chromium → Vercel 的鏈條有多個失敗點（RAM / 超時 / 關鍵字不符），
+    導致報告反覆生成失敗。內建路徑完全自持，完全不依賴 Vercel，直接在 Railway 生成。
+    若想強制用外部，可在呼叫 /report-gen/start 時帶 use_external=true。
     """
-    return _url_for(report_type) is not None
+    # 夫妻 / 親子有真正的 REST API，繼續走外部
+    if report_type in ("marital", "parent_child"):
+        return _url_for(report_type) is not None
+    # life_script / child → 走後端內建（可靠）
+    return False
 
 
 def _save_pdf(pdf_bytes: bytes, prefix: str = "marital") -> tuple[str, str]:
