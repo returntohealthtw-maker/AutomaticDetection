@@ -7,12 +7,12 @@
 注意：/record 由外部 Vercel 服務呼叫，使用 shared secret 認證
       （REPORTS_INGEST_SECRET env var）。若沒設則允許任何來源（僅開發用）。
 """
-from typing import Optional, List
+from typing import Any, Optional, List
 import time
 import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -202,7 +202,7 @@ def diag_pdf() -> dict:
 # ─── Schemas ─────────────────────────────────────────────────────────────────
 
 class RecordReportIn(BaseModel):
-    session_id:    Optional[int] = None
+    session_id:    Optional[Any] = None   # 接受 int 或 string（URL params 傳來的是字串）
     subject_name:  str = ""
     subject_email: str = ""
     report_type:   str = "life_script"   # life_script / child / parent_child / marital
@@ -212,6 +212,16 @@ class RecordReportIn(BaseModel):
     # 1 = 由 admin 後台手動觸發寄信（先入 pending）
     # 0 = 外部系統已自行寄信（傳統行為，預設）
     pending_send:  int = 0
+
+    @validator('session_id', pre=True, always=True)
+    def coerce_session_id(cls, v):
+        """容許字串 '31'、整數 31、None、空字串，統一轉為 int 或 None"""
+        if v is None or v == '' or v == 'null':
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
 
 
 class ReportOut(BaseModel):
