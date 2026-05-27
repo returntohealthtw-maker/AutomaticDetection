@@ -31,12 +31,17 @@ REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # 各家公開預設網址（環境變數沒設時的 fallback）
+# life_script：現在改用本機 Railway 內建 /report-app/（不再依賴 Vercel）
+# 若環境變數 REPORT_URL_LIFE_SCRIPT 有設定則以環境變數為準（可保留 Vercel 作備援）
 DEFAULT_URLS = {
-    "life_script":  "https://brianave-report-image.vercel.app",
+    "life_script":  "__local__",   # 代表使用本機 /report-app/
     "child":        "https://brianwave-child.vercel.app",
     "parent_child": "https://web-production-f1aec.up.railway.app",
     "marital":      "https://web-production-2c7d43.up.railway.app",
 }
+
+# 本機 report-app 的路徑前綴（headless 開瀏覽器時改用 localhost）
+LOCAL_REPORT_APP_PATH = "/report-app/"
 
 # 每家系統的 API 模式
 SYSTEM_MODES = {
@@ -58,6 +63,17 @@ def _url_for(report_type: str) -> Optional[str]:
     if u:
         return u
     return DEFAULT_URLS.get(report_type)
+
+
+def _is_local(report_type: str) -> bool:
+    """life_script 現在走本機 /report-app/，不走外部 Vercel"""
+    return _url_for(report_type) == "__local__"
+
+
+def _local_base_url() -> str:
+    """本機 Railway 的根 URL（headless browser 用）"""
+    port = int(os.environ.get("PORT", 8000))
+    return f"http://127.0.0.1:{port}"
 
 
 def is_external_available(report_type: str) -> bool:
@@ -431,8 +447,16 @@ def trigger_external_report(
         rd = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
         if rd:
             api_base = rd if rd.startswith("http") else f"https://{rd}"
+
+    # life_script 走本機 /report-app/（不依賴外部 Vercel）
+    if _is_local(report_type):
+        local_base = _local_base_url()
+        effective_base = local_base + LOCAL_REPORT_APP_PATH.rstrip("/")
+    else:
+        effective_base = base
+
     return _call_vite_prefill(
-        base=base,
+        base=effective_base,
         subject_name=subject_name,
         subject_email=subject_email,
         brainwave_data=brainwave_data,

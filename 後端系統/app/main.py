@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.05.27.13"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.05.27.14"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 20
@@ -83,7 +83,7 @@ APK_RELEASE_NOTES = (
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules, report_app_api
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -122,6 +122,12 @@ print(f"[static-app] 使用路徑：{_STATIC_APP_DIR}")
 if _STATIC_APP_DIR:
     app.mount("/static-app", StaticFiles(directory=_STATIC_APP_DIR), name="static-app")
 
+    # 掛載成人報告 React App（本機版，不再依賴 Vercel）
+    _REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "report-app")
+    if os.path.isdir(_REPORT_APP_DIR):
+        app.mount("/report-app", StaticFiles(directory=_REPORT_APP_DIR, html=True), name="report-app")
+        print(f"[report-app] ✅ 本機 React App 掛載：{_REPORT_APP_DIR}")
+
 # 掛載路由
 app.include_router(sessions.router)
 app.include_router(payments.router)
@@ -136,6 +142,7 @@ app.include_router(report_gen.router)
 app.include_router(eeg.router)
 app.include_router(reports.router)
 app.include_router(share_rules.router)
+app.include_router(report_app_api.router)
 
 
 def _friendly_error_html(title: str, message: str, hint: str = "") -> str:

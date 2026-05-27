@@ -347,7 +347,7 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                 try:
                     await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
                 except Exception as e:
-                    raise RuntimeError(f"無法打開 Vercel 頁面：{e}")
+                    raise RuntimeError(f"無法打開報告頁面：{e}")
 
                 # ── 完成偵測策略（雙軌並行，任一先到即視為完成）────────────────
                 # 主軌：輪詢 DB — Vercel app 完成後會 POST /reports/record，
