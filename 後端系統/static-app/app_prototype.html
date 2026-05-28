@@ -8462,7 +8462,7 @@ function _filterAdminReports() {
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
-          ${isFailed && r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}')" style="background:#f44336;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新生成</button>` : ''}
+          ${r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>` : ''}
           <button onclick="_uploadReplacementPdf(${r.report_id},'${esc(r.subject_name||'')}')" style="background:#e65100;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="上傳 PDF 取代現有檔案（修復掉圖等問題）">📤 上傳取代</button>
           ${r.is_test ? `<button onclick="_deleteTestReport(${r.report_id})" style="background:#9c27b0;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🗑️ 刪除</button>` : ''}
         </div>
@@ -8552,10 +8552,11 @@ function _startGeneratingPoll() {
 }
 
 // 從「資料庫紀錄」tab 直接重新生成失敗報告
-async function _regenFromDbRecords(sessionId, email) {
-  const emailInput = prompt(`重新生成 Session #${sessionId} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, email || '');
+async function _regenFromDbRecords(sessionId, email, subjectName) {
+  const nameLabel = subjectName ? `「${subjectName}」` : `Session #${sessionId}`;
+  const emailInput = prompt(`重新生成 ${nameLabel} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, email || '');
   if (emailInput === null) return; // 使用者取消
-  if (!confirm(`確定對 Session #${sessionId} 重新生成？\nEmail：${emailInput || '(無)'}\n\n⏳ 完成後進入「待核准」狀態，需 admin 預覽 PDF 後手動寄信。`)) return;
+  if (!confirm(`確定重新生成 ${nameLabel} 的報告？\nSession #${sessionId} · Email：${emailInput || '(無)'}\n\n⚠️ 舊的報告紀錄將被覆蓋\n⏳ 完成後進入「待核准」狀態，需 admin 預覽 PDF 後手動寄信。`)) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
@@ -8563,7 +8564,7 @@ async function _regenFromDbRecords(sessionId, email) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`重新生成失敗：${data.detail || data.error || r.status}`); return; }
-    alert(`✅ 已送出重新生成指令！\n\n預計 20-30 分鐘後完成，完成後狀態會變為「待核准寄信」。`);
+    alert(`✅ 已送出重新生成指令！\n\n預計 20~30 分鐘後完成，完成後狀態變為「待核准寄信」。`);
     renderAdminReports();
   } catch (e) {
     alert(`例外：${e.message}`);
