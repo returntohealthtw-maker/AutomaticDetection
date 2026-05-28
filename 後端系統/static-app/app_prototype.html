@@ -1379,6 +1379,12 @@
           <div id="reports-subpane-subjects" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#f5f7fa;">
             <div style="background:#0d1729;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <input id="all-subjects-search" type="text" placeholder="搜尋姓名 / Email / 手機 / 顧問" style="flex:1;min-width:200px;padding:8px 12px;border:none;border-radius:8px;font-size:13px;" oninput="_filterAllSubjects()">
+              <select id="all-subjects-sort" style="padding:7px 10px;border:none;border-radius:8px;font-size:12px;background:#1c2942;color:#e0e6f0;flex-shrink:0;" onchange="_filterAllSubjects()">
+                <option value="time_desc">🕐 建檔時間（新→舊）</option>
+                <option value="time_asc">🕐 建檔時間（舊→新）</option>
+                <option value="session_desc">🧪 最新檢測（新→舊）</option>
+                <option value="consultant">👤 施作顧問</option>
+              </select>
               <span id="all-subjects-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAllSubjects()">🔄 重新載入</button>
             </div>
@@ -7609,7 +7615,8 @@ function _filterAllSubjects() {
   const listEl = document.getElementById('all-subjects-list');
   if (!listEl) return;
   const q = (document.getElementById('all-subjects-search')?.value || '').toLowerCase().trim();
-  let rows = _allSubjectsCache;
+  const sortBy = document.getElementById('all-subjects-sort')?.value || 'time_desc';
+  let rows = [..._allSubjectsCache];
   if (q) {
     rows = rows.filter(s =>
       (s.name || '').toLowerCase().includes(q) ||
@@ -7617,6 +7624,24 @@ function _filterAllSubjects() {
       (s.phone || '').toLowerCase().includes(q) ||
       (s.consultant_name || '').toLowerCase().includes(q) ||
       (s.consultant_org || '').toLowerCase().includes(q));
+  }
+  // 排序
+  const toMs = (t) => {
+    if (!t) return 0;
+    return typeof t === 'number' ? t : new Date(String(t)).getTime() || 0;
+  };
+  if (sortBy === 'time_desc') {
+    rows.sort((a, b) => toMs(b.created_at) - toMs(a.created_at));
+  } else if (sortBy === 'time_asc') {
+    rows.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
+  } else if (sortBy === 'session_desc') {
+    rows.sort((a, b) => toMs(b.latest_session_at) - toMs(a.latest_session_at));
+  } else if (sortBy === 'consultant') {
+    rows.sort((a, b) => {
+      const ca = (a.latest_consultant_name || a.consultant_name || '').toLowerCase();
+      const cb = (b.latest_consultant_name || b.consultant_name || '').toLowerCase();
+      return ca < cb ? -1 : ca > cb ? 1 : 0;
+    });
   }
   if (!rows.length) {
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">沒有符合的受測者</div>';
@@ -7729,11 +7754,13 @@ function _renderAllSubjectCard(s) {
 
   return `
     <div style="background:white;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-      <!-- 標題列：姓名 + 年齡性別 -->
+      <!-- 標題列：姓名 + 年齡性別 + 刪除按鈕 -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
         <div style="font-size:16px;font-weight:700;color:#1a3a6e;">${esc(s.name)}</div>
         <div style="font-size:12px;color:#666;">${ageTxt} · ${esc(s.gender || '—')}</div>
         ${s.occupation ? `<div style="font-size:11px;color:#888;background:#eef2f7;padding:2px 7px;border-radius:8px;">${esc(s.occupation)}</div>` : ''}
+        <div style="flex:1;"></div>
+        <button onclick="_deleteAllSubject(${s.subject_id}, '${esc(s.name)}')" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600;flex-shrink:0;" title="刪除此受測者（含所有報告）">🗑️ 刪除</button>
       </div>
 
       <!-- 建立資訊區（時間 + 顧問 + 機構類型）-->
@@ -7764,6 +7791,28 @@ function _renderAllSubjectCard(s) {
         ${reportsHtml}
       </div>
     </div>`;
+}
+
+async function _deleteAllSubject(subjectId, name) {
+  if (!subjectId) { alert('缺少受測者 ID，無法刪除'); return; }
+  const confirmMsg = `確定要刪除受測者「${name}」嗎？\n\n⚠️ 這將一併刪除該受測者的所有相關資料（檢測紀錄、報告等），此操作不可復原。`;
+  if (!confirm(confirmMsg)) return;
+  try {
+    const r = await apiFetch(`/subjects/${subjectId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`❌ 刪除失敗：${err.detail || err.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    // 從快取移除並重新渲染
+    _allSubjectsCache = _allSubjectsCache.filter(s => s.subject_id !== subjectId);
+    const countEl = document.getElementById('all-subjects-count');
+    if (countEl) countEl.textContent = `共 ${_allSubjectsCache.length} 筆`;
+    _filterAllSubjects();
+    showToast(`✅ 已刪除受測者「${name}」`);
+  } catch (e) {
+    alert(`❌ 刪除失敗：${e.message}`);
+  }
 }
 
 // ─── 檢測 ↔ 報告對照：找出有檢測但沒生報告／失敗／卡住的 ──────────
