@@ -1472,57 +1472,6 @@
           </div>
         </div>
 
-        <!-- ===== 🆘 救回誤刪報告 Modal ===== -->
-        <div id="restore-report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
-          <div style="background:white;width:100%;max-width:500px;border-radius:16px;overflow:hidden;margin:auto;">
-            <div style="background:linear-gradient(135deg,#b71c1c,#c62828);color:white;padding:16px 20px;display:flex;align-items:center;gap:10px;">
-              <span style="font-size:22px;">🆘</span>
-              <div style="flex:1;">
-                <div style="font-size:15px;font-weight:700;">救回誤刪的報告</div>
-                <div style="font-size:11px;opacity:0.85;margin-top:2px;">從 GCS 孤兒 PDF 重建 DB 紀錄（GCS 檔案從未被刪）</div>
-              </div>
-              <button onclick="document.getElementById('restore-report-modal').style.display='none'" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;">×</button>
-            </div>
-            <div style="padding:14px 16px;background:#fff3e0;border-bottom:1px solid #ffd54f;font-size:12px;color:#bf360c;line-height:1.7;">
-              ⚠️ <b>誤刪救回說明：</b>「清理測試報告」只刪 DB 紀錄，GCS 上的 PDF 檔案完全沒有被刪除。<br>
-              在下方選擇 GCS 孤兒 PDF（沒有對應 DB 報告的檔案），填入受測者資訊後點「建立報告紀錄」即可救回。
-            </div>
-            <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
-              <div>
-                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">選擇 GCS 孤兒 PDF <span style="color:#c62828;">*</span></div>
-                <select id="restore-gcs-url" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;" onchange="_onRestoreUrlChange()">
-                  <option value="">— 載入中，請稍候 —</option>
-                </select>
-                <div id="restore-url-hint" style="font-size:11px;color:#1565c0;margin-top:4px;"></div>
-              </div>
-              <div>
-                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">受測者姓名</div>
-                <input id="restore-subject-name" type="text" placeholder="例：王小明（從 GCS 檔名自動推測）" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
-              </div>
-              <div>
-                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">通知 Email</div>
-                <input id="restore-notify-email" type="email" placeholder="選填" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
-              </div>
-              <div style="display:flex;gap:8px;">
-                <div style="flex:1;">
-                  <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">報告類型</div>
-                  <select id="restore-report-kind" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;">
-                    <option value="">不確定</option>
-                    <option value="life_script">成人腦波分析</option>
-                    <option value="child">兒童腦波天賦</option>
-                    <option value="marital">夫妻關係</option>
-                    <option value="parent_child">親子關係</option>
-                  </select>
-                </div>
-              </div>
-              <button onclick="_doRestoreReport()" style="width:100%;padding:12px;background:linear-gradient(135deg,#b71c1c,#c62828);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
-                ✅ 建立報告紀錄（救回）
-              </button>
-              <div id="restore-result" style="font-size:12px;text-align:center;min-height:20px;"></div>
-            </div>
-          </div>
-        </div>
-
         <!-- ===== 付款重測 Modal ===== -->
         <div id="paid-redetect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-end;justify-content:center;padding:0;">
           <div style="background:white;width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
@@ -2979,6 +2928,55 @@
       <button onclick="_dismissRedetectModal(); goto('screen-eegtest-connect');" style="width:100%;padding:12px;border-radius:12px;background:rgba(26,35,126,0.1);color:#1a237e;font-size:14px;font-weight:600;border:none;cursor:pointer;">
         🧠 先做腦波儀健康檢查
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- 🆘 救回誤刪報告 Modal（phone-wrap 外，確保在任何 screen 都可見）-->
+<div id="restore-report-modal" style="display:none;pointer-events:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10001;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;">
+  <div style="background:white;width:100%;max-width:500px;border-radius:16px;overflow:hidden;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="background:linear-gradient(135deg,#b71c1c,#c62828);color:white;padding:16px 20px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:22px;">🆘</span>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:700;">救回誤刪的報告</div>
+        <div style="font-size:11px;opacity:0.85;margin-top:2px;">從 GCS 孤兒 PDF 重建 DB 紀錄（GCS 檔案從未被刪）</div>
+      </div>
+      <button onclick="document.getElementById('restore-report-modal').style.display='none';document.getElementById('restore-report-modal').style.pointerEvents='none';" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;">×</button>
+    </div>
+    <div style="padding:14px 16px;background:#fff3e0;border-bottom:1px solid #ffd54f;font-size:12px;color:#bf360c;line-height:1.7;">
+      ⚠️ <b>誤刪救回說明：</b>「清理測試報告」只刪 DB 紀錄，GCS 上的 PDF 檔案完全沒有被刪除。<br>
+      在下方選擇 GCS 孤兒 PDF（沒有對應 DB 報告的檔案），填入受測者資訊後點「建立報告紀錄」即可救回。
+    </div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">選擇 GCS 孤兒 PDF <span style="color:#c62828;">*</span></div>
+        <select id="restore-gcs-url" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;" onchange="_onRestoreUrlChange()">
+          <option value="">— 載入中，請稍候 —</option>
+        </select>
+        <div id="restore-url-hint" style="font-size:11px;color:#1565c0;margin-top:4px;word-break:break-all;"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">受測者姓名</div>
+        <input id="restore-subject-name" type="text" placeholder="例：王小明（從 GCS 檔名自動推測）" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">通知 Email</div>
+        <input id="restore-notify-email" type="email" placeholder="選填" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">報告類型</div>
+        <select id="restore-report-kind" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;">
+          <option value="">不確定</option>
+          <option value="life_script">成人腦波分析</option>
+          <option value="child">兒童腦波天賦</option>
+          <option value="marital">夫妻關係</option>
+          <option value="parent_child">親子關係</option>
+        </select>
+      </div>
+      <button onclick="_doRestoreReport()" style="width:100%;padding:12px;background:linear-gradient(135deg,#b71c1c,#c62828);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+        ✅ 建立報告紀錄（救回）
+      </button>
+      <div id="restore-result" style="font-size:12px;text-align:center;min-height:20px;"></div>
     </div>
   </div>
 </div>
