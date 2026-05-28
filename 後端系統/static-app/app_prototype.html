@@ -8253,15 +8253,48 @@ function _filterGcsList() {
             ${createdStr} · ${_fmtBytes(it.size)} · ${sendStatus}
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:flex-end;">
           <button onclick="openExternalUrl('${it.signed_url}')" style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;">🔍 預覽/下載</button>
           ${importBtn}
           ${sendBtn}
+          <button onclick="_deleteGcsFile('${(it.name || '').replace(/'/g, "\\'")}', ${!!db})" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;" title="從 GCS 刪除此 PDF（含 DB 記錄）">🗑️ 刪除</button>
         </div>
       </div>
       <div style="font-size:10px;color:#aaa;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;" title="${it.name}">${it.name}</div>
     </div>
   `; }).join('');
+}
+
+// 刪除 GCS 上的 PDF（含選擇性刪除 DB 記錄）
+async function _deleteGcsFile(objectName, hasDbRecord) {
+  const fname = objectName.split('/').pop();
+  const dbNote = hasDbRecord ? '\n\n⚠️ 此檔案已入庫，同時也會刪除資料庫中的報告記錄。' : '\n\n（此為歷史孤兒檔，無資料庫記錄）';
+  if (!confirm(`確定要刪除此 GCS 檔案？\n\n${fname}${dbNote}\n\n此操作不可復原。`)) return;
+  try {
+    const alsoDb = hasDbRecord ? 'true' : 'false';
+    const r = await apiFetch(`/reports/gcs-file?object_name=${encodeURIComponent(objectName)}&also_db=${alsoDb}`, {
+      method: 'DELETE',
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert(`❌ 刪除失敗：${data.detail || data.error || r.status}`);
+      return;
+    }
+    const ok = data.ok;
+    const dbInfo = data.db_deleted?.length ? `，已刪除 DB 記錄 #${data.db_deleted.map(d => d.report_id).join(', ')}` : '';
+    showToast(`${ok ? '✅ GCS 刪除成功' : '⚠️ GCS 刪除失敗（DB 已清除）'}${dbInfo}`, ok ? 'ok' : 'warn');
+    // 從快取移除並重新渲染
+    _gcsListCache = _gcsListCache.filter(it => it.name !== objectName);
+    const countEl = document.getElementById('gcs-list-count');
+    if (countEl) {
+      const total = _gcsListCache.length;
+      const withDb = _gcsListCache.filter(it => it.db).length;
+      countEl.textContent = `共 ${total} 筆 · ${withDb} 已入庫 / ${total - withDb} 未入庫`;
+    }
+    _filterGcsList();
+  } catch (e) {
+    alert(`❌ 例外：${e.message}`);
+  }
 }
 
 // 把 GCS 上的孤兒檔補錄到 DB

@@ -1332,6 +1332,47 @@ def import_from_gcs(
     }
 
 
+@router.delete("/gcs-file")
+def delete_gcs_file(
+    object_name: str = Query(..., description="GCS object name，例如 reports/general/xxx.pdf"),
+    also_db: bool = Query(True, description="True = 同時刪除 DB 中對應的 Report 記錄"),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：從 GCS 刪除指定 PDF 檔案，並可選擇同時刪除 DB 紀錄。"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可刪除 GCS 檔案")
+
+    obj = (object_name or "").strip()
+    if not obj:
+        raise HTTPException(400, "object_name 不能為空")
+
+    from app.services import gcs_uploader
+
+    # 1) 刪除 GCS 物件
+    gcs_result = gcs_uploader.delete_pdf_object(obj)
+
+    # 2) 若 also_db=True，刪除 DB 中 pdf_url 含此 object name 的 Report
+    db_deleted = []
+    if also_db:
+        matching = db.query(M.Report).filter(M.Report.pdf_url.like(f"%{obj}%")).all()
+        for rep in matching:
+            db_deleted.append({"report_id": rep.report_id, "session_id": rep.session_id})
+            db.delete(rep)
+        if db_deleted:
+            db.commit()
+
+    return {
+        "ok": gcs_result.get("ok", False),
+        "object_name": obj,
+        "gcs": gcs_result,
+        "db_deleted": db_deleted,
+        "note": f"GCS {'刪除成功' if gcs_result.get('ok') else '刪除失敗：' + str(gcs_result.get('error', ''))}"
+               + (f"；DB 已刪除 {len(db_deleted)} 筆報告記錄" if db_deleted else "；DB 無對應記錄"),
+    }
+
+
 @router.get("/by-subject")
 def by_subject(
     email: str = Query(..., description="受測者 email"),
