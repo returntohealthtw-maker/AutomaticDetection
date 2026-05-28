@@ -8798,12 +8798,18 @@ async function _adminSendReportEmail(reportId) {
     alert('找不到此報告');
     return;
   }
-  if (!cached.subject_email) {
-    const newEmail = prompt('此報告未填收件 Email，請輸入要寄送的 Email：');
-    if (!newEmail || !newEmail.includes('@')) return;
-    cached.subject_email = newEmail;
+  // 每次都讓管理員確認／修改收件 email（預設帶入已存的信箱）
+  const inputEmail = prompt(
+    `寄送報告 #${reportId}（${cached.subject_name || '未知'}）\n\n請確認或修改收件 Email：`,
+    cached.subject_email || ''
+  );
+  if (inputEmail === null) return;          // 按取消
+  if (!inputEmail.trim() || !inputEmail.includes('@')) {
+    alert('請輸入有效的 Email 地址');
+    return;
   }
-  const confirmMsg = `確定寄送報告 #${reportId} 給 ${cached.subject_email}？\n\n受測者：${cached.subject_name || '(未知)'}\n類型：${cached.report_kind || '?'}\n\n點選「確定」前請先在新分頁開啟 PDF 預覽內容無誤。`;
+  cached.subject_email = inputEmail.trim(); // 更新快取供後續使用
+  const confirmMsg = `確定寄送報告給 ${cached.subject_email}？\n\n受測者：${cached.subject_name || '(未知)'}\n類型：${cached.report_kind_zh || cached.report_kind || '?'}\n\n⚠️ 點確定前請先開啟 PDF 預覽確認內容正確。`;
   if (!confirm(confirmMsg)) return;
 
   try {
