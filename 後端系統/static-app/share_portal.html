@@ -297,8 +297,11 @@ async function doLogin() {
     });
     const data = await r.json();
     if (!r.ok) { errEl.textContent = data.detail || '帳號或密碼錯誤'; return; }
-    const _PORTAL_ROLES = ['admin', 'project', 'staff'];
-    if (!_PORTAL_ROLES.includes(data.role)) { errEl.textContent = '此入口僅限專案人員、工作人員或管理員使用'; return; }
+    // 允許 role 或 org_type 符合（相容舊帳號：org_type=專案人員/工作人員 但 role=consultant）
+    const _PORTAL_ROLES    = ['admin', 'project', 'staff'];
+    const _PORTAL_ORG_TYPES = ['專案人員', '工作人員'];
+    const canAccess = _PORTAL_ROLES.includes(data.role) || _PORTAL_ORG_TYPES.includes(data.org_type);
+    if (!canAccess) { errEl.textContent = '此入口僅限專案人員、工作人員或管理員使用'; return; }
 
     _token = data.token;
     _userName = data.name || phone;

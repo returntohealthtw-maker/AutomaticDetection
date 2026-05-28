@@ -196,12 +196,19 @@ def approve(req_id: str, db: Session = Depends(get_db)):
         consultant = existing
         note = f"既有顧問 #{existing.consultant_id}：已重設密碼、同步申請資料、重新啟用"
     else:
+        # 根據 org_type 決定 role（專案人員/工作人員有分潤管理權限）
+        _ORG_TYPE_TO_ROLE = {
+            "專案人員": "project",
+            "工作人員": "staff",
+        }
+        assigned_role = _ORG_TYPE_TO_ROLE.get(row.org_type or "", "consultant")
+
         consultant = M.Consultant(
             name          = name,
             phone         = phone,
             email         = email,
             password_hash = hash_password(initial_pw),
-            role          = "consultant",
+            role          = assigned_role,
             org_type      = row.org_type or "",
             org           = row.org or "",
             is_active     = 1,

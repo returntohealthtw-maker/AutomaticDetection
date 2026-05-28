@@ -106,8 +106,10 @@ def put_share_rules(
 ):
     """儲存分潤規則（需 admin 或有效 token）"""
     user = require_user(authorization, db)
-    _ALLOWED = {"admin", "project", "staff"}
-    if user.role not in _ALLOWED:
+    # 允許 role 或 org_type 符合（相容舊帳號：org_type=專案人員/工作人員 但 role=consultant）
+    _ALLOWED_ROLES     = {"admin", "project", "staff"}
+    _ALLOWED_ORG_TYPES = {"專案人員", "工作人員"}
+    if user.role not in _ALLOWED_ROLES and (user.org_type or "") not in _ALLOWED_ORG_TYPES:
         raise HTTPException(403, "僅管理員、專案人員或工作人員可修改分潤規則")
 
     row = db.query(M.ShareRuleSet).filter_by(rule_set_key=RULE_SET_KEY).first()
