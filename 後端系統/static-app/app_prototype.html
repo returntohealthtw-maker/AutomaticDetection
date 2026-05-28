@@ -8736,20 +8736,59 @@ async function _showPaidNotDetected() {
 // 一鍵批次刪除所有測試報告
 async function _cleanupAllTestReports() {
   const tests = (_adminReportsCache || []).filter(r => r.is_test);
-  if (!tests.length) {
+  const allReports = _adminReportsCache || [];
+
+  if (!tests.length && !allReports.length) {
     alert('沒有需要清理的測試報告。');
     return;
   }
-  if (!confirm(`即將刪除 ${tests.length} 筆測試報告（姓名為「受測者」等預設值，無法回查的孤兒報告）。\n\n這些報告無法關聯到任何真實受測者，刪除不會影響顧問與受測者資料。\n\n確定要繼續？`)) return;
 
-  let success = 0, fail = 0;
-  for (const r of tests) {
+  // 詢問是否要同時清理「有腦波資料但未付款」的報告
+  const includeUnpaid = tests.length > 0
+    ? confirm(
+        `目前找到 ${tests.length} 筆測試報告（姓名為「受測者」等預設值）。\n\n` +
+        `是否「同時刪除」有腦波資料但從未付款的報告？\n\n` +
+        `【確定】= 包含未付款報告一併清理\n` +
+        `【取消】= 只清理姓名為預設值的孤兒報告`
+      )
+    : confirm(
+        `沒有姓名為預設值的孤兒報告。\n\n` +
+        `是否改為清理「有腦波資料但從未付款」的報告？\n\n` +
+        `【確定】= 清理未付款報告\n【取消】= 不操作`
+      );
+
+  // 組合要刪除的清單
+  let toDelete = [...tests];
+  if (includeUnpaid) {
+    // 非 is_test 但沒有付款（report_list 沒有付款欄位，後端會二次驗證）
+    const nonTestWithSession = allReports.filter(r => !r.is_test && r.session_id);
+    toDelete = [...new Map([...toDelete, ...nonTestWithSession].map(r => [r.report_id, r])).values()];
+  }
+
+  if (!toDelete.length) { alert('沒有符合條件的報告。'); return; }
+
+  const forceNote = includeUnpaid ? '\n\n⚠️ 後端會自動略過「已付款」的報告，確保安全。' : '';
+  if (!confirm(`即將嘗試刪除 ${toDelete.length} 筆報告。${forceNote}\n\n確定繼續？`)) return;
+
+  let success = 0, fail = 0, skipped = 0;
+  for (const r of toDelete) {
     try {
-      const resp = await apiFetch(`/reports/${r.report_id}/delete-test`, { method: 'DELETE' });
-      if (resp.ok) success++; else fail++;
+      const url = r.is_test
+        ? `/reports/${r.report_id}/delete-test`
+        : `/reports/${r.report_id}/delete-test?force_unpaid=true`;
+      const resp = await apiFetch(url, { method: 'DELETE' });
+      if (resp.ok) {
+        success++;
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        // 後端拒絕（例如已付款）→ 計為略過而非失敗
+        if (resp.status === 400) skipped++;
+        else fail++;
+        console.warn(`[cleanupTest] 報告 #${r.report_id} 刪除失敗:`, d.detail || resp.status);
+      }
     } catch(e) { fail++; }
   }
-  alert(`清理完成 ✅\n成功：${success} 筆\n失敗：${fail} 筆`);
+  alert(`清理完成 ✅\n成功：${success} 筆\n略過（已付款，保留）：${skipped} 筆\n失敗：${fail} 筆`);
   renderAdminReports();
 }
 

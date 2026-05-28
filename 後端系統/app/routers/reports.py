@@ -2119,6 +2119,7 @@ def delete_session_report(
 @router.delete("/{report_id}/delete-test")
 def delete_test_report(
     report_id: int,
+    force_unpaid: bool = Query(False, description="True = 即使有腦波資料也刪除，前提是該 session 沒有已付款紀錄"),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
@@ -2126,8 +2127,9 @@ def delete_test_report(
 
     安全檢查：
       - 必須是 admin
-      - 報告的 subject_name 必須是預設值之一（受測者 / 陳小明 / 測試模式 / 🧪 管理員測試-* / 空）
-      - 即使是測試報告，session_id 為非空時不刪（避免誤刪有腦波資料的）
+      - 預設：報告的 subject_name 必須是預設值之一（受測者 / 陳小明 / 測試模式 / 🧪 管理員測試-* / 空）
+      - force_unpaid=true：即使 subject_name 為真實姓名，只要 session 沒有已付款（status='paid'）紀錄，
+        也允許刪除。用於清理「有腦波資料但未付款」的測試 session。
 
     這個 API 不會去刪 GCS 上的 PDF（避免影響其他關聯），只刪 DB row。
     """
@@ -2163,11 +2165,28 @@ def delete_test_report(
     )
 
     if not is_placeholder:
-        raise HTTPException(
-            400,
-            f"報告 #{report_id} 的受測者為「{raw_name}」，不是測試報告，禁止透過此 API 刪除。"
-            "若確實要刪除，請使用一般的報告刪除流程（含 GCS 與 Session 處理）。",
-        )
+        if not force_unpaid:
+            raise HTTPException(
+                400,
+                f"報告 #{report_id} 的受測者為「{raw_name}」，不是測試報告，禁止透過此 API 刪除。"
+                "若確實要刪除（且確認未付款），請加上 ?force_unpaid=true 參數。",
+            )
+        # force_unpaid=True：確認該 session 沒有已付款的 Payment
+        if rep.session_id:
+            paid = (
+                db.query(M.Payment)
+                .filter(
+                    M.Payment.session_id == rep.session_id,
+                    M.Payment.status == "paid",
+                )
+                .first()
+            )
+            if paid:
+                raise HTTPException(
+                    400,
+                    f"報告 #{report_id}（受測者：{raw_name}）的 Session #{rep.session_id} "
+                    f"已有付款紀錄（Payment #{paid.payment_id}，status=paid），禁止刪除。",
+                )
 
     # 刪除前記錄
     deleted_info = {
@@ -2176,6 +2195,7 @@ def delete_test_report(
         "raw_name":      raw_name,
         "report_kind":   rep.talent_report_kind,
         "completed_at":  rep.completed_at.isoformat() if rep.completed_at else None,
+        "force_unpaid":  force_unpaid,
     }
     db.delete(rep)
     db.commit()
