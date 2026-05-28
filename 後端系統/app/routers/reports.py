@@ -2005,6 +2005,52 @@ def admin_manual_link_subject(
     return {"ok": True, "report_id": report_id, "linked_to": sid, "subject_name": subj.name}
 
 
+@router.delete("/sessions/{session_id}/delete-report")
+def delete_session_report(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：刪除指定 Session 的報告（含 GCS PDF），讓其可重新生成。
+
+    - 刪除 Report DB 記錄（含 pdf_url、status 等）
+    - 嘗試刪除 GCS 上的 PDF（若 GCS 未設定或物件不存在，不影響 DB 刪除）
+    - 保留 Session 和 EegCapture（腦波原始數據不動），以便重新生成
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可刪除報告")
+
+    s = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not s:
+        raise HTTPException(404, f"找不到 Session #{session_id}")
+
+    r = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    if not r:
+        raise HTTPException(404, f"Session #{session_id} 沒有對應的報告")
+
+    from app.services import gcs_uploader
+    gcs_result = {"ok": True, "note": "無 pdf_url，跳過 GCS 刪除"}
+    if r.pdf_url:
+        gcs_result = gcs_uploader.delete_pdf_object(r.pdf_url)
+
+    deleted_info = {
+        "report_id":   r.report_id,
+        "session_id":  session_id,
+        "subject_name": s.subject_name,
+        "pdf_url":     r.pdf_url,
+        "gcs":         gcs_result,
+    }
+    db.delete(r)
+    db.commit()
+
+    return {
+        "ok": True,
+        "deleted": deleted_info,
+        "note": "報告已刪除，Session 保留。可重新觸發生成。",
+    }
+
+
 @router.delete("/{report_id}/delete-test")
 def delete_test_report(
     report_id: int,

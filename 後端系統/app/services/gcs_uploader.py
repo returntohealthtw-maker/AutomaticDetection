@@ -87,6 +87,65 @@ def upload_pdf(local_path: str, object_name: str) -> Optional[str]:
         return None
 
 
+def delete_pdf_object(pdf_url: str) -> dict:
+    """從 GCS 刪除一個 PDF 檔案。
+
+    pdf_url 可以是：
+      - GCS signed URL: https://storage.googleapis.com/BUCKET/reports/xxx.pdf?X-Goog-...
+      - GCS public URL: https://storage.googleapis.com/BUCKET/reports/xxx.pdf
+      - 直接的 object name: reports/general/xxx.pdf
+
+    回傳 {"ok": True, "object_name": "..."} 或 {"ok": False, "error": "..."}
+    """
+    if not pdf_url:
+        return {"ok": False, "error": "pdf_url 為空"}
+    if not is_configured():
+        return {"ok": False, "error": "GCS 未設定"}
+
+    # 從 URL 萃取 object name
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(pdf_url)
+        if parsed.scheme in ("http", "https") and "storage.googleapis.com" in parsed.netloc:
+            # https://storage.googleapis.com/BUCKET/object/path?...
+            path = unquote(parsed.path)  # e.g. /my-bucket/reports/general/xxx.pdf
+            bucket = _bucket_name()
+            prefix = f"/{bucket}/"
+            if path.startswith(prefix):
+                object_name = path[len(prefix):]
+            else:
+                # bucket 在 hostname 裡（CNAME 模式），整個 path 就是 object name
+                object_name = path.lstrip("/")
+        else:
+            # 直接傳入 object name（無 scheme）
+            object_name = pdf_url.lstrip("/")
+    except Exception as e:
+        return {"ok": False, "error": f"URL 解析失敗：{e}"}
+
+    if not object_name:
+        return {"ok": False, "error": "無法從 URL 解析 object name"}
+
+    try:
+        creds_dict = _credentials_dict()
+        from google.cloud import storage
+        from google.oauth2 import service_account
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket = client.bucket(_bucket_name())
+        blob = bucket.blob(object_name)
+        if blob.exists():
+            blob.delete()
+            logger.info("✅ GCS 刪除成功 gs://%s/%s", _bucket_name(), object_name)
+            return {"ok": True, "object_name": object_name, "existed": True}
+        else:
+            logger.warning("GCS 物件不存在（跳過刪除）: %s", object_name)
+            return {"ok": True, "object_name": object_name, "existed": False,
+                    "note": "GCS 上無此物件（可能已被刪除或 URL 已過期）"}
+    except Exception as e:
+        logger.exception("GCS 刪除失敗：%s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def diag() -> dict:
     creds = _credentials_dict()
     return {
