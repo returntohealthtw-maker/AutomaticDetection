@@ -1285,7 +1285,8 @@
               <span id="admin-report-count" style="font-size:12px;opacity:0.7;flex-shrink:0;">共 0 筆</span>
               <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminReports()">🔄 重新載入</button>
               <button class="btn btn-sm" style="background:#388e3c;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_relinkOrphanReports()" title="對 subject_id=NULL 的舊報告，依姓名+顧問自動匹配回受測者主檔">🔗 一鍵修復孤兒報告</button>
-              <button class="btn btn-sm" style="background:#9c27b0;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_cleanupAllTestReports()" title="刪除所有姓名為預設值的孤兒測試報告">🧹 清理測試報告</button>
+              <button class="btn btn-sm" style="background:#9c27b0;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_cleanupAllTestReports()" title="刪除姓名為預設值的孤兒測試報告（安全版：不會刪真實姓名報告）">🧹 清理測試報告</button>
+              <button class="btn btn-sm" style="background:#c62828;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_openRestoreModal()" title="從 GCS 找回誤刪的報告 DB 紀錄">🆘 救回誤刪</button>
               <button class="btn btn-sm" style="background:#f57c00;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="_showPaidNotDetected()" title="列出已付款但未完成檢測 / 報告的訂單">💳 已付款未檢測</button>
             </div>
             <div style="background:#e3f2fd;padding:8px 16px;border-bottom:1px solid #90caf9;font-size:11px;color:#0d47a1;line-height:1.6;">
@@ -1467,6 +1468,57 @@
           <div id="home-recent-list">
             <div class="history-item" style="opacity:0.6;">
               <div class="hi-top"><span class="hi-name">載入中…</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 🆘 救回誤刪報告 Modal ===== -->
+        <div id="restore-report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+          <div style="background:white;width:100%;max-width:500px;border-radius:16px;overflow:hidden;margin:auto;">
+            <div style="background:linear-gradient(135deg,#b71c1c,#c62828);color:white;padding:16px 20px;display:flex;align-items:center;gap:10px;">
+              <span style="font-size:22px;">🆘</span>
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:700;">救回誤刪的報告</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:2px;">從 GCS 孤兒 PDF 重建 DB 紀錄（GCS 檔案從未被刪）</div>
+              </div>
+              <button onclick="document.getElementById('restore-report-modal').style.display='none'" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;">×</button>
+            </div>
+            <div style="padding:14px 16px;background:#fff3e0;border-bottom:1px solid #ffd54f;font-size:12px;color:#bf360c;line-height:1.7;">
+              ⚠️ <b>誤刪救回說明：</b>「清理測試報告」只刪 DB 紀錄，GCS 上的 PDF 檔案完全沒有被刪除。<br>
+              在下方選擇 GCS 孤兒 PDF（沒有對應 DB 報告的檔案），填入受測者資訊後點「建立報告紀錄」即可救回。
+            </div>
+            <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">選擇 GCS 孤兒 PDF <span style="color:#c62828;">*</span></div>
+                <select id="restore-gcs-url" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;" onchange="_onRestoreUrlChange()">
+                  <option value="">— 載入中，請稍候 —</option>
+                </select>
+                <div id="restore-url-hint" style="font-size:11px;color:#1565c0;margin-top:4px;"></div>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">受測者姓名</div>
+                <input id="restore-subject-name" type="text" placeholder="例：王小明（從 GCS 檔名自動推測）" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">通知 Email</div>
+                <input id="restore-notify-email" type="email" placeholder="選填" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+              </div>
+              <div style="display:flex;gap:8px;">
+                <div style="flex:1;">
+                  <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px;">報告類型</div>
+                  <select id="restore-report-kind" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;">
+                    <option value="">不確定</option>
+                    <option value="life_script">成人腦波分析</option>
+                    <option value="child">兒童腦波天賦</option>
+                    <option value="marital">夫妻關係</option>
+                    <option value="parent_child">親子關係</option>
+                  </select>
+                </div>
+              </div>
+              <button onclick="_doRestoreReport()" style="width:100%;padding:12px;background:linear-gradient(135deg,#b71c1c,#c62828);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+                ✅ 建立報告紀錄（救回）
+              </button>
+              <div id="restore-result" style="font-size:12px;text-align:center;min-height:20px;"></div>
             </div>
           </div>
         </div>
@@ -8738,60 +8790,41 @@ async function _showPaidNotDetected() {
 
 // 一鍵批次刪除所有測試報告
 async function _cleanupAllTestReports() {
+  // ⚠️ 安全限制：只清理 is_test=true 的系統測試報告（姓名為「受測者」等預設值）
+  // 絕不批次刪除真實姓名報告，防止誤刪付費客戶資料
   const tests = (_adminReportsCache || []).filter(r => r.is_test);
-  const allReports = _adminReportsCache || [];
 
-  if (!tests.length && !allReports.length) {
-    alert('沒有需要清理的測試報告。');
+  if (!tests.length) {
+    alert('✅ 目前沒有需要清理的系統測試報告（姓名為「受測者」等預設值）。\n\n若需刪除特定報告，請在報告卡片上逐筆操作。');
     return;
   }
 
-  // 詢問是否要同時清理「有腦波資料但未付款」的報告
-  const includeUnpaid = tests.length > 0
-    ? confirm(
-        `目前找到 ${tests.length} 筆測試報告（姓名為「受測者」等預設值）。\n\n` +
-        `是否「同時刪除」有腦波資料但從未付款的報告？\n\n` +
-        `【確定】= 包含未付款報告一併清理\n` +
-        `【取消】= 只清理姓名為預設值的孤兒報告`
-      )
-    : confirm(
-        `沒有姓名為預設值的孤兒報告。\n\n` +
-        `是否改為清理「有腦波資料但從未付款」的報告？\n\n` +
-        `【確定】= 清理未付款報告\n【取消】= 不操作`
-      );
+  // 顯示將被刪除的名單讓管理員確認
+  const listPreview = tests.slice(0, 10).map(r =>
+    `  · ${r.subject_name || '(無名稱)'}  #${r.report_id}  ${r.report_kind_zh || r.report_kind || '?'}`
+  ).join('\n');
+  const moreNote = tests.length > 10 ? `\n  … 以及其他 ${tests.length - 10} 筆` : '';
 
-  // 組合要刪除的清單
-  let toDelete = [...tests];
-  if (includeUnpaid) {
-    // 非 is_test 但沒有付款（report_list 沒有付款欄位，後端會二次驗證）
-    const nonTestWithSession = allReports.filter(r => !r.is_test && r.session_id);
-    toDelete = [...new Map([...toDelete, ...nonTestWithSession].map(r => [r.report_id, r])).values()];
-  }
+  if (!confirm(
+    `即將刪除 ${tests.length} 筆系統測試報告：\n\n${listPreview}${moreNote}\n\n` +
+    `⚠️ 只刪除姓名為「受測者 / 陳小明 / 測試模式」等預設值的孤兒報告。\n` +
+    `真實姓名的報告完全不受影響。\n\n確定繼續？`
+  )) return;
 
-  if (!toDelete.length) { alert('沒有符合條件的報告。'); return; }
-
-  const forceNote = includeUnpaid ? '\n\n⚠️ 後端會自動略過「已付款」的報告，確保安全。' : '';
-  if (!confirm(`即將嘗試刪除 ${toDelete.length} 筆報告。${forceNote}\n\n確定繼續？`)) return;
-
-  let success = 0, fail = 0, skipped = 0;
-  for (const r of toDelete) {
+  let success = 0, fail = 0;
+  for (const r of tests) {
     try {
-      const url = r.is_test
-        ? `/reports/${r.report_id}/delete-test`
-        : `/reports/${r.report_id}/delete-test?force_unpaid=true`;
-      const resp = await apiFetch(url, { method: 'DELETE' });
+      const resp = await apiFetch(`/reports/${r.report_id}/delete-test`, { method: 'DELETE' });
       if (resp.ok) {
         success++;
       } else {
         const d = await resp.json().catch(() => ({}));
-        // 後端拒絕（例如已付款）→ 計為略過而非失敗
-        if (resp.status === 400) skipped++;
-        else fail++;
+        fail++;
         console.warn(`[cleanupTest] 報告 #${r.report_id} 刪除失敗:`, d.detail || resp.status);
       }
     } catch(e) { fail++; }
   }
-  alert(`清理完成 ✅\n成功：${success} 筆\n略過（已付款，保留）：${skipped} 筆\n失敗：${fail} 筆`);
+  alert(`清理完成 ✅\n成功刪除：${success} 筆測試報告\n失敗：${fail} 筆`);
   renderAdminReports();
 }
 
@@ -10018,6 +10051,124 @@ function _maybePromptInitialPwdChange() {
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────
+// 🆘 救回誤刪報告（從 GCS 孤兒 PDF 重建 DB 紀錄）
+// ─────────────────────────────────────────────────────────────────────────
+let _gcsOrphanCache = [];
+
+async function _openRestoreModal() {
+  const modal = document.getElementById('restore-report-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  modal.style.pointerEvents = 'auto';
+  document.getElementById('restore-result').textContent = '';
+
+  const sel = document.getElementById('restore-gcs-url');
+  sel.innerHTML = '<option value="">⏳ 載入 GCS 孤兒 PDF…</option>';
+  _gcsOrphanCache = [];
+
+  try {
+    // 同時取 GCS 全部檔案 + DB 全部報告的 pdf_url
+    const [gcsR, dbR] = await Promise.all([
+      apiFetch('/reports/gcs-list?limit=500'),
+      apiFetch('/reports/list'),
+    ]);
+    if (!gcsR.ok) throw new Error('GCS 列表載入失敗');
+    if (!dbR.ok)  throw new Error('DB 報告列表載入失敗');
+
+    const gcsData  = await gcsR.json();
+    const dbData   = await dbR.json();
+
+    const dbUrls = new Set((dbData.reports || []).map(r => r.pdf_url).filter(Boolean));
+    const allFiles = gcsData.files || [];
+
+    // 孤兒 = GCS 有、DB 無
+    _gcsOrphanCache = allFiles.filter(f => f.url && !dbUrls.has(f.url));
+
+    if (!_gcsOrphanCache.length) {
+      sel.innerHTML = '<option value="">✅ 沒有孤兒 PDF（所有 GCS 檔案均有對應 DB 紀錄）</option>';
+      return;
+    }
+
+    sel.innerHTML = `<option value="">— 選擇要救回的 PDF（共 ${_gcsOrphanCache.length} 個孤兒）—</option>` +
+      _gcsOrphanCache.map((f, i) =>
+        `<option value="${i}">${f.name || f.url.split('/').pop()} (${f.size_mb ? f.size_mb.toFixed(1)+'MB' : '?'})</option>`
+      ).join('');
+  } catch(e) {
+    sel.innerHTML = `<option value="">❌ 載入失敗：${e.message}</option>`;
+  }
+}
+
+function _onRestoreUrlChange() {
+  const sel = document.getElementById('restore-gcs-url');
+  const idx = parseInt(sel.value, 10);
+  if (isNaN(idx)) return;
+  const f = _gcsOrphanCache[idx];
+  if (!f) return;
+
+  // 從檔名推測受測者姓名（格式通常是 「姓名_成人腦波報告_xxx.pdf」）
+  const fname = (f.name || f.url.split('/').pop() || '').replace(/\.pdf$/i, '');
+  const parts = fname.split('_');
+  const guessName = parts[0] || '';
+  document.getElementById('restore-subject-name').value = guessName;
+
+  // 從檔名推測報告類型
+  let kindGuess = '';
+  if (fname.includes('兒童') || fname.includes('child')) kindGuess = 'child';
+  else if (fname.includes('成人') || fname.includes('life')) kindGuess = 'life_script';
+  else if (fname.includes('夫妻') || fname.includes('marital')) kindGuess = 'marital';
+  else if (fname.includes('親子') || fname.includes('parent')) kindGuess = 'parent_child';
+  document.getElementById('restore-report-kind').value = kindGuess;
+
+  document.getElementById('restore-url-hint').textContent = `URL：${f.url}`;
+}
+
+async function _doRestoreReport() {
+  const sel  = document.getElementById('restore-gcs-url');
+  const idx  = parseInt(sel.value, 10);
+  const name = document.getElementById('restore-subject-name').value.trim();
+  const email = document.getElementById('restore-notify-email').value.trim();
+  const kind  = document.getElementById('restore-report-kind').value;
+  const resultEl = document.getElementById('restore-result');
+
+  if (isNaN(idx)) { resultEl.textContent = '❌ 請選擇 GCS 檔案'; return; }
+  const f = _gcsOrphanCache[idx];
+  if (!f || !f.url) { resultEl.textContent = '❌ 找不到選取的 GCS 檔案'; return; }
+  if (!name) { resultEl.textContent = '❌ 請填入受測者姓名'; return; }
+
+  resultEl.textContent = '⏳ 建立中…';
+  try {
+    const resp = await apiFetch('/reports/restore-from-gcs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pdf_url: f.url,
+        subject_name: name,
+        notify_email: email || null,
+        report_kind: kind || null,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      resultEl.textContent = `❌ 失敗：${data.detail || resp.status}`;
+      return;
+    }
+    resultEl.innerHTML = `✅ 已建立報告 #${data.report_id}（${name}）！請重新載入報告列表查看。`;
+    // 從孤兒列表移除已救回的項目
+    _gcsOrphanCache.splice(idx, 1);
+    // 更新下拉選單
+    sel.remove(sel.selectedIndex);
+    sel.insertAdjacentHTML('afterbegin',
+      `<option value="">— 繼續救回更多？剩 ${_gcsOrphanCache.length} 個孤兒 —</option>`);
+    sel.selectedIndex = 0;
+    document.getElementById('restore-subject-name').value = '';
+    document.getElementById('restore-url-hint').textContent = '';
+    renderAdminReports();
+  } catch(e) {
+    resultEl.textContent = `❌ 例外：${e.message}`;
+  }
+}
+
 // 🔁 付款重測（開啟 Modal → 選客戶 → 直接進採集流程）
 // ───────────────────────────────────────────────────────────────────────────
 let _redetectCache = [];

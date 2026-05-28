@@ -2171,22 +2171,26 @@ def delete_test_report(
                 f"報告 #{report_id} 的受測者為「{raw_name}」，不是測試報告，禁止透過此 API 刪除。"
                 "若確實要刪除（且確認未付款），請加上 ?force_unpaid=true 參數。",
             )
-        # force_unpaid=True：確認該 session 沒有已付款的 Payment
-        if rep.session_id:
-            paid = (
-                db.query(M.Payment)
-                .filter(
-                    M.Payment.session_id == rep.session_id,
-                    M.Payment.status == "paid",
-                )
-                .first()
+        # force_unpaid=True：嚴格安全檢查
+        # 1. 若無 session_id（孤兒報告），有真實姓名就拒絕
+        if not rep.session_id:
+            raise HTTPException(
+                400,
+                f"報告 #{report_id}（受測者：{raw_name}）是孤兒報告（無 session），"
+                "無法確認付款狀態，禁止自動刪除。請手動確認後個別處理。",
             )
-            if paid:
-                raise HTTPException(
-                    400,
-                    f"報告 #{report_id}（受測者：{raw_name}）的 Session #{rep.session_id} "
-                    f"已有付款紀錄（Payment #{paid.payment_id}，status=paid），禁止刪除。",
-                )
+        # 2. 有 session_id：只要該 session 有任何 Payment 記錄（不限 status），一律保留
+        any_payment = (
+            db.query(M.Payment)
+            .filter(M.Payment.session_id == rep.session_id)
+            .first()
+        )
+        if any_payment:
+            raise HTTPException(
+                400,
+                f"報告 #{report_id}（受測者：{raw_name}）的 Session #{rep.session_id} "
+                f"已有付款紀錄（Payment #{any_payment.payment_id}，status={any_payment.status}），禁止刪除。",
+            )
 
     # 刪除前記錄
     deleted_info = {
@@ -2200,6 +2204,85 @@ def delete_test_report(
     db.delete(rep)
     db.commit()
     return {"ok": True, "deleted": deleted_info}
+
+
+@router.post("/restore-from-gcs")
+def restore_report_from_gcs(
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：從 GCS PDF URL 重建 Report DB 紀錄（用於誤刪救回）。
+
+    body 欄位：
+      - pdf_url        (str, required)  GCS public URL
+      - subject_name   (str, optional)  受測者姓名
+      - notify_email   (str, optional)  通知 Email
+      - report_kind    (str, optional)  報告類型 (life_script / child / ...)
+      - completed_at   (str, optional)  ISO 時間字串（從檔名或 GCS metadata 推測）
+    """
+    import datetime as _dt
+
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可還原報告")
+
+    pdf_url = (body.get("pdf_url") or "").strip()
+    if not pdf_url:
+        raise HTTPException(400, "pdf_url 不可為空")
+    if not pdf_url.startswith("https://storage.googleapis.com/"):
+        raise HTTPException(400, "pdf_url 必須是 GCS public URL")
+
+    # 防止重複還原同一個 URL
+    existing = db.query(M.Report).filter(M.Report.pdf_url == pdf_url).first()
+    if existing:
+        raise HTTPException(
+            409,
+            f"此 GCS URL 已對應報告 #{existing.report_id}（{existing.status}），不需再還原。",
+        )
+
+    subject_name = (body.get("subject_name") or "").strip() or None
+    notify_email = (body.get("notify_email") or "").strip() or None
+    report_kind  = (body.get("report_kind") or "").strip() or None
+    completed_at_str = (body.get("completed_at") or "").strip()
+
+    completed_at = None
+    if completed_at_str:
+        try:
+            completed_at = _dt.datetime.fromisoformat(completed_at_str.replace("Z", "+00:00"))
+        except Exception:
+            pass
+    if completed_at is None:
+        completed_at = _dt.datetime.utcnow()
+
+    # 將 subject_name 存入 client_summary 以便 list API 顯示
+    import json as _json
+    summary_obj: dict = {}
+    if subject_name:
+        summary_obj["subject_name"] = subject_name
+    summary_obj["restored_from_gcs"] = True
+
+    new_rep = M.Report(
+        session_id          = None,
+        subject_id          = None,
+        status              = "completed",
+        pdf_url             = pdf_url,
+        notify_email        = notify_email,
+        email_sent          = 0,
+        talent_report_kind  = report_kind,
+        client_summary      = _json.dumps(summary_obj, ensure_ascii=False),
+        completed_at        = completed_at,
+    )
+    db.add(new_rep)
+    db.commit()
+    db.refresh(new_rep)
+
+    return {
+        "ok": True,
+        "report_id": new_rep.report_id,
+        "pdf_url":   pdf_url,
+        "subject_name": subject_name,
+    }
 
 
 @router.delete("/events/{correlation_id}")
