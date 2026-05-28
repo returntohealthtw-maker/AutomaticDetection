@@ -8421,9 +8421,18 @@ function _filterAdminReports() {
     const statusLabel = isFailed
       ? '<span style="color:#f44336;font-weight:700;">❌ 生成失敗</span>'
       : isGenerating
-        ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中（等待 Vercel 完成）</span>'
+        ? '<span style="color:#1976d2;font-weight:700;">⏳ 生成中</span>'
         : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
                         : '<span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>');
+
+    // 進度條（僅 generating 狀態顯示，由 _startGeneratingPoll 動態更新）
+    const progressBar = isGenerating ? `
+      <div id="rpt-prog-wrap-${r.report_id}" data-session="${r.session_id||''}" style="margin-top:6px;">
+        <div style="background:#e3f2fd;border-radius:6px;height:10px;overflow:hidden;">
+          <div id="rpt-prog-${r.report_id}" style="background:linear-gradient(90deg,#1565c0,#42a5f5);height:100%;width:0%;transition:width 1.2s ease;border-radius:6px;"></div>
+        </div>
+        <div id="rpt-prog-txt-${r.report_id}" style="font-size:10px;color:#1565c0;margin-top:3px;font-weight:600;">⏳ 等待進度資料...</div>
+      </div>` : '';
 
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${borderColor !== 'transparent' ? `border-left:4px solid ${borderColor};` : ''}">
@@ -8446,6 +8455,7 @@ function _filterAdminReports() {
             🕒 ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
             · ${statusLabel}
           </div>
+          ${progressBar}
           ${orphanWarn}
           ${headlessErrTxt}
         </div>
@@ -8458,6 +8468,86 @@ function _filterAdminReports() {
       </div>
     </div>
   `; }).join('');
+
+  // 若有生成中的報告，啟動進度條輪詢
+  if (rows.some(r => (r.status === 'generating' || r.status === 'pending') && !r.pdf_url)) {
+    _startGeneratingPoll();
+  }
+}
+
+// ── 生成進度條輪詢 ──────────────────────────────────────────────────────────
+let _genPollTimer = null;
+
+async function _pollGeneratingProgress() {
+  const wraps = document.querySelectorAll('[id^="rpt-prog-wrap-"]');
+  if (!wraps.length) {
+    clearInterval(_genPollTimer); _genPollTimer = null; return;
+  }
+  try {
+    const resp = await apiFetch('/reports/headless/jobs');
+    if (!resp.ok) return;
+    const { jobs = [] } = await resp.json();
+
+    // session_id → job（只看 running）
+    const sessMap = {};
+    for (const job of jobs) {
+      if (job.status === 'running' && job.vercel_url) {
+        const m = job.vercel_url.match(/session_id=(\d+)/);
+        if (m) sessMap[m[1]] = job;
+      }
+    }
+
+    wraps.forEach(wrap => {
+      const reportId  = wrap.id.replace('rpt-prog-wrap-', '');
+      const sessionId = wrap.dataset.session;
+      const barEl     = document.getElementById('rpt-prog-' + reportId);
+      const txtEl     = document.getElementById('rpt-prog-txt-' + reportId);
+      if (!barEl || !txtEl) return;
+
+      const job = sessMap[sessionId];
+      if (!job) {
+        // job 不在 running 列表，可能剛完成或尚未啟動
+        txtEl.textContent = '⏳ 等待啟動...';
+        return;
+      }
+
+      const preview    = job.page_text_preview || '';
+      const pctMatch   = preview.match(/(\d+)\s*%/);
+      const pct        = pctMatch ? Math.min(99, parseInt(pctMatch[1])) : 0;
+      const elapsed    = (job.elapsed_sec || 0);
+      const elMin      = Math.floor(elapsed / 60);
+      const elSec      = String(Math.floor(elapsed % 60)).padStart(2,'0');
+      const pageMatch  = preview.match(/正在渲染\s*\[([^\]]+)\]/);
+      const pageTxt    = pageMatch ? `[${pageMatch[1]}]` : '';
+      const isPdf      = /PDF\s*\[/.test(preview);
+      const isUpload   = /Proxy|GCS|上傳中/.test(preview);
+
+      barEl.style.width = pct + '%';
+      if (pct >= 90) barEl.style.background = 'linear-gradient(90deg,#00695c,#26a69a)';
+
+      if (isUpload)      txtEl.textContent = `⬆️ 上傳報告中… ${elMin}:${elSec}`;
+      else if (isPdf)    txtEl.textContent = `📄 PDF 組合中… ${pct}% · ${elMin}:${elSec} ${pageTxt}`;
+      else               txtEl.textContent = `🧠 渲染中 ${pct}% · ${elMin}:${elSec} ${pageTxt || '準備中'}`;
+    });
+
+    // 若有 job completed/failed，3 秒後重新整理列表
+    const anyDone = jobs.some(j => (j.status === 'completed' || j.status === 'failed') &&
+      wraps[Symbol.iterator] && [...wraps].some(w => {
+        const m = j.vercel_url && j.vercel_url.match(/session_id=(\d+)/);
+        return m && w.dataset.session === m[1];
+      })
+    );
+    if (anyDone) {
+      clearInterval(_genPollTimer); _genPollTimer = null;
+      setTimeout(() => renderAdminReports(), 3000);
+    }
+  } catch(e) { console.warn('[genPoll]', e); }
+}
+
+function _startGeneratingPoll() {
+  if (_genPollTimer) return;          // 已在輪詢中
+  _pollGeneratingProgress();          // 立即執行一次
+  _genPollTimer = setInterval(_pollGeneratingProgress, 10000);  // 每 10 秒
 }
 
 // 從「資料庫紀錄」tab 直接重新生成失敗報告
