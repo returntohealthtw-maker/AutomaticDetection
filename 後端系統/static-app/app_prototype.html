@@ -8553,16 +8553,17 @@ function _startGeneratingPoll() {
 
 // 從「資料庫紀錄」tab 直接重新生成失敗報告
 async function _regenFromDbRecords(sessionId, email) {
-  if (!confirm(`確定要重新生成 Session #${sessionId} 的報告？`)) return;
+  const emailInput = prompt(`重新生成 Session #${sessionId} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, email || '');
+  if (emailInput === null) return; // 使用者取消
+  if (!confirm(`確定對 Session #${sessionId} 重新生成？\nEmail：${emailInput || '(無)'}\n\n⏳ 完成後進入「待核准」狀態，需 admin 預覽 PDF 後手動寄信。`)) return;
   try {
-    const r = await apiFetch('/reports/regenerate', {
+    const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_ids: [sessionId], notify_email: email || undefined }),
+      body: JSON.stringify({ notify_email: emailInput || undefined }),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`重新生成失敗：${data.detail || r.status}`); return; }
-    alert(`已送出重新生成指令，請稍候 20-30 分鐘後刷新查看結果。`);
+    if (!r.ok) { alert(`重新生成失敗：${data.detail || data.error || r.status}`); return; }
+    alert(`✅ 已送出重新生成指令！\n\n預計 20-30 分鐘後完成，完成後狀態會變為「待核准寄信」。`);
     renderAdminReports();
   } catch (e) {
     alert(`例外：${e.message}`);
