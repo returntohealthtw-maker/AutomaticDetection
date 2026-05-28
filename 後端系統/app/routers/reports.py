@@ -1335,11 +1335,15 @@ def import_from_gcs(
 @router.delete("/gcs-file")
 def delete_gcs_file(
     object_name: str = Query(..., description="GCS object name，例如 reports/general/xxx.pdf"),
-    also_db: bool = Query(True, description="True = 同時刪除 DB 中對應的 Report 記錄"),
+    also_db: bool = Query(True, description="True = 同時刪除 DB 中對應的 Report 記錄（report_id 未提供時用 LIKE 比對）"),
+    report_id: Optional[int] = Query(None, description="精確刪除指定 report_id（優先於 also_db+LIKE）"),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """管理員專用：從 GCS 刪除指定 PDF 檔案，並可選擇同時刪除 DB 紀錄。"""
+    """管理員專用：從 GCS 刪除指定 PDF 檔案，並可選擇同時刪除 DB 紀錄。
+
+    建議傳入 report_id（精確刪除，不受中文 URL 編碼干擾）。
+    """
     user = require_user(authorization, db)
     if user.role != "admin":
         raise HTTPException(403, "僅管理員可刪除 GCS 檔案")
@@ -1353,13 +1357,33 @@ def delete_gcs_file(
     # 1) 刪除 GCS 物件
     gcs_result = gcs_uploader.delete_pdf_object(obj)
 
-    # 2) 若 also_db=True，刪除 DB 中 pdf_url 含此 object name 的 Report
+    # 2) 刪除 DB Report 記錄
     db_deleted = []
-    if also_db:
-        matching = db.query(M.Report).filter(M.Report.pdf_url.like(f"%{obj}%")).all()
-        for rep in matching:
+    if report_id:
+        # 優先：用 report_id 精確刪除（避免中文字 URL 編碼導致 LIKE 不匹配）
+        rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+        if rep:
             db_deleted.append({"report_id": rep.report_id, "session_id": rep.session_id})
             db.delete(rep)
+            db.commit()
+    elif also_db:
+        # 備援：用 LIKE 比對（適用於 ASCII-only 的 object_name）
+        from urllib.parse import quote
+        # 嘗試原始版本 + URL 編碼版本
+        patterns = [f"%{obj}%"]
+        try:
+            encoded_obj = quote(obj, safe="/")
+            if encoded_obj != obj:
+                patterns.append(f"%{encoded_obj}%")
+        except Exception:
+            pass
+        matched_ids = set()
+        for pat in patterns:
+            for rep in db.query(M.Report).filter(M.Report.pdf_url.like(pat)).all():
+                if rep.report_id not in matched_ids:
+                    matched_ids.add(rep.report_id)
+                    db_deleted.append({"report_id": rep.report_id, "session_id": rep.session_id})
+                    db.delete(rep)
         if db_deleted:
             db.commit()
 

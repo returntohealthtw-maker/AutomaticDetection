@@ -8257,7 +8257,7 @@ function _filterGcsList() {
           <button onclick="openExternalUrl('${it.signed_url}')" style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;">🔍 預覽/下載</button>
           ${importBtn}
           ${sendBtn}
-          <button onclick="_deleteGcsFile('${(it.name || '').replace(/'/g, "\\'")}', ${!!db})" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;" title="從 GCS 刪除此 PDF（含 DB 記錄）">🗑️ 刪除</button>
+          <button onclick="_deleteGcsFile('${(it.name || '').replace(/'/g, "\\'")}', ${db ? db.report_id : 0})" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;" title="從 GCS 刪除此 PDF（含 DB 記錄）">🗑️ 刪除</button>
         </div>
       </div>
       <div style="font-size:10px;color:#aaa;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;background:#f5f7fa;padding:4px 6px;border-radius:4px;" title="${it.name}">${it.name}</div>
@@ -8266,15 +8266,15 @@ function _filterGcsList() {
 }
 
 // 刪除 GCS 上的 PDF（含選擇性刪除 DB 記錄）
-async function _deleteGcsFile(objectName, hasDbRecord) {
+// reportId = DB 的 report_id（數字），0 表示無 DB 記錄（孤兒檔）
+async function _deleteGcsFile(objectName, reportId) {
   const fname = objectName.split('/').pop();
-  const dbNote = hasDbRecord ? '\n\n⚠️ 此檔案已入庫，同時也會刪除資料庫中的報告記錄。' : '\n\n（此為歷史孤兒檔，無資料庫記錄）';
+  const hasDbRecord = reportId > 0;
+  const dbNote = hasDbRecord ? `\n\n⚠️ 此檔案已入庫（Report #${reportId}），同時也會刪除資料庫中的報告記錄。` : '\n\n（此為歷史孤兒檔，無資料庫記錄）';
   if (!confirm(`確定要刪除此 GCS 檔案？\n\n${fname}${dbNote}\n\n此操作不可復原。`)) return;
   try {
-    const alsoDb = hasDbRecord ? 'true' : 'false';
-    const r = await apiFetch(`/reports/gcs-file?object_name=${encodeURIComponent(objectName)}&also_db=${alsoDb}`, {
-      method: 'DELETE',
-    });
+    const qs = `object_name=${encodeURIComponent(objectName)}${hasDbRecord ? `&report_id=${reportId}` : '&also_db=false'}`;
+    const r = await apiFetch(`/reports/gcs-file?${qs}`, { method: 'DELETE' });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       alert(`❌ 刪除失敗：${data.detail || data.error || r.status}`);
