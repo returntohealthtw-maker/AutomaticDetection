@@ -6,6 +6,7 @@
 端點：
   POST /api/gemini          — Gemini 文字 / SVG / 圖像生成（同 api/gemini.ts）
   POST /api/gcsSignedUrl    — GCS signed URL（同 api/gcsSignedUrl.ts）
+  POST /api/uploadPdfProxy  — 伺服器端 GCS 上傳代理（繞過瀏覽器 CORS）
   POST /api/sendEmail       — 寄信（同 api/sendEmail.ts）
 """
 from __future__ import annotations
@@ -221,6 +222,71 @@ async def gcs_signed_url(request: Request):
 
     except Exception as e:
         logger.exception("[report_app_api/gcsSignedUrl]")
+        return JSONResponse({"error": str(e)}, status_code=500, headers=_cors_headers())
+
+
+# ── /api/uploadPdfProxy ───────────────────────────────────────────────────────
+# 從瀏覽器接收 PDF binary，在 Railway server 端上傳到 GCS，
+# 完全繞過 signed URL direct PUT 的 CORS 問題。
+
+@router.options("/api/uploadPdfProxy")
+async def upload_pdf_proxy_options():
+    return JSONResponse({}, headers=_cors_headers())
+
+
+@router.post("/api/uploadPdfProxy")
+async def upload_pdf_proxy(request: Request):
+    """接收 PDF binary 並在伺服器端上傳至 GCS（繞過瀏覽器 CORS 限制）"""
+    pathname = request.headers.get("X-Pathname", "").strip()
+    if not pathname or not pathname.startswith("reports/"):
+        return JSONResponse(
+            {"error": "Header X-Pathname 必須以 reports/ 開頭"},
+            status_code=400,
+            headers=_cors_headers(),
+        )
+
+    pdf_bytes = await request.body()
+    if not pdf_bytes:
+        return JSONResponse({"error": "空 body"}, status_code=400, headers=_cors_headers())
+
+    bucket_name = os.environ.get("GCS_BUCKET_NAME", "").strip()
+    sa_json_str = os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "").strip()
+    if not bucket_name or not sa_json_str:
+        missing = "GCS_BUCKET_NAME" if not bucket_name else "GCP_SERVICE_ACCOUNT_JSON"
+        return JSONResponse(
+            {"error": f"GCS 尚未設定（缺少 {missing}）"},
+            status_code=503,
+            headers=_cors_headers(),
+        )
+
+    try:
+        import json as _json
+        import datetime
+        from google.cloud import storage as gcs_lib
+        from google.oauth2 import service_account as sa_mod
+
+        creds_info = _json.loads(sa_json_str)
+        creds = sa_mod.Credentials.from_service_account_info(creds_info)
+        client = gcs_lib.Client(credentials=creds, project=creds_info.get("project_id"))
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(pathname)
+        blob.upload_from_string(pdf_bytes, content_type="application/pdf")
+
+        dl_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(days=7),
+            method="GET",
+        )
+        pub_url = f"https://storage.googleapis.com/{bucket_name}/{pathname}"
+
+        size_kb = len(pdf_bytes) // 1024
+        logger.info("[uploadPdfProxy] 上傳成功: %s (%dKB)", pathname, size_kb)
+        return JSONResponse(
+            {"downloadUrl": dl_url, "publicUrl": pub_url, "pathname": pathname, "sizeKB": size_kb},
+            headers=_cors_headers(),
+        )
+    except Exception as e:
+        logger.exception("[uploadPdfProxy]")
         return JSONResponse({"error": str(e)}, status_code=500, headers=_cors_headers())
 
 
