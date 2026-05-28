@@ -237,7 +237,10 @@ async def upload_pdf_proxy_options():
 @router.post("/api/uploadPdfProxy")
 async def upload_pdf_proxy(request: Request):
     """接收 PDF binary 並在伺服器端上傳至 GCS（繞過瀏覽器 CORS 限制）"""
-    pathname = request.headers.get("X-Pathname", "").strip()
+    from urllib.parse import unquote
+    pathname_raw = request.headers.get("X-Pathname", "").strip()
+    # Header 值可能是 URL-encoded（瀏覽器 fetch 不允許非 ASCII header）
+    pathname = unquote(pathname_raw)
     if not pathname or not pathname.startswith("reports/"):
         return JSONResponse(
             {"error": "Header X-Pathname 必須以 reports/ 開頭"},
