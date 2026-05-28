@@ -7727,20 +7727,40 @@ function _renderAllSubjectCard(s) {
   if (s.latest_brainwave) {
     const bw = s.latest_brainwave;
     const ba = bw.bands_avg || {};
-    const cell = (label, val, color) =>
-      `<div style="flex:1;min-width:70px;background:${color};color:white;padding:6px 8px;border-radius:6px;text-align:center;">
-         <div style="font-size:10px;opacity:0.85;">${label}</div>
-         <div style="font-size:16px;font-weight:700;">${Math.round(val || 0)}</div>
+    const b7 = bw.bands_7  || {};
+    const cell = (label, val, color, sub) =>
+      `<div style="flex:1;min-width:72px;background:${color};color:white;padding:6px 8px;border-radius:6px;text-align:center;">
+         <div style="font-size:9px;opacity:0.8;line-height:1.2;">${label}${sub ? `<br><span style='font-size:8px;opacity:0.75;'>${sub}</span>` : ''}</div>
+         <div style="font-size:16px;font-weight:700;margin-top:2px;">${Math.round(val || 0)}</div>
        </div>`;
+    // 優先使用 bands_7（真實 high/low），若無則退回 bands_avg 估算
+    const hasB7 = Object.keys(b7).length > 0;
+    const theta     = hasB7 ? b7.theta      : ba.theta;
+    const hiAlpha   = hasB7 ? b7.alpha_high : Math.round((ba.alpha||0)*1.1);
+    const loAlpha   = hasB7 ? b7.alpha_low  : Math.round((ba.alpha||0)*0.9);
+    const hiBeta    = hasB7 ? b7.beta_high  : Math.round((ba.beta ||0)*1.1);
+    const loBeta    = hasB7 ? b7.beta_low   : Math.round((ba.beta ||0)*0.9);
+    const hiGamma   = hasB7 ? b7.gamma_high : Math.round((ba.gamma||0)*1.1);
+    const loGamma   = hasB7 ? b7.gamma_low  : Math.round((ba.gamma||0)*0.9);
     bwHtml = `
-      <div style="font-size:11px;color:#666;margin-bottom:4px;">最新檢測 (Session #${s.latest_session_id})</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <div style="font-size:11px;color:#666;margin-bottom:6px;">最新檢測 (Session #${s.latest_session_id})
+        <span style="font-size:10px;color:#999;margin-left:6px;">樣本數 ${bw.sample_count||'—'}</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
         ${cell('專注', bw.attention_percentage, '#1976d2')}
         ${cell('放鬆', bw.meditation_percentage, '#7e57c2')}
-        ${cell('Theta', ba.theta, '#26a69a')}
-        ${cell('Alpha', ba.alpha, '#43a047')}
-        ${cell('Beta',  ba.beta,  '#fb8c00')}
-        ${cell('Gamma', ba.gamma, '#e53935')}
+        ${cell('Theta', theta, '#26a69a', '直覺能力')}
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
+        ${cell('High α', hiAlpha, '#43a047', '氣血飽滿')}
+        ${cell('Low α',  loAlpha, '#66bb6a', '內在安定')}
+        ${cell('High β', hiBeta,  '#e65100', '高度專注')}
+        ${cell('Low β',  loBeta,  '#fb8c00', '邏輯分析')}
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        ${cell('High γ', hiGamma, '#c62828', '觀察環境')}
+        ${cell('Low γ',  loGamma, '#e53935', '慈悲柔軟')}
+        ${cell('Delta',  ba.delta, '#546e7a', '深度休息')}
       </div>`;
   }
 

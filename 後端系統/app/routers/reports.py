@@ -915,6 +915,13 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         if b is None:  return a
         return (a + b) / 2.0
 
+    lo_alpha = _safe_float(avg.low_alpha)
+    hi_alpha = _safe_float(avg.high_alpha)
+    lo_beta  = _safe_float(avg.low_beta)
+    hi_beta  = _safe_float(avg.high_beta)
+    lo_gamma = _safe_float(avg.low_gamma)
+    hi_gamma = _safe_float(avg.high_gamma)
+
     bw = {
         "attention_percentage":  _safe_int(avg.attention),
         "meditation_percentage": _safe_int(avg.meditation),
@@ -925,6 +932,16 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
             "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
             "beta":  _band_avg(avg.low_beta,  avg.high_beta),
             "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
+        },
+        # 實際 High / Low 分類（來自 ThinkGear 原始數據）
+        "bands_7": {
+            "theta":      _safe_float(avg.theta),
+            "alpha_high": hi_alpha,
+            "alpha_low":  lo_alpha,
+            "beta_high":  hi_beta,
+            "beta_low":   lo_beta,
+            "gamma_high": hi_gamma,
+            "gamma_low":  lo_gamma,
         },
     }
     return bw
