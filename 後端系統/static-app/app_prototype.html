@@ -8380,8 +8380,11 @@ function _filterAdminReports() {
     const isGenerating = (dbStatus === 'generating' || dbStatus === 'pending') && !r.pdf_url;
     const isFailed     = dbStatus === 'failed';
     const pendingSend  = !r.email_sent && r.pdf_url;       // PDF 好了但 admin 尚未核准寄信
-    const sendBtn = pendingSend
-      ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`
+    // 有 PDF 就一律顯示寄信按鈕（已寄過→「再次寄信」，未寄→「預覽後寄信」）
+    const sendBtn = r.pdf_url
+      ? (r.email_sent
+          ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#546e7a;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="已寄過，可再次寄給其他人">📨 再次寄信</button>`
+          : `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`)
       : '';
 
     // 受測者顯示：姓名 · 年齡 · 性別
