@@ -188,7 +188,104 @@ async def generate_report_async(report_id: int, session_id: int):
         report.talent_report_kind = _resolve_talent_kind(session_obj)
         db.commit()
 
-        # 6. 生成 PDF
+        # 6. 嘗試用圖形版 headless renderer 生成報告（優先）
+        #    若 headless 不可用或啟動失敗，才 fallback 到舊的 ReportLab 文字 PDF
+        headless_triggered = False
+        try:
+            from app.services import report_orchestrator
+            from app.services.headless_renderer import is_available
+
+            if is_available() and session_obj:
+                # 組裝 brainwave_data（與 _do_regenerate_one 相同格式）
+                def _si(v, fb=50):
+                    try: return int(v) if v is not None else int(fb)
+                    except: return int(fb)
+                def _sf(v, fb=50.0):
+                    try: return float(v) if v is not None else float(fb)
+                    except: return float(fb)
+                def _band_avg(lo, hi):
+                    a = _sf(lo, None); b = _sf(hi, None)
+                    if a is None and b is None: return 50.0
+                    if a is None: return b
+                    if b is None: return a
+                    return (a + b) / 2.0
+
+                bw = {
+                    "attention_percentage":  _si(avg.attention),
+                    "meditation_percentage": _si(avg.meditation),
+                    "sample_count":          session_obj.total_captures or 0,
+                    "bands_avg": {
+                        "delta": _sf(avg.delta),
+                        "theta": _sf(avg.theta),
+                        "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
+                        "beta":  _band_avg(avg.low_beta,  avg.high_beta),
+                        "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
+                    },
+                    "bands_7": {
+                        "theta":      _sf(avg.theta),
+                        "alpha_high": min(100, _sf(avg.high_alpha)),
+                        "alpha_low":  max(0,   _sf(avg.low_alpha)),
+                        "beta_high":  min(100, _sf(avg.high_beta)),
+                        "beta_low":   max(0,   _sf(avg.low_beta)),
+                        "gamma_high": min(100, _sf(avg.high_gamma)),
+                        "gamma_low":  max(0,   _sf(avg.low_gamma)),
+                    },
+                }
+
+                # 取 api_base
+                import os as _os
+                api_base = settings.PUBLIC_BASE_URL or ""
+                if not api_base:
+                    rd = _os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+                    if rd:
+                        api_base = rd if rd.startswith("http") else f"https://{rd}"
+
+                # 判斷 report_type
+                rt = (session_obj.report_type or "adult").lower()
+                if "child" in rt:
+                    ext_rt = "child"
+                elif "marital" in rt:
+                    ext_rt = "marital"
+                else:
+                    ext_rt = "life_script"
+
+                notify_email = report.notify_email or ""
+                subject_name = session_obj.subject_name or ""
+
+                # 更新狀態為 generating（headless 完成後會 callback 更新為 completed）
+                report.status = "generating"
+                db.commit()
+
+                res = report_orchestrator.trigger_external_report(
+                    report_type   = ext_rt,
+                    subject_name  = subject_name,
+                    subject_email = notify_email,
+                    subject_age   = session_obj.subject_age,
+                    subject_gender= session_obj.subject_gender or "female",
+                    brainwave_data= bw,
+                    variant       = "full",
+                    extra={
+                        "session_id": session_id,
+                        "api_base":   api_base,
+                    },
+                )
+                if res.get("ok") and res.get("mode") == "headless":
+                    headless_triggered = True
+                    print(f"[INFO] Report {report_id}: headless job triggered job_id={res.get('job_id')}")
+                else:
+                    # headless 未啟動（mode=vite_prefill 或 ok=False），改走舊 fallback
+                    report.status = "processing"
+                    db.commit()
+        except Exception as _he:
+            print(f"[WARN] Report {report_id}: headless trigger failed ({_he}), fallback to ReportLab")
+            report.status = "processing"
+            db.commit()
+
+        if headless_triggered:
+            # headless 已接手，本函數不再操作 PDF/狀態
+            return
+
+        # 7. Fallback：舊 ReportLab 文字版 PDF（當 headless 不可用時）
         pdf_path = await _generate_pdf(
             session  = session_obj,
             indices  = indices,
@@ -196,10 +293,10 @@ async def generate_report_async(report_id: int, session_id: int):
             avg      = avg
         )
 
-        # 7. 上傳到 GCS（或本地）
+        # 8. 上傳到 GCS（或本地）
         pdf_url = await _upload_pdf(pdf_path, report_id)
 
-        # 8. 更新報告狀態
+        # 9. 更新報告狀態
         report.status       = "completed"
         report.pdf_url      = pdf_url
         report.completed_at = None  # SQLAlchemy 會用 server default
