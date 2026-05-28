@@ -10026,6 +10026,7 @@ async function openPaidRedetectModal() {
   const modal = document.getElementById('paid-redetect-modal');
   if (!modal) return;
   modal.style.display = 'flex';
+  modal.style.pointerEvents = 'auto';  // 清除 _forceCloseAllOverlays() 留下的 pointer-events:none
   _redetectCache = [];
   document.getElementById('redetect-list').innerHTML =
     '<div style="text-align:center;padding:24px;color:#999;">🔄 載入已付款未完成檢測名單…</div>';
