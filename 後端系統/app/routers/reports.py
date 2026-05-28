@@ -11,7 +11,7 @@ from typing import Any, Optional, List
 import time
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -2199,3 +2199,87 @@ def delete_report_event(
     )
     db.commit()
     return {"ok": True, "deleted": n}
+
+
+# ── 手動上傳取代 PDF ────────────────────────────────────────────────────────────
+
+@router.post("/{report_id}/upload-pdf")
+async def upload_replacement_pdf(
+    report_id: int,
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：上傳 PDF 檔案取代報告的 GCS 版本，並更新 DB 的 pdf_url。
+
+    用途：手動修復報告掉圖（如缺封面/封底），下載 → 本地編輯 → 透過此 API 重新上傳。
+
+    行為：
+      - 把新 PDF 上傳至 GCS  reports/manual/{report_id}_{timestamp}_{原始檔名}
+      - 更新 Report.pdf_url 為新 GCS public URL
+      - 更新 Report.status = 'completed'、Report.completed_at = now()
+      - 回傳新 pdf_url
+    """
+    import json as _json
+    import datetime
+
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅管理員可上傳取代報告")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(400, "上傳的檔案是空的")
+    if len(pdf_bytes) < 1024:
+        raise HTTPException(400, "檔案太小，可能不是有效 PDF")
+
+    # ── 上傳到 GCS ─────────────────────────────────────────────────────────────
+    bucket_name = os.environ.get("GCS_BUCKET_NAME", "").strip()
+    sa_json_str = os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "").strip()
+    if not bucket_name or not sa_json_str:
+        missing = "GCS_BUCKET_NAME" if not bucket_name else "GCP_SERVICE_ACCOUNT_JSON"
+        raise HTTPException(503, f"GCS 尚未設定（缺少 {missing}）")
+
+    try:
+        from google.cloud import storage as gcs_lib
+        from google.oauth2 import service_account as sa_mod
+
+        creds_info = _json.loads(sa_json_str)
+        creds = sa_mod.Credentials.from_service_account_info(creds_info)
+        client = gcs_lib.Client(credentials=creds, project=creds_info.get("project_id"))
+        bucket = client.bucket(bucket_name)
+
+        # 保留原始檔名但加上 report_id 和時間戳，避免衝突
+        ts = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        safe_name = (file.filename or "report.pdf").replace("/", "_")
+        pathname = f"reports/manual/{report_id}_{ts}_{safe_name}"
+
+        blob = bucket.blob(pathname)
+        blob.upload_from_string(pdf_bytes, content_type="application/pdf")
+
+        pub_url = f"https://storage.googleapis.com/{bucket_name}/{pathname}"
+        size_kb = len(pdf_bytes) // 1024
+
+    except Exception as exc:
+        raise HTTPException(500, f"GCS 上傳失敗：{exc}") from exc
+
+    # ── 更新 DB ────────────────────────────────────────────────────────────────
+    old_url = rep.pdf_url
+    rep.pdf_url = pub_url
+    rep.status = "completed"
+    rep.completed_at = datetime.datetime.utcnow()
+    db.commit()
+    db.refresh(rep)
+
+    return {
+        "ok": True,
+        "report_id": report_id,
+        "pdf_url": pub_url,
+        "old_pdf_url": old_url,
+        "gcs_pathname": pathname,
+        "size_kb": size_kb,
+    }

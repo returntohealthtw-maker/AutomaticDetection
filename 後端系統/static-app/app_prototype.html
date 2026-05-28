@@ -8463,6 +8463,7 @@ function _filterAdminReports() {
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
           ${isFailed && r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}')" style="background:#f44336;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新生成</button>` : ''}
+          <button onclick="_uploadReplacementPdf(${r.report_id},'${esc(r.subject_name||'')}')" style="background:#e65100;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="上傳 PDF 取代現有檔案（修復掉圖等問題）">📤 上傳取代</button>
           ${r.is_test ? `<button onclick="_deleteTestReport(${r.report_id})" style="background:#9c27b0;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🗑️ 刪除</button>` : ''}
         </div>
       </div>
@@ -8582,6 +8583,59 @@ async function _deleteTestReport(reportId) {
   } catch (e) {
     alert(`刪除例外：${e.message}`);
   }
+}
+
+// ── 手動上傳取代 PDF ────────────────────────────────────────────────────────────
+function _uploadReplacementPdf(reportId, subjectName) {
+  // 建立隱藏的 file input，觸發後立即上傳
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/pdf,.pdf';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    document.body.removeChild(inp);
+    if (!file) return;
+
+    const sizeMB = (file.size / 1048576).toFixed(1);
+    if (!confirm(`上傳「${file.name}」(${sizeMB} MB) 取代\n報告 #${reportId}（${subjectName || '未知'}）的 PDF？\n\n⚠️ 原有 GCS 檔案不會被刪除，DB 的 pdf_url 將更新為新上傳的檔案。`)) return;
+
+    // 顯示進行中提示
+    const toast = document.createElement('div');
+    toast.id = 'upload-toast-' + reportId;
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1565c0;color:white;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.25);';
+    toast.textContent = `⬆️ 上傳中 ${sizeMB}MB…`;
+    document.body.appendChild(toast);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      // 不能用 apiFetch（它會強制帶 Content-Type: application/json，破壞 multipart boundary）
+      const auth = _getAuth();
+      const headers = auth && auth.token ? { 'Authorization': `Bearer ${auth.token}` } : {};
+      const r = await fetch(`${API_BASE}/reports/${reportId}/upload-pdf`, {
+        method: 'POST', headers, body: form, cache: 'no-store',
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.style.background = '#c62828';
+        toast.textContent = `❌ 上傳失敗：${data.detail || data.error || r.status}`;
+        setTimeout(() => toast.remove(), 5000);
+        return;
+      }
+      toast.style.background = '#2e7d32';
+      toast.textContent = `✅ 上傳成功！(${data.size_kb || '?'} KB) 即將重新整理…`;
+      setTimeout(() => { toast.remove(); renderAdminReports(); }, 2500);
+    } catch (e) {
+      toast.style.background = '#c62828';
+      toast.textContent = `❌ 例外：${e.message}`;
+      setTimeout(() => toast.remove(), 5000);
+    }
+  };
+
+  inp.click();
 }
 
 // 🔗 一鍵修復孤兒報告：呼叫 /reports/admin/relink-orphan-reports
