@@ -8457,7 +8457,10 @@ function _filterAdminReports() {
     if (r.is_test) {
       orphanWarn = '<div style="margin-top:4px;padding:4px 8px;background:#f3e5f5;border-left:3px solid #9c27b0;border-radius:4px;font-size:10px;color:#6a1b9a;">🧪 系統測試報告 · 受測者姓名缺失（生成時未填寫受測者資料），無法回查至任何受測者個人資料。建議刪除。</div>';
     } else if (r.orphan) {
-      orphanWarn = '<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;">⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</div>';
+      orphanWarn = `<div style="margin-top:4px;padding:4px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:10px;color:#bf360c;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>⚠️ 此報告未連結到檢測場次（session_id 為空），無法回查腦波原始資料</span>
+        <button onclick="_linkReportToSession(${r.report_id},'${esc(r.subject_name||'')}')" style="flex-shrink:0;background:#e65100;color:white;border:none;font-size:10px;padding:3px 8px;border-radius:4px;font-weight:600;cursor:pointer;">🔗 連結 Session</button>
+      </div>`;
     }
 
     const borderColor = r.is_test       ? '#ce93d8'
@@ -8659,6 +8662,33 @@ async function _adminDeleteReport(reportId, subjectName) {
       return;
     }
     showToast(`✅ 已刪除報告 #${reportId}（${subjectName}）${delGcs ? ' + GCS PDF' : ''}`, 'ok');
+    renderAdminReports();
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+}
+
+// ── 孤兒報告手動連結 Session ────────────────────────────────────────────────────
+async function _linkReportToSession(reportId, subjectName) {
+  const input = prompt(
+    `將報告 #${reportId}（${subjectName}）連結到哪個 Session？\n\n` +
+    `請輸入 Session ID（可在「🧠 檢測↔報告」分頁看到，如：33）`
+  );
+  if (!input) return;
+  const sessId = parseInt(input.trim(), 10);
+  if (!sessId || sessId <= 0) return alert('請輸入有效的 Session ID（正整數）');
+
+  try {
+    const r = await apiFetch(`/reports/${reportId}/link-session`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessId }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(`❌ 連結失敗：${data.detail || r.status}`, 'error', 5000);
+      return;
+    }
+    showToast(`✅ 報告 #${reportId} 已連結到 Session #${sessId}（${data.subject_name || ''}）`, 'ok', 4000);
     renderAdminReports();
   } catch (e) {
     showToast(`❌ 連線失敗：${e.message}`, 'error');

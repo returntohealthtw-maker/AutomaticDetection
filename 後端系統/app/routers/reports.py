@@ -2051,6 +2051,58 @@ def admin_relink_orphan_reports(
     }
 
 
+@router.post("/{report_id}/link-session")
+def admin_link_session(
+    report_id: int,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """admin 手動把孤兒 Report 連結到指定 Session（設定 session_id）。
+    同時將 Report.subject_id / subject_name 對齊該 Session 的受測者資料。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅 admin 可執行")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+
+    sess_id = body.get("session_id")
+    if not isinstance(sess_id, int) or sess_id <= 0:
+        raise HTTPException(400, "session_id 必須是正整數")
+
+    sess = db.query(M.Session).filter(M.Session.session_id == sess_id).first()
+    if not sess:
+        raise HTTPException(404, f"找不到 Session #{sess_id}")
+
+    # 確認 session 尚未有其他 report
+    existing = db.query(M.Report).filter(
+        M.Report.session_id == sess_id,
+        M.Report.report_id != report_id,
+    ).first()
+    if existing:
+        raise HTTPException(
+            400,
+            f"Session #{sess_id} 已有報告 #{existing.report_id}（{existing.talent_report_kind}），"
+            "請先刪除舊報告再連結。",
+        )
+
+    rep.session_id = sess_id
+    if sess.subject_id:
+        rep.subject_id = sess.subject_id
+    db.commit()
+    db.refresh(rep)
+    return {
+        "ok": True,
+        "report_id":   report_id,
+        "session_id":  sess_id,
+        "subject_name": sess.subject_name,
+        "subject_id":   sess.subject_id,
+    }
+
+
 @router.post("/{report_id}/manual-link-subject")
 def admin_manual_link_subject(
     report_id: int,
