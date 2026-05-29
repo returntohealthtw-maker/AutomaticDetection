@@ -633,6 +633,8 @@ def list_gcs_pdfs(
 
     # 把 (pdf_url, info) 整理成可查的 dict（用 object name 比對）
     # GCS pdf_url 包含 /<bucket>/<object_name>?X-Goog-...
+    # signed URL 含有 URL 編碼的中文，需 unquote 後才能與 GCS list 的原始路徑比對
+    import urllib.parse as _urlparse
     db_by_object: dict[str, dict] = {}
     for r in db_reports:
         url = r.pdf_url or ""
@@ -647,6 +649,8 @@ def list_gcs_pdfs(
                 obj_in_db = "/".join(seg[4:])
             else:
                 obj_in_db = no_q
+            # signed URL 的中文會被 URL 編碼（%E8%98%87...），需解碼才能與 GCS 路徑比對
+            obj_in_db = _urlparse.unquote(obj_in_db)
         except Exception:
             obj_in_db = ""
         if obj_in_db:
@@ -1272,7 +1276,17 @@ def import_from_gcs(
             subject_name = fname
 
     # 3) 避免重複補錄（用 object_name 做去重，比對 pdf_url 中的 object path）
-    existing = db.query(M.Report).filter(M.Report.pdf_url.like(f"%{obj}%")).first()
+    # signed URL 含 URL 編碼，需同時比對原始路徑和編碼後路徑
+    import urllib.parse as _urlparse
+    obj_encoded = _urlparse.quote(obj, safe="/")
+    existing = (
+        db.query(M.Report)
+        .filter(
+            M.Report.pdf_url.like(f"%{obj}%") |
+            M.Report.pdf_url.like(f"%{obj_encoded}%")
+        )
+        .first()
+    )
     if existing:
         # 已經補過 / 已經有紀錄 → 更新 signed URL（過期會自動續簽）
         existing.pdf_url = signed
