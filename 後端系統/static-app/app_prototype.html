@@ -9194,16 +9194,24 @@ const _ROLES = [
 ];
 
 const _PRODUCTS = [
-  { key:'life_trial',    label:'人生劇本 · 體驗版',   price:3000  },
-  { key:'life_full',     label:'人生劇本 · 完整版',   price:5000  },
-  { key:'life_vip',      label:'人生劇本 · VIP版',    price:12000 },
-  { key:'child_trial',   label:'兒童天賦 · 體驗版',   price:3000  },
-  { key:'child_full',    label:'兒童天賦 · 完整版',   price:5000  },
-  { key:'child_vip',     label:'兒童天賦 · VIP版',    price:12000 },
-  { key:'relation',      label:'關係報告（共振）',     price:8000  },
-  { key:'up_trial_full', label:'加購升級：體驗→完整', price:2000, upgrade:true },
-  { key:'up_full_vip',   label:'加購升級：完整→VIP',  price:7000, upgrade:true },
-  { key:'up_trial_vip',  label:'加購升級：體驗→VIP',  price:9000, upgrade:true },
+  // ── 加盟商專屬（含體驗版）──────────────────────────────────────────
+  { key:'life_trial',         label:'人生劇本 · 體驗版（加盟）',      price:3000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'life_full',          label:'人生劇本 · 完整版（加盟）',      price:5000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'life_vip',           label:'人生劇本 · VIP版（加盟）',       price:12000, rolesOnly:['franchise','agent','project','staff'] },
+  { key:'child_trial',        label:'兒童天賦 · 體驗版（加盟）',      price:3000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'child_full',         label:'兒童天賦 · 完整版（加盟）',      price:5000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'child_vip',          label:'兒童天賦 · VIP版（加盟）',       price:12000, rolesOnly:['franchise','agent','project','staff'] },
+  { key:'up_trial_full',      label:'加購升級：體驗→完整（加盟）',    price:2000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
+  { key:'up_full_vip',        label:'加購升級：完整→VIP（加盟）',     price:7000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
+  { key:'up_trial_vip',       label:'加購升級：體驗→VIP（加盟）',     price:9000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
+  // ── 直營商專屬（無體驗版，價格不同）────────────────────────────────
+  { key:'life_full_direct',   label:'人生劇本 · 完整版（直營）',      price:4800,  rolesOnly:['direct'] },
+  { key:'life_vip_direct',    label:'人生劇本 · VIP版（直營）',       price:8800,  rolesOnly:['direct'] },
+  { key:'child_full_direct',  label:'兒童天賦 · 完整版（直營）',      price:4800,  rolesOnly:['direct'] },
+  { key:'child_vip_direct',   label:'兒童天賦 · VIP版（直營）',       price:8800,  rolesOnly:['direct'] },
+  { key:'up_full_vip_direct', label:'加購升級：完整→VIP（直營）',     price:4000,  upgrade:true, rolesOnly:['direct'] },
+  // ── 共用品項（所有身份）────────────────────────────────────────────
+  { key:'relation',           label:'關係報告（共振）',                price:8000  },
 ];
 
 // 快取，避免每次 render 都 re-fetch
@@ -9324,7 +9332,11 @@ function renderShareRulesEditor() {
       <button data-mode="pct"    class="${mode==='pct'?'active':''}"    onclick="toggleRuleMode('${p.key}','pct')">% 比例</button>
       <button data-mode="amount" class="${mode==='amount'?'active':''}" onclick="toggleRuleMode('${p.key}','amount')">固定金額</button>
     </div>`;
-    const rows = _ROLES.map(role => {
+    // 若品項有 rolesOnly 限制，只顯示適用角色的欄位
+    const applicableRoles = p.rolesOnly
+      ? _ROLES.filter(role => p.rolesOnly.includes(role.key))
+      : _ROLES;
+    const rows = applicableRoles.map(role => {
       const pctVal    = (r.pct_byRole    || {})[role.key] ?? 0;
       const amtVal    = (r.amount_byRole || {})[role.key] ?? 0;
       const isPct = mode === 'pct';
