@@ -8510,6 +8510,7 @@ function _filterAdminReports() {
           <div style="font-size:10px;color:#999;margin-top:3px;">
             🕒 ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
             · ${statusLabel}
+            · <span style="color:#aaa;">Session: ${r.session_id != null ? `<a href="#" onclick="event.preventDefault();_linkReportToSession(${r.report_id},'${esc(r.subject_name||'')}');return false;" title="點擊重新連結到其他 Session" style="color:#1976d2;text-decoration:underline;">#${r.session_id}</a>` : '<a href="#" onclick="event.preventDefault();_linkReportToSession('+r.report_id+',\''+esc(r.subject_name||'')+'\');return false;" style="color:#e65100;font-weight:700;text-decoration:underline;" title="尚未連結 Session，點擊設定">未連結 ⚠️</a>'}</span>
           </div>
           ${progressBar}
           ${orphanWarn}
