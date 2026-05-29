@@ -18,7 +18,7 @@ from sqlalchemy import func
 
 from app.core import models as M
 from app.core.database import get_db
-from app.routers.auth import require_user
+from app.routers.auth import require_user, require_admin
 
 router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 
@@ -2220,6 +2220,7 @@ def admin_delete_report(
     - delete_gcs=1 時同時刪除 GCS 上的 PDF（預設只刪 DB）
     - 不做姓名白名單限制，任何報告皆可刪（管理員自行負責）
     """
+    from app.services import gcs_uploader as _gcs
     require_admin(authorization, db)
     if confirm != 1:
         raise HTTPException(400, "請加上 ?confirm=1 確認刪除")
@@ -2231,7 +2232,7 @@ def admin_delete_report(
     gcs_result = None
     if delete_gcs and rep.pdf_url:
         try:
-            gcs_result = gcs_uploader.delete_pdf_object(rep.pdf_url)
+            gcs_result = _gcs.delete_pdf_object(rep.pdf_url)
         except Exception as e:
             gcs_result = f"GCS 刪除失敗：{e}"
 

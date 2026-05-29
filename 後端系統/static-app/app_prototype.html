@@ -8641,26 +8641,18 @@ async function _deleteTestReport(reportId) {
 }
 
 async function _adminDeleteReport(reportId, subjectName) {
-  const alsoGcs = confirm(
-    `確定刪除「${subjectName}」的報告 #${reportId}？\n\n` +
-    `【確定】= 僅刪除資料庫紀錄（GCS PDF 保留，可日後補錄）\n` +
-    `【取消】= 放棄刪除\n\n` +
-    `⚠️ 此動作不可復原。`
-  );
-  if (!alsoGcs && alsoGcs !== false) return; // undefined = ESC
-  // alsoGcs: true=只刪DB, false=放棄
-  if (alsoGcs === false) return;
+  // 第一步：確認是否刪除
+  if (!confirm(`確定刪除「${subjectName}」的報告 #${reportId}？\n\n⚠️ 此動作不可復原。`)) return;
 
-  // 二次確認：是否同時刪 GCS
+  // 第二步：是否同時刪除 GCS PDF
   const delGcs = confirm(
-    `是否同時刪除 GCS 上的 PDF 檔案？\n\n` +
-    `【確定】= DB + GCS 一起刪除（不可復原）\n` +
-    `【取消】= 只刪 DB 紀錄（PDF 仍保留在雲端）`
+    `是否同時刪除 GCS 雲端上的 PDF 檔案？\n\n` +
+    `確定 → DB 紀錄 + GCS PDF 全部刪除\n` +
+    `取消 → 只刪 DB 紀錄（PDF 仍保留在雲端，可日後補錄）`
   );
 
   try {
-    const url = `/reports/${reportId}?confirm=1&delete_gcs=${delGcs ? 1 : 0}`;
-    const r = await apiFetch(url, { method: 'DELETE' });
+    const r = await apiFetch(`/reports/${reportId}?confirm=1&delete_gcs=${delGcs ? 1 : 0}`, { method: 'DELETE' });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       showToast(`❌ 刪除失敗：${data.detail || r.status}`, 'error', 4000);
