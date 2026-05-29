@@ -302,14 +302,15 @@ def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
 # 模式 3：vite_prefill（成人/兒童 — 帶 query string 讓 React 自動執行）
 # ──────────────────────────────────────────────────────────────────────
 def _call_vite_prefill(
-    base:           str,
-    subject_name:   str,
-    subject_email:  str,
-    brainwave_data: Optional[Dict[str, Any]],
-    variant:        str = "full",
-    session_id:     Optional[int] = None,
-    api_base:       str = "",
-    report_type:    str = "life_script",
+    base:                 str,
+    subject_name:         str,
+    subject_email:        str,
+    brainwave_data:       Optional[Dict[str, Any]],
+    variant:              str = "full",
+    session_id:           Optional[int] = None,
+    api_base:             str = "",
+    report_type:          str = "life_script",
+    chapters_to_generate: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
     在主後端用 Playwright Chromium 在背景打開 Vercel React App，
@@ -337,6 +338,7 @@ def _call_vite_prefill(
             variant=variant,
             session_id=session_id,
             api_base=api_base,
+            chapters_to_generate=chapters_to_generate,
         )
         if result.get("ok"):
             return {
@@ -388,6 +390,8 @@ def _call_vite_prefill(
         "attention":  int(attn), "meditation": int(medi),
         "delta": int(delta), "alpha": int(alpha), "beta": int(beta), "gamma": int(gamma),
     }
+    if chapters_to_generate:
+        params["chapters"] = ",".join(str(c) for c in chapters_to_generate)
     qs = urlencode(params)
     redirect_url = f"{base}/?{qs}"
     return {
@@ -484,6 +488,7 @@ def trigger_external_report(
         session_id=(extra or {}).get("session_id"),
         api_base=api_base,
         report_type=report_type,
+        chapters_to_generate=chapters_to_generate,
     )
 
 

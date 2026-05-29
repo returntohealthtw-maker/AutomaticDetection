@@ -4620,10 +4620,12 @@ async function startFullReportGeneration(opts) {
     } catch (e) { /* 忽略：session_id 可選 */ }
   }
 
-  // 預設行為：測試模式 = 只生成第一章
+  // 優先順序：opts 明確傳入 > window._testModeChapters > 舊版 chapter1Only 旗標 > null（全章）
   const chaptersToGen = opts.chaptersToGenerate !== undefined
     ? opts.chaptersToGenerate
-    : (_testMode_chapter1Only ? [1] : null);
+    : (window._testModeChapters !== undefined && window._testModeChapters !== null)
+      ? window._testModeChapters
+      : (_testMode_chapter1Only ? [1] : null);
 
   const subjectEmail = opts.subjectEmail !== undefined
     ? opts.subjectEmail
@@ -6698,7 +6700,7 @@ function _renderBrainAnalysisInto(prefix) {
 // 用於決定報告生成時要呼叫哪一組章節 + 是否進入測試模式
 function _parseReportKey(key) {
   // NT$1 測試：用 trial 版（章節 1,3,8,12 共 4 章 ~3-5 分鐘），而非 full（48 節 ~15-20 分鐘）
-  if (key === 'test_1')          return { type: 'life_script', variant: 'trial', chapter1Only: true  };
+  if (key === 'test_1')          return { type: 'life_script', variant: 'full',  chapter1Only: false, chaptersToGenerate: [1,2] };
   if (key.startsWith('life_'))   return { type: 'life_script', variant: key.split('_')[1], chapter1Only: false };
   if (key.startsWith('child_'))  return { type: 'child',       variant: key.split('_')[1], chapter1Only: false };
   if (key.startsWith('up_'))     return { type: 'life_script', variant: 'vip',  chapter1Only: false };
@@ -6727,16 +6729,18 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   _currentReportSubType  = parsed.type;
   _currentReportVariant  = parsed.variant;
   _testMode_chapter1Only = parsed.chapter1Only;
+  // NT$1 或其他明確指定 chaptersToGenerate 的 key，直接保留
+  window._testModeChapters = parsed.chaptersToGenerate || null;
 
-  // ── 管理員專用：所有報告（含 NT$1 與正式報告）皆強制使用「1 章 4 小節」測試模式 ──
-  // 用意：節省 Gemini 額度、加速管理員驗證流程
-  // 非管理員（加盟商/直營商/代理商/專案人員/工作人員）一律走完整報告流程
+  // ── 管理員專用：正式報告（非 NT$1）皆強制使用「第1+2章 測試模式」 ──
+  // NT$1 本身已指定 chaptersToGenerate:[1,2]，不再覆蓋
   try {
     const isAdmin = !!((_currentUser || _getAuth() || {}).role === 'admin');
-    if (isAdmin) {
-      _currentReportVariant  = 'trial';   // trial 版的第 1 章 = 4 小節
-      _testMode_chapter1Only = true;       // 只生成第 1 章
-      console.log('[admin] 強制使用 1 章 4 小節模式');
+    if (isAdmin && !parsed.chaptersToGenerate) {
+      _currentReportVariant     = 'full';
+      window._testModeChapters  = [1, 2];   // 管理員一律只生成前兩章
+      _testMode_chapter1Only    = false;
+      console.log('[admin] 強制使用第1+2章測試模式');
     }
   } catch(e) {}
 

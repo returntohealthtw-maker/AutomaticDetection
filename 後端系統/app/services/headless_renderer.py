@@ -32,7 +32,7 @@ import logging
 import os
 import threading
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -116,15 +116,16 @@ def diag() -> dict:
 
 # ── 主要 API：建立 background job ────────────────────────────────────
 def start_headless_job(
-    report_type:   str,                # life_script / child
-    vercel_base:   str,                # https://brianave-report-image.vercel.app
-    subject_name:  str,
-    subject_email: str,
-    brainwave_data: Optional[Dict[str, Any]],
-    variant:       str = "full",
-    session_id:    Optional[int] = None,
-    api_base:      str = "",
-    job_id:        Optional[str] = None,
+    report_type:          str,                # life_script / child
+    vercel_base:          str,                # https://brianave-report-image.vercel.app
+    subject_name:         str,
+    subject_email:        str,
+    brainwave_data:       Optional[Dict[str, Any]],
+    variant:              str = "full",
+    session_id:           Optional[int] = None,
+    api_base:             str = "",
+    job_id:               Optional[str] = None,
+    chapters_to_generate: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
     在背景啟動一個 headless Chromium 任務，立即回傳 job_id。
@@ -275,6 +276,9 @@ def start_headless_job(
     ingest_secret = os.environ.get("REPORTS_INGEST_SECRET", "").strip()
     if ingest_secret:
         params["ingest_secret"] = ingest_secret
+    # 只生成特定章節（例如 [1,2]）→ 傳給 React App 的 ?chapters=1,2
+    if chapters_to_generate:
+        params["chapters"] = ",".join(str(c) for c in chapters_to_generate)
     target_url = f"{vercel_base.rstrip('/')}/?{urlencode(params)}"
 
     # 紀錄
