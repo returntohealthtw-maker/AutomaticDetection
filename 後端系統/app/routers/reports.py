@@ -2206,6 +2206,46 @@ def delete_test_report(
     return {"ok": True, "deleted": deleted_info}
 
 
+@router.delete("/{report_id}")
+def admin_delete_report(
+    report_id: int,
+    confirm: int = Query(0, description="必須帶 ?confirm=1 才真的刪除"),
+    delete_gcs: int = Query(0, description="1=同時刪除 GCS 上的 PDF 檔案"),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """管理員專用：刪除任意報告的 DB 紀錄。
+
+    - 必須帶 ?confirm=1
+    - delete_gcs=1 時同時刪除 GCS 上的 PDF（預設只刪 DB）
+    - 不做姓名白名單限制，任何報告皆可刪（管理員自行負責）
+    """
+    require_admin(authorization, db)
+    if confirm != 1:
+        raise HTTPException(400, "請加上 ?confirm=1 確認刪除")
+
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+
+    gcs_result = None
+    if delete_gcs and rep.pdf_url:
+        try:
+            gcs_result = gcs_uploader.delete_pdf_object(rep.pdf_url)
+        except Exception as e:
+            gcs_result = f"GCS 刪除失敗：{e}"
+
+    deleted_info = {
+        "report_id":   rep.report_id,
+        "session_id":  rep.session_id,
+        "pdf_url":     rep.pdf_url,
+        "gcs_deleted": gcs_result,
+    }
+    db.delete(rep)
+    db.commit()
+    return {"ok": True, "deleted": deleted_info}
+
+
 @router.post("/restore-from-gcs")
 def restore_report_from_gcs(
     body: dict,

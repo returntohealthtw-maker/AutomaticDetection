@@ -8517,7 +8517,7 @@ function _filterAdminReports() {
           ${sendBtn}
           ${r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>` : ''}
           <button onclick="_uploadReplacementPdf(${r.report_id},'${esc(r.subject_name||'')}')" style="background:#e65100;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="上傳 PDF 取代現有檔案（修復掉圖等問題）">📤 上傳取代</button>
-          ${r.is_test ? `<button onclick="_deleteTestReport(${r.report_id})" style="background:#9c27b0;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🗑️ 刪除</button>` : ''}
+          <button onclick="_adminDeleteReport(${r.report_id},'${esc(r.subject_name||'(未知)')}')" style="background:#b71c1c;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="從資料庫刪除此報告紀錄">🗑️ 刪除</button>
         </div>
       </div>
     </div>
@@ -8637,6 +8637,39 @@ async function _deleteTestReport(reportId) {
     renderAdminReports();
   } catch (e) {
     alert(`刪除例外：${e.message}`);
+  }
+}
+
+async function _adminDeleteReport(reportId, subjectName) {
+  const alsoGcs = confirm(
+    `確定刪除「${subjectName}」的報告 #${reportId}？\n\n` +
+    `【確定】= 僅刪除資料庫紀錄（GCS PDF 保留，可日後補錄）\n` +
+    `【取消】= 放棄刪除\n\n` +
+    `⚠️ 此動作不可復原。`
+  );
+  if (!alsoGcs && alsoGcs !== false) return; // undefined = ESC
+  // alsoGcs: true=只刪DB, false=放棄
+  if (alsoGcs === false) return;
+
+  // 二次確認：是否同時刪 GCS
+  const delGcs = confirm(
+    `是否同時刪除 GCS 上的 PDF 檔案？\n\n` +
+    `【確定】= DB + GCS 一起刪除（不可復原）\n` +
+    `【取消】= 只刪 DB 紀錄（PDF 仍保留在雲端）`
+  );
+
+  try {
+    const url = `/reports/${reportId}?confirm=1&delete_gcs=${delGcs ? 1 : 0}`;
+    const r = await apiFetch(url, { method: 'DELETE' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(`❌ 刪除失敗：${data.detail || r.status}`, 'error', 4000);
+      return;
+    }
+    showToast(`✅ 已刪除報告 #${reportId}（${subjectName}）${delGcs ? ' + GCS PDF' : ''}`, 'ok');
+    renderAdminReports();
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
   }
 }
 
