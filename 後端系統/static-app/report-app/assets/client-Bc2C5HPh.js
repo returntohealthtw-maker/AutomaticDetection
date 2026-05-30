@@ -1,4 +1,4 @@
-import{g as ne}from"./index-u_FKqPBE.js";function rt(){if(typeof navigator<"u"&&navigator.product==="ReactNative")return!0;if(typeof process<"u"){const e=process.type;return e==="renderer"||e==="worker"?!1:!!(process.versions&&process.versions.node)}return!1}/*!
+import{g as ne}from"./index-CF4pzzQt.js";function rt(){if(typeof navigator<"u"&&navigator.product==="ReactNative")return!0;if(typeof process<"u"){const e=process.type;return e==="renderer"||e==="worker"?!1:!!(process.versions&&process.versions.node)}return!1}/*!
  * Determine if an object is a Buffer
  *
  * @author   Feross Aboukhadijeh <https://feross.org>
