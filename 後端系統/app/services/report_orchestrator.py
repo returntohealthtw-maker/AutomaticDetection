@@ -35,13 +35,14 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 # 若環境變數 REPORT_URL_LIFE_SCRIPT 有設定則以環境變數為準（可保留 Vercel 作備援）
 DEFAULT_URLS = {
     "life_script":  "__local__",   # 代表使用本機 /report-app/
-    "child":        "https://brianwave-child.vercel.app",
+    "child":        "__local__",   # 代表使用本機 /child-report-app/（已移植，不再走 Vercel）
     "parent_child": "https://web-production-f1aec.up.railway.app",
     "marital":      "https://web-production-2c7d43.up.railway.app",
 }
 
 # 本機 report-app 的路徑前綴（headless 開瀏覽器時改用 localhost）
-LOCAL_REPORT_APP_PATH = "/report-app/"
+LOCAL_REPORT_APP_PATH       = "/report-app/"
+LOCAL_CHILD_REPORT_APP_PATH = "/child-report-app/"
 
 # 每家系統的 API 模式
 SYSTEM_MODES = {
@@ -72,23 +73,30 @@ def _local_base_url() -> str:
 
 
 def _is_local(report_type: str) -> bool:
-    """life_script 是否走本機 /report-app/（優先用本機，穩定且不依賴 Vercel）
+    """是否走本機靜態 React App（優先用本機，穩定且不依賴 Vercel）
+
+    支援 life_script（/report-app/）與 child（/child-report-app/）。
 
     判斷順序：
-    1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1 → 強制走外部 Vercel
-    2. 本機 /report-app/ 目錄存在 → 走本機
-    3. 否則走外部
+    1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1  → life_script 強制走外部
+    2. 環境變數 USE_EXTERNAL_CHILD=1        → child 強制走外部
+    3. 本機對應目錄存在（有 index.html）→ 走本機
+    4. 否則走外部
     """
-    if report_type != "life_script":
+    if report_type not in ("life_script", "child"):
         return False
-    if os.environ.get("USE_EXTERNAL_LIFE_SCRIPT", "").strip() == "1":
+
+    # 強制外部 flag
+    if report_type == "life_script" and os.environ.get("USE_EXTERNAL_LIFE_SCRIPT", "").strip() == "1":
         return False
-    # 檢查本機 report-app 目錄是否存在（只要有 index.html 就算）
-    import importlib.util
-    port = int(os.environ.get("PORT", 8000))
+    if report_type == "child" and os.environ.get("USE_EXTERNAL_CHILD", "").strip() == "1":
+        return False
+
+    # 對應靜態目錄名稱
+    dir_name = "report-app" if report_type == "life_script" else "child-report-app"
     local_index_candidates = [
-        "/app/static-app/report-app/index.html",     # Docker / Railway
-        "static-app/report-app/index.html",           # 本地開發
+        f"/app/static-app/{dir_name}/index.html",   # Docker / Railway
+        f"static-app/{dir_name}/index.html",          # 本地開發
     ]
     for c in local_index_candidates:
         if os.path.isfile(c):
@@ -472,10 +480,13 @@ def trigger_external_report(
         if rd:
             api_base = rd if rd.startswith("http") else f"https://{rd}"
 
-    # life_script 走本機 /report-app/（不依賴外部 Vercel）
+    # life_script / child 走本機靜態 React App（不依賴外部 Vercel）
     if _is_local(report_type):
         local_base = _local_base_url()
-        effective_base = local_base + LOCAL_REPORT_APP_PATH.rstrip("/")
+        if report_type == "child":
+            effective_base = local_base + LOCAL_CHILD_REPORT_APP_PATH.rstrip("/")
+        else:
+            effective_base = local_base + LOCAL_REPORT_APP_PATH.rstrip("/")
     else:
         effective_base = base
 

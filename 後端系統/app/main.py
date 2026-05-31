@@ -126,7 +126,13 @@ if _STATIC_APP_DIR:
     _REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "report-app")
     if os.path.isdir(_REPORT_APP_DIR):
         app.mount("/report-app", StaticFiles(directory=_REPORT_APP_DIR, html=True), name="report-app")
-        print(f"[report-app] ✅ 本機 React App 掛載：{_REPORT_APP_DIR}")
+        print(f"[report-app] ✅ 本機成人 React App 掛載：{_REPORT_APP_DIR}")
+
+    # 掛載兒童報告 React App（本機版，與成人版並列）
+    _CHILD_REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "child-report-app")
+    if os.path.isdir(_CHILD_REPORT_APP_DIR):
+        app.mount("/child-report-app", StaticFiles(directory=_CHILD_REPORT_APP_DIR, html=True), name="child-report-app")
+        print(f"[child-report-app] ✅ 本機兒童 React App 掛載：{_CHILD_REPORT_APP_DIR}")
 
 # 掛載路由
 app.include_router(sessions.router)
