@@ -6732,17 +6732,6 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   // NT$1 或其他明確指定 chaptersToGenerate 的 key，直接保留
   window._testModeChapters = parsed.chaptersToGenerate || null;
 
-  // ── 管理員專用：正式報告（非 NT$1）皆強制使用「第1+2章 測試模式」 ──
-  // NT$1 本身已指定 chaptersToGenerate:[1,2]，不再覆蓋
-  try {
-    const isAdmin = !!((_currentUser || _getAuth() || {}).role === 'admin');
-    if (isAdmin && !parsed.chaptersToGenerate) {
-      _currentReportVariant     = 'full';
-      window._testModeChapters  = [1, 2];   // 管理員一律只生成前兩章
-      _testMode_chapter1Only    = false;
-      console.log('[admin] 強制使用第1+2章測試模式');
-    }
-  } catch(e) {}
 
   // NT$1 測試使用 60 秒採集；正式報告 180 秒
   _eegLiveDurationSec = 180;
