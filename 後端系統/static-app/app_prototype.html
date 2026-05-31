@@ -4919,7 +4919,7 @@ let _currentSubjectGender  = '';              // '男' / '女' / ''
 let _currentReportSubType  = 'life_script';   // life_script / child / parent_child / marital
 let _currentReportVariant  = 'full';          // trial / full / vip
 // 若為 true，進入 screen-results 時只生成第一章（NT$1 測試模式）
-let _testMode_chapter1Only = true;
+let _testMode_chapter1Only = false;  // 預設不限制章節，只有明確設定時才限制
 // 已棄用：腦波儀健康檢查已完全獨立成 _ethcState 流程（screen-eegtest-detect / -result）
 // 此變數保留為 false 以避免任何殘存的引用導致主流程被汙染。
 let _eegTestMode = false;
