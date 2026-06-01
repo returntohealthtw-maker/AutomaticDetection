@@ -1901,12 +1901,25 @@ def admin_send_report_email(
         if sess:
             subject_name = sess.subject_name or ""
 
+    # 寄信前重新產生 Signed URL，確保連結有效（避免公開 URL 或過期的 Signed URL）
+    from app.services import gcs_uploader
+    email_pdf_url = rep.pdf_url
+    try:
+        fresh = gcs_uploader.generate_fresh_signed_url(rep.pdf_url)
+        if fresh:
+            email_pdf_url = fresh
+            # 同步更新 DB 裡的 pdf_url，延長有效期
+            rep.pdf_url = fresh
+            db.commit()
+    except Exception:
+        pass  # 若重新簽署失敗，仍使用原本的 pdf_url
+
     from app.services import email_sender
     result = email_sender.send_report_link_email(
         to            = to,
         subject_name  = subject_name or "您",
         report_title  = title,
-        pdf_url       = rep.pdf_url,
+        pdf_url       = email_pdf_url,
     )
 
     if result.get("ok"):
@@ -2471,7 +2484,14 @@ async def upload_replacement_pdf(
         blob = bucket.blob(pathname)
         blob.upload_from_string(pdf_bytes, content_type="application/pdf")
 
-        pub_url = f"https://storage.googleapis.com/{bucket_name}/{pathname}"
+        # 使用 Signed URL（7 天有效），避免私有 bucket 的公開 URL 無法存取問題
+        from datetime import timedelta
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(days=7),
+            method="GET",
+            response_disposition=f'attachment; filename="{safe_name}"',
+        )
         size_kb = len(pdf_bytes) // 1024
 
     except Exception as exc:
@@ -2479,7 +2499,7 @@ async def upload_replacement_pdf(
 
     # ── 更新 DB ────────────────────────────────────────────────────────────────
     old_url = rep.pdf_url
-    rep.pdf_url = pub_url
+    rep.pdf_url = signed_url
     rep.status = "completed"
     rep.completed_at = datetime.datetime.utcnow()
     db.commit()
@@ -2488,7 +2508,7 @@ async def upload_replacement_pdf(
     return {
         "ok": True,
         "report_id": report_id,
-        "pdf_url": pub_url,
+        "pdf_url": signed_url,
         "old_pdf_url": old_url,
         "gcs_pathname": pathname,
         "size_kb": size_kb,

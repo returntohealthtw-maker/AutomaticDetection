@@ -158,6 +158,60 @@ def diag() -> dict:
     }
 
 
+def generate_fresh_signed_url(pdf_url: str, days: Optional[int] = None) -> Optional[str]:
+    """
+    從已儲存的 pdf_url（公開 URL 或舊 Signed URL）重新產生有效的 Signed URL。
+
+    用於：
+      - 管理員寄信前確保連結有效（舊 signed URL 可能已過期）
+      - 公開 URL 在私有 bucket 無法存取，改為 Signed URL
+
+    回傳新的 Signed URL，或 None（若 GCS 未設定或解析失敗）。
+    """
+    if not pdf_url or not is_configured():
+        return None
+
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(pdf_url)
+        path = unquote(parsed.path)
+
+        if "storage.googleapis.com" not in parsed.netloc:
+            logger.warning("generate_fresh_signed_url: 非 GCS URL，略過 %s", pdf_url[:80])
+            return None
+
+        bucket = _bucket_name()
+        prefix = f"/{bucket}/"
+        if path.startswith(prefix):
+            object_name = path[len(prefix):]
+        else:
+            object_name = path.lstrip("/")
+
+        if not object_name:
+            return None
+
+        from google.cloud import storage
+        from google.oauth2 import service_account
+
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        blob = client.bucket(bucket).blob(object_name)
+
+        expiry_days = days if days is not None else _signed_days()
+        url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(days=expiry_days),
+            method="GET",
+            response_disposition=f'attachment; filename="{os.path.basename(object_name)}"',
+        )
+        logger.info("✅ 重新簽署 URL 成功 gs://%s/%s（有效 %d 天）", bucket, object_name, expiry_days)
+        return url
+    except Exception as e:
+        logger.exception("generate_fresh_signed_url 失敗：%s", e)
+        return None
+
+
 def list_pdfs(prefix: str = "", max_items: int = 500) -> list[dict]:
     """
     直接列出 GCS bucket 裡所有 PDF（後台『報告管理 → GCS 全部檔案』用）。
