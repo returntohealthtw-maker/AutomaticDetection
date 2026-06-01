@@ -4579,6 +4579,7 @@ function _showRedetectModal(reason) {
   const r = document.getElementById('redetect-reason');
   if (r) r.textContent = '原因：' + (reason || '未知');
   ov.style.display = 'flex';
+  ov.style.pointerEvents = 'auto';  // 重置 pointer-events，避免 _forceCloseAllOverlays 殘留 none 導致按鈕無法點擊
 }
 
 // 採集結束時沒有收到真實腦波訊號 → 清除假資料後直接跳回連接頁（讓使用者重新確認連線）
