@@ -5322,7 +5322,8 @@ function _startEegLiveCapture() {
   _populateDetectHeader();
   _resetEegLiveUI();
 
-  _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] };
+  _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
+                    low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[] };
   _eegLiveStartTs = Date.now();
   _eegSimState = null;
 
@@ -5467,7 +5468,10 @@ function _persistEegStats(stats) {
 }
 
 // 接受 APK 餵進來的單筆 sample（從 native 呼叫 window.JSBridge.onEegSample）
-// 結構建議：{ attn:0-100, medi:0-100, delta, theta, alpha, beta, gamma } (五個 band 為 raw power 或 0-100)
+// 結構建議（8-band 完整格式，推薦）：
+//   { attn, medi, delta, theta, low_alpha, high_alpha, low_beta, high_beta, low_gamma, high_gamma }
+// 向下相容格式（5-band 合併）：
+//   { attn, medi, delta, theta, alpha, beta, gamma }
 // 路由：腦波儀健康檢查啟用時，資料只進健康檢查 sink，不會汙染主流程的 _eegLiveAccum
 window.JSBridge = window.JSBridge || {};
 window.JSBridge.onEegSample = function(payload) {
@@ -5488,9 +5492,17 @@ function _ingestEegSample(s) {
   const m = clamp(s.medi);
   const d = clamp(s.delta);
   const th= clamp(s.theta);
-  const al= clamp(s.alpha);
-  const be= clamp(s.beta);
-  const ga= clamp(s.gamma);
+  // 支援 8-band（low_alpha/high_alpha 等）或 5-band（alpha 等）
+  const loAl = s.low_alpha  != null ? clamp(s.low_alpha)  : null;
+  const hiAl = s.high_alpha != null ? clamp(s.high_alpha) : null;
+  const loBe = s.low_beta   != null ? clamp(s.low_beta)   : null;
+  const hiBe = s.high_beta  != null ? clamp(s.high_beta)  : null;
+  const loGa = s.low_gamma  != null ? clamp(s.low_gamma)  : null;
+  const hiGa = s.high_gamma != null ? clamp(s.high_gamma) : null;
+  // 合併值：有個別值就用平均，否則直接用 alpha/beta/gamma
+  const al= (loAl != null && hiAl != null) ? Math.round((loAl+hiAl)/2) : clamp(s.alpha);
+  const be= (loBe != null && hiBe != null) ? Math.round((loBe+hiBe)/2) : clamp(s.beta);
+  const ga= (loGa != null && hiGa != null) ? Math.round((loGa+hiGa)/2) : clamp(s.gamma);
 
   // 更新腦波儀電量（僅在 APK 推入 bat 時更新，避免覆蓋 AndroidBridge 輪詢值）
   if (typeof s.bat === 'number' && s.bat >= 0) {
@@ -5508,6 +5520,13 @@ function _ingestEegSample(s) {
   _eegLiveAccum.alpha.push(al);
   _eegLiveAccum.beta.push(be);
   _eegLiveAccum.gamma.push(ga);
+  // 8-band：有則累積，無則略過（_summarizeEegAccum 會判斷是否有資料）
+  if (loAl != null) _eegLiveAccum.low_alpha.push(loAl);
+  if (hiAl != null) _eegLiveAccum.high_alpha.push(hiAl);
+  if (loBe != null) _eegLiveAccum.low_beta.push(loBe);
+  if (hiBe != null) _eegLiveAccum.high_beta.push(hiBe);
+  if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
+  if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
 
   // 更新 UI
   const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = String(v); };
@@ -5556,17 +5575,28 @@ function _ingestEegSample(s) {
 
 function _summarizeEegAccum(acc) {
   const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
+  const has8 = acc.low_alpha && acc.low_alpha.length > 0;
+  const bands = {
+    delta: avg(acc.delta),
+    theta: avg(acc.theta),
+    alpha: avg(acc.alpha),
+    beta:  avg(acc.beta),
+    gamma: avg(acc.gamma),
+  };
+  // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
+  if (has8) {
+    bands.low_alpha  = avg(acc.low_alpha);
+    bands.high_alpha = avg(acc.high_alpha);
+    bands.low_beta   = avg(acc.low_beta);
+    bands.high_beta  = avg(acc.high_beta);
+    bands.low_gamma  = avg(acc.low_gamma);
+    bands.high_gamma = avg(acc.high_gamma);
+  }
   return {
-    sample_count:        acc.attn.length,
+    sample_count:         acc.attn.length,
     attention_percentage: avg(acc.attn),
     meditation_percentage:avg(acc.medi),
-    bands_avg: {
-      delta: avg(acc.delta),
-      theta: avg(acc.theta),
-      alpha: avg(acc.alpha),
-      beta:  avg(acc.beta),
-      gamma: avg(acc.gamma),
-    },
+    bands_avg:            bands,
   };
 }
 

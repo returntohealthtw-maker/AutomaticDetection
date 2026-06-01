@@ -346,23 +346,36 @@ public class WebAppActivity extends Activity {
                             int rHBeta  = CLS_DATA.iHighBeta;
                             int rLGamma = CLS_DATA.iLowGamma;
                             int rHGamma = CLS_DATA.iHighGamma;
-                            int delta = bandTo100(rDelta);
-                            int theta = bandTo100(rTheta);
-                            int alpha = bandTo100((rLAlpha + rHAlpha) / 2);
-                            int beta  = bandTo100((rLBeta  + rHBeta)  / 2);
-                            int gamma = bandTo100((rLGamma + rHGamma) / 2);
+                            int delta   = bandTo100(rDelta);
+                            int theta   = bandTo100(rTheta);
+                            // 個別高/低頻帶（0-100 正規化後各自保留，不再提前平均）
+                            int loAlpha = bandTo100(rLAlpha);
+                            int hiAlpha = bandTo100(rHAlpha);
+                            int loBeta  = bandTo100(rLBeta);
+                            int hiBeta  = bandTo100(rHBeta);
+                            int loGamma = bandTo100(rLGamma);
+                            int hiGamma = bandTo100(rHGamma);
+                            // 合併值（向下相容舊版前端）
+                            int alpha = (loAlpha + hiAlpha) / 2;
+                            int beta  = (loBeta  + hiBeta)  / 2;
+                            int gamma = (loGamma + hiGamma) / 2;
                             int bat   = ble.getBatteryLevel();
                             sampleCount[0]++;
                             sStreamDiagSampleCount++;
-                            // raw_* 為 ThinkGear 原始值（用於 MBTI 等需要保留個體差異的計算）
+                            // 同時傳 8-band 個別值（low_alpha/high_alpha 等）與合併值（alpha）
+                            // raw_* 為 ThinkGear 原始功率（用於 MBTI 等需高精度計算）
                             String json = String.format(
                                 "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
                                 "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d," +
+                                "\"low_alpha\":%d,\"high_alpha\":%d," +
+                                "\"low_beta\":%d,\"high_beta\":%d," +
+                                "\"low_gamma\":%d,\"high_gamma\":%d," +
                                 "\"raw_delta\":%d,\"raw_theta\":%d," +
                                 "\"raw_lalpha\":%d,\"raw_halpha\":%d," +
                                 "\"raw_lbeta\":%d,\"raw_hbeta\":%d," +
                                 "\"raw_lgamma\":%d,\"raw_hgamma\":%d}",
                                 attn, medi, delta, theta, alpha, beta, gamma, bat,
+                                loAlpha, hiAlpha, loBeta, hiBeta, loGamma, hiGamma,
                                 rDelta, rTheta, rLAlpha, rHAlpha, rLBeta, rHBeta, rLGamma, rHGamma);
                             webView.post(() -> webView.evaluateJavascript(
                                 "window.JSBridge&&window.JSBridge.onEegSample('" + json + "')", null));

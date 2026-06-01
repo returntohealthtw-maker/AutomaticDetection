@@ -37,9 +37,20 @@ class EegStatsIn(BaseModel):
     attention_percentage:   int = 0     # 0-100
     meditation_percentage:  int = 0
 
-    # 5 個 band 平均值 (0-100)
+    # 頻帶平均值（支援兩種格式，均可選填）
+    #
+    # 格式 A — 5-band 合併（舊版相容）：
+    #   { delta, theta, alpha, beta, gamma }
+    #   → high_alpha = low_alpha = alpha（無法區分 High/Low）
+    #
+    # 格式 B — 8-band 完整（ThinkGear 原始輸出，推薦）：
+    #   { delta, theta, low_alpha, high_alpha,
+    #                   low_beta,  high_beta,
+    #                   low_gamma, high_gamma }
+    #   → High / Low 儲存各自的真實值
+    #
+    # 兩種格式可混用：未提供個別 high/low 的頻帶自動退回合併值。
     bands_avg: dict = Field(default_factory=dict)
-    # { delta, theta, alpha, beta, gamma }
 
 
 class EegStatsOut(BaseModel):
@@ -109,6 +120,17 @@ def save_eeg_stats(
         except Exception:
             return 0
 
+    # 支援 8-band 格式：優先取個別 low_*/high_*，無則退回合併值（兩者相同）
+    def _lo(band_key):
+        """取 low_{band} 值；若無則用合併的 {band} 值"""
+        lo = bands.get(f"low_{band_key}")
+        return _i(lo if lo is not None else bands.get(band_key))
+
+    def _hi(band_key):
+        """取 high_{band} 值；若無則用合併的 {band} 值"""
+        hi = bands.get(f"high_{band_key}")
+        return _i(hi if hi is not None else bands.get(band_key))
+
     cap = M.EegCapture(
         session_id   = sess.session_id,
         seq_num      = 0,
@@ -119,13 +141,12 @@ def save_eeg_stats(
         meditation   = _i(payload.meditation_percentage),
         delta        = _i(bands.get("delta")),
         theta        = _i(bands.get("theta")),
-        # 沒分 low/high 就同時存入 low_* 與 high_*（讓 _session_to_brainwave_data 平均後不會減半）
-        low_alpha    = _i(bands.get("alpha")),
-        high_alpha   = _i(bands.get("alpha")),
-        low_beta     = _i(bands.get("beta")),
-        high_beta    = _i(bands.get("beta")),
-        low_gamma    = _i(bands.get("gamma")),
-        high_gamma   = _i(bands.get("gamma")),
+        low_alpha    = _lo("alpha"),
+        high_alpha   = _hi("alpha"),
+        low_beta     = _lo("beta"),
+        high_beta    = _hi("beta"),
+        low_gamma    = _lo("gamma"),
+        high_gamma   = _hi("gamma"),
         feedback     = 0,
     )
     db.add(cap)
@@ -175,6 +196,13 @@ def get_session_stats(
     n = len(det)
     def avg(attr): return round(sum(getattr(c, attr, 0) or 0 for c in det) / n)
 
+    lo_alpha = avg("low_alpha")
+    hi_alpha = avg("high_alpha")
+    lo_beta  = avg("low_beta")
+    hi_beta  = avg("high_beta")
+    lo_gamma = avg("low_gamma")
+    hi_gamma = avg("high_gamma")
+
     stats = {
         "sample_count":           n,
         "attention_percentage":   avg("attention"),
@@ -182,9 +210,19 @@ def get_session_stats(
         "bands_avg": {
             "delta": avg("delta"),
             "theta": avg("theta"),
-            "alpha": round((avg("low_alpha") + avg("high_alpha")) / 2),
-            "beta":  round((avg("low_beta")  + avg("high_beta"))  / 2),
-            "gamma": round((avg("low_gamma") + avg("high_gamma")) / 2),
+            "alpha": round((lo_alpha + hi_alpha) / 2),
+            "beta":  round((lo_beta  + hi_beta)  / 2),
+            "gamma": round((lo_gamma + hi_gamma) / 2),
+        },
+        # 真實 High / Low（供 admin panel 顯示；若資料來自舊版 5-band 介面則兩值相同）
+        "bands_7": {
+            "theta":      avg("theta"),
+            "alpha_high": hi_alpha,
+            "alpha_low":  lo_alpha,
+            "beta_high":  hi_beta,
+            "beta_low":   lo_beta,
+            "gamma_high": hi_gamma,
+            "gamma_low":  lo_gamma,
         },
     }
 
