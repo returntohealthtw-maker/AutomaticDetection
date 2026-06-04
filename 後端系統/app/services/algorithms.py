@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 import math
 
+from scipy.stats import norm as _NORM
+
+from app.algorithms.data_stats import DATA_STATS
+
 
 @dataclass
 class EegBands:
@@ -337,40 +341,67 @@ def compute_all_indices(avg: BandAverages) -> dict:
     return results
 
 
+def _band_percentile(value: float, stat: dict) -> float:
+    """
+    將單一頻段功率換算成「相對於族群的百分位」(0~1)。
+
+    作法：對個人頻段值取 log10，與 data_stats.py 的族群 (mean, std) 算 z 分數，
+    再過標準常態 CDF。0.5 = 與族群中位數相當，>0.5 = 高於多數人。
+
+    這是真八卦演算法（bagua.py）的數理基礎，天生以族群中位數為中心，
+    不會像「絕對比值」那樣被 1/f 頻譜形狀帶得所有人同一側。
+    """
+    if value is None or value <= 0:
+        return 0.5  # 無資料 → 中性
+    try:
+        z = (math.log10(value) - stat["mean"]) / stat["std"]
+    except (ValueError, ZeroDivisionError):
+        return 0.5
+    return float(_NORM.cdf(z))
+
+
 def compute_mbti(avg: BandAverages) -> dict:
     """
     計算 MBTI 傾向（僅 EEG 部分，70% 權重）
     回傳各維度分數（0~100，>50 傾向第一字母）
+
+    ⚠️ 2026-06 修正「人人同型」bug：
+    舊版用腦波頻段「絕對比值」過 sigmoid，且以「比值=1」為臨界點。
+    人腦頻段功率有固定 1/f 排序（delta≫theta≫alpha≫beta≫gamma），
+    這些比值對所有人都落在同一側 → 每個人算出同一型；
+    頻段為 0 時比值預設 1 → 四維皆 50 → 一律同型。
+
+    新版改用「族群百分位（data_stats 對數常數）+ 個人 attn/medi」，
+    與前端 app_prototype.html 的 _etComputeMBTILayers「原型層」使用完全相同的
+    公式與常數，確保 App 畫面、文字摘要、LINE 通知的主推論型一致。
     """
-    d = avg.delta
-    t = avg.theta
-    la = avg.low_alpha
-    ha = avg.high_alpha
-    lb = avg.low_beta
-    hb = avg.high_beta
-    lg = avg.low_gamma
-    hg = avg.high_gamma
-    a  = avg.alpha
-    b  = avg.beta
+    # 各頻段相對族群的百分位（0~1，0.5=族群中位數）
+    p_delta = _band_percentile(avg.delta,      DATA_STATS["delta"])
+    p_theta = _band_percentile(avg.theta,      DATA_STATS["theta"])
+    p_la    = _band_percentile(avg.low_alpha,  DATA_STATS["lowAlpha"])
+    p_ha    = _band_percentile(avg.high_alpha, DATA_STATS["highAlpha"])
+    p_lb    = _band_percentile(avg.low_beta,   DATA_STATS["lowBeta"])
+    p_hb    = _band_percentile(avg.high_beta,  DATA_STATS["highBeta"])
+    p_lg    = _band_percentile(avg.low_gamma,  DATA_STATS["lowGamma"])
+    p_mg    = _band_percentile(avg.high_gamma, DATA_STATS["midGamma"])
+    p_alpha = (p_la + p_ha) / 2
+    p_beta  = (p_lb + p_hb) / 2
+    p_gamma = (p_lg + p_mg) / 2
 
-    # E/I：β/α 比值（Mindsensor 為 Fp1 單通道，無法計算 FAA）
-    # β/α > 1 → 外向(E)；β/α < 1 → 內向(I)
-    alpha_avg = (ha + la) if (ha + la) > 0 else 1
-    beta_avg  = (hb + lb) if (hb + lb) > 0 else 1
-    ei_raw = _safe_div(beta_avg, alpha_avg)           # β/α 比值
-    ei_pct = _clamp(1 / (1 + math.exp(-3 * (ei_raw - 1))) * 100, 0, 100)  # >50 = E
+    # 個人專注 / 放鬆百分位（0~1）
+    act  = _clamp(avg.attention  / 100, 0, 1)
+    calm = _clamp(avg.meditation / 100, 0, 1)
 
-    # N/S：Theta / Beta（高 Theta = 直覺 N；高 Beta = 感官 S）
-    ns_raw = _safe_div(t, b)
-    ns_pct = _clamp(1 / (1 + math.exp(-3 * (ns_raw - 1))) * 100, 0, 100)  # >50 = N
+    # 四維分數（0~1，權重和為 1 → 平均人約 0.5；>=0.5 取第一字母）
+    ei = 0.45 * p_beta  + 0.25 * (1 - p_alpha) + 0.30 * act
+    ns = 0.55 * p_theta + 0.25 * (1 - p_beta)  + 0.20 * p_gamma
+    tf = 0.45 * p_beta  + 0.30 * (1 - p_gamma) + 0.25 * (1 - calm)
+    jp = 0.50 * p_beta  + 0.30 * (1 - p_theta) + 0.20 * act
 
-    # T/F：Low Beta / (Low Gamma + Theta)（高邏輯 = T；高情感 = F）
-    tf_raw = _safe_div(lb, lg + t)
-    tf_pct = _clamp(1 / (1 + math.exp(-3 * (tf_raw - 1))) * 100, 0, 100)  # >50 = T
-
-    # J/P：High Beta / Theta（高執行 = J；高直覺彈性 = P）
-    jp_raw = _safe_div(hb, t)
-    jp_pct = _clamp(1 / (1 + math.exp(-3 * (jp_raw - 1))) * 100, 0, 100)  # >50 = J
+    ei_pct = _clamp(ei * 100, 0, 100)   # >50 = E
+    ns_pct = _clamp(ns * 100, 0, 100)   # >50 = N
+    tf_pct = _clamp(tf * 100, 0, 100)   # >50 = T
+    jp_pct = _clamp(jp * 100, 0, 100)   # >50 = J
 
     mbti_type = (
         ("E" if ei_pct >= 50 else "I") +

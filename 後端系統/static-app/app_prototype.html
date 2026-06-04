@@ -6308,6 +6308,32 @@ function _etCenterSig(feature, mid, scale) {
   const x = 1 / (1 + Math.exp(-((feature - mid) / s)));
   return _etClamp(x * 100, 0, 100);
 }
+
+// ── 族群百分位工具（與後端 app/services/algorithms.py 共用同一組常數）──
+// 標準常態 CDF（Zelen & Severo 近似，誤差 < 1e-7）
+function _etNormCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp(-z * z / 2);
+  const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+}
+// 上千人腦波樣本的「log10 後」mean/std（來源：data_stats.py，真八卦演算法的基準分布）
+const _ET_DATA_STATS = {
+  delta:     { mean: 5.29835995039, std: 0.542447565538 },
+  theta:     { mean: 4.72538897932, std: 0.441840459259 },
+  lowAlpha:  { mean: 4.07285436418, std: 0.424115475935 },
+  highAlpha: { mean: 4.09023791618, std: 0.376780766056 },
+  lowBeta:   { mean: 4.02628991082, std: 0.404178025673 },
+  highBeta:  { mean: 4.08907476245, std: 0.392740498864 },
+  lowGamma:  { mean: 3.7574299841,  std: 0.426077247618 },
+  midGamma:  { mean: 3.75332489124, std: 0.628883941715 },
+};
+// 將單一頻段功率換算成相對族群百分位（0~1，0.5=族群中位數）
+function _etBandPct(value, stat) {
+  if (!(value > 0)) return 0.5;
+  const z = (Math.log10(value) - stat.mean) / stat.std;
+  return _etNormCdf(z);
+}
 function _etMakeMbtiResult(ei, ns, tf, jp) {
   const dims = [
     { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei },
@@ -6325,73 +6351,63 @@ function _etMakeMbtiResult(ei, ns, tf, jp) {
 //   社會化（social）：對外面向 → β γ + attn 高（active engagement）
 //   同儕關係（peer）：人際情感 → γ + medi 變動 + attn 趨勢（情緒共鳴 / 互動敏銳）
 function _etComputeMBTILayers(acc) {
-  // ── 1. 取得代表性頻段功率（優先用 ThinkGear 原始 8 頻段，精度高） ──
+  // ── 1. 取得代表性頻段功率（優先用 ThinkGear 原始 8 頻段，與後端 captures 同尺度） ──
   const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && _etAvg(acc.r_lalpha) > 0);
-  let delta, theta, alpha, beta, gamma;
-  if (hasRaw) {
-    delta = _etAvg(acc.r_delta);
-    theta = _etAvg(acc.r_theta);
-    alpha = _etAvg(acc.r_lalpha) + _etAvg(acc.r_halpha);
-    beta  = _etAvg(acc.r_lbeta)  + _etAvg(acc.r_hbeta);
-    gamma = _etAvg(acc.r_lgamma) + _etAvg(acc.r_hgamma);
-  } else {
-    delta = _etAvg(acc.delta);
-    theta = _etAvg(acc.theta);
-    alpha = _etAvg(acc.alpha);
-    beta  = _etAvg(acc.beta);
-    gamma = _etAvg(acc.gamma);
-  }
+  const lowAlpha  = hasRaw ? _etAvg(acc.r_lalpha)  : 0;
+  const highAlpha = hasRaw ? _etAvg(acc.r_halpha)  : 0;
+  const lowBeta   = hasRaw ? _etAvg(acc.r_lbeta)   : 0;
+  const highBeta  = hasRaw ? _etAvg(acc.r_hbeta)   : 0;
+  const lowGamma  = hasRaw ? _etAvg(acc.r_lgamma)  : 0;
+  const highGamma = hasRaw ? _etAvg(acc.r_hgamma)  : 0;
+  const deltaV    = hasRaw ? _etAvg(acc.r_delta)   : 0;
+  const thetaV    = hasRaw ? _etAvg(acc.r_theta)   : 0;
 
-  // ── 2. 個人 eSense 動態（不同人差異極大，是個人化的關鍵來源） ──
+  // ── 2. 各頻段相對族群的百分位（0~1，0.5=族群中位數）──
+  //   無原始頻段時退回 0.5（中性），讓 attn/medi 主導個人化，仍因人而異。
+  const S = _ET_DATA_STATS;
+  const pTheta = _etBandPct(thetaV,    S.theta);
+  const pLA    = _etBandPct(lowAlpha,  S.lowAlpha);
+  const pHA    = _etBandPct(highAlpha, S.highAlpha);
+  const pLB    = _etBandPct(lowBeta,   S.lowBeta);
+  const pHB    = _etBandPct(highBeta,  S.highBeta);
+  const pLG    = _etBandPct(lowGamma,  S.lowGamma);
+  const pMG    = _etBandPct(highGamma, S.midGamma);
+  const pAlpha = (pLA + pHA) / 2;
+  const pBeta  = (pLB + pHB) / 2;
+  const pGamma = (pLG + pMG) / 2;
+
+  // ── 3. 個人 eSense 動態 ──
   const attnMean = _etAvg(acc.attn || []), attnStd = _etStd(acc.attn || []), attnTrend = _etTrend(acc.attn || []);
   const mediMean = _etAvg(acc.medi || []), mediStd = _etStd(acc.medi || []);
-  const act    = _etClamp((attnMean - 50) / 50, -1, 1);   // 專注主動度
-  const calm   = _etClamp((mediMean - 50) / 50, -1, 1);   // 放鬆安定度
-  const focus  = _etClamp(1 - attnStd / 30, -1, 1);       // 專注穩定度（越高越穩）
-  const trend  = _etClamp(attnTrend / 25, -1, 1);         // 專注趨勢（漸入 / 漸退）
-  const emoVar = _etClamp(mediStd / 25, 0, 1);            // 情緒起伏
+  const act  = _etClamp(attnMean / 100, 0, 1);   // 專注百分位
+  const calm = _etClamp(mediMean / 100, 0, 1);   // 放鬆百分位
 
-  // ── 3. 相對頻段比例（0~1，去除絕對量級差異） ──
-  // 若完全沒有頻段功率，退回族群典型比例，讓 eSense 主導個人化（仍會因人而異）
-  const tot = delta + theta + alpha + beta + gamma;
-  let rD, rT, rA, rB, rG;
-  if (tot > 1e-6) {
-    rD = delta / tot; rT = theta / tot; rA = alpha / tot; rB = beta / tot; rG = gamma / tot;
-  } else {
-    rD = 0.30; rT = 0.18; rA = 0.28; rB = 0.18; rG = 0.06;  // 休息態典型比例
-  }
+  // ── 4. 四維核心分數（0~1，>=0.5 取第一字母）──
+  //   ⚠️ 與後端 compute_mbti 使用完全相同的公式與權重，
+  //      確保 App 畫面（原型層）= 文字摘要 / LINE 通知的主推論型。
+  const ei = 0.45 * pBeta  + 0.25 * (1 - pAlpha) + 0.30 * act;        // >=0.5 → E
+  const ns = 0.55 * pTheta + 0.25 * (1 - pBeta)  + 0.20 * pGamma;     // >=0.5 → N
+  const tf = 0.45 * pBeta  + 0.30 * (1 - pGamma) + 0.25 * (1 - calm); // >=0.5 → T
+  const jp = 0.50 * pBeta  + 0.30 * (1 - pTheta) + 0.20 * act;        // >=0.5 → J
 
-  // ── 4. 四維連續特徵（相對頻段 + 個人 eSense）──
-  //   E/I：高頻活化(β+γ) 高、α 低、主動度高 → 外向 E
-  //   N/S：慢波(θ+δ) 直覺 vs β 具體感知 → 直覺 N
-  //   T/F：β 分析優勢 vs α+γ 情感連結 → 思考 T
-  //   J/P：β 結構 vs θ+δ 彈性流動 → 判斷 J
-  const fEI = (rB + rG - rA)              + 0.13 * act;
-  const fNS = (rT + rD * 0.4 - rB)        + 0.10 * calm + 0.05 * trend;
-  const fTF = (rB + rG * 0.5 - rA - rT * 0.4) + 0.13 * focus;
-  const fJP = (rB - rT - rD * 0.3)        + 0.13 * (focus - emoVar);
-
-  // 各維臨界中心（族群典型值，使 50% 落點接近中位數）與靈敏度
-  const MID = { EI: -0.04, NS: 0.12, TF: -0.14, JP: -0.09 };
-  const SC  = { EI: 0.10,  NS: 0.10, TF: 0.11,  JP: 0.10  };
-
-  // ── 5. 四個情境層次：對特徵施加「情境偏移」，且偏移量乘上個人動態 ──
-  //   archetype 原型：純腦波本質（無情境偏移）
-  //   family    原生家庭：受安定 / 警覺習慣牽引
-  //   social    社會化：對外活躍 → 偏外向 / 執行
-  //   peer      同儕關係：情感共鳴 → 偏情感 / 彈性
+  // ── 5. 四個情境層次：原型層為核心（無偏移，= 後端結果），其餘層加情境偏移 ──
+  //   偏移量乘上個人動態，確保不同人、不同層都有差異（偏移在 0~1 分數空間，幅度小）
+  const actC   = act - 0.5;                          // -0.5~0.5
+  const focus  = _etClamp(1 - attnStd / 30, 0, 1);   // 專注穩定度
+  const trend  = _etClamp(attnTrend / 25, -1, 1);    // 專注趨勢
+  const emoVar = _etClamp(mediStd / 25, 0, 1);       // 情緒起伏
   const SHIFT = {
-    archetype: { EI: 0,                  NS: 0,                 TF: 0,                   JP: 0 },
-    family:    { EI: -0.03 * (1 - calm), NS: 0.03 * calm,       TF: -0.05 * calm,        JP: 0.05 * calm },
-    social:    { EI: 0.06 + 0.05 * act,  NS: -0.03,             TF: 0.04 * focus,        JP: 0.05 + 0.03 * focus },
-    peer:      { EI: 0.03 * act,         NS: 0.03 * emoVar,     TF: -0.06 - 0.04 * emoVar, JP: -0.05 * emoVar },
+    archetype: { EI: 0,                    NS: 0,                    TF: 0,                     JP: 0 },
+    family:    { EI: -0.05 * (1 - calm),   NS: 0.04 * calm,          TF: -0.05 * calm,          JP: 0.05 * calm },
+    social:    { EI: 0.06 + 0.05 * actC,   NS: -0.03 + 0.03 * trend, TF: 0.05 * focus,          JP: 0.05 + 0.04 * focus },
+    peer:      { EI: 0.03 * actC,          NS: 0.03 * emoVar,        TF: -0.06 - 0.04 * emoVar, JP: -0.05 * emoVar },
   };
 
   const mk = (sh) => _etMakeMbtiResult(
-    _etCenterSig(fEI + sh.EI, MID.EI, SC.EI),
-    _etCenterSig(fNS + sh.NS, MID.NS, SC.NS),
-    _etCenterSig(fTF + sh.TF, MID.TF, SC.TF),
-    _etCenterSig(fJP + sh.JP, MID.JP, SC.JP),
+    _etClamp((ei + sh.EI) * 100, 0, 100),
+    _etClamp((ns + sh.NS) * 100, 0, 100),
+    _etClamp((tf + sh.TF) * 100, 0, 100),
+    _etClamp((jp + sh.JP) * 100, 0, 100),
   );
 
   return {
