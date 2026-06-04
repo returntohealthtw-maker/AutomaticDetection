@@ -7516,17 +7516,25 @@ async function loadEegCompare() {
       const dateStr = row.created_at
         ? new Date(row.created_at * 1000).toLocaleDateString('zh-TW', {month:'2-digit', day:'2-digit'})
         : '—';
-      const bg = i % 2 === 0 ? '#ffffff' : '#f8faff';
-      html += `<tr style="background:${bg};">
-        <td style="padding:7px 10px;font-weight:600;color:#1a3a6e;">${row.subject_name || '—'}</td>
+      // 電極接觸不良：專注=0 且 放鬆=0（eSense 值）是明確的訊號問題
+      const badContact = (row.attention === 0 && row.meditation === 0);
+      const bg = badContact ? '#fff3f3' : (i % 2 === 0 ? '#ffffff' : '#f8faff');
+      const nameCell = badContact
+        ? `<td style="padding:7px 10px;font-weight:600;color:#c62828;">⚠️ ${row.subject_name || '—'}</td>`
+        : `<td style="padding:7px 10px;font-weight:600;color:#1a3a6e;">${row.subject_name || '—'}</td>`;
+      html += `<tr style="background:${bg};" title="${badContact ? '⚠️ 專注與放鬆皆為0，疑似電極接觸不良，資料無效' : ''}">
+        ${nameCell}
         <td style="padding:7px 6px;text-align:center;color:#555;">${row.age || '—'}</td>
         <td style="padding:7px 6px;text-align:center;color:#555;">${row.sample_count ?? '—'}</td>
         <td style="padding:7px 6px;text-align:center;color:#555;font-size:10px;">${dateStr}</td>
         ${fields.map(f => {
           const v = row[f];
           const display = v != null ? v : '—';
-          const bg2 = v != null ? cellBg(f, v) : '#f5f5f5';
-          return `<td style="padding:7px 6px;text-align:center;background:${bg2};font-weight:700;color:#1a3a6e;">${display}</td>`;
+          // 專注/放鬆=0 且判定為壞資料 → 特別標紅
+          const isBadeSense = badContact && (f === 'attention' || f === 'meditation');
+          const bg2 = isBadeSense ? '#ffcdd2' : (v != null ? cellBg(f, v) : '#f5f5f5');
+          const color2 = isBadeSense ? '#b71c1c' : '#1a3a6e';
+          return `<td style="padding:7px 6px;text-align:center;background:${bg2};font-weight:700;color:${color2};">${display}</td>`;
         }).join('')}
       </tr>`;
     });
@@ -8058,10 +8066,19 @@ function _renderAllSubjectCard(s) {
     const loBeta    = hasB7 ? b7.beta_low   : Math.round((ba.beta ||0)*0.9);
     const hiGamma   = hasB7 ? b7.gamma_high : Math.round((ba.gamma||0)*1.1);
     const loGamma   = hasB7 ? b7.gamma_low  : Math.round((ba.gamma||0)*0.9);
+    // 電極接觸不良警示：eSense 值兩者均為 0
+    const badContact = (bw.attention_percentage === 0 && bw.meditation_percentage === 0);
+    const contactWarn = badContact
+      ? `<div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:#b71c1c;line-height:1.5;">
+           ⚠️ <b>電極接觸不良</b>：專注 &amp; 放鬆皆為 0，代表 ThinkGear 晶片未能計算 eSense（需 8+ 秒穩定接觸才能啟動）。<br>
+           頻帶數值可能是電磁雜訊，不代表真實腦波。請重新測量並確保電極緊貼前額。
+         </div>`
+      : '';
     bwHtml = `
       <div style="font-size:11px;color:#666;margin-bottom:6px;">最新檢測 (Session #${s.latest_session_id})
         <span style="font-size:10px;color:#999;margin-left:6px;">樣本數 ${bw.sample_count||'—'}</span>
       </div>
+      ${contactWarn}
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
         ${cell('專注', bw.attention_percentage, '#1976d2')}
         ${cell('放鬆', bw.meditation_percentage, '#7e57c2')}
