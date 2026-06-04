@@ -3066,6 +3066,9 @@
         _sameCount = 1;
         _fakeMode = false;   // 數值有變動 → 設備真的有量測，恢復顯示百分比
       }
+      // 🆕 同步至全域，供健康檢查三個畫面使用
+      window._eegBatFakeMode = _fakeMode;
+      window._eegBatLastPct  = pct;
     } else if (_lastBatPct > 0 && bridgeAvailable && bleActuallyConnected) {
       // bridge 仍存在、BLE 確實連線但讀取失敗 → 顯示快取（標 stale）
       pct = _lastBatPct;
@@ -5766,13 +5769,21 @@ function _refreshEegHealthPreCheck() {
   });
 
   // 即時電量（純資訊用）
-  if (batReadable && trulyConnected) {
-    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ ' + bat + '%' });
-  } else if (batReadable && !trulyConnected) {
+  // 判斷是否為韌體假電量：已知固定值或 window._eegBatFakeMode 旗標
+  const batIsFake = batReadable && (
+    window._eegBatFakeMode === true ||
+    window._eegBatLastPct === bat    // 與 polling 快取吻合（同一個固定值）
+  );
+  if (!batReadable) {
+    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（請先連線腦波儀）' });
+  } else if (!trulyConnected) {
     // 機型/驅動回傳的固定假值，不應顯示為綠色
     rows.push({ ok:false, advisory:true, label:'電量讀數', val: 'ℹ️ 讀到 ' + bat + '%（無連線時為機型固定值，非真實電量）' });
+  } else if (batIsFake) {
+    // 真的連線但韌體回傳固定值 → 說明清楚
+    rows.push({ ok:true, advisory:true, label:'電量讀數', val: bat + '%（韌體固定值，無法讀取真實電量）' });
   } else {
-    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（請先連線腦波儀）' });
+    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ ' + bat + '%' });
   }
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
@@ -5906,7 +5917,16 @@ function _tickEegHealthCheck() {
   }
   _setText('ethc-stat-signal', signalLabel);
 
-  _setText('ethc-stat-bat', bat >= 1 && bat <= 100 ? bat + '%' : '— 無法讀取');
+  // 電量顯示：檢測韌體固定值
+  if (bat >= 1 && bat <= 100) {
+    // 若 batteries 陣列已有 3+ 筆且全相同 → 確定是韌體固定值
+    const batArr = _ethcState.batteries;
+    const allSame = batArr.length >= 3 && batArr.every(v => v === batArr[0]);
+    const fakeHint = allSame || window._eegBatFakeMode;
+    _setText('ethc-stat-bat', fakeHint ? bat + '%（韌體固定值）' : bat + '%');
+  } else {
+    _setText('ethc-stat-bat', '— 無法讀取');
+  }
 
   if (elapsed >= _ethcState.durationSec) {
     _finishEegHealthCheck(false);
@@ -6092,9 +6112,12 @@ function _renderEegHealthResult(state, byUser) {
          sampleRate >= 0.3 ? '尚可' : '不良',
   });
   if (batAvg >= 1) {
-    const batRange = (batMin === batMax) ? batAvg + '%（固定值，可能韌體未提供真實量測）'
-                                         : `${batMin}%~${batMax}%（平均 ${batAvg}%）`;
-    checks.push({ ok: batAvg >= 20, label:'🔋 電量讀數', val: batRange });
+    const batIsFirm = (batMin === batMax);  // 60 次讀數全部相同 → 確定是韌體固定值
+    const batRange = batIsFirm
+      ? `${batAvg}%（韌體固定值，無法讀取真實電量）`
+      : `${batMin}%～${batMax}%（平均 ${batAvg}%）`;
+    // 固定值：顯示為「資訊」（advisory），不作為判斷失敗；真實值才判斷是否低電量
+    checks.push({ ok: batIsFirm ? null : (batAvg >= 20), label:'🔋 電量讀數', val: batRange });
   } else {
     checks.push({ ok: false, label:'🔋 電量讀數', val: '無法讀取' });
   }
