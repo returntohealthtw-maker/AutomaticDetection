@@ -359,7 +359,10 @@ public class WebAppActivity extends Activity {
                             int alpha = (loAlpha + hiAlpha) / 2;
                             int beta  = (loBeta  + hiBeta)  / 2;
                             int gamma = (loGamma + hiGamma) / 2;
-                            int bat   = ble.getBatteryLevel();
+                            int bat    = ble.getBatteryLevel();
+                            // iGoodSignal: ThinkGear 原廠訊號品質（0=完美，200=無接觸/斷線）
+                            // 傳給 JS 做健康檢查用，不再只靠採樣率推算品質
+                            int sigQ   = CLS_DATA.iGoodSignal;
                             sampleCount[0]++;
                             sStreamDiagSampleCount++;
                             // 同時傳 8-band 個別值（low_alpha/high_alpha 等）與合併值（alpha）
@@ -367,6 +370,7 @@ public class WebAppActivity extends Activity {
                             String json = String.format(
                                 "{\"attn\":%d,\"medi\":%d,\"delta\":%d,\"theta\":%d," +
                                 "\"alpha\":%d,\"beta\":%d,\"gamma\":%d,\"bat\":%d," +
+                                "\"signal\":%d," +
                                 "\"low_alpha\":%d,\"high_alpha\":%d," +
                                 "\"low_beta\":%d,\"high_beta\":%d," +
                                 "\"low_gamma\":%d,\"high_gamma\":%d," +
@@ -375,6 +379,7 @@ public class WebAppActivity extends Activity {
                                 "\"raw_lbeta\":%d,\"raw_hbeta\":%d," +
                                 "\"raw_lgamma\":%d,\"raw_hgamma\":%d}",
                                 attn, medi, delta, theta, alpha, beta, gamma, bat,
+                                sigQ,
                                 loAlpha, hiAlpha, loBeta, hiBeta, loGamma, hiGamma,
                                 rDelta, rTheta, rLAlpha, rHAlpha, rLBeta, rHBeta, rLGamma, rHGamma);
                             webView.post(() -> webView.evaluateJavascript(

@@ -5845,7 +5845,7 @@ function _startEegHealthCheckSession() {
   _ethcState = {
     startTs: Date.now(),
     sampleCount: 0,
-    signals: [],          // 訊號品質 ── 收到資料就 +1，這裡簡化用「有沒有資料」當訊號
+    signals: [],          // 原廠 iGoodSignal 數值（0=完美, 200=無接觸），每秒一筆
     batteries: [],        // 採集期間的電量讀數
     lastSampleTs: 0,
     abort: false,
@@ -5905,15 +5905,31 @@ function _tickEegHealthCheck() {
   const rate = elapsed > 0 ? (_ethcState.sampleCount / elapsed).toFixed(1) : '—';
   _setText('ethc-stat-rate', rate + ' 筆/秒');
 
-  // 訊號品質
+  // 訊號品質：優先使用原廠 iGoodSignal（0=完美, 200=無接觸），fallback 用採樣率推算
   let signalLabel = '尚未接收';
   if (_ethcState.sampleCount === 0 && elapsed > 5) {
     signalLabel = '✗ 無訊號';
   } else if (_ethcState.sampleCount > 0) {
     const lastSec = (Date.now() - _ethcState.lastSampleTs) / 1000;
-    if (lastSec > 5) signalLabel = '⚠ 訊號中斷';
-    else if (_ethcState.sampleCount / Math.max(1, elapsed) >= 0.6) signalLabel = '✓ 良好';
-    else signalLabel = '⚠ 訊號弱';
+    if (lastSec > 5) {
+      signalLabel = '⚠ 訊號中斷';
+    } else {
+      const sigArr = _ethcState.signals;
+      if (sigArr.length > 0) {
+        // 取最近 5 筆的平均（反應即時狀態）
+        const recent = sigArr.slice(-5);
+        const avgSig = recent.reduce((a,b)=>a+b,0) / recent.length;
+        if (avgSig === 0)       signalLabel = '✓ 完美（0）';
+        else if (avgSig <= 30)  signalLabel = '✓ 良好（' + Math.round(avgSig) + '）';
+        else if (avgSig <= 70)  signalLabel = '⚠ 尚可（' + Math.round(avgSig) + '）';
+        else if (avgSig <= 150) signalLabel = '⚠ 不佳（' + Math.round(avgSig) + '）';
+        else                    signalLabel = '✗ 電極未接觸（' + Math.round(avgSig) + '）';
+      } else {
+        // 舊版 Java 尚未傳 signal 欄位時 fallback
+        if (_ethcState.sampleCount / Math.max(1, elapsed) >= 0.6) signalLabel = '✓ 良好';
+        else signalLabel = '⚠ 訊號弱';
+      }
+    }
   }
   _setText('ethc-stat-signal', signalLabel);
 
@@ -5943,6 +5959,10 @@ function _eegHealthSampleSink(obj) {
   // 若有 bat 欄位，採信腦波儀回報值
   if (obj && typeof obj.bat === 'number' && obj.bat >= 1 && obj.bat <= 100) {
     _ethcState.batteries.push(obj.bat);
+  }
+  // 原廠 iGoodSignal 訊號品質（0=完美, 200=無接觸）
+  if (obj && typeof obj.signal === 'number' && obj.signal >= 0 && obj.signal <= 200) {
+    _ethcState.signals.push(obj.signal);
   }
   // 累積各頻段資料給 MBTI 分析使用（不寫入 DB / 不傳到後端，純前端計算）
   if (!window._ethrAccum) {
@@ -6017,7 +6037,22 @@ function _renderEegHealthResult(state, byUser) {
   const batMin = state.batteries.length ? Math.min(...state.batteries) : -1;
   const batMax = state.batteries.length ? Math.max(...state.batteries) : -1;
 
-  // 健康判斷
+  // 原廠訊號品質：iGoodSignal（0=完美, 200=無接觸）→ 計算平均與最差值
+  const hasRealSig   = state.signals.length > 0;
+  const sigAvg       = hasRealSig ? state.signals.reduce((a,b)=>a+b,0) / state.signals.length : -1;
+  const sigWorst     = hasRealSig ? Math.max(...state.signals) : -1;
+  // 訊號品質等級（基於原廠值）
+  function _sigGrade(avg) {
+    if (avg < 0)   return { ok: null, label: '— 無數據（舊版韌體）' };
+    if (avg === 0) return { ok: true,  label: '完美（0）' };
+    if (avg <= 30) return { ok: true,  label: '良好（' + Math.round(avg) + '）' };
+    if (avg <= 70) return { ok: null,  label: '尚可（' + Math.round(avg) + '）' };
+    if (avg <= 150)return { ok: false, label: '不佳（' + Math.round(avg) + '）—請重新配戴' };
+    return           { ok: false, label: '電極未接觸（' + Math.round(avg) + '）' };
+  }
+  const sigGrade = _sigGrade(sigAvg);
+
+  // 健康判斷：優先依原廠訊號品質，fallback 用採樣率
   let overallStatus, summaryEmoji, summaryTitle, summaryDesc;
   if (!state.bridgeAvailable) {
     overallStatus = 'browser';
@@ -6029,21 +6064,33 @@ function _renderEegHealthResult(state, byUser) {
     summaryEmoji = '❌';
     summaryTitle = '未接收到腦波資料';
     summaryDesc = '可能原因：腦波儀未開機、未戴上、未配對成功，或藍牙連線中斷。請確認腦波儀電源燈是否亮起，並重新配對。';
-  } else if (sampleRate < 0.3) {
+  } else if (hasRealSig && sigAvg > 150) {
     overallStatus = 'poor';
     summaryEmoji = '⚠️';
-    summaryTitle = '訊號品質不良';
-    summaryDesc = `60 秒只收到 ${sampleCount} 筆資料（正常應約 60 筆）。可能腦波儀電極接觸不良，或距離手機過遠。請調整佩戴方式或縮短距離後重試。`;
-  } else if (sampleRate < 0.7) {
+    summaryTitle = '電極接觸不良';
+    summaryDesc = `平均訊號品質 ${Math.round(sigAvg)}（最差 ${sigWorst}），電極與皮膚接觸不穩定。請重新配戴腦波儀後再次檢測。`;
+  } else if (hasRealSig && sigAvg > 70) {
     overallStatus = 'fair';
     summaryEmoji = '🟡';
     summaryTitle = '訊號品質尚可';
-    summaryDesc = `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），略低於預期。可正常使用但建議重新配戴腦波儀以獲得最佳訊號。`;
+    summaryDesc = `平均訊號品質 ${Math.round(sigAvg)}（標準 0~30），略有雜訊。可正常使用，建議調整佩戴位置以獲得更佳訊號。`;
+  } else if (!hasRealSig && sampleRate < 0.3) {
+    overallStatus = 'poor';
+    summaryEmoji = '⚠️';
+    summaryTitle = '訊號品質不良';
+    summaryDesc = `60 秒只收到 ${sampleCount} 筆資料（正常應約 60 筆）。可能腦波儀電極接觸不良，或距離手機過遠。`;
+  } else if (!hasRealSig && sampleRate < 0.7) {
+    overallStatus = 'fair';
+    summaryEmoji = '🟡';
+    summaryTitle = '訊號品質尚可';
+    summaryDesc = `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），略低於預期。建議重新配戴腦波儀。`;
   } else {
     overallStatus = 'good';
     summaryEmoji = '✅';
     summaryTitle = '腦波儀運作正常';
-    summaryDesc = `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），訊號穩定，可以正常進行檢測作業。`;
+    summaryDesc = hasRealSig
+      ? `平均訊號品質 ${Math.round(sigAvg)}（0=完美），收到 ${sampleCount} 筆資料，訊號穩定，可以正常進行檢測作業。`
+      : `共接收 ${sampleCount} 筆資料（${sampleRate.toFixed(1)} 筆/秒），訊號穩定，可以正常進行檢測作業。`;
   }
 
   _setText('ethr-summary-emoji', summaryEmoji);
@@ -6105,11 +6152,13 @@ function _renderEegHealthResult(state, byUser) {
     val: sampleCount === 0 ? '— 無資料' : sampleRate.toFixed(2) + ' 筆/秒（標準 ≈ 1.0）',
   });
   checks.push({
-    ok: sampleRate >= 0.7,
+    ok: sigGrade.ok,
     label: '📊 訊號品質判斷',
+    // 有原廠數值→顯示真實品質+說明；fallback 用採樣率推算
     val: sampleCount === 0 ? '無訊號' :
-         sampleRate >= 0.7 ? '良好' :
-         sampleRate >= 0.3 ? '尚可' : '不良',
+         hasRealSig ? sigGrade.label + '（原廠 iGoodSignal，標準 0~30）' :
+         sampleRate >= 0.7 ? '良好（採樣率推算）' :
+         sampleRate >= 0.3 ? '尚可（採樣率推算）' : '不良（採樣率推算）',
   });
   if (batAvg >= 1) {
     const batIsFirm = (batMin === batMax);  // 60 次讀數全部相同 → 確定是韌體固定值
