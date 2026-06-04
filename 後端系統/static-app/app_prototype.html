@@ -6301,6 +6301,13 @@ function _etLogSig(ratio, slope) {
   const x = 1 / (1 + Math.exp(-(slope || 2) * l));
   return _etClamp(x * 100, 0, 100);
 }
+// 校準型 sigmoid：以「族群典型值 mid」為 50 分臨界點，scale 控制靈敏度。
+// 取代舊的 _etLogSig（固定以比值=1 為中心，導致所有人落同一側 → 同型）。
+function _etCenterSig(feature, mid, scale) {
+  const s = (scale && scale > 1e-6) ? scale : 0.1;
+  const x = 1 / (1 + Math.exp(-((feature - mid) / s)));
+  return _etClamp(x * 100, 0, 100);
+}
 function _etMakeMbtiResult(ei, ns, tf, jp) {
   const dims = [
     { pair:'E/I', score:ei, dominant: ei>=50?'E':'I', pct:ei },
@@ -6318,113 +6325,81 @@ function _etMakeMbtiResult(ei, ns, tf, jp) {
 //   社會化（social）：對外面向 → β γ + attn 高（active engagement）
 //   同儕關係（peer）：人際情感 → γ + medi 變動 + attn 趨勢（情緒共鳴 / 互動敏銳）
 function _etComputeMBTILayers(acc) {
+  // ── 1. 取得代表性頻段功率（優先用 ThinkGear 原始 8 頻段，精度高） ──
   const hasRaw = !!(acc.r_lalpha && acc.r_lalpha.length && _etAvg(acc.r_lalpha) > 0);
-
-  // 統計特徵
-  const aMean = _etAvg(acc.alpha), bMean = _etAvg(acc.beta), gMean = _etAvg(acc.gamma);
-  const tMean = _etAvg(acc.theta), dMean = _etAvg(acc.delta);
-  const attnMean = _etAvg(acc.attn || []), attnStd = _etStd(acc.attn || []), attnTrend = _etTrend(acc.attn || []);
-  const mediMean = _etAvg(acc.medi || []), mediStd = _etStd(acc.medi || []);
-
-  // 原始頻段（如果有）
-  let la=0, ha=0, lb=0, hb=0, lg=0, hg=0, dRaw=0, tRaw=0;
+  let delta, theta, alpha, beta, gamma;
   if (hasRaw) {
-    la = _etAvg(acc.r_lalpha); ha = _etAvg(acc.r_halpha);
-    lb = _etAvg(acc.r_lbeta);  hb = _etAvg(acc.r_hbeta);
-    lg = _etAvg(acc.r_lgamma); hg = _etAvg(acc.r_hgamma);
-    dRaw = _etAvg(acc.r_delta); tRaw = _etAvg(acc.r_theta);
+    delta = _etAvg(acc.r_delta);
+    theta = _etAvg(acc.r_theta);
+    alpha = _etAvg(acc.r_lalpha) + _etAvg(acc.r_halpha);
+    beta  = _etAvg(acc.r_lbeta)  + _etAvg(acc.r_hbeta);
+    gamma = _etAvg(acc.r_lgamma) + _etAvg(acc.r_hgamma);
+  } else {
+    delta = _etAvg(acc.delta);
+    theta = _etAvg(acc.theta);
+    alpha = _etAvg(acc.alpha);
+    beta  = _etAvg(acc.beta);
+    gamma = _etAvg(acc.gamma);
   }
 
-  // 為防止 4 層全部一樣，每層加上「擾動因子」(perturbation)
-  // 擾動來源：個人獨有的訊號特徵（attnTrend、mediStd 等）— 這些不會在 4 層之間共享
-  const attnSign = attnTrend >= 0 ? 1 : -1;
-  const mediVar  = mediStd / Math.max(1, mediMean);  // 情緒穩定度
+  // ── 2. 個人 eSense 動態（不同人差異極大，是個人化的關鍵來源） ──
+  const attnMean = _etAvg(acc.attn || []), attnStd = _etStd(acc.attn || []), attnTrend = _etTrend(acc.attn || []);
+  const mediMean = _etAvg(acc.medi || []), mediStd = _etStd(acc.medi || []);
+  const act    = _etClamp((attnMean - 50) / 50, -1, 1);   // 專注主動度
+  const calm   = _etClamp((mediMean - 50) / 50, -1, 1);   // 放鬆安定度
+  const focus  = _etClamp(1 - attnStd / 30, -1, 1);       // 專注穩定度（越高越穩）
+  const trend  = _etClamp(attnTrend / 25, -1, 1);         // 專注趨勢（漸入 / 漸退）
+  const emoVar = _etClamp(mediStd / 25, 0, 1);            // 情緒起伏
 
-  // ===== 原型性格（archetype）：最深層腦波驅動 =====
-  // E/I：β/α 比 + attn 主動度（最少擾動）
-  // N/S：θ/β 比（直覺 vs 具體）
-  // T/F：γ/(α+δ) 比（高階聯結 vs 安定具體）
-  // J/P：β穩定度 / θ 流動（執行 vs 彈性）
-  const archetype = (() => {
-    if (hasRaw) {
-      const a=la+ha, b=lb+hb, g=lg+hg;
-      return _etMakeMbtiResult(
-        _etLogSig(_etSafeRatio(b, a), 2.0),
-        _etLogSig(_etSafeRatio(tRaw + g, b), 2.0),
-        _etLogSig(_etSafeRatio(lb, lg + tRaw), 2.0),
-        _etLogSig(_etSafeRatio(hb, tRaw), 2.0),
-      );
-    }
-    return _etMakeMbtiResult(
-      _etLogSig(_etSafeRatio(bMean + attnMean*0.5, aMean + 10), 1.6),
-      _etLogSig(_etSafeRatio(tMean + gMean, bMean + 10), 1.6),
-      _etLogSig(_etSafeRatio(bMean, gMean + tMean*0.7 + 5), 1.6),
-      _etLogSig(_etSafeRatio(bMean + 10, tMean + attnStd*0.5 + 5), 1.6),
-    );
-  })();
+  // ── 3. 相對頻段比例（0~1，去除絕對量級差異） ──
+  // 若完全沒有頻段功率，退回族群典型比例，讓 eSense 主導個人化（仍會因人而異）
+  const tot = delta + theta + alpha + beta + gamma;
+  let rD, rT, rA, rB, rG;
+  if (tot > 1e-6) {
+    rD = delta / tot; rT = theta / tot; rA = alpha / tot; rB = beta / tot; rG = gamma / tot;
+  } else {
+    rD = 0.30; rT = 0.18; rA = 0.28; rB = 0.18; rG = 0.06;  // 休息態典型比例
+  }
 
-  // ===== 原生家庭（family）：童年情感安定 + α θ 為主 =====
-  // 加入 medi 與 mediStd 的影響（早期形塑的安定／警覺）
-  // 每個維度用「不同重心」避免跟原型完全一樣
-  const family = (() => {
-    if (hasRaw) {
-      const a=la+ha, b=lb+hb, g=lg+hg;
-      return _etMakeMbtiResult(
-        _etLogSig(_etSafeRatio(b * 0.8 + attnMean, a + mediMean), 1.8),
-        _etLogSig(_etSafeRatio(tRaw + ha, b * 0.7 + dRaw * 0.5), 1.8),
-        _etLogSig(_etSafeRatio(la + lb, lg + tRaw + mediStd*0.01*tRaw), 1.8),
-        _etLogSig(_etSafeRatio(hb + attnMean*0.3, tRaw + mediStd*0.02*tRaw), 1.8),
-      );
-    }
-    return _etMakeMbtiResult(
-      _etLogSig(_etSafeRatio(bMean*0.9 + attnMean, aMean + mediMean + 10), 1.5),
-      _etLogSig(_etSafeRatio(tMean + aMean*0.5, bMean*0.7 + dMean*0.5 + 5), 1.5),
-      _etLogSig(_etSafeRatio(aMean + bMean*0.5, gMean + tMean*0.7 + mediStd + 5), 1.5),
-      _etLogSig(_etSafeRatio(bMean + attnMean*0.4, tMean + mediStd + 5), 1.5),
-    );
-  })();
+  // ── 4. 四維連續特徵（相對頻段 + 個人 eSense）──
+  //   E/I：高頻活化(β+γ) 高、α 低、主動度高 → 外向 E
+  //   N/S：慢波(θ+δ) 直覺 vs β 具體感知 → 直覺 N
+  //   T/F：β 分析優勢 vs α+γ 情感連結 → 思考 T
+  //   J/P：β 結構 vs θ+δ 彈性流動 → 判斷 J
+  const fEI = (rB + rG - rA)              + 0.13 * act;
+  const fNS = (rT + rD * 0.4 - rB)        + 0.10 * calm + 0.05 * trend;
+  const fTF = (rB + rG * 0.5 - rA - rT * 0.4) + 0.13 * focus;
+  const fJP = (rB - rT - rD * 0.3)        + 0.13 * (focus - emoVar);
 
-  // ===== 社會化（social）：β γ + 注意力主動 + 對外活躍 =====
-  // 整體往「外向 / 執行」偏移（因為對外場合通常更活躍）
-  const social = (() => {
-    if (hasRaw) {
-      const a=la+ha, b=lb+hb, g=lg+hg;
-      return _etMakeMbtiResult(
-        _etLogSig(_etSafeRatio(b + g + attnMean, a * 0.7 + 10), 1.8),
-        _etLogSig(_etSafeRatio(tRaw + g + Math.abs(attnTrend) * 5, b + dRaw*0.5), 1.8),
-        _etLogSig(_etSafeRatio(b + attnMean, lg + tRaw + mediMean), 1.8),
-        _etLogSig(_etSafeRatio(hb * 1.2 + attnMean, tRaw + attnStd*0.5), 1.8),
-      );
-    }
-    return _etMakeMbtiResult(
-      _etLogSig(_etSafeRatio(bMean + gMean + attnMean*1.3 + attnStd, aMean*0.7 + mediMean*0.5 + 10), 1.5),
-      _etLogSig(_etSafeRatio(tMean + gMean + Math.abs(attnTrend)*3, bMean + dMean*0.5 + 5), 1.5),
-      _etLogSig(_etSafeRatio(bMean*1.1 + attnMean, gMean + tMean*0.5 + mediMean + 5), 1.5),
-      _etLogSig(_etSafeRatio(bMean*1.2 + attnMean*0.7, tMean + attnStd + 5), 1.5),
-    );
-  })();
+  // 各維臨界中心（族群典型值，使 50% 落點接近中位數）與靈敏度
+  const MID = { EI: -0.04, NS: 0.12, TF: -0.14, JP: -0.09 };
+  const SC  = { EI: 0.10,  NS: 0.10, TF: 0.11,  JP: 0.10  };
 
-  // ===== 同儕關係（peer）：γ + medi 起伏 + 情感共鳴 =====
-  // 整體往「F / 情感」偏移（朋友互動通常情感層面更強）
-  const peer = (() => {
-    if (hasRaw) {
-      const a=la+ha, b=lb+hb, g=lg+hg;
-      return _etMakeMbtiResult(
-        _etLogSig(_etSafeRatio(b + attnMean, a + mediMean + 10), 1.8),
-        _etLogSig(_etSafeRatio(tRaw + g * 1.3 + mediStd*0.01*tRaw, b * 0.8), 1.8),
-        _etLogSig(_etSafeRatio(lb * 0.7, lg * 1.4 + tRaw + mediStd*0.02*tRaw), 1.8),
-        _etLogSig(_etSafeRatio(hb * 0.7, tRaw + mediStd*0.02*tRaw), 1.8),
-      );
-    }
-    return _etMakeMbtiResult(
-      _etLogSig(_etSafeRatio(bMean + attnMean, aMean + mediMean*1.1 + 10), 1.4),
-      _etLogSig(_etSafeRatio(tMean + gMean*1.3 + mediStd*0.5, bMean*0.8 + 5), 1.5),
-      _etLogSig(_etSafeRatio(bMean*0.7 + attnMean*0.5, gMean*1.4 + mediMean + mediStd + 5), 1.5),
-      _etLogSig(_etSafeRatio(bMean*0.7, tMean + mediStd*1.2 + 5), 1.5),
-    );
-  })();
+  // ── 5. 四個情境層次：對特徵施加「情境偏移」，且偏移量乘上個人動態 ──
+  //   archetype 原型：純腦波本質（無情境偏移）
+  //   family    原生家庭：受安定 / 警覺習慣牽引
+  //   social    社會化：對外活躍 → 偏外向 / 執行
+  //   peer      同儕關係：情感共鳴 → 偏情感 / 彈性
+  const SHIFT = {
+    archetype: { EI: 0,                  NS: 0,                 TF: 0,                   JP: 0 },
+    family:    { EI: -0.03 * (1 - calm), NS: 0.03 * calm,       TF: -0.05 * calm,        JP: 0.05 * calm },
+    social:    { EI: 0.06 + 0.05 * act,  NS: -0.03,             TF: 0.04 * focus,        JP: 0.05 + 0.03 * focus },
+    peer:      { EI: 0.03 * act,         NS: 0.03 * emoVar,     TF: -0.06 - 0.04 * emoVar, JP: -0.05 * emoVar },
+  };
 
-  return { archetype, family, social, peer };
+  const mk = (sh) => _etMakeMbtiResult(
+    _etCenterSig(fEI + sh.EI, MID.EI, SC.EI),
+    _etCenterSig(fNS + sh.NS, MID.NS, SC.NS),
+    _etCenterSig(fTF + sh.TF, MID.TF, SC.TF),
+    _etCenterSig(fJP + sh.JP, MID.JP, SC.JP),
+  );
+
+  return {
+    archetype: mk(SHIFT.archetype),
+    family:    mk(SHIFT.family),
+    social:    mk(SHIFT.social),
+    peer:      mk(SHIFT.peer),
+  };
 }
 
 // 向下相容 wrapper：返回主推論型（原型層次）
