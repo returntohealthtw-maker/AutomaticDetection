@@ -5762,19 +5762,12 @@ function _refreshEegHealthPreCheck() {
   // 電量：原廠韌體未提供真實電量，固定回傳假值，一律顯示「原廠未提供」
   rows.push({ ok: null, advisory:true, label:'電量讀數', val: '原廠未提供' });
 
-  // 訊號品質：從 getBleDebugInfo 取得原廠 iGoodSignal
-  // 原廠轉換：iGoodSignal = (200 - ThinkGear_PoorSignal) / 2，範圍 0~100
-  // 數值越高越好：100=完美接觸，0=完全無接觸
-  if (trulyConnected && dbg && typeof dbg.signal_quality === 'number' && dbg.signal_quality >= 0) {
-    const sq = dbg.signal_quality;
-    let sqLabel, sqOk;
-    if (sq >= 95)      { sqLabel = '完美（' + sq + '）';                         sqOk = true;  }
-    else if (sq >= 85) { sqLabel = '優良（' + sq + '）';                         sqOk = true;  }
-    else if (sq >= 70) { sqLabel = '良好（' + sq + '）';                         sqOk = true;  }
-    else if (sq >= 50) { sqLabel = '尚可（' + sq + '）';                         sqOk = null;  }
-    else if (sq >= 30) { sqLabel = '不佳（' + sq + '）・請調整或重新配戴';        sqOk = false; }
-    else               { sqLabel = '電極未接觸（' + sq + '）・請調整或重新配戴'; sqOk = false; }
-    rows.push({ ok: sqOk, advisory: sqOk !== false, label:'訊號品質', val: sqLabel });
+  // 訊號品質：連線頁不顯示數值
+  // 原因：Mindsensor 韌體電極未接觸皮膚時送出 PoorSignal=0（誤報完美），
+  // 連線頁量到的永遠是 100，無法反映真實接觸狀態。
+  // 真實訊號品質僅在「開始健康檢查」採集過程中有效。
+  if (trulyConnected) {
+    rows.push({ ok: null, advisory:true, label:'訊號品質', val: '請戴上後按下方按鈕開始量測' });
   }
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
