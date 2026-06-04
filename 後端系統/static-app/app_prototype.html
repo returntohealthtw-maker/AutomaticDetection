@@ -3021,6 +3021,7 @@
   function updateBattery() {
     let pct = -1;
     let bridgeAvailable = false;
+    let bleActuallyConnected = false;  // 🆕 真實 BLE GATT 連線狀態
     try {
       if (typeof AndroidBridge !== 'undefined' && AndroidBridge &&
           typeof AndroidBridge.getDeviceBattery === 'function') {
@@ -3030,11 +3031,27 @@
         if (typeof pct !== 'number') pct = parseInt(pct, 10);
         if (isNaN(pct)) pct = -1;
       }
+      // 🆕 向 Java 查詢真實 BLE 連線狀態（需藍牙開啟+權限+GATT 建立）
+      //    此方法與電量快取完全無關，BT 關閉時必定回傳 false
+      if (bridgeAvailable && typeof AndroidBridge.isBrainwaveConnected === 'function') {
+        try { bleActuallyConnected = !!AndroidBridge.isBrainwaveConnected(); } catch(e2) {}
+      }
     } catch(e) {
       pct = -1;
+      bleActuallyConnected = false;
     }
 
-    // 有讀到合理值就更新快取
+    // 🆕 BLE 實際未連線時：丟棄電量讀數與快取，重置假電量狀態
+    //    防止 Java 端 30 分鐘快取在 BT 關閉後誤觸發 _fakeMode
+    if (!bleActuallyConnected) {
+      pct = -1;
+      _lastBatPct = -1;
+      _stale = false;
+      _fakeMode = false;
+      _sameCount = 0;
+    }
+
+    // 有讀到合理值就更新快取（只在真正連線時才會走到這裡）
     if (pct >= 1 && pct <= 100) {
       _lastBatPct = pct;
       _stale = false;
@@ -3049,8 +3066,8 @@
         _sameCount = 1;
         _fakeMode = false;   // 數值有變動 → 設備真的有量測，恢復顯示百分比
       }
-    } else if (_lastBatPct > 0 && bridgeAvailable) {
-      // bridge 仍存在但讀取失敗 → 顯示快取（標 stale）
+    } else if (_lastBatPct > 0 && bridgeAvailable && bleActuallyConnected) {
+      // bridge 仍存在、BLE 確實連線但讀取失敗 → 顯示快取（標 stale）
       pct = _lastBatPct;
       _stale = true;
     }
@@ -3058,7 +3075,8 @@
     const els = document.querySelectorAll('.eeg-battery');
     els.forEach(function(el) {
       if (pct < 0) {
-        if (_hasBridge) {
+        // 🆕 只有 BLE 實際連線中才顯示「連線中」，BT 關閉或未連線一律顯示「--」
+        if (bleActuallyConnected) {
           el.textContent = '🧠連線中';
           el.className = 'eeg-battery mid';
         } else {

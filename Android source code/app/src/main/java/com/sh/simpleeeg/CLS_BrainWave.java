@@ -93,8 +93,14 @@ public class CLS_BrainWave
             }
 
             // 3) 即時值無效時，若快取仍在合理時間內（30 分鐘）就回傳快取
+            //    ⚠️ 藍牙已關閉時不回傳快取：避免 JS 端誤判為「已連線」
             if (sLastValidBattery > 0 &&
                 (System.currentTimeMillis() - sLastValidBatteryTs) < 30L * 60 * 1000) {
+                try {
+                    android.bluetooth.BluetoothAdapter ba =
+                            android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+                    if (ba == null || !ba.isEnabled()) return -1;
+                } catch (Throwable ignore) {}
                 return sLastValidBattery;
             }
 
