@@ -3205,6 +3205,14 @@ screens.forEach((s, i) => {
 
 // 啟動時：若有 token 自動驗證；無 token 跳登入頁
 window.addEventListener('DOMContentLoaded', () => {
+  // 頁面載入時預填手機號碼（首次顯示登入畫面用）
+  try {
+    const saved = localStorage.getItem('saved_login_phone');
+    if (saved) {
+      const el = document.getElementById('login-phone-input');
+      if (el) el.value = saved;
+    }
+  } catch (e) {}
   if (typeof _initAuthOnBoot === 'function') _initAuthOnBoot();
 });
 
@@ -3234,6 +3242,16 @@ function goto(id) {
   if (id === 'screen-mbti') id = 'screen-connect';
   // 每次切換畫面都強制清除可能殘留的 overlay，防止 Android 渲染 bug 導致按鈕失效
   _forceCloseAllOverlays();
+  // 進入登入畫面時自動回填上次登入的手機號碼
+  if (id === 'screen-login') {
+    try {
+      const saved = localStorage.getItem('saved_login_phone');
+      if (saved) {
+        const el = document.getElementById('login-phone-input');
+        if (el && !el.value) el.value = saved;
+      }
+    } catch (e) {}
+  }
   const idx = screens.findIndex(s => s.id === id);
   if (idx >= 0) gotoIndex(idx);
 }
@@ -4457,6 +4475,9 @@ async function loginConsultant() {
   }
   const data = await resp.json();
   _saveAuth(data);
+
+  // 記住手機號碼，下次開啟登入畫面時自動回填
+  try { localStorage.setItem('saved_login_phone', phone); } catch (e) {}
 
   // 一般顧問進首頁、admin 也進首頁（要進管理員後台另外走入口）
   goto('screen-home');
