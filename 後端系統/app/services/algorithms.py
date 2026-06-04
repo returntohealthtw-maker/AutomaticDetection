@@ -9,6 +9,8 @@ import math
 from scipy.stats import norm as _NORM
 
 from app.algorithms.data_stats import DATA_STATS
+from app.algorithms.bagua import Bagua
+from app.algorithms.mbti import Personality
 
 
 @dataclass
@@ -341,74 +343,62 @@ def compute_all_indices(avg: BandAverages) -> dict:
     return results
 
 
-def _band_percentile(value: float, stat: dict) -> float:
+def _norm100_to_raw(v: float) -> float:
     """
-    將單一頻段功率換算成「相對於族群的百分位」(0~1)。
-
-    作法：對個人頻段值取 log10，與 data_stats.py 的族群 (mean, std) 算 z 分數，
-    再過標準常態 CDF。0.5 = 與族群中位數相當，>0.5 = 高於多數人。
-
-    這是真八卦演算法（bagua.py）的數理基礎，天生以族群中位數為中心，
-    不會像「絕對比值」那樣被 1/f 頻譜形狀帶得所有人同一側。
+    還原 Android bandTo100() 正規化：
+        bandTo100(raw) = log10(raw + 1) / 6.0 * 100
+        → raw = 10^(v * 0.06) − 1
+    DB 的 low_alpha / theta 等欄位存的是 0-100 正規化值，
+    Bagua.calcBagua / getPersonalityFromBagua 需要原始 ThinkGear 值（~萬為單位）。
     """
-    if value is None or value <= 0:
-        return 0.5  # 無資料 → 中性
-    try:
-        z = (math.log10(value) - stat["mean"]) / stat["std"]
-    except (ValueError, ZeroDivisionError):
-        return 0.5
-    return float(_NORM.cdf(z))
+    v = max(0.01, float(v))
+    return (10.0 ** (v * 0.06)) - 1.0
 
 
 def compute_mbti(avg: BandAverages) -> dict:
     """
-    計算 MBTI 傾向（僅 EEG 部分，70% 權重）
-    回傳各維度分數（0~100，>50 傾向第一字母）
+    使用 BrainDNA 原始八卦演算法計算 MBTI（移植自 BrainDNA/braindna/algorithms/）：
 
-    ⚠️ 2026-06 修正「人人同型」bug：
-    舊版用腦波頻段「絕對比值」過 sigmoid，且以「比值=1」為臨界點。
-    人腦頻段功率有固定 1/f 排序（delta≫theta≫alpha≫beta≫gamma），
-    這些比值對所有人都落在同一側 → 每個人算出同一型；
-    頻段為 0 時比值預設 1 → 四維皆 50 → 一律同型。
+        1. bandTo100 反函數還原 DB 的 0-100 值 → 原始 ThinkGear 值
+        2. Bagua.calcBagua(lowAlpha)          → 八卦（7 型，乾兌震巽坎艮坤）
+        3. Personality.getPersonalityFromBagua(bagua, theta)  → MBTI 16 型
+        4. 顯示分數從 laPct / thPct 推導（方向與型別字母一致）
 
-    新版改用「族群百分位（data_stats 對數常數）+ 個人 attn/medi」，
-    與前端 app_prototype.html 的 _etComputeMBTILayers「原型層」使用完全相同的
-    公式與常數，確保 App 畫面、文字摘要、LINE 通知的主推論型一致。
+    與前端 _etComputeMBTILayers 原型層完全相同的演算流程。
     """
-    # 各頻段相對族群的百分位（0~1，0.5=族群中位數）
-    p_delta = _band_percentile(avg.delta,      DATA_STATS["delta"])
-    p_theta = _band_percentile(avg.theta,      DATA_STATS["theta"])
-    p_la    = _band_percentile(avg.low_alpha,  DATA_STATS["lowAlpha"])
-    p_ha    = _band_percentile(avg.high_alpha, DATA_STATS["highAlpha"])
-    p_lb    = _band_percentile(avg.low_beta,   DATA_STATS["lowBeta"])
-    p_hb    = _band_percentile(avg.high_beta,  DATA_STATS["highBeta"])
-    p_lg    = _band_percentile(avg.low_gamma,  DATA_STATS["lowGamma"])
-    p_mg    = _band_percentile(avg.high_gamma, DATA_STATS["midGamma"])
-    p_alpha = (p_la + p_ha) / 2
-    p_beta  = (p_lb + p_hb) / 2
-    p_gamma = (p_lg + p_mg) / 2
+    # 1. 還原 raw ThinkGear 值
+    raw_la = _norm100_to_raw(avg.low_alpha)
+    raw_th = _norm100_to_raw(avg.theta)
 
-    # 個人專注 / 放鬆百分位（0~1）
-    act  = _clamp(avg.attention  / 100, 0, 1)
-    calm = _clamp(avg.meditation / 100, 0, 1)
+    # 2. 八卦（calcBagua 不使用 brainColor 參數，只用 lowAlphaMean）
+    bagua = Bagua.calcBagua(None, raw_la)
 
-    # 四維分數（0~1，權重和為 1 → 平均人約 0.5；>=0.5 取第一字母）
-    ei = 0.45 * p_beta  + 0.25 * (1 - p_alpha) + 0.30 * act
-    ns = 0.55 * p_theta + 0.25 * (1 - p_beta)  + 0.20 * p_gamma
-    tf = 0.45 * p_beta  + 0.30 * (1 - p_gamma) + 0.25 * (1 - calm)
-    jp = 0.50 * p_beta  + 0.30 * (1 - p_theta) + 0.20 * act
+    # 3. MBTI 16 型
+    personality = Personality.getPersonalityFromBagua(bagua, raw_th)
+    mbti_type   = personality.id
 
-    ei_pct = _clamp(ei * 100, 0, 100)   # >50 = E
-    ns_pct = _clamp(ns * 100, 0, 100)   # >50 = N
-    tf_pct = _clamp(tf * 100, 0, 100)   # >50 = T
-    jp_pct = _clamp(jp * 100, 0, 100)   # >50 = J
+    # 4. 顯示用百分位分數（從 laPct / thPct 推導，方向與 mbti_type 一致）
+    LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
+    LA_STD  = DATA_STATS["lowAlpha"]["std"]
+    la_pct  = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD))
+    th_pct  = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD))
 
-    mbti_type = (
-        ("E" if ei_pct >= 50 else "I") +
-        ("N" if ns_pct >= 50 else "S") +
-        ("T" if tf_pct >= 50 else "F") +
-        ("J" if jp_pct >= 50 else "P")
-    )
+    # E/I：段內位置（7 段，每段 0.125，交替 I/E）
+    seg     = min(int(la_pct / 0.125), 6)
+    seg_pos = (la_pct - seg * 0.125) / 0.125
+    ei_str  = _clamp(seg_pos * 45 + 5, 5, 50)
+    ei_pct  = (50 + ei_str) if mbti_type[0] == 'E' else (50 - ei_str)
+
+    # N/S：laPct 與 0.375 邊界距離（< 0.375 = N 型卦組，>= 0.375 = S 型卦組）
+    ns_dist = ((0.375 - la_pct) / 0.375) if la_pct < 0.375 else ((la_pct - 0.375) / 0.625)
+    ns_base = _clamp(50 + ns_dist * 45, 50, 95)
+    ns_pct  = ns_base if mbti_type[1] == 'N' else (100 - ns_base)
+
+    # T/F & J/P：theta 百分位強度（遠離 0.5 → 信號越強）
+    tf_str = _clamp(abs(th_pct - 0.5) * 80 + 10, 10, 45)
+    tf_pct = (50 + tf_str) if mbti_type[2] == 'T' else (50 - tf_str)
+    jp_str = _clamp(abs(th_pct - 0.5) * 70 + 10, 10, 45)
+    jp_pct = (50 + jp_str) if mbti_type[3] == 'J' else (50 - jp_str)
 
     return {
         "mbti_type":  mbti_type,
@@ -416,10 +406,10 @@ def compute_mbti(avg: BandAverages) -> dict:
         "ns_score":   round(ns_pct, 1),
         "tf_score":   round(tf_pct, 1),
         "jp_score":   round(jp_pct, 1),
-        "ei_label":   "E" if ei_pct >= 50 else "I",
-        "ns_label":   "N" if ns_pct >= 50 else "S",
-        "tf_label":   "T" if tf_pct >= 50 else "F",
-        "jp_label":   "J" if jp_pct >= 50 else "P",
+        "ei_label":   mbti_type[0],
+        "ns_label":   mbti_type[1],
+        "tf_label":   mbti_type[2],
+        "jp_label":   mbti_type[3],
         "confidence": round(
             (abs(ei_pct-50) + abs(ns_pct-50) + abs(tf_pct-50) + abs(jp_pct-50)) / 2, 1
         )
