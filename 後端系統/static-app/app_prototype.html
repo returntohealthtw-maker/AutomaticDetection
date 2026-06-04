@@ -5788,7 +5788,7 @@ function _refreshEegHealthPreCheck() {
   // 連線頁量到的永遠是 100，無法反映真實接觸狀態。
   // 真實訊號品質僅在「開始健康檢查」採集過程中有效。
   if (trulyConnected) {
-    rows.push({ ok: null, advisory:true, label:'訊號品質', val: '請戴上後按下方按鈕開始量測' });
+    rows.push({ ok: null, advisory:true, label:'訊號品質', val: '需按橘色「開始 1 分鐘健康檢查」才量得到' });
   }
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
