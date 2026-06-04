@@ -286,3 +286,70 @@ def list_my_sessions(
             "report_variant":(getattr(rep, "variant", None) if rep else None),
         })
     return {"ok": True, "count": len(out), "sessions": out}
+
+
+@router.get("/admin/compare")
+def admin_eeg_compare(
+    limit: int = 20,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    【管理員】腦波比對診斷：列出最近 N 筆場次的全部腦波統計，
+    方便逐一比較不同受測者的數值，確認是否真實差異。
+
+    回傳欄位：
+      session_id, subject_name, age, created_at,
+      attention, meditation, delta, theta,
+      low_alpha, high_alpha, low_beta, high_beta, low_gamma, high_gamma,
+      sample_count
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "需要管理員權限")
+
+    # 取最近 limit 筆場次（含 EegCapture 統計筆，seq_num=0）
+    sessions = (
+        db.query(M.Session)
+        .order_by(M.Session.session_id.desc())
+        .limit(limit)
+        .all()
+    )
+    session_ids = [s.session_id for s in sessions]
+    if not session_ids:
+        return {"ok": True, "rows": []}
+
+    # 取每個場次的 seq_num=0 統計筆（即 eeg/save-stats 寫入的那筆平均值）
+    caps = (
+        db.query(M.EegCapture)
+        .filter(
+            M.EegCapture.session_id.in_(session_ids),
+            M.EegCapture.seq_num == 0,
+        )
+        .all()
+    )
+    cap_map: dict = {c.session_id: c for c in caps}
+
+    rows = []
+    for s in sessions:
+        c = cap_map.get(s.session_id)
+        rows.append({
+            "session_id":   s.session_id,
+            "subject_name": s.subject_name,
+            "age":          s.subject_age,
+            "report_type":  s.report_type,
+            "consultant":   s.consultant_name,
+            "created_at":   s.created_at,
+            "sample_count": s.total_captures,
+            "attention":    c.attention    if c else None,
+            "meditation":   c.meditation   if c else None,
+            "delta":        c.delta        if c else None,
+            "theta":        c.theta        if c else None,
+            "low_alpha":    c.low_alpha    if c else None,
+            "high_alpha":   c.high_alpha   if c else None,
+            "low_beta":     c.low_beta     if c else None,
+            "high_beta":    c.high_beta    if c else None,
+            "low_gamma":    c.low_gamma    if c else None,
+            "high_gamma":   c.high_gamma   if c else None,
+        })
+    return {"ok": True, "count": len(rows), "rows": rows}
