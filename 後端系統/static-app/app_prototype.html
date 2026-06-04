@@ -3077,23 +3077,14 @@
 
     const els = document.querySelectorAll('.eeg-battery');
     els.forEach(function(el) {
-      if (pct < 0) {
-        // 🆕 只有 BLE 實際連線中才顯示「連線中」，BT 關閉或未連線一律顯示「--」
-        if (bleActuallyConnected) {
-          el.textContent = '🧠連線中';
-          el.className = 'eeg-battery mid';
-        } else {
-          el.textContent = '🧠--';
-          el.className = 'eeg-battery off';
-        }
-      } else if (_fakeMode) {
+      // 原廠韌體不提供真實電量，一律只顯示連線狀態，不顯示百分比
+      if (bleActuallyConnected) {
         el.textContent = '🧠 已連線';
         el.className = 'eeg-battery high';
-        el.title = '此款腦波儀韌體未提供真實電量讀數，僅顯示連線狀態。若使用時間過長請充電。';
+        el.title = '腦波儀已連線（原廠韌體未提供真實電量）';
       } else {
-        const suffix = _stale ? '~' : '';
-        el.textContent = '🧠' + pct + '%' + suffix;
-        el.className = 'eeg-battery ' + (pct >= 60 ? 'high' : pct >= 20 ? 'mid' : 'low');
+        el.textContent = '🧠--';
+        el.className = 'eeg-battery off';
         el.title = '';
       }
     });
@@ -5768,22 +5759,20 @@ function _refreshEegHealthPreCheck() {
           : '✗ 未連線（請確認腦波儀已開機並完成配對）')
   });
 
-  // 即時電量（純資訊用）
-  // 判斷是否為韌體假電量：已知固定值或 window._eegBatFakeMode 旗標
-  const batIsFake = batReadable && (
-    window._eegBatFakeMode === true ||
-    window._eegBatLastPct === bat    // 與 polling 快取吻合（同一個固定值）
-  );
-  if (!batReadable) {
-    rows.push({ ok:false, advisory:true, label:'電量讀數', val: '✗ 無法讀取（請先連線腦波儀）' });
-  } else if (!trulyConnected) {
-    // 機型/驅動回傳的固定假值，不應顯示為綠色
-    rows.push({ ok:false, advisory:true, label:'電量讀數', val: 'ℹ️ 讀到 ' + bat + '%（無連線時為機型固定值，非真實電量）' });
-  } else if (batIsFake) {
-    // 真的連線但韌體回傳固定值 → 說明清楚
-    rows.push({ ok:true, advisory:true, label:'電量讀數', val: bat + '%（韌體固定值，無法讀取真實電量）' });
-  } else {
-    rows.push({ ok:true, advisory:true, label:'電量讀數', val: '✓ ' + bat + '%' });
+  // 電量：原廠韌體未提供真實電量，固定回傳假值，一律顯示「原廠未提供」
+  rows.push({ ok: null, advisory:true, label:'電量讀數', val: '原廠未提供' });
+
+  // 訊號品質：從 getBleDebugInfo 取得原廠 iGoodSignal（0=完美, 200=無接觸）
+  // 連線後才有意義，未連線時略過
+  if (trulyConnected && dbg && typeof dbg.signal_quality === 'number' && dbg.signal_quality >= 0) {
+    const sq = dbg.signal_quality;
+    let sqLabel, sqOk;
+    if (sq === 0)       { sqLabel = '完美（0）';                           sqOk = true;  }
+    else if (sq <= 30)  { sqLabel = '良好（' + sq + '）';                  sqOk = true;  }
+    else if (sq <= 70)  { sqLabel = '尚可（' + sq + '）';                  sqOk = null;  }
+    else if (sq <= 150) { sqLabel = '不佳（' + sq + '）・請調整或重新配戴'; sqOk = false; }
+    else                { sqLabel = '電極未接觸（' + sq + '）・請調整或重新配戴'; sqOk = false; }
+    rows.push({ ok: sqOk, advisory: sqOk !== false, label:'訊號品質', val: sqLabel });
   }
 
   list.innerHTML = rows.map(_ethcRowHtml).join('');
@@ -5933,16 +5922,8 @@ function _tickEegHealthCheck() {
   }
   _setText('ethc-stat-signal', signalLabel);
 
-  // 電量顯示：檢測韌體固定值
-  if (bat >= 1 && bat <= 100) {
-    // 若 batteries 陣列已有 3+ 筆且全相同 → 確定是韌體固定值
-    const batArr = _ethcState.batteries;
-    const allSame = batArr.length >= 3 && batArr.every(v => v === batArr[0]);
-    const fakeHint = allSame || window._eegBatFakeMode;
-    _setText('ethc-stat-bat', fakeHint ? bat + '%（韌體固定值）' : bat + '%');
-  } else {
-    _setText('ethc-stat-bat', '— 無法讀取');
-  }
+  // 電量：原廠韌體未提供真實電量，一律顯示「原廠未提供」
+  _setText('ethc-stat-bat', '原廠未提供');
 
   if (elapsed >= _ethcState.durationSec) {
     _finishEegHealthCheck(false);
@@ -6160,16 +6141,8 @@ function _renderEegHealthResult(state, byUser) {
          sampleRate >= 0.7 ? '良好（採樣率推算）' :
          sampleRate >= 0.3 ? '尚可（採樣率推算）' : '不良（採樣率推算）',
   });
-  if (batAvg >= 1) {
-    const batIsFirm = (batMin === batMax);  // 60 次讀數全部相同 → 確定是韌體固定值
-    const batRange = batIsFirm
-      ? `${batAvg}%（韌體固定值，無法讀取真實電量）`
-      : `${batMin}%～${batMax}%（平均 ${batAvg}%）`;
-    // 固定值：顯示為「資訊」（advisory），不作為判斷失敗；真實值才判斷是否低電量
-    checks.push({ ok: batIsFirm ? null : (batAvg >= 20), label:'🔋 電量讀數', val: batRange });
-  } else {
-    checks.push({ ok: false, label:'🔋 電量讀數', val: '無法讀取' });
-  }
+  // 電量：原廠韌體未提供真實電量，一律顯示「原廠未提供」
+  checks.push({ ok: null, label:'🔋 電量讀數', val: '原廠未提供' });
   checks.push({
     ok: byUser ? null : true,
     label: '⏱️ 採集時間',

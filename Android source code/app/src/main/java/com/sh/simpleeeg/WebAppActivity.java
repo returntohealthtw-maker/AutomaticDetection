@@ -533,7 +533,10 @@ public class WebAppActivity extends Activity {
                 sb.append("\"ble_connected\":").append(bleConnected).append(",");
                 sb.append("\"battery\":").append(bat).append(",");
                 // 即時診斷：若電量能讀到，BLE 在運作的可能性極高（資料層通了）
-                sb.append("\"battery_readable\":").append(bat >= 1 && bat <= 100);
+                sb.append("\"battery_readable\":").append(bat >= 1 && bat <= 100).append(",");
+                // 原廠 ThinkGear 訊號品質（0=完美, 200=無接觸）
+                // CLS_DATA.iGoodSignal 由 ThreadProcess 每秒更新，連線中即有值
+                sb.append("\"signal_quality\":").append(CLS_DATA.iGoodSignal);
                 sb.append("}");
                 return sb.toString();
             } catch (Throwable t) {
