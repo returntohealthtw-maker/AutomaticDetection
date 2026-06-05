@@ -451,9 +451,7 @@ def send_report_link_email(
            box-shadow:0 4px 12px rgba(74,144,226,0.3);">📥 下載報告 PDF</a>
       </div>
 
-      <p style="font-size:13px;color:#888;text-align:center;">
-        ⏰ 下載連結將於 <b>{expires_days} 天後</b>失效，請儘早下載保存
-      </p>
+      {"" if expires_days == 0 else f'<p style="font-size:13px;color:#888;text-align:center;">⏰ 下載連結將於 <b>{expires_days} 天後</b>失效，請儘早下載保存</p>'}
 
       <div style="margin-top:32px;padding:18px 22px;background:#f5f7fa;border-radius:10px;font-size:13px;line-height:1.7;color:#555;">
         <b>📌 報告使用建議</b><br>
@@ -469,10 +467,11 @@ def send_report_link_email(
 </body>
 </html>"""
 
+    expires_note = f"（{expires_days} 天內有效）" if expires_days > 0 else ""
     plain = (
         f"{subject_name} 您好：\n\n"
         f"您的腦波分析報告「{report_title}」已產生。\n\n"
-        f"下載連結（{expires_days} 天內有效）：\n{pdf_url}\n\n"
+        f"下載連結{expires_note}：\n{pdf_url}\n\n"
         f"— onlineReport 線上腦波分析系統"
     )
     result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)

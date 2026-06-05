@@ -1901,18 +1901,27 @@ def admin_send_report_email(
         if sess:
             subject_name = sess.subject_name or ""
 
-    # 寄信前重新產生 Signed URL，確保連結有效（避免公開 URL 或過期的 Signed URL）
-    from app.services import gcs_uploader
-    email_pdf_url = rep.pdf_url
-    try:
-        fresh = gcs_uploader.generate_fresh_signed_url(rep.pdf_url)
-        if fresh:
-            email_pdf_url = fresh
-            # 同步更新 DB 裡的 pdf_url，延長有效期
-            rep.pdf_url = fresh
-            db.commit()
-    except Exception:
-        pass  # 若重新簽署失敗，仍使用原本的 pdf_url
+    # 使用永久下載連結（/api/v1/public/client/{token}/pdf），
+    # 點擊時動態重新簽署，避免 GCS token 過期問題。
+    # 若 qr_token 不存在（舊資料），則 fallback 重新簽署一次後放入 Email。
+    from app.core.config import settings
+    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
+
+    if rep.qr_token and base:
+        # 永久連結：不含 GCS token，永遠有效
+        email_pdf_url = f"{base}/api/v1/public/client/{rep.qr_token}/pdf"
+    else:
+        # fallback：重新簽署 signed URL（7 天內有效）
+        from app.services import gcs_uploader
+        email_pdf_url = rep.pdf_url
+        try:
+            fresh = gcs_uploader.generate_fresh_signed_url(rep.pdf_url)
+            if fresh:
+                email_pdf_url = fresh
+                rep.pdf_url = fresh
+                db.commit()
+        except Exception:
+            pass
 
     from app.services import email_sender
     result = email_sender.send_report_link_email(
@@ -1920,6 +1929,7 @@ def admin_send_report_email(
         subject_name  = subject_name or "您",
         report_title  = title,
         pdf_url       = email_pdf_url,
+        expires_days  = 0,  # 永久連結，不顯示「7 天有效」提示
     )
 
     if result.get("ok"):

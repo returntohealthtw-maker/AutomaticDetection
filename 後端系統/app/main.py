@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.06.04.05"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.06.05.01"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 24
@@ -126,13 +126,13 @@ if _STATIC_APP_DIR:
     _REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "report-app")
     if os.path.isdir(_REPORT_APP_DIR):
         app.mount("/report-app", StaticFiles(directory=_REPORT_APP_DIR, html=True), name="report-app")
-        print(f"[report-app] ✅ 本機成人 React App 掛載：{_REPORT_APP_DIR}")
+        print(f"[report-app] OK 本機成人 React App 掛載：{_REPORT_APP_DIR}")
 
     # 掛載兒童報告 React App（本機版，與成人版並列）
     _CHILD_REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "child-report-app")
     if os.path.isdir(_CHILD_REPORT_APP_DIR):
         app.mount("/child-report-app", StaticFiles(directory=_CHILD_REPORT_APP_DIR, html=True), name="child-report-app")
-        print(f"[child-report-app] ✅ 本機兒童 React App 掛載：{_CHILD_REPORT_APP_DIR}")
+        print(f"[child-report-app] OK 本機兒童 React App 掛載：{_CHILD_REPORT_APP_DIR}")
 
 # 掛載路由
 app.include_router(sessions.router)
@@ -255,10 +255,30 @@ def _run_lightweight_migrations():
             return False
 
     pending = []
+    # sessions – new columns added over time
     if not has_column("sessions", "subject_id"):
         pending.append("ALTER TABLE sessions ADD COLUMN subject_id INTEGER NULL")
+    if not has_column("sessions", "consultant_name"):
+        pending.append("ALTER TABLE sessions ADD COLUMN consultant_name VARCHAR(50) NULL")
+    if not has_column("sessions", "company_id"):
+        pending.append("ALTER TABLE sessions ADD COLUMN company_id INTEGER NULL")
+    if not has_column("sessions", "report_audience"):
+        pending.append("ALTER TABLE sessions ADD COLUMN report_audience VARCHAR(20) DEFAULT 'student'")
+    # reports – new columns added over time
     if not has_column("reports", "subject_id"):
         pending.append("ALTER TABLE reports ADD COLUMN subject_id INTEGER NULL")
+    if not has_column("reports", "consultant_name"):
+        pending.append("ALTER TABLE reports ADD COLUMN consultant_name VARCHAR(50) NULL")
+    if not has_column("reports", "qr_token"):
+        pending.append("ALTER TABLE reports ADD COLUMN qr_token VARCHAR(64) NULL")
+    if not has_column("reports", "client_summary"):
+        pending.append("ALTER TABLE reports ADD COLUMN client_summary TEXT NULL")
+    if not has_column("reports", "notify_email"):
+        pending.append("ALTER TABLE reports ADD COLUMN notify_email VARCHAR(200) NULL")
+    if not has_column("reports", "email_sent"):
+        pending.append("ALTER TABLE reports ADD COLUMN email_sent INTEGER DEFAULT 0")
+    if not has_column("reports", "talent_report_kind"):
+        pending.append("ALTER TABLE reports ADD COLUMN talent_report_kind VARCHAR(32) NULL")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
@@ -269,9 +289,9 @@ def _run_lightweight_migrations():
             try:
                 conn.execute(text(sql))
                 conn.commit()
-                print(f"[DB-MIGRATE] ✅ {sql}")
+                print(f"[DB-MIGRATE] OK {sql}")
             except Exception as e:
-                print(f"[DB-MIGRATE] ⚠️ {sql} → {e}")
+                print(f"[DB-MIGRATE] WARN {sql} -> {e}")
 
 
 async def _reset_orphan_generating_reports():

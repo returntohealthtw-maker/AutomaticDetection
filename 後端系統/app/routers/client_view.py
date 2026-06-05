@@ -4,7 +4,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session as DbSession
 
 from app.core.database import get_db
@@ -83,3 +83,38 @@ def client_summary_json(token: str, db: DbSession = Depends(get_db)):
         return json.loads(r.client_summary or "{}")
     except json.JSONDecodeError:
         return {}
+
+
+@router.get("/client/{token}/pdf")
+def client_download_pdf(token: str, db: DbSession = Depends(get_db)):
+    """
+    永久報告下載端點（Email 連結使用此 URL）。
+    每次點擊時動態重新產生 GCS Signed URL（7 天有效），
+    避免 Email 連結因 GCS token 過期而失效。
+    """
+    r = db.query(models.Report).filter(models.Report.qr_token == token).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="找不到報告")
+
+    if not r.pdf_url:
+        html = """<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>報告未就緒</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px 20px;color:#555;">
+<h2>報告尚未產生</h2><p>PDF 尚未完成，請聯絡顧問確認狀態。</p>
+</body></html>"""
+        return HTMLResponse(html, status_code=200)
+
+    # 動態重新簽署，確保連結永遠有效
+    from app.services import gcs_uploader
+    fresh_url = None
+    try:
+        fresh_url = gcs_uploader.generate_fresh_signed_url(r.pdf_url)
+        if fresh_url:
+            # 同步更新 DB，延長快取有效期
+            r.pdf_url = fresh_url
+            db.commit()
+    except Exception:
+        pass
+
+    redirect_url = fresh_url or r.pdf_url
+    return RedirectResponse(url=redirect_url, status_code=302)
