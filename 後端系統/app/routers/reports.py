@@ -520,6 +520,34 @@ def list_reports(
         except Exception:
             return None
 
+    # ── 圖片品質：依 chapter_done 事件的 payload imagen_used 判斷 ─────────
+    # 'ok'      = 所有章節都用 Imagen 生成
+    # 'fallback' = 至少一章用 Canvas 2D 或 SVG 降級（漏圖）
+    # None       = 無事件資料（舊報告或未記錄）
+    session_ids_for_img = [rep.session_id for rep, _ in rows if rep.session_id is not None]
+    img_quality_by_sid: dict[int, str] = {}
+    if session_ids_for_img:
+        evts = db.query(M.ReportGenerationEvent).filter(
+            M.ReportGenerationEvent.session_id.in_(session_ids_for_img),
+            M.ReportGenerationEvent.phase == "chapter_done",
+        ).all()
+        for evt in evts:
+            sid_evt = evt.session_id
+            if sid_evt is None:
+                continue
+            try:
+                payload = _json.loads(evt.payload_json or "{}")
+                imagen_used = payload.get("imagen_used")
+            except Exception:
+                imagen_used = None
+
+            if imagen_used is False:
+                # 至少一章為降級圖片 → 確定漏圖，不再覆蓋
+                img_quality_by_sid[sid_evt] = "fallback"
+            elif imagen_used is True and img_quality_by_sid.get(sid_evt) != "fallback":
+                # 目前還沒有確定漏圖 → 暫標為 ok
+                img_quality_by_sid[sid_evt] = "ok"
+
     out = []
     for rep, sess in rows:
         cons = cons_map.get(sess.consultant_name) if (sess and sess.consultant_name) else None
@@ -585,6 +613,7 @@ def list_reports(
             "is_test":        is_test,                      # 🧪 admin 可用 is_test 過濾或一鍵清理
             "linked_to_subject": subj_record is not None,   # 🔗 是否已連結到 Subject 主檔
             "headless_error": headless_error,               # 失敗原因（來自 headless_renderer）
+            "image_quality":  img_quality_by_sid.get(rep.session_id) if rep.session_id else None,
         })
     return {"ok": True, "count": len(out), "reports": out}
 
