@@ -2,7 +2,7 @@
 腦波數據接收 API
 Android 手機檢測完成後呼叫此 API 上傳數據
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.orm import Session as DbSession
 from pydantic import BaseModel
 from typing import List, Optional
@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
 from app.services.report_generator import generate_report_async
 from app.routers.monitor import broadcast
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["腦波數據"])
 
@@ -101,6 +102,41 @@ async def upload_session(
     if aud not in ("teacher", "student"):
         aud = "student"
 
+    # ── 防重複上傳：同一顧問 + 同受測者 + 相近擷取數，15 分鐘內只建一筆 ──
+    # 原因：Android App 在網路逾時後可能自動重試，導致同一場測建兩筆 session
+    DEDUP_WINDOW_MS  = 15 * 60 * 1000   # 15 分鐘
+    DEDUP_CAPTURE_DELTA = 10            # 擷取數差距容忍值
+    now_ms = int(time.time() * 1000)
+    if req.subject_name and req.consultant_name and len(req.captures) >= 150:
+        cutoff = now_ms - DEDUP_WINDOW_MS
+        existing = (
+            db.query(models.Session)
+            .filter(
+                models.Session.subject_name    == req.subject_name,
+                models.Session.consultant_name == req.consultant_name,
+                models.Session.created_at      >= cutoff,
+                models.Session.status          == 1,   # 成功場次才算
+            )
+            .order_by(models.Session.session_id.desc())
+            .first()
+        )
+        if existing and abs(existing.total_captures - len(req.captures)) <= DEDUP_CAPTURE_DELTA:
+            # 找到重複場次，直接回傳已存在的結果
+            rep = db.query(models.Report).filter(
+                models.Report.session_id == existing.session_id
+            ).first()
+            base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
+            client_url = (
+                f"{base}/api/v1/public/client/{rep.qr_token}" if (base and rep and rep.qr_token) else None
+            )
+            return SessionResponse(
+                session_id       = existing.session_id,
+                report_id        = rep.report_id if rep else 0,
+                message          = "重複上傳，已回傳既有場次",
+                captures_saved   = existing.total_captures,
+                client_view_url  = client_url,
+            )
+
     # 1. 建立場次記錄
     session = models.Session(
         consultant_name  = req.consultant_name,
@@ -180,7 +216,7 @@ async def upload_session(
             session_id = session.session_id
         )
 
-    base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
     client_url = f"{base}/api/v1/public/client/{qr_token}" if base else None
 
     return SessionResponse(
@@ -237,7 +273,7 @@ def get_report_status(report_id: int, db: DbSession = Depends(get_db)):
     ).first()
     if not report:
         raise HTTPException(status_code=404, detail="報告不存在")
-    base = (settings.PUBLIC_APP_BASE_URL or "").rstrip("/")
+    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
     client_url = (
         f"{base}/api/v1/public/client/{report.qr_token}"
         if base and report.qr_token
@@ -250,3 +286,89 @@ def get_report_status(report_id: int, db: DbSession = Depends(get_db)):
         "line_sent":       report.line_sent,
         "client_view_url": client_url,
     }
+
+
+# ─── Admin 管理端點 ──────────────────────────────────────────────────────────
+
+@router.delete("/admin/sessions/{session_id}")
+def admin_delete_session(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    [Admin] 刪除場次及其所有腦波擷取資料、報告記錄。
+    只允許 admin 或顧問刪除無報告 / 失敗的重複場次。
+    """
+    user = get_current_user(authorization, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未登入")
+
+    sess = db.query(models.Session).filter(
+        models.Session.session_id == session_id
+    ).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session #{session_id} 不存在")
+
+    # 非 admin 只能刪除自己負責的場次
+    if user.role != "admin" and sess.consultant_name != user.name:
+        raise HTTPException(status_code=403, detail="無權刪除此場次")
+
+    # 檢查是否有已完成的報告（有 PDF 的不允許刪除，避免誤操作）
+    report = db.query(models.Report).filter(
+        models.Report.session_id == session_id
+    ).first()
+    if report and report.status == "completed" and report.pdf_url:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session #{session_id} 已有完成的報告，請先至報告管理刪除報告"
+        )
+
+    report_id = report.report_id if report else None
+    # 刪除 report（如果有）
+    if report:
+        db.delete(report)
+    # EegCapture 有 cascade delete，刪 session 時自動刪
+    db.delete(sess)
+    db.commit()
+
+    return {
+        "ok": True,
+        "deleted_session_id": session_id,
+        "deleted_report_id":  report_id,
+        "message": f"Session #{session_id} 及其腦波資料已刪除",
+    }
+
+
+@router.post("/admin/payments/{payment_id}/link-session")
+def admin_link_payment_session(
+    payment_id: int,
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    [Admin] 手動將付款記錄關聯到指定場次（修正付款-場次斷鏈問題）。
+    """
+    user = get_current_user(authorization, db)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要 admin 權限")
+
+    pay = db.query(models.Payment).filter(
+        models.Payment.payment_id == payment_id
+    ).first() if hasattr(models, "Payment") else None
+
+    if pay is None:
+        # Try via raw query
+        from sqlalchemy import text
+        result = db.execute(
+            text("UPDATE payments SET session_id=:sid WHERE payment_id=:pid"),
+            {"sid": session_id, "pid": payment_id}
+        )
+        db.commit()
+        return {"ok": True, "payment_id": payment_id, "session_id": session_id,
+                "rows_updated": result.rowcount}
+
+    pay.session_id = session_id
+    db.commit()
+    return {"ok": True, "payment_id": payment_id, "session_id": session_id}
