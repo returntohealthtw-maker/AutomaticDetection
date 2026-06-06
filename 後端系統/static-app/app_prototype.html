@@ -5382,6 +5382,12 @@ function _startEegLiveCapture() {
   _populateDetectHeader();
   _resetEegLiveUI();
 
+  // 每次開始新採集都清除上一次的 session 關聯，避免上一輪（如零資料退出後）
+  // 的 session_id 因 async persist 競態而汙染本輪報告
+  window._lastEegCapture    = null;
+  window._lastEegSessionId  = null;
+  window._lastEegPersistPromise = null;
+
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
                     low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
                     _zeroConsec: 0 };   // 連續 attention=0 AND meditation=0 的樣本計數
