@@ -4623,6 +4623,10 @@ function _validateBrainwaveCapture(bw) {
   if (att === 0 && med === 0 && bandsTotal === 0) {
     return { ok: false, reason: '腦波數值全為零（疑似未真正接收到腦波儀資料）' };
   }
+  // 電極接觸不良：ThinkGear eSense 值（專注/放鬆）持續為 0，即使頻段有數值也代表訊號無效
+  if (att === 0 && med === 0) {
+    return { ok: false, reason: '收集資訊不完全，請重新調整腦波儀重測（電極接觸不良：專注與放鬆值皆為 0）' };
+  }
   return { ok: true };
 }
 
@@ -5379,7 +5383,8 @@ function _startEegLiveCapture() {
   _resetEegLiveUI();
 
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
-                    low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[] };
+                    low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
+                    _zeroConsec: 0 };   // 連續 attention=0 AND meditation=0 的樣本計數
   _eegLiveStartTs = Date.now();
   _eegSimState = null;
 
@@ -5417,7 +5422,6 @@ function _startEegLiveCapture() {
       if (sc === 0) {
         const stxt = document.getElementById('detect-status-text');
         if (stxt) stxt.textContent = '⚠️ 尚未收到腦波訊號，請確認腦波儀已開機並連線';
-        // 顯示黃色提示卡（如果沒有的話建立一個）
         const warnId = 'detect-no-signal-warn';
         if (!document.getElementById(warnId)) {
           const hint = document.getElementById('detect-hint-card') || document.querySelector('#screen-detect .detect-body');
@@ -5429,6 +5433,17 @@ function _startEegLiveCapture() {
             hint.insertBefore(warnEl, hint.firstChild);
           }
         }
+      }
+    }
+
+    // ─── 持續性資料歸零偵測：超過 30 秒連續 attention=meditation=0 ──────
+    // 電極接觸不良時 ThinkGear 晶片 eSense 值歸 0，需提早退出並提示重測
+    if (window.AndroidBridge && elapsedSec >= 30 && _eegLiveAccum) {
+      const zeroConsec = _eegLiveAccum._zeroConsec || 0;
+      if (zeroConsec >= 30) {
+        _stopEegLiveCapture();
+        _showNoSignalAndRetry('收集資訊不完全，請重新調整腦波儀重測');
+        return;
       }
     }
 
@@ -5583,6 +5598,13 @@ function _ingestEegSample(s) {
   if (hiBe != null) _eegLiveAccum.high_beta.push(hiBe);
   if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
   if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
+
+  // 連續歸零計數：attention=0 AND meditation=0 視為電極接觸不良
+  if (a === 0 && m === 0) {
+    _eegLiveAccum._zeroConsec = (_eegLiveAccum._zeroConsec || 0) + 1;
+  } else {
+    _eegLiveAccum._zeroConsec = 0;  // 只要有一筆有效就重設
+  }
 
   // 更新 UI
   const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = String(v); };

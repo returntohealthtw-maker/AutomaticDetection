@@ -823,11 +823,22 @@ def admin_paid_not_detected(
     # eeg 計數 by session_id
     all_sids = [s.session_id for ss in sess_by_subj.values() for s in ss]
     eeg_count_by_sess: dict[int, int] = {}
+    # 「全歸零」session：有 EEG 採集筆數但 attention 與 meditation 平均皆為 0
+    # （電極接觸不良時 ThinkGear eSense 輸出 0，頻段可能有值但資料無效）
+    zero_quality_sess: set[int] = set()
     if all_sids:
         for sid, cnt in db.query(M.EegCapture.session_id, sqlfunc.count(M.EegCapture.capture_id))\
                           .filter(M.EegCapture.session_id.in_(all_sids))\
                           .group_by(M.EegCapture.session_id).all():
             eeg_count_by_sess[sid] = cnt
+        # 找出有採集但 attention+meditation 總和 = 0 的 session（全歸零）
+        for sid, sum_att, sum_med in db.query(
+            M.EegCapture.session_id,
+            sqlfunc.sum(M.EegCapture.attention),
+            sqlfunc.sum(M.EegCapture.meditation),
+        ).filter(M.EegCapture.session_id.in_(all_sids)).group_by(M.EegCapture.session_id).all():
+            if (sum_att or 0) == 0 and (sum_med or 0) == 0:
+                zero_quality_sess.add(sid)
 
     # 最新 payment by subject_name（fallback）
     pay_by_subj_name: dict[str, M.Payment] = {}
@@ -850,17 +861,24 @@ def admin_paid_not_detected(
 
     for subj in all_subjects:
         sessions = sess_by_subj.get(subj.subject_id, [])
-        # 是否有任何含 EEG 資料的 session
-        has_any_eeg = any(eeg_count_by_sess.get(s.session_id, 0) > 0 for s in sessions)
-        if has_any_eeg:
-            continue   # 已有腦波資料，不需重測
+        # 有 EEG 採集且品質正常（attention 或 meditation 有非零值）的 session
+        has_valid_eeg = any(
+            eeg_count_by_sess.get(s.session_id, 0) > 0
+            and s.session_id not in zero_quality_sess
+            for s in sessions
+        )
+        if has_valid_eeg:
+            continue   # 已有有效腦波資料，不需重測
 
         seen_subject_ids.add(subj.subject_id)
 
         # 計算未完成原因
         reason = []
+        zero_sessions = [s for s in sessions if s.session_id in zero_quality_sess]
         if not sessions:
             reason.append("從未進行過檢測")
+        elif zero_sessions:
+            reason.append(f"有 {len(zero_sessions)} 次腦波數值全為 0（電極接觸不良，請重新調整後重測）")
         else:
             reason.append(f"有 {len(sessions)} 次 session，但全部無腦波採集資料")
 
@@ -920,9 +938,10 @@ def admin_paid_not_detected(
         if p.subject_name and p.subject_name in seen_names_from_subjects:
             continue
 
-        # 取 session eeg 計數
+        # 取 session eeg 計數，並檢查是否全歸零
         sess = None
         eeg_cnt = 0
+        is_zero_quality = False
         if p.session_id:
             sess = db.query(M.Session).filter(M.Session.session_id == p.session_id).first()
             eeg_cnt = eeg_count_by_sess.get(p.session_id, 0)
@@ -930,14 +949,28 @@ def admin_paid_not_detected(
                 cnt_row = db.query(sqlfunc.count(M.EegCapture.capture_id))\
                             .filter(M.EegCapture.session_id == p.session_id).scalar()
                 eeg_cnt = cnt_row or 0
+            # 檢查是否全歸零（有採集但 attention+meditation 皆 0）
+            if eeg_cnt > 0:
+                if p.session_id in zero_quality_sess:
+                    is_zero_quality = True
+                else:
+                    # 不在先前查詢範圍內，補查
+                    row = db.query(
+                        sqlfunc.sum(M.EegCapture.attention),
+                        sqlfunc.sum(M.EegCapture.meditation),
+                    ).filter(M.EegCapture.session_id == p.session_id).first()
+                    if row and (row[0] or 0) == 0 and (row[1] or 0) == 0:
+                        is_zero_quality = True
 
-        # 有 EEG 資料 → 跳過
-        if eeg_cnt > 0:
+        # 有效 EEG 資料（非全歸零）→ 跳過，不需重測
+        if eeg_cnt > 0 and not is_zero_quality:
             continue
 
         reason = []
         if not p.session_id:
             reason.append("尚未開始檢測")
+        elif is_zero_quality:
+            reason.append("腦波數值全為 0（電極接觸不良，請重新調整後重測）")
         elif eeg_cnt == 0:
             reason.append("session 存在但無腦波採集資料")
 
