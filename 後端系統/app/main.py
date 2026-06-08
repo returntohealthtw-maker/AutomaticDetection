@@ -83,7 +83,7 @@ APK_RELEASE_NOTES = (
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules, report_app_api
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules, report_app_api, parent_child
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -134,6 +134,22 @@ if _STATIC_APP_DIR:
         app.mount("/child-report-app", StaticFiles(directory=_CHILD_REPORT_APP_DIR, html=True), name="child-report-app")
         print(f"[child-report-app] OK 本機兒童 React App 掛載：{_CHILD_REPORT_APP_DIR}")
 
+# 掛載親子報告靜態資源（封面圖 + 生成圖片）
+_PC_DATA_CANDIDATES = [
+    "/app/parent_child_data",                          # Docker / Railway
+    os.path.join(_BACKEND_DIR, "parent_child_data"),   # 本地開發
+]
+_PC_DATA_DIR = next((p for p in _PC_DATA_CANDIDATES if os.path.isdir(p)), None)
+if _PC_DATA_DIR:
+    app.mount("/parent-child/static", StaticFiles(directory=_PC_DATA_DIR), name="parent-child-static")
+    print(f"[parent-child] OK 靜態資源掛載：{_PC_DATA_DIR}")
+else:
+    # 首次執行自動建立目錄
+    _new_pc_dir = os.path.join(_BACKEND_DIR, "parent_child_data")
+    os.makedirs(os.path.join(_new_pc_dir, "report_images"), exist_ok=True)
+    app.mount("/parent-child/static", StaticFiles(directory=_new_pc_dir), name="parent-child-static")
+    print(f"[parent-child] 已建立並掛載靜態資源目錄：{_new_pc_dir}")
+
 # 掛載路由
 app.include_router(sessions.router)
 app.include_router(payments.router)
@@ -149,6 +165,7 @@ app.include_router(eeg.router)
 app.include_router(reports.router)
 app.include_router(share_rules.router)
 app.include_router(report_app_api.router)
+app.include_router(parent_child.router)
 
 
 def _friendly_error_html(title: str, message: str, hint: str = "") -> str:

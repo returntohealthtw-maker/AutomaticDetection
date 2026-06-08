@@ -73,8 +73,13 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_URLS = {
     "life_script":  "__local__",   # 代表使用本機 /report-app/
     "child":        "__local__",   # 代表使用本機 /child-report-app/（已移植，不再走 Vercel）
-    "parent_child": "https://web-production-f1aec.up.railway.app",
+    "parent_child": "__local__",   # 代表使用本機 /parent-child/（已移植，不再走 Railway）
     "marital":      "https://web-production-2c7d43.up.railway.app",
+}
+
+# Railway fallback URLs（若環境變數強制外部時使用）
+FALLBACK_URLS = {
+    "parent_child": "https://web-production-f1aec.up.railway.app",
 }
 
 # 本機 report-app 的路徑前綴（headless 開瀏覽器時改用 localhost）
@@ -110,17 +115,19 @@ def _local_base_url() -> str:
 
 
 def _is_local(report_type: str) -> bool:
-    """是否走本機靜態 React App（優先用本機，穩定且不依賴 Vercel）
+    """是否走本機內建服務（優先用本機，穩定且不依賴外部 Vercel / Railway）
 
-    支援 life_script（/report-app/）與 child（/child-report-app/）。
+    支援 life_script（/report-app/）、child（/child-report-app/）、
+    parent_child（/parent-child/）。
 
     判斷順序：
-    1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1  → life_script 強制走外部
-    2. 環境變數 USE_EXTERNAL_CHILD=1        → child 強制走外部
-    3. 本機對應目錄存在（有 index.html）→ 走本機
-    4. 否則走外部
+    1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1   → life_script 強制走外部
+    2. 環境變數 USE_EXTERNAL_CHILD=1         → child 強制走外部
+    3. 環境變數 USE_EXTERNAL_PARENT_CHILD=1  → parent_child 強制走外部
+    4. 本機對應目錄 / 路由存在 → 走本機
+    5. 否則走外部
     """
-    if report_type not in ("life_script", "child"):
+    if report_type not in ("life_script", "child", "parent_child"):
         return False
 
     # 強制外部 flag
@@ -128,8 +135,21 @@ def _is_local(report_type: str) -> bool:
         return False
     if report_type == "child" and os.environ.get("USE_EXTERNAL_CHILD", "").strip() == "1":
         return False
+    if report_type == "parent_child" and os.environ.get("USE_EXTERNAL_PARENT_CHILD", "").strip() == "1":
+        return False
 
-    # 對應靜態目錄名稱
+    if report_type == "parent_child":
+        # 親子報告已內建於主程式，只要 parent_child_data 目錄存在即視為本機可用
+        pc_candidates = [
+            "/app/parent_child_data",            # Docker / Railway
+            "parent_child_data",                 # 本地開發（CWD = 後端系統/）
+        ]
+        for c in pc_candidates:
+            if os.path.isdir(c):
+                return True
+        return True  # router 已 include，預設走本機
+
+    # 對應靜態目錄名稱（life_script / child）
     dir_name = "report-app" if report_type == "life_script" else "child-report-app"
     local_index_candidates = [
         f"/app/static-app/{dir_name}/index.html",   # Docker / Railway
@@ -510,8 +530,13 @@ def trigger_external_report(
                       "metrics":           _bw_to_metrics(brainwave_data or {})}},
             {"role": "child2", "role_zh": "孩子2", "name": e.get("child2_name", ""), "present": False, "data": None},
         ]
+        # 使用本機內建親子報告（優先），或 fallback 到外部 Railway
+        if _is_local("parent_child"):
+            pc_base = _local_base_url() + "/parent-child"
+        else:
+            pc_base = FALLBACK_URLS.get("parent_child", base)
         return _call_parent_child(
-            base=base,
+            base=pc_base,
             family_name=family_name,
             members=members,
             image_mode=e.get("image_mode", "none"),
