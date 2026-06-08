@@ -26,6 +26,43 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _compute_mbti_from_bw(bw_data: Optional[Dict[str, Any]]) -> str:
+    """
+    從 brainwave_data（含 bands_avg）用 BrainDNA 演算法計算 MBTI 字串。
+    與 app/services/algorithms.py compute_mbti() 完全相同邏輯，
+    用於在呼叫婚姻報告 API 前自動填入 mbti 欄位。
+    回傳 MBTI 字串（e.g. "INTJ"）或 "----"（失敗/無資料）。
+    """
+    if not bw_data:
+        return "----"
+    try:
+        from app.services.algorithms import compute_mbti, BandAverages
+        ba = (bw_data.get("bands_avg") or {})
+        alpha = float(ba.get("alpha") or 50)
+        theta = float(ba.get("theta") or 50)
+        beta  = float(ba.get("beta")  or 50)
+        gamma = float(ba.get("gamma") or 50)
+        delta = float(ba.get("delta") or 50)
+        avg = BandAverages(
+            delta      = delta,
+            theta      = theta,
+            low_alpha  = alpha * 0.9,
+            high_alpha = alpha * 1.1,
+            low_beta   = beta  * 0.9,
+            high_beta  = beta  * 1.1,
+            low_gamma  = gamma * 0.9,
+            high_gamma = gamma * 1.1,
+            attention  = float(bw_data.get("attention_percentage") or 50),
+            meditation = float(bw_data.get("meditation_percentage") or 50),
+            sample_count = int(bw_data.get("sample_count") or 0),
+        )
+        result = compute_mbti(avg)
+        return result.get("mbti_type", "----") or "----"
+    except Exception as e:
+        logger.warning("[_compute_mbti_from_bw] MBTI 計算失敗: %s", e)
+        return "----"
+
 # 報告 PDF 存放位置
 REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -436,18 +473,27 @@ def trigger_external_report(
     # 夫妻：需要兩個人，從 extra 拿 husband/wife
     if mode == "marital_rest":
         e = extra or {}
+        wife_bw = e.get("wife_brainwave_data") or brainwave_data or {}
+        # 若呼叫端未提供 mbti，用 BrainDNA 演算法自動計算（與成人報告一致）
+        husband_mbti = (e.get("husband_mbti") or "").strip() or _compute_mbti_from_bw(brainwave_data)
+        wife_mbti    = (e.get("wife_mbti") or "").strip() or _compute_mbti_from_bw(wife_bw)
         husband = e.get("husband") or {
             "name": e.get("husband_name") or subject_name,
             "age":  subject_age or 0,
-            "mbti": e.get("husband_mbti") or "----",
+            "mbti": husband_mbti,
             "bw":   brainwave_data or {},
         }
         wife = e.get("wife") or {
             "name": e.get("wife_name") or "太太",
             "age":  e.get("wife_age") or 0,
-            "mbti": e.get("wife_mbti") or "----",
-            "bw":   e.get("wife_brainwave_data") or brainwave_data or {},
+            "mbti": wife_mbti,
+            "bw":   wife_bw,
         }
+        # 若 extra 已直接提供完整的 husband/wife dict 但 mbti 仍為空，補上
+        if e.get("husband") and not (e["husband"].get("mbti") or "").strip().replace("-", ""):
+            husband["mbti"] = husband_mbti
+        if e.get("wife") and not (e["wife"].get("mbti") or "").strip().replace("-", ""):
+            wife["mbti"] = wife_mbti
         return _call_marital(base, husband, wife, meta=e)
 
     # 親子：需要 4 個家庭成員（dad, mom, child1, child2）
