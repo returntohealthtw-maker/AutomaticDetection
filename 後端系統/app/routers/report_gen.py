@@ -128,6 +128,7 @@ class StartRequest(BaseModel):
     chapters_to_generate: Optional[List[int]] = None  # 只生成這些章節（None = 全部）
     use_external:         Optional[bool] = None       # None = 自動判斷（外部設了就用），True/False = 強制
     session_id:           Optional[int] = None        # 從 /eeg/save-stats 拿到的 session_id，外部完成後可 callback
+    extra:                Optional[Dict[str, Any]] = None  # 關係報告用：wife_session_id / members 等多人資料
 
 
 class ChaptersQuery(BaseModel):
@@ -361,20 +362,27 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
 
     valid, why = _is_valid_bw(bw)
     if not valid:
-        logger.warning("[report-gen/start] 拒絕生成（資料不完整）: %s | session_id=%s | name=%s",
-                       why, req.session_id, req.subject_name)
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "ok": False,
-                "code": "INVALID_BRAINWAVE",
-                "reason": why,
-                "message": "尚未採集到有效的腦波資料，無法生成報告。請使用腦波儀完成至少 30 秒的有效檢測後再試。",
-                "subject_name": req.subject_name,
-                "session_id": req.session_id,
-                "sample_count": (bw or {}).get("sample_count", 0),
-            },
-        )
+        # 親子報告特例：若所有成員皆由 session_id 提供資料，第一人的腦波仍是必要的
+        # 但允許關係報告（marital/parent_child）從 session_id 補充主成員腦波
+        is_relation = req.report_type in ("marital", "parent_child")
+        has_session_id = bool(req.session_id)
+        if not (is_relation and has_session_id):
+            logger.warning("[report-gen/start] 拒絕生成（資料不完整）: %s | session_id=%s | name=%s",
+                           why, req.session_id, req.subject_name)
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "ok": False,
+                    "code": "INVALID_BRAINWAVE",
+                    "reason": why,
+                    "message": "尚未採集到有效的腦波資料，無法生成報告。請使用腦波儀完成至少 30 秒的有效檢測後再試。",
+                    "subject_name": req.subject_name,
+                    "session_id": req.session_id,
+                    "sample_count": (bw or {}).get("sample_count", 0),
+                },
+            )
+        logger.info("[report-gen/start] 關係報告允許空腦波 (type=%s, session_id=%s), 將由成員 session_id 補充",
+                    req.report_type, req.session_id)
 
     # 🔑 受測者真實姓名解析：若 subject_id 有傳，從 Subject 主檔取真名，避免 PDF 顯示「受測者」
     PLACEHOLDER_NAMES = {"受測者", "陳小明", "測試模式", "test", "Test", "TEST"}
@@ -446,6 +454,46 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         except Exception as pe:
             logger.warning("[report-gen/start] 建立 pending Report 失敗: %s", pe)
 
+        # ── 建立 extra，合併系統欄位與前端傳入的關係報告資料 ──────────────────────
+        merged_extra: Dict[str, Any] = dict(req.extra or {})
+        merged_extra["session_id"]  = req.session_id
+        merged_extra["subject_id"]  = req.subject_id
+
+        # 夫妻報告：若 extra 含 wife_session_id，自動從 DB 補充第二人腦波資料
+        if req.report_type in ("marital",) and "wife_session_id" in merged_extra:
+            wife_sid = merged_extra["wife_session_id"]
+            if wife_sid and not merged_extra.get("wife_brainwave_data"):
+                try:
+                    wife_bw = _bw_from_session(db, int(wife_sid))
+                    if wife_bw:
+                        merged_extra["wife_brainwave_data"] = wife_bw
+                        logger.info("[report-gen/start] 夫妻第二人腦波已從 session_id=%s 補充", wife_sid)
+                except Exception as e:
+                    logger.warning("[report-gen/start] 夫妻第二人腦波補充失敗: %s", e)
+
+        # 親子報告：若 extra.members 含 session_id，自動補充各成員腦波資料
+        if req.report_type == "parent_child" and merged_extra.get("members"):
+            from app.services.report_orchestrator import _bw_to_metrics as _pc_bw_to_metrics
+            enriched_members = []
+            for m in merged_extra["members"]:
+                m = dict(m)
+                m_sid = m.get("session_id")
+                if m_sid and m.get("present") and not m.get("data"):
+                    try:
+                        m_bw = _bw_from_session(db, int(m_sid))
+                        if m_bw:
+                            m["data"] = {
+                                "concentration_pct": int(m_bw.get("attention_percentage") or 50),
+                                "relaxation_pct":    int(m_bw.get("meditation_percentage") or 50),
+                                "metrics":           _pc_bw_to_metrics(m_bw),
+                            }
+                            logger.info("[report-gen/start] 親子成員 %s 腦波已從 session_id=%s 補充",
+                                        m.get("name", "?"), m_sid)
+                    except Exception as e:
+                        logger.warning("[report-gen/start] 親子成員腦波補充失敗 sid=%s: %s", m_sid, e)
+                enriched_members.append(m)
+            merged_extra["members"] = enriched_members
+
         result = report_orchestrator.trigger_external_report(
             report_type=req.report_type,
             subject_name=resolved_name,                # 🔑 用解析後的真名（不是 placeholder）
@@ -455,7 +503,7 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
             variant=req.variant,
             chapters_to_generate=req.chapters_to_generate,
             brainwave_data=bw,
-            extra={"session_id": req.session_id, "subject_id": req.subject_id},
+            extra=merged_extra,
         )
 
         # ── 夫妻 / 親子 REST 模式：外部系統不回呼 /reports/record，主動寫 DB ──

@@ -2103,12 +2103,13 @@
       <div class="screen" id="screen-relation-done">
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-          <div style="font-size:72px;margin-bottom:12px;">💞</div>
-          <div style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">關係報告生成中！</div>
+          <div id="relation-done-icon" style="font-size:72px;margin-bottom:12px;">💞</div>
+          <div id="relation-done-title" style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">關係報告生成中！</div>
           <div id="relation-done-msg" style="font-size:13px;color:#666;line-height:1.6;margin-bottom:16px;"></div>
-          <div style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#c2185b;margin-bottom:24px;">
-            ✨ 系統正在分析雙方腦波共振資料，完成後將自動寄送至雙方 Email。
+          <div id="relation-status-bar" style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#c2185b;margin-bottom:24px;">
+            ✨ 系統正在分析腦波共振資料，完成後將自動寄送至 Email。
           </div>
+          <div id="relation-result-btns" style="width:100%;max-width:300px;display:none;margin-bottom:16px;"></div>
           <button class="btn btn-primary" style="max-width:300px;" onclick="goto('screen-history')">前往歷史紀錄</button>
           <button class="btn btn-secondary" style="max-width:300px;margin-top:10px;" onclick="goto('screen-home')">返回首頁</button>
         </div>
@@ -7234,24 +7235,138 @@ function togglePerson(el) {
   }
 }
 
-function generateRelationReport() {
+async function generateRelationReport() {
   const cfg = _relationConfigs[_currentRelationType];
   if (!cfg) { goto('screen-home'); return; }
 
   const selectedPersons = _selectedPersonIds
     .map(id => _vipCustomers.find(p => p.id === id))
     .filter(Boolean);
-  const names = selectedPersons.map(p => p.name).join('、');
+  const names  = selectedPersons.map(p => p.name).join('、');
   const emails = [...new Set(selectedPersons.map(p => p.email).filter(Boolean))];
 
+  // 映射 UI 類型 → 後端 report_type
+  const typeMap = { couple: 'marital', lover: 'marital', parent: 'parent_child' };
+  const reportType = typeMap[_currentRelationType] || _currentRelationType;
+
+  // 先切換到完成畫面（生成中狀態）
+  document.getElementById('relation-done-icon').textContent  = cfg.emoji;
+  document.getElementById('relation-done-title').textContent = '關係報告生成中！';
   document.getElementById('relation-done-msg').innerHTML =
-    `${cfg.emoji} <b>${cfg.label}</b><br>對象：${names}` +
+    `<b>${cfg.label}</b><br>對象：${names}` +
     (emails.length ? `<br><span style="font-size:11px;color:#aaa;margin-top:4px;display:block;">報告將寄送至：${emails.join('、')}</span>` : '');
+  document.getElementById('relation-status-bar').style.background   = '#fce4ec';
+  document.getElementById('relation-status-bar').style.borderColor  = '#f48fb1';
+  document.getElementById('relation-status-bar').style.color        = '#c2185b';
+  document.getElementById('relation-status-bar').textContent = '✨ 系統正在分析腦波共振資料，完成後將自動寄送至 Email…';
+  document.getElementById('relation-result-btns').style.display = 'none';
   goto('screen-relation-done');
 
-  // TODO: 呼叫後端啟動關係報告生成（帶 session_ids + report_type）
-  // 目前先顯示「生成中」畫面；下一版接通 orchestrator
-  console.log('[relation] 啟動關係報告', _currentRelationType, selectedPersons.map(p => p.session_id));
+  // 建立 extra（多人資料）
+  let extra = {};
+  const p0 = selectedPersons[0];
+  const p1 = selectedPersons[1];
+
+  if (reportType === 'marital') {
+    extra = {
+      husband_name:       p0 ? p0.name : '',
+      husband_session_id: p0 ? p0.session_id : null,
+      wife_name:          p1 ? p1.name : '',
+      wife_session_id:    p1 ? p1.session_id : null,
+    };
+  } else if (reportType === 'parent_child') {
+    const roleMap   = ['dad', 'mom', 'child1', 'child2'];
+    const roleZhMap = ['爸爸', '媽媽', '孩子1', '孩子2'];
+    extra = {
+      family_name: p0 ? p0.name.charAt(0) + '家' : '我的家庭',
+      members: selectedPersons.map((p, i) => ({
+        role:       roleMap[i]   || ('child' + i),
+        role_zh:    roleZhMap[i] || ('孩子' + i),
+        name:       p.name,
+        present:    true,
+        session_id: p.session_id,
+        data:       null,   // 後端從 session_id 補充
+      })),
+    };
+  }
+
+  // 呼叫後端
+  try {
+    const resp = await fetch(`${API_BASE}/report-gen/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject_name:   p0 ? p0.name : names,
+        subject_email:  emails[0] || null,
+        subject_age:    p0 ? (p0.age || null) : null,
+        subject_gender: '',
+        report_type:    reportType,
+        variant:        'vip',
+        session_id:     p0 ? (p0.session_id || null) : null,
+        brainwave_data: null,   // 後端從 session_id 補充
+        extra:          extra,
+      }),
+    });
+
+    const data = await resp.json();
+    const xmode = data.external_mode || data.mode || '';
+    const statusBar   = document.getElementById('relation-status-bar');
+    const resultBtns  = document.getElementById('relation-result-btns');
+    const doneTitle   = document.getElementById('relation-done-title');
+
+    if (!resp.ok || data.ok === false) {
+      const errMsg = data.detail?.message || data.detail?.reason || data.error || `HTTP ${resp.status}`;
+      statusBar.style.background  = '#ffeaea';
+      statusBar.style.borderColor = '#f44';
+      statusBar.style.color       = '#c00';
+      statusBar.textContent = `❌ 生成失敗：${errMsg}`;
+      doneTitle.textContent = '生成失敗';
+      document.getElementById('relation-done-icon').textContent = '⚠️';
+      return;
+    }
+
+    if (xmode === 'marital_rest') {
+      // 夫妻報告：直接有 PDF
+      statusBar.style.background  = '#e8f5e9';
+      statusBar.style.borderColor = '#66bb6a';
+      statusBar.style.color       = '#2e7d32';
+      statusBar.textContent = '✅ 夫妻腦波報告已生成完成！';
+      doneTitle.textContent = '報告已完成 🎉';
+      if (data.result_url) {
+        resultBtns.style.display = 'block';
+        resultBtns.innerHTML = `<a href="${data.result_url}" target="_blank"
+          style="display:block;background:#c2185b;color:white;border-radius:12px;padding:12px;font-weight:700;text-decoration:none;font-size:14px;margin-bottom:8px;">
+          📄 下載夫妻報告 PDF →</a>`;
+      }
+    } else if (xmode === 'parent_child_rest') {
+      // 親子報告：跳到報告生成頁面
+      statusBar.style.background  = '#e8f5e9';
+      statusBar.style.borderColor = '#66bb6a';
+      statusBar.style.color       = '#2e7d32';
+      statusBar.textContent = '✅ 親子報告已開始生成，請點下方連結查看進度。';
+      doneTitle.textContent = '報告生成中 🌿';
+      if (data.result_url) {
+        resultBtns.style.display = 'block';
+        resultBtns.innerHTML = `<a href="${data.result_url}" target="_blank"
+          style="display:block;background:#c2185b;color:white;border-radius:12px;padding:12px;font-weight:700;text-decoration:none;font-size:14px;margin-bottom:8px;">
+          📊 查看親子報告進度 →</a>`;
+      }
+    } else {
+      statusBar.style.background  = '#fffde7';
+      statusBar.style.borderColor = '#ffd54f';
+      statusBar.style.color       = '#795548';
+      statusBar.textContent = `⏳ 報告處理中（${xmode || '未知模式'}），完成後將寄送 Email。`;
+    }
+
+  } catch (e) {
+    const statusBar = document.getElementById('relation-status-bar');
+    statusBar.style.background  = '#ffeaea';
+    statusBar.style.borderColor = '#f44';
+    statusBar.style.color       = '#c00';
+    statusBar.textContent = `❌ 連線失敗：${e.message}`;
+    document.getElementById('relation-done-title').textContent = '生成失敗';
+    document.getElementById('relation-done-icon').textContent = '⚠️';
+  }
 }
 
 // 開發測試：模擬付款成功
