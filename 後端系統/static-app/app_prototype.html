@@ -5693,21 +5693,35 @@ function _summarizeEegAccum(acc) {
     gamma: avg(acc.gamma),
   };
   // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
+  let bands_7 = null;
   if (has8) {
     const _sub = k => (acc[k] && acc[k].length > 0) ? avg(acc[k]) : avg(acc[k.replace('low_','').replace('high_','')] || []);
-    bands.low_alpha  = _sub('low_alpha');
-    bands.high_alpha = _sub('high_alpha');
-    bands.low_beta   = _sub('low_beta');
-    bands.high_beta  = _sub('high_beta');
-    bands.low_gamma  = _sub('low_gamma');
-    bands.high_gamma = _sub('high_gamma');
+    const loA = _sub('low_alpha');
+    const hiA = _sub('high_alpha');
+    const loB = _sub('low_beta');
+    const hiB = _sub('high_beta');
+    const loG = _sub('low_gamma');
+    const hiG = _sub('high_gamma');
+    // 寫入 bands_avg（方便舊路徑讀取）
+    bands.low_alpha  = loA;  bands.high_alpha = hiA;
+    bands.low_beta   = loB;  bands.high_beta  = hiB;
+    bands.low_gamma  = loG;  bands.high_gamma = hiG;
+    // 同時建立 bands_7（與後端 _session_to_brainwave_data 格式一致，讓 headless_renderer 優先讀取）
+    bands_7 = {
+      theta:      bands.theta,
+      alpha_high: hiA, alpha_low: loA,
+      beta_high:  hiB, beta_low:  loB,
+      gamma_high: hiG, gamma_low: loG,
+    };
   }
-  return {
-    sample_count:         acc.attn.length,
-    attention_percentage: avg(acc.attn),
-    meditation_percentage:avg(acc.medi),
-    bands_avg:            bands,
+  const result = {
+    sample_count:          acc.attn.length,
+    attention_percentage:  avg(acc.attn),
+    meditation_percentage: avg(acc.medi),
+    bands_avg:             bands,
   };
+  if (bands_7) result.bands_7 = bands_7;
+  return result;
 }
 
 // 把實際採集到的腦波填入 screen-results 各 chip / bw-row。
