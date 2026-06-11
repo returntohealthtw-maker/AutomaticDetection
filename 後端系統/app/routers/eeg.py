@@ -221,16 +221,28 @@ def get_session_stats(
     lo_gamma = avg("low_gamma")
     hi_gamma = avg("high_gamma")
 
+    # sample_count 使用 Session.total_captures（真實秒數），
+    # 而不是 EegCapture DB 列數（新版 save-stats 只有 1 列）
+    sample_count = sess.total_captures or n
+
     stats = {
-        "sample_count":           n,
+        "sample_count":           sample_count,
         "attention_percentage":   avg("attention"),
         "meditation_percentage":  avg("meditation"),
         "bands_avg": {
-            "delta": avg("delta"),
-            "theta": avg("theta"),
-            "alpha": round((lo_alpha + hi_alpha) / 2),
-            "beta":  round((lo_beta  + hi_beta)  / 2),
-            "gamma": round((lo_gamma + hi_gamma) / 2),
+            "delta":      avg("delta"),
+            "theta":      avg("theta"),
+            "alpha":      round((lo_alpha + hi_alpha) / 2),
+            "beta":       round((lo_beta  + hi_beta)  / 2),
+            "gamma":      round((lo_gamma + hi_gamma) / 2),
+            # 保留真實 sub-band 欄位，讓下游（headless_renderer、orchestrator）
+            # 可直接讀取而不必回退到 ×0.9/×1.1 估算
+            "low_alpha":  lo_alpha,
+            "high_alpha": hi_alpha,
+            "low_beta":   lo_beta,
+            "high_beta":  hi_beta,
+            "low_gamma":  lo_gamma,
+            "high_gamma": hi_gamma,
         },
         # 真實 High / Low（供 admin panel 顯示；若資料來自舊版 5-band 介面則兩值相同）
         "bands_7": {

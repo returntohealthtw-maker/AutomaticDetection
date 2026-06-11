@@ -49,6 +49,10 @@ def _compute_mbti_from_bw(bw_data: Optional[Dict[str, Any]]) -> str:
             v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
             return float(v) if v is not None else base * scale
 
+        def _esen(key):
+            """eSense 值可合法為 0（代表電極接觸不良），不能用 or 50 替換"""
+            v = bw_data.get(key)
+            return float(v) if v is not None else 50.0
         avg = BandAverages(
             delta      = delta,
             theta      = theta,
@@ -58,8 +62,8 @@ def _compute_mbti_from_bw(bw_data: Optional[Dict[str, Any]]) -> str:
             high_beta  = _sub_f("high_beta",  "beta_high",  beta,  1.1),
             low_gamma  = _sub_f("low_gamma",  "gamma_low",  gamma, 0.9),
             high_gamma = _sub_f("high_gamma", "gamma_high", gamma, 1.1),
-            attention  = float(bw_data.get("attention_percentage") or 50),
-            meditation = float(bw_data.get("meditation_percentage") or 50),
+            attention  = _esen("attention_percentage"),
+            meditation = _esen("meditation_percentage"),
             sample_count = int(bw_data.get("sample_count") or 0),
         )
         result = compute_mbti(avg)
@@ -353,6 +357,10 @@ def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
     def _g(d, k, fallback=50):
         v = d.get(k)
         return fallback if v is None else v
+    def _sub(key1, key2, base, scale):
+        """優先讀真實 sub-band；沒有才用合并帶 × scale 估算"""
+        v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
+        return float(v) if v is not None else base * scale
     ba = (bw or {}).get("bands_avg") or {}
     delta = _g(ba, "delta")
     theta = _g(ba, "theta")
@@ -362,12 +370,12 @@ def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
     return {
         "Delta":  cap(delta),
         "Theta":  cap(theta),
-        "High α": cap(alpha * 1.1),
-        "Low α":  cap(alpha * 0.9),
-        "High β": cap(beta  * 1.1),
-        "Low β":  cap(beta  * 0.9),
-        "High γ": cap(gamma * 1.1),
-        "Low γ":  cap(gamma * 0.9),
+        "High α": cap(_sub("high_alpha", "alpha_high", alpha, 1.1)),
+        "Low α":  cap(_sub("low_alpha",  "alpha_low",  alpha, 0.9)),
+        "High β": cap(_sub("high_beta",  "beta_high",  beta,  1.1)),
+        "Low β":  cap(_sub("low_beta",   "beta_low",   beta,  0.9)),
+        "High γ": cap(_sub("high_gamma", "gamma_high", gamma, 1.1)),
+        "Low γ":  cap(_sub("low_gamma",  "gamma_low",  gamma, 0.9)),
     }
 
 

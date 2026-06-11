@@ -5682,7 +5682,9 @@ function _ingestEegSample(s) {
 
 function _summarizeEegAccum(acc) {
   const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
-  const has8 = acc.low_alpha && acc.low_alpha.length > 0;
+  // 只要任何 sub-band 陣列有資料，就視為 8-band 模式（避免只有部分陣列有資料時漏存）
+  const has8 = ['low_alpha','high_alpha','low_beta','high_beta','low_gamma','high_gamma']
+    .some(k => acc[k] && acc[k].length > 0);
   const bands = {
     delta: avg(acc.delta),
     theta: avg(acc.theta),
@@ -5692,12 +5694,13 @@ function _summarizeEegAccum(acc) {
   };
   // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
   if (has8) {
-    bands.low_alpha  = avg(acc.low_alpha);
-    bands.high_alpha = avg(acc.high_alpha);
-    bands.low_beta   = avg(acc.low_beta);
-    bands.high_beta  = avg(acc.high_beta);
-    bands.low_gamma  = avg(acc.low_gamma);
-    bands.high_gamma = avg(acc.high_gamma);
+    const _sub = k => (acc[k] && acc[k].length > 0) ? avg(acc[k]) : avg(acc[k.replace('low_','').replace('high_','')] || []);
+    bands.low_alpha  = _sub('low_alpha');
+    bands.high_alpha = _sub('high_alpha');
+    bands.low_beta   = _sub('low_beta');
+    bands.high_beta  = _sub('high_beta');
+    bands.low_gamma  = _sub('low_gamma');
+    bands.high_gamma = _sub('high_gamma');
   }
   return {
     sample_count:         acc.attn.length,

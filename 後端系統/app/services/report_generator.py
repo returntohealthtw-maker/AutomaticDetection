@@ -215,11 +215,18 @@ async def generate_report_async(report_id: int, session_id: int):
                     "meditation_percentage": _si(avg.meditation),
                     "sample_count":          session_obj.total_captures or 0,
                     "bands_avg": {
-                        "delta": _sf(avg.delta),
-                        "theta": _sf(avg.theta),
-                        "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
-                        "beta":  _band_avg(avg.low_beta,  avg.high_beta),
-                        "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
+                        "delta":      _sf(avg.delta),
+                        "theta":      _sf(avg.theta),
+                        "alpha":      _band_avg(avg.low_alpha, avg.high_alpha),
+                        "beta":       _band_avg(avg.low_beta,  avg.high_beta),
+                        "gamma":      _band_avg(avg.low_gamma, avg.high_gamma),
+                        # 保留真實 sub-band，讓 headless_renderer 不必回退 ×0.9/×1.1
+                        "low_alpha":  _sf(avg.low_alpha),
+                        "high_alpha": _sf(avg.high_alpha),
+                        "low_beta":   _sf(avg.low_beta),
+                        "high_beta":  _sf(avg.high_beta),
+                        "low_gamma":  _sf(avg.low_gamma),
+                        "high_gamma": _sf(avg.high_gamma),
                     },
                     "bands_7": {
                         "theta":      _sf(avg.theta),

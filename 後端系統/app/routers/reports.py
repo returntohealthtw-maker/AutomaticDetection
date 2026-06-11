@@ -293,20 +293,8 @@ def headless_get_brainwave(
     if not bw:
         raise HTTPException(404, "找不到腦波資料（EegCapture 為空）")
 
-    ba = bw.get("bands_avg") or {}
-    def _cap(v): return max(0, min(100, int(v)))
-    alpha = float(ba.get("alpha") or 50)
-    beta  = float(ba.get("beta")  or 50)
-    gamma = float(ba.get("gamma") or 50)
-    bw["bands_7"] = {
-        "theta":      _cap(ba.get("theta") or 50),
-        "alpha_high": _cap(alpha * 1.1),
-        "alpha_low":  _cap(alpha * 0.9),
-        "beta_high":  _cap(beta  * 1.1),
-        "beta_low":   _cap(beta  * 0.9),
-        "gamma_high": _cap(gamma * 1.1),
-        "gamma_low":  _cap(gamma * 0.9),
-    }
+    # bands_7 已由 _session_to_brainwave_data 以真實 low/high 子頻值填入，
+    # 不再用 alpha×0.9/×1.1 估算覆蓋。
 
     return {
         "ok": True,
