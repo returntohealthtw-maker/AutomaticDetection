@@ -5395,7 +5395,15 @@ function _startEegLiveCapture() {
 
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
                     low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
-                    _zeroConsec: 0 };   // 連續 attention=0 AND meditation=0 的樣本計數
+                    _zeroConsec: 0,   // 相容舊命名
+                    _poorConsec: 0 }; // 連續 att≤5 AND med≤5 計數（含全零）
+  // 清除上一次留下的警告元素和狀態標記
+  ['detect-poor-signal-warn', 'detect-no-signal-warn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+  const stxt = document.getElementById('detect-status-text');
+  if (stxt) delete stxt.dataset.poorWarned;
   _eegLiveStartTs = Date.now();
   _eegSimState = null;
 
@@ -5426,34 +5434,37 @@ function _startEegLiveCapture() {
       }
     }
 
-    // ─── 早期無訊號警告（APK 模式，採集 30 秒後仍 0 筆）────────────
-    // 讓使用者儘早知道腦波儀沒有傳送資料，而不是等到採集結束才發現
-    if (window.AndroidBridge && elapsedSec === 30) {
-      const sc = (_eegLiveAccum && _eegLiveAccum.attn) ? _eegLiveAccum.attn.length : 0;
-      if (sc === 0) {
+    // ─── 早期訊號品質警告（APK 模式）────────────────────────────────
+    if (window.AndroidBridge && _eegLiveAccum) {
+      const poorConsec = _eegLiveAccum._poorConsec || 0;
+
+      // 15 秒：連續 15 筆 att≤5 且 med≤5 → 顯示黃色警告，提示重新配戴
+      if (elapsedSec >= 15 && poorConsec >= 15) {
         const stxt = document.getElementById('detect-status-text');
-        if (stxt) stxt.textContent = '⚠️ 尚未收到腦波訊號，請確認腦波儀已開機並連線';
-        const warnId = 'detect-no-signal-warn';
+        if (stxt && !stxt.dataset.poorWarned) {
+          stxt.dataset.poorWarned = '1';
+          stxt.textContent = '⚠️ 電極接觸不良，請重新調整腦波儀位置';
+        }
+        const warnId = 'detect-poor-signal-warn';
         if (!document.getElementById(warnId)) {
           const hint = document.getElementById('detect-hint-card') || document.querySelector('#screen-detect .detect-body');
           if (hint) {
             const warnEl = document.createElement('div');
             warnEl.id = warnId;
             warnEl.style.cssText = 'background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;font-size:12px;color:#e65100;line-height:1.6;margin:10px 16px;';
-            warnEl.innerHTML = '⚠️ <b>30 秒內未收到腦波資料</b><br>請確認：① 腦波儀已開機 ② APP 右上角🧠已連線 ③ 前額電極接觸良好<br>若仍無訊號採集結束後系統將要求重新檢測。';
+            warnEl.innerHTML = '⚠️ <b>電極接觸不良（已持續 15 秒）</b><br>'
+              + '專注 &amp; 放鬆值極低，代表 ThinkGear 無法偵測到腦波。<br>'
+              + '請：① 調整腦波儀貼緊前額中心 ② 確認金屬電極有接觸皮膚<br>'
+              + '<b style="color:#c62828;">若 30 秒仍未改善，系統將自動中止並要求重測。</b>';
             hint.insertBefore(warnEl, hint.firstChild);
           }
         }
       }
-    }
 
-    // ─── 持續性資料歸零偵測：超過 30 秒連續 attention=meditation=0 ──────
-    // 電極接觸不良時 ThinkGear 晶片 eSense 值歸 0，需提早退出並提示重測
-    if (window.AndroidBridge && elapsedSec >= 30 && _eegLiveAccum) {
-      const zeroConsec = _eegLiveAccum._zeroConsec || 0;
-      if (zeroConsec >= 30) {
+      // 30 秒：連續 30 筆 att≤5 且 med≤5 → 立即中止，回到連接頁重測
+      if (elapsedSec >= 30 && poorConsec >= 30) {
         _stopEegLiveCapture();
-        _showNoSignalAndRetry('收集資訊不完全，請重新調整腦波儀重測');
+        _showNoSignalAndRetry(`電極接觸不良已持續 30 秒，請重新配戴腦波儀後重測（專注與放鬆值持續 ≤ 5）`);
         return;
       }
     }
@@ -5614,11 +5625,14 @@ function _ingestEegSample(s) {
   if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
   if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
 
-  // 連續歸零計數：attention=0 AND meditation=0 視為電極接觸不良
-  if (a === 0 && m === 0) {
-    _eegLiveAccum._zeroConsec = (_eegLiveAccum._zeroConsec || 0) + 1;
+  // 連續低品質計數：att ≤ 5 AND med ≤ 5（含全零）= 電極接觸不良
+  // ThinkGear 規格：att=0 明確代表「無讀數」；1-5 在正常配戴下極不可能出現
+  if (a <= 5 && m <= 5) {
+    _eegLiveAccum._poorConsec = (_eegLiveAccum._poorConsec || 0) + 1;
+    _eegLiveAccum._zeroConsec = _eegLiveAccum._poorConsec; // 相容舊命名
   } else {
-    _eegLiveAccum._zeroConsec = 0;  // 只要有一筆有效就重設
+    _eegLiveAccum._poorConsec = 0;  // 只要有一筆有效就重設
+    _eegLiveAccum._zeroConsec = 0;
   }
 
   // 更新 UI
