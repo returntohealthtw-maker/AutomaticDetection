@@ -924,6 +924,15 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     if not detection:
         return None
 
+    # 真正的採集秒數（session.total_captures）比 len(captures) 更準確：
+    # 新版 save-stats 流程只寫 1 筆 EegCapture（平均摘要，seq_num=0），
+    # 但 total_captures 記錄的是 _summarizeEegAccum 時真正累積的樣本數（秒數）。
+    sess_for_sc = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    real_sample_count = (
+        (sess_for_sc.total_captures if sess_for_sc and sess_for_sc.total_captures else 0)
+        or len(captures)
+    )
+
     avg = compute_averages(detection)
     # 修正：不能用 `x or 50`（會把合法的 0 / 0.0 / 接近 0 的低值替換成 50）
     # 改成只在「真的是 None」時才 fallback，且 fallback 改為由前端決定（這裡若有資料一律帶實際值）
@@ -958,13 +967,17 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     bw = {
         "attention_percentage":  _safe_int(avg.attention),
         "meditation_percentage": _safe_int(avg.meditation),
-        "sample_count":          len(captures),
+        "sample_count":          real_sample_count,   # 真實採集秒數，不是 DB 記錄筆數
         "bands_avg": {
             "delta": _safe_float(avg.delta),
             "theta": _safe_float(avg.theta),
             "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
             "beta":  _band_avg(avg.low_beta,  avg.high_beta),
             "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
+            # 8-band 真實子頻帶（一起帶出，避免報告生成層用 ×0.9/×1.1 估算）
+            "low_alpha":  lo_alpha, "high_alpha": hi_alpha,
+            "low_beta":   lo_beta,  "high_beta":  hi_beta,
+            "low_gamma":  lo_gamma, "high_gamma": hi_gamma,
         },
         # 實際 High / Low 分類（來自 ThinkGear 原始數據）
         "bands_7": {

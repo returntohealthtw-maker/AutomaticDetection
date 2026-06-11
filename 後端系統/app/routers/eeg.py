@@ -74,6 +74,24 @@ def save_eeg_stats(
     """
     user = require_user(authorization, db)
 
+    # ── 後端品質門檻：拒絕無效腦波數據 ──────────────────────────────────────
+    att = int(payload.attention_percentage or 0)
+    med = int(payload.meditation_percentage or 0)
+    bands_check = payload.bands_avg or {}
+    bands_total = sum(int(v or 0) for v in bands_check.values()) if bands_check else 0
+
+    if att == 0 and med == 0 and bands_total == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="腦波數值全為零，拒絕存入（電極未接觸或腦波儀未連線）"
+        )
+    if att <= 5 and med <= 5:
+        raise HTTPException(
+            status_code=422,
+            detail=f"腦波品質不足（專注={att}、放鬆={med}），電極接觸極差，請重新配戴後重測"
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
     bands = payload.bands_avg or {}
     now_ts = int(time.time())
 

@@ -1,0 +1,8 @@
+=== status report-app ===
+?? ?ºï—¼?¢è?é¤Œç?/static-app/report-app/
+=== status geminiService ===
+=== ls-files report-app index.html ===
+=== ls-files geminiService ===
+=== check ignore geminiService ===
+.gitignore:55:_reports_review/	_reports_review/adult/services/geminiService.ts
+DONE

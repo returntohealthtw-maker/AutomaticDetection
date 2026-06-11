@@ -2946,10 +2946,10 @@
       4. 重新「開始新檢測」並完成至少 30 秒採集<br>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <button onclick="_dismissRedetectModal(); goto('screen-home');" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#f7462a);color:white;font-size:16px;font-weight:700;border:none;cursor:pointer;">
-        🏠 返回首頁重新檢測
+      <button onclick="_dismissRedetectModal(); _showNoSignalAndRetry(document.getElementById('redetect-reason')?.textContent?.replace('原因：','') || '腦波資料品質不足，請重新配戴腦波儀');" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#1565c0,#0d47a1);color:white;font-size:16px;font-weight:700;border:none;cursor:pointer;">
+        🔄 重新配戴腦波儀重測
       </button>
-      <button onclick="_dismissRedetectModal(); goto('screen-eegtest-connect');" style="width:100%;padding:12px;border-radius:12px;background:rgba(26,35,126,0.1);color:#1a237e;font-size:14px;font-weight:600;border:none;cursor:pointer;">
+      <button onclick="_dismissRedetectModal(); goto('screen-eegtest-connect');" style="width:100%;padding:12px;border-radius:12px;background:rgba(26,35,126,0.1);color:#1a237e;font-size:14px;font-weight:600;border:none;cursor:pointer;margin-top:8px;">
         🧠 先做腦波儀健康檢查
       </button>
     </div>
@@ -4622,11 +4622,15 @@ function _validateBrainwaveCapture(bw) {
   const bands = bw.bands_avg || {};
   const bandsTotal = Object.values(bands).reduce((s, v) => s + (Number(v) || 0), 0);
   if (att === 0 && med === 0 && bandsTotal === 0) {
-    return { ok: false, reason: '腦波數值全為零（疑似未真正接收到腦波儀資料）' };
+    return { ok: false, reason: '腦波數值全為零（腦波儀未連線或電極完全未接觸）' };
   }
-  // 電極接觸不良：ThinkGear eSense 值（專注/放鬆）持續為 0，即使頻段有數值也代表訊號無效
+  // 電極接觸不良：eSense 值全為 0（頻段有值但不可信）
   if (att === 0 && med === 0) {
-    return { ok: false, reason: '收集資訊不完全，請重新調整腦波儀重測（電極接觸不良：專注與放鬆值皆為 0）' };
+    return { ok: false, reason: '電極接觸不良：專注與放鬆值皆為 0，ThinkGear 無法計算 eSense，請重新配戴後重測' };
+  }
+  // 電極接觸極差：att ≤ 5 且 med ≤ 5 代表幾乎無有效接觸（如 session 44 att=5, med=2）
+  if (att <= 5 && med <= 5) {
+    return { ok: false, reason: `電極接觸極差，請重新配戴腦波儀後重測（專注=${att}、放鬆=${med}，有效門檻需 ≥ 10）` };
   }
   return { ok: true };
 }
@@ -5468,6 +5472,8 @@ function _startEegLiveCapture() {
         return;
       }
 
+      // 驗證通過後才存 DB
+      _persistEegStats(window._lastEegCapture);
       if (stxt) stxt.textContent = '✅ 採集完成，進入分析…';
       setTimeout(() => goto('screen-results'), 600);
     }
@@ -5483,14 +5489,14 @@ function _stopEegLiveCapture() {
     }
   } catch (e) {}
 
-  // 把累積資料丟到全域，後續 startFullReportGeneration 帶進 brainwave_data
+  // 把累積資料丟到全域，後續驗證通過後才呼叫 _persistEegStats 存 DB
+  // （不在此處存，避免品質不良的數據被寫入資料庫）
   if (_eegLiveAccum) {
     window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
-    _persistEegStats(window._lastEegCapture);
   }
 }
 
-// 手動點「結束採集」— 先停再驗，有資料才能進結果頁
+// 手動點「結束採集」— 先停再驗，驗證通過才存 DB 並進結果頁
 function _manualStopAndValidate() {
   _stopEegLiveCapture();
   const bwCheck = _validateBrainwaveCapture(window._lastEegCapture);
@@ -5498,6 +5504,8 @@ function _manualStopAndValidate() {
     _showNoSignalAndRetry(bwCheck.reason);
     return;
   }
+  // 驗證通過後才存 DB
+  _persistEegStats(window._lastEegCapture);
   goto('screen-results');
 }
 

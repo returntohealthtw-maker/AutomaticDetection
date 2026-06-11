@@ -1,0 +1,10 @@
+=== tracked files under static-app (count) ===
+TRACKED_COUNT: 0
+=== check-ignore report-app ===
+=== check-ignore child-report-app ===
+=== git log for report-app (last 3) ===
+=== .gitignore lines mentioning static or report ===
+8: dist/
+22: «áºÝ¨t²Î/reports/
+55: _reports_review/
+DONE

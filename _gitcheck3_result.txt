@@ -1,0 +1,35 @@
+TOTAL_TRACKED: 239
+MATCH report-app: 38
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/client-C5uMGarh.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/html2canvas.esm-QH1iLAAe.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/index-6JXZz4Zq.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/index.es-DfxHg1HQ.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/purify.es-B9ZVCkUG.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/backcover.jpg"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/cover.jpg"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/index.html"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/robots.txt"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/xin-backcover.png"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/xin-cover.png"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/report-app/assets/client-27B0CWzg.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/report-app/assets/client-BrlwrJe0.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/report-app/assets/client-CGRMbK9I.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/report-app/assets/client-DPA4qscB.js"
+MATCH static-app: 49
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/apk/BrainReport-LUKE.apk"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/apk/README.txt"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/app_prototype.html"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/client-C5uMGarh.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/html2canvas.esm-QH1iLAAe.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/index-6JXZz4Zq.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/index.es-DfxHg1HQ.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/assets/purify.es-B9ZVCkUG.js"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/backcover.jpg"
+"\345\276\214\347\253\257\347\263\273\347\265\261/static-app/child-report-app/cover.jpg"
+=== HEAD commit for report-app index.html (by substring via log --all) ===
+1593593 fix: unify App-screen and report MBTI via population-percentile model
+bd39a82 fix: MBTI same for everyone due to absolute band-ratio bias
+df759bc ui: clarify signal quality hint on connect screen
+c01d76f feat: remember phone number on login screen
+cc440a9 fix: remove unreliable signal quality from connect screen
+DONE

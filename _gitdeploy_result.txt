@@ -1,0 +1,17 @@
+=== staging report-app from inside dir ===
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/client-DFoQMHJy.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/html2canvas.esm-QH1iLAAe.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/index-CYynoh6d.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/index-nQM_EIYQ.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/index.es-C2WOdCaW.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '?ºï—¼?¢è?é¤Œç?/static-app/report-app/assets/purify.es-B9ZVCkUG.js', LF will be replaced by CRLF the next time Git touches it
+=== staged changes under report-app ===
+ .../static-app/report-app/assets/client-DFoQMHJy.js |  12 +
+ .../report-app/assets/html2canvas.esm-QH1iLAAe.js  |  22 ++
+ .../static-app/report-app/assets/index-CYynoh6d.css |   1 +
+ .../static-app/report-app/assets/index-nQM_EIYQ.js | 407 +++++++++++++++++++++
+ .../static-app/report-app/assets/index.es-C2WOdCaW.js |  18 +
+ .../static-app/report-app/assets/purify.es-B9ZVCkUG.js |   2 +
+ ?ºï—¼?¢è?é¤Œç?/static-app/report-app/index.html       |  15 +
+ 7 files changed, 477 insertions(+)
+DONE_STAGE

@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     # Railway 直接注入 DATABASE_URL（最優先）
     DATABASE_URL: Optional[str] = None
 
+    # SQLite 絕對路徑（本機開發，優先於 USE_SQLITE 的相對路徑）
+    # 例：D:/Write program/Database/ToOtherProject/eeg_dev.db
+    DB_PATH: str = ""
+
     # MySQL（GCP 備用）
     DB_HOST: str = "127.0.0.1"
     DB_PORT: int = 3306
@@ -74,8 +78,13 @@ class Settings(BaseSettings):
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql://", 1)
             return url
-        # 2. 本地 SQLite
-        if self.USE_SQLITE:
+        # 2. 本地 SQLite（DB_PATH 可指定絕對路徑；未設定時用相對路徑）
+        if self.USE_SQLITE or self.DB_PATH:
+            if self.DB_PATH:
+                # Windows 絕對路徑：將反斜線統一為正斜線
+                # sqlite:///D:/path/to/file.db
+                p = self.DB_PATH.replace("\\", "/")
+                return f"sqlite:///{p}"
             return "sqlite:///./eeg_dev.db"
         # 3. GCP MySQL
         return (f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}"
