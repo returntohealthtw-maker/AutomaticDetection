@@ -268,14 +268,15 @@ def active_headless_jobs():
         started = j.get("started_at") or now
         elapsed_sec = int(now - started)
         result.append({
-            "job_id":       j.get("job_id"),
-            "report_type":  j.get("report_type"),
-            "subject_name": j.get("subject_name"),
-            "status":       j.get("status"),         # queued / running / completed / failed
-            "elapsed_sec":  elapsed_sec,
-            "elapsed_min":  round(elapsed_sec / 60, 1),
-            "error":        j.get("error"),
-            "vercel_url":   (j.get("vercel_url") or "")[:120],  # 截短，URL 很長
+            "job_id":            j.get("job_id"),
+            "report_type":       j.get("report_type"),
+            "subject_name":      j.get("subject_name"),
+            "status":            j.get("status"),         # queued / running / completed / failed
+            "elapsed_sec":       elapsed_sec,
+            "elapsed_min":       round(elapsed_sec / 60, 1),
+            "error":             j.get("error"),
+            "vercel_url":        (j.get("vercel_url") or "")[:120],  # 截短，URL 很長
+            "page_text_preview": (j.get("page_text_preview") or "")[:400],  # 最新頁面快照
         })
     return {
         "ok":         True,
