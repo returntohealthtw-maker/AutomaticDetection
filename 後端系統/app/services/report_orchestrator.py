@@ -440,22 +440,26 @@ def _call_vite_prefill(
         v = d.get(k)
         return fallback if v is None else v
     ba = (brainwave_data or {}).get("bands_avg") or {}
+    b7 = (brainwave_data or {}).get("bands_7")   or {}  # 真實 High/Low 子頻帶
     attn  = _g(brainwave_data or {}, "attention_percentage")
     medi  = _g(brainwave_data or {}, "meditation_percentage")
     delta = _g(ba, "delta"); theta = _g(ba, "theta")
     alpha = _g(ba, "alpha"); beta  = _g(ba, "beta"); gamma = _g(ba, "gamma")
 
-    # 優先讀實際子頻帶（相容兩種命名）
-    def _sub_v(ba, key1, key2, base, scale):
-        v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
-        return int(max(0, min(100, v))) if v is not None else int(max(0, min(100, base * scale)))
+    # 優先讀 bands_7（真實量測），再讀 bands_avg 子鍵，最後才用 ×0.9/×1.1 估算
+    def _sub_v(b7, ba, key_b7, key1, key2, base, scale):
+        for d, k in [(b7, key_b7), (ba, key1), (ba, key2)]:
+            v = d.get(k)
+            if v is not None:
+                return int(max(0, min(100, v)))
+        return int(max(0, min(100, base * scale)))
 
-    hi_alpha = _sub_v(ba, "high_alpha", "alpha_high", alpha, 1.1)
-    lo_alpha = _sub_v(ba, "low_alpha",  "alpha_low",  alpha, 0.9)
-    hi_beta  = _sub_v(ba, "high_beta",  "beta_high",  beta,  1.1)
-    lo_beta  = _sub_v(ba, "low_beta",   "beta_low",   beta,  0.9)
-    hi_gamma = _sub_v(ba, "high_gamma", "gamma_high", gamma, 1.1)
-    lo_gamma = _sub_v(ba, "low_gamma",  "gamma_low",  gamma, 0.9)
+    hi_alpha = _sub_v(b7, ba, "alpha_high", "high_alpha", "alpha_high", alpha, 1.1)
+    lo_alpha = _sub_v(b7, ba, "alpha_low",  "low_alpha",  "alpha_low",  alpha, 0.9)
+    hi_beta  = _sub_v(b7, ba, "beta_high",  "high_beta",  "beta_high",  beta,  1.1)
+    lo_beta  = _sub_v(b7, ba, "beta_low",   "low_beta",   "beta_low",   beta,  0.9)
+    hi_gamma = _sub_v(b7, ba, "gamma_high", "high_gamma", "gamma_high", gamma, 1.1)
+    lo_gamma = _sub_v(b7, ba, "gamma_low",  "low_gamma",  "gamma_low",  gamma, 0.9)
 
     params = {
         "auto":       "1",

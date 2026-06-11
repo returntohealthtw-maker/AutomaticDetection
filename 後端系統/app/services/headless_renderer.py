@@ -143,6 +143,7 @@ def start_headless_job(
     # 組裝 ?auto=1&... URL（同時支援 camelCase + snake_case，避免命名漂移）
     bw_present = bool(brainwave_data and (brainwave_data.get("bands_avg") or brainwave_data.get("attention_percentage")))
     ba = (brainwave_data or {}).get("bands_avg") or {}
+    b7 = (brainwave_data or {}).get("bands_7")   or {}  # 真實 High/Low 子頻帶
 
     # 取值函式：有資料就用實際值，無資料時回傳 None（明確區分「缺資料」vs「值為 0」）
     def _opt(d, k):
@@ -158,6 +159,13 @@ def start_headless_job(
         """只在 None 時 fallback 為 50（0 是合法值，不替換）"""
         return 50 if v is None else max(0, min(100, int(v)))
 
+    def _first(*vals):
+        """回傳第一個非 None 的值"""
+        for v in vals:
+            if v is not None:
+                return v
+        return None
+
     attn_opt  = _opt(brainwave_data, "attention_percentage")
     medi_opt  = _opt(brainwave_data, "meditation_percentage")
     delta_opt = _opt(ba, "delta")
@@ -166,14 +174,15 @@ def start_headless_job(
     beta_opt  = _opt(ba, "beta")
     gamma_opt = _opt(ba, "gamma")
 
-    # ── 8-band 真實子頻帶（優先讀實際值，避免 ×0.9/×1.1 失真）──
-    # bands_avg 中可能同時有 "low_alpha" (save-stats 流) 或 "alpha_low" (老格式)
-    lo_alpha_opt = _opt(ba, "low_alpha")  if _opt(ba, "low_alpha")  is not None else _opt(ba, "alpha_low")
-    hi_alpha_opt = _opt(ba, "high_alpha") if _opt(ba, "high_alpha") is not None else _opt(ba, "alpha_high")
-    lo_beta_opt  = _opt(ba, "low_beta")   if _opt(ba, "low_beta")   is not None else _opt(ba, "beta_low")
-    hi_beta_opt  = _opt(ba, "high_beta")  if _opt(ba, "high_beta")  is not None else _opt(ba, "beta_high")
-    lo_gamma_opt = _opt(ba, "low_gamma")  if _opt(ba, "low_gamma")  is not None else _opt(ba, "gamma_low")
-    hi_gamma_opt = _opt(ba, "high_gamma") if _opt(ba, "high_gamma") is not None else _opt(ba, "gamma_high")
+    # ── 8-band 真實子頻帶（查詢順序：bands_7 → bands_avg 兩種命名，最後才估算）──
+    # bands_7  key 格式：alpha_high / alpha_low / beta_high / ...
+    # bands_avg key 格式（舊）：high_alpha / low_alpha / ...
+    lo_alpha_opt = _first(_opt(b7, "alpha_low"),  _opt(ba, "low_alpha"),  _opt(ba, "alpha_low"))
+    hi_alpha_opt = _first(_opt(b7, "alpha_high"), _opt(ba, "high_alpha"), _opt(ba, "alpha_high"))
+    lo_beta_opt  = _first(_opt(b7, "beta_low"),   _opt(ba, "low_beta"),   _opt(ba, "beta_low"))
+    hi_beta_opt  = _first(_opt(b7, "beta_high"),  _opt(ba, "high_beta"),  _opt(ba, "beta_high"))
+    lo_gamma_opt = _first(_opt(b7, "gamma_low"),  _opt(ba, "low_gamma"),  _opt(ba, "gamma_low"))
+    hi_gamma_opt = _first(_opt(b7, "gamma_high"), _opt(ba, "high_gamma"), _opt(ba, "gamma_high"))
 
     attn_val  = _val_or_50(attn_opt)
     medi_val  = _val_or_50(medi_opt)
@@ -209,7 +218,9 @@ def start_headless_job(
             "[headless] brainwave_data 缺欄位 %s（將用 50% 替代）— session=%s",
             missing_keys, session_id,
         )
-    sub_source = "actual" if (lo_alpha_opt is not None or hi_alpha_opt is not None) else "estimated(×0.9/×1.1)"
+    sub_source = ("bands_7" if (_opt(b7,"alpha_low") is not None or _opt(b7,"alpha_high") is not None)
+                  else "bands_avg" if (lo_alpha_opt is not None or hi_alpha_opt is not None)
+                  else "estimated(×0.9/×1.1)")
     logger.info(
         "[headless] session=%s URL 帶腦波：attn=%d medi=%d δ=%d θ=%d α=%d β=%d γ=%d "
         "| α↓=%d α↑=%d β↓=%d β↑=%d γ↓=%d γ↑=%d (sub=%s, bw_present=%s)",
