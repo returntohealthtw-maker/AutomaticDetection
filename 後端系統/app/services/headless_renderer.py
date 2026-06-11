@@ -166,6 +166,15 @@ def start_headless_job(
     beta_opt  = _opt(ba, "beta")
     gamma_opt = _opt(ba, "gamma")
 
+    # ── 8-band 真實子頻帶（優先讀實際值，避免 ×0.9/×1.1 失真）──
+    # bands_avg 中可能同時有 "low_alpha" (save-stats 流) 或 "alpha_low" (老格式)
+    lo_alpha_opt = _opt(ba, "low_alpha")  if _opt(ba, "low_alpha")  is not None else _opt(ba, "alpha_low")
+    hi_alpha_opt = _opt(ba, "high_alpha") if _opt(ba, "high_alpha") is not None else _opt(ba, "alpha_high")
+    lo_beta_opt  = _opt(ba, "low_beta")   if _opt(ba, "low_beta")   is not None else _opt(ba, "beta_low")
+    hi_beta_opt  = _opt(ba, "high_beta")  if _opt(ba, "high_beta")  is not None else _opt(ba, "beta_high")
+    lo_gamma_opt = _opt(ba, "low_gamma")  if _opt(ba, "low_gamma")  is not None else _opt(ba, "gamma_low")
+    hi_gamma_opt = _opt(ba, "high_gamma") if _opt(ba, "high_gamma") is not None else _opt(ba, "gamma_high")
+
     attn_val  = _val_or_50(attn_opt)
     medi_val  = _val_or_50(medi_opt)
     delta_val = _val_or_50(delta_opt)
@@ -174,7 +183,20 @@ def start_headless_job(
     beta_val  = _val_or_50(beta_opt)
     gamma_val = _val_or_50(gamma_opt)
 
-    # 醒目記錄真正進入 URL 的值（防止下次再被指控不知資料跑去哪了）
+    # 子頻帶：有實際量測值就直接用；沒有才用 ×0.9/×1.1 估算（fallback）
+    def _sub(actual_opt, base_val, scale):
+        if actual_opt is not None:
+            return max(0, min(100, int(actual_opt)))
+        return max(0, min(100, int(base_val * scale)))
+
+    lo_alpha_val = _sub(lo_alpha_opt, alpha_val, 0.9)
+    hi_alpha_val = _sub(hi_alpha_opt, alpha_val, 1.1)
+    lo_beta_val  = _sub(lo_beta_opt,  beta_val,  0.9)
+    hi_beta_val  = _sub(hi_beta_opt,  beta_val,  1.1)
+    lo_gamma_val = _sub(lo_gamma_opt, gamma_val, 0.9)
+    hi_gamma_val = _sub(hi_gamma_opt, gamma_val, 1.1)
+
+    # 醒目記錄真正進入 URL 的值
     missing_keys = [
         k for k, v in [
             ("attention", attn_opt), ("meditation", medi_opt),
@@ -187,10 +209,14 @@ def start_headless_job(
             "[headless] brainwave_data 缺欄位 %s（將用 50% 替代）— session=%s",
             missing_keys, session_id,
         )
+    sub_source = "actual" if (lo_alpha_opt is not None or hi_alpha_opt is not None) else "estimated(×0.9/×1.1)"
     logger.info(
-        "[headless] session=%s URL 帶腦波：attn=%d medi=%d δ=%d θ=%d α=%d β=%d γ=%d (bw_present=%s)",
+        "[headless] session=%s URL 帶腦波：attn=%d medi=%d δ=%d θ=%d α=%d β=%d γ=%d "
+        "| α↓=%d α↑=%d β↓=%d β↑=%d γ↓=%d γ↑=%d (sub=%s, bw_present=%s)",
         session_id, attn_val, medi_val, delta_val, theta_val,
-        alpha_val, beta_val, gamma_val, "1" if bw_present else "0",
+        alpha_val, beta_val, gamma_val,
+        lo_alpha_val, hi_alpha_val, lo_beta_val, hi_beta_val, lo_gamma_val, hi_gamma_val,
+        sub_source, "1" if bw_present else "0",
     )
 
     # 同時把整包 brainwave_data 以 base64-encoded JSON 塞進 URL
@@ -199,20 +225,24 @@ def start_headless_job(
     bw_payload = {
         "attention_percentage":  attn_val,
         "meditation_percentage": medi_val,
-        # 5-band 平均
+        # 5-band 合併
         "bands_avg": {
             "delta": delta_val, "theta": theta_val, "alpha": alpha_val,
             "beta":  beta_val,  "gamma": gamma_val,
+            # 8-band 真實子頻帶（一起帶進 payload，React App 可直接使用）
+            "low_alpha":  lo_alpha_val, "high_alpha": hi_alpha_val,
+            "low_beta":   lo_beta_val,  "high_beta":  hi_beta_val,
+            "low_gamma":  lo_gamma_val, "high_gamma": hi_gamma_val,
         },
         # 7 子頻帶（依設計文件 06）
         "bands_7": {
             "theta":      theta_val,
-            "alpha_high": min(100, int(alpha_val * 1.1)),
-            "alpha_low":  max(0,   int(alpha_val * 0.9)),
-            "beta_high":  min(100, int(beta_val  * 1.1)),
-            "beta_low":   max(0,   int(beta_val  * 0.9)),
-            "gamma_high": min(100, int(gamma_val * 1.1)),
-            "gamma_low":  max(0,   int(gamma_val * 0.9)),
+            "alpha_high": hi_alpha_val,
+            "alpha_low":  lo_alpha_val,
+            "beta_high":  hi_beta_val,
+            "beta_low":   lo_beta_val,
+            "gamma_high": hi_gamma_val,
+            "gamma_low":  lo_gamma_val,
         },
         "attention":      attn_val,
         "relaxation":     medi_val,
@@ -235,20 +265,20 @@ def start_headless_job(
         "focus":       attn_val,
         "relaxation":  medi_val,
         "theta":       theta_val,
-        "highAlpha":   min(100, int(alpha_val * 1.1)),
-        "lowAlpha":    max(0,   int(alpha_val * 0.9)),
-        "highBeta":    min(100, int(beta_val  * 1.1)),
-        "lowBeta":     max(0,   int(beta_val  * 0.9)),
-        "highGamma":   min(100, int(gamma_val * 1.1)),
-        "lowGamma":    max(0,   int(gamma_val * 0.9)),
+        "highAlpha":   hi_alpha_val,
+        "lowAlpha":    lo_alpha_val,
+        "highBeta":    hi_beta_val,
+        "lowBeta":     lo_beta_val,
+        "highGamma":   hi_gamma_val,
+        "lowGamma":    lo_gamma_val,
 
         # ── snake_case 別名（符合設計文件 06_腦波資料格式規格）──
-        "alpha_high":  min(100, int(alpha_val * 1.1)),
-        "alpha_low":   max(0,   int(alpha_val * 0.9)),
-        "beta_high":   min(100, int(beta_val  * 1.1)),
-        "beta_low":    max(0,   int(beta_val  * 0.9)),
-        "gamma_high":  min(100, int(gamma_val * 1.1)),
-        "gamma_low":   max(0,   int(gamma_val * 0.9)),
+        "alpha_high":  hi_alpha_val,
+        "alpha_low":   lo_alpha_val,
+        "beta_high":   hi_beta_val,
+        "beta_low":    lo_beta_val,
+        "gamma_high":  hi_gamma_val,
+        "gamma_low":   lo_gamma_val,
 
         # ── 通用別名（attention / meditation / 5-band 平均）──
         "attention":             attn_val,

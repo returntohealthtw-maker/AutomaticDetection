@@ -78,16 +78,25 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
     sample_count = (sess.total_captures if (sess and sess.total_captures) else n) or n
 
+    lo_al = avg_nz("low_alpha");  hi_al = avg_nz("high_alpha")
+    lo_be = avg_nz("low_beta");   hi_be = avg_nz("high_beta")
+    lo_ga = avg_nz("low_gamma");  hi_ga = avg_nz("high_gamma")
+
     bw = {
         "attention_percentage":  avg_nz("attention"),
         "meditation_percentage": avg_nz("meditation"),
         "sample_count":          int(sample_count),
         "bands_avg": {
+            # 5-band 合併（向下相容）
             "delta": avg_nz("delta"),
             "theta": avg_nz("theta"),
             "alpha": pair_avg("low_alpha", "high_alpha"),
             "beta":  pair_avg("low_beta",  "high_beta"),
             "gamma": pair_avg("low_gamma", "high_gamma"),
+            # 8-band 真實子頻帶（優先帶出，避免 headless_renderer 用 ×0.9/×1.1 估算）
+            "low_alpha":  lo_al, "high_alpha": hi_al,
+            "low_beta":   lo_be, "high_beta":  hi_be,
+            "low_gamma":  lo_ga, "high_gamma": hi_ga,
         },
     }
     return bw

@@ -44,15 +44,20 @@ def _compute_mbti_from_bw(bw_data: Optional[Dict[str, Any]]) -> str:
         beta  = float(ba.get("beta")  or 50)
         gamma = float(ba.get("gamma") or 50)
         delta = float(ba.get("delta") or 50)
+
+        def _sub_f(key1, key2, base, scale):
+            v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
+            return float(v) if v is not None else base * scale
+
         avg = BandAverages(
             delta      = delta,
             theta      = theta,
-            low_alpha  = alpha * 0.9,
-            high_alpha = alpha * 1.1,
-            low_beta   = beta  * 0.9,
-            high_beta  = beta  * 1.1,
-            low_gamma  = gamma * 0.9,
-            high_gamma = gamma * 1.1,
+            low_alpha  = _sub_f("low_alpha",  "alpha_low",  alpha, 0.9),
+            high_alpha = _sub_f("high_alpha", "alpha_high", alpha, 1.1),
+            low_beta   = _sub_f("low_beta",   "beta_low",   beta,  0.9),
+            high_beta  = _sub_f("high_beta",  "beta_high",  beta,  1.1),
+            low_gamma  = _sub_f("low_gamma",  "gamma_low",  gamma, 0.9),
+            high_gamma = _sub_f("high_gamma", "gamma_high", gamma, 1.1),
             attention  = float(bw_data.get("attention_percentage") or 50),
             meditation = float(bw_data.get("meditation_percentage") or 50),
             sample_count = int(bw_data.get("sample_count") or 0),
@@ -193,32 +198,35 @@ def _public_pdf_url(job_id: str) -> str:
 # ──────────────────────────────────────────────────────────────────────
 def _bw_to_seven_indices(bw: Dict[str, Any]) -> Dict[str, float]:
     """
-    把採集到的 5-band 平均 (delta/theta/alpha/beta/gamma 0-100)
-    + attention/meditation 轉成「七大腦波指標」(0-100)：
+    把採集到的腦波資料轉成「七大腦波指標」(0-100)：
        high_alpha, low_alpha, theta, high_beta, low_beta, high_gamma, low_gamma
 
-    因為單通道 EEG 沒分 low/high alpha-beta-gamma，這邊用簡單映射：
-      high_alpha ≈ alpha 平均 * 1.1（上限 100）
-      low_alpha  ≈ alpha 平均 * 0.9
-      ... 類似
+    優先讀取 bands_avg 中的真實 8-band 子頻帶（low_alpha / high_alpha 等）；
+    若無實際值，才退回 alpha × 0.9 / × 1.1 的估算（舊行為）。
     """
     def cap(v): return max(0, min(100, int(v)))
-    def _g(d, k, fallback=50):
+    def _g(d, k, fallback=None):
         v = d.get(k)
         return fallback if v is None else v
     ba = (bw or {}).get("bands_avg") or {}
-    alpha  = _g(ba, "alpha")
-    theta  = _g(ba, "theta")
-    beta   = _g(ba, "beta")
-    gamma  = _g(ba, "gamma")
+    alpha  = _g(ba, "alpha",  50)
+    theta  = _g(ba, "theta",  50)
+    beta   = _g(ba, "beta",   50)
+    gamma  = _g(ba, "gamma",  50)
+
+    # 優先讀實際子頻帶（相容兩種命名：low_alpha 與 alpha_low）
+    def _sub(ba, key1, key2, base, scale):
+        v = _g(ba, key1) if _g(ba, key1) is not None else _g(ba, key2)
+        return cap(v) if v is not None else cap(base * scale)
+
     return {
-        "high_alpha": cap(alpha * 1.1),
-        "low_alpha":  cap(alpha * 0.9),
+        "high_alpha": _sub(ba, "high_alpha", "alpha_high", alpha, 1.1),
+        "low_alpha":  _sub(ba, "low_alpha",  "alpha_low",  alpha, 0.9),
         "theta":      cap(theta),
-        "high_beta":  cap(beta * 1.1),
-        "low_beta":   cap(beta * 0.9),
-        "high_gamma": cap(gamma * 1.1),
-        "low_gamma":  cap(gamma * 0.9),
+        "high_beta":  _sub(ba, "high_beta",  "beta_high",  beta,  1.1),
+        "low_beta":   _sub(ba, "low_beta",   "beta_low",   beta,  0.9),
+        "high_gamma": _sub(ba, "high_gamma", "gamma_high", gamma, 1.1),
+        "low_gamma":  _sub(ba, "low_gamma",  "gamma_low",  gamma, 0.9),
     }
 
 
@@ -424,10 +432,23 @@ def _call_vite_prefill(
         v = d.get(k)
         return fallback if v is None else v
     ba = (brainwave_data or {}).get("bands_avg") or {}
-    attn = _g(brainwave_data or {}, "attention_percentage")
-    medi = _g(brainwave_data or {}, "meditation_percentage")
+    attn  = _g(brainwave_data or {}, "attention_percentage")
+    medi  = _g(brainwave_data or {}, "meditation_percentage")
     delta = _g(ba, "delta"); theta = _g(ba, "theta")
-    alpha = _g(ba, "alpha"); beta = _g(ba, "beta"); gamma = _g(ba, "gamma")
+    alpha = _g(ba, "alpha"); beta  = _g(ba, "beta"); gamma = _g(ba, "gamma")
+
+    # 優先讀實際子頻帶（相容兩種命名）
+    def _sub_v(ba, key1, key2, base, scale):
+        v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
+        return int(max(0, min(100, v))) if v is not None else int(max(0, min(100, base * scale)))
+
+    hi_alpha = _sub_v(ba, "high_alpha", "alpha_high", alpha, 1.1)
+    lo_alpha = _sub_v(ba, "low_alpha",  "alpha_low",  alpha, 0.9)
+    hi_beta  = _sub_v(ba, "high_beta",  "beta_high",  beta,  1.1)
+    lo_beta  = _sub_v(ba, "low_beta",   "beta_low",   beta,  0.9)
+    hi_gamma = _sub_v(ba, "high_gamma", "gamma_high", gamma, 1.1)
+    lo_gamma = _sub_v(ba, "low_gamma",  "gamma_low",  gamma, 0.9)
+
     params = {
         "auto":       "1",
         "name":       subject_name or "",
@@ -439,19 +460,19 @@ def _call_vite_prefill(
         "focus":      int(attn),
         "relaxation": int(medi),
         "theta":      int(theta),
-        "highAlpha":  int(min(100, alpha * 1.1)),
-        "lowAlpha":   int(max(0,   alpha * 0.9)),
-        "highBeta":   int(min(100, beta  * 1.1)),
-        "lowBeta":    int(max(0,   beta  * 0.9)),
-        "highGamma":  int(min(100, gamma * 1.1)),
-        "lowGamma":   int(max(0,   gamma * 0.9)),
+        "highAlpha":  hi_alpha,
+        "lowAlpha":   lo_alpha,
+        "highBeta":   hi_beta,
+        "lowBeta":    lo_beta,
+        "highGamma":  hi_gamma,
+        "lowGamma":   lo_gamma,
         # snake_case 別名（符合設計文件）
-        "alpha_high": int(min(100, alpha * 1.1)),
-        "alpha_low":  int(max(0,   alpha * 0.9)),
-        "beta_high":  int(min(100, beta  * 1.1)),
-        "beta_low":   int(max(0,   beta  * 0.9)),
-        "gamma_high": int(min(100, gamma * 1.1)),
-        "gamma_low":  int(max(0,   gamma * 0.9)),
+        "alpha_high": hi_alpha,
+        "alpha_low":  lo_alpha,
+        "beta_high":  hi_beta,
+        "beta_low":   lo_beta,
+        "gamma_high": hi_gamma,
+        "gamma_low":  lo_gamma,
         "attention":  int(attn), "meditation": int(medi),
         "delta": int(delta), "alpha": int(alpha), "beta": int(beta), "gamma": int(gamma),
     }
