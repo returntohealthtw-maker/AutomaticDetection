@@ -1676,7 +1676,7 @@ def all_subjects_overview(
             "latest_session_id":      (latest.session_id if latest else None),
             "latest_report_type":     (latest.report_type if latest else None),
             "latest_consultant_name": (latest.consultant_name if latest else None),
-            "latest_session_at":      (latest.created_at if latest else None),  # ms timestamp
+            "latest_session_at":      (latest.created_at * 1000 if latest and latest.created_at else None),  # 秒→毫秒
             # 報告 + 腦波
             "reports":           rep_list,
             "latest_brainwave":  bw,
