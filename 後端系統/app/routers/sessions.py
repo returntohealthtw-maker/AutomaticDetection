@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
 from app.services.report_generator import generate_report_async
 from app.routers.monitor import broadcast
-from app.routers.auth import get_current_user
+from app.routers.auth import require_user as get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["腦波數據"])
 
