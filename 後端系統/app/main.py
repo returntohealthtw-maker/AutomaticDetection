@@ -127,6 +127,16 @@ if _STATIC_APP_DIR:
     if os.path.isdir(_REPORT_APP_DIR):
         app.mount("/report-app", StaticFiles(directory=_REPORT_APP_DIR, html=True), name="report-app")
         print(f"[report-app] OK 本機成人 React App 掛載：{_REPORT_APP_DIR}")
+        # 雙重保障：Vite build 產生的 index.html 使用絕對路徑 /assets/... 
+        # 當掛載在子路徑 /report-app/ 時，/assets/ 路徑會 404 導致 React 無法啟動。
+        # 除了將 index.html 改為相對路徑外，此處也額外掛載 /assets 作為防護。
+        _REPORT_ASSETS_DIR = os.path.join(_REPORT_APP_DIR, "assets")
+        if os.path.isdir(_REPORT_ASSETS_DIR):
+            try:
+                app.mount("/assets", StaticFiles(directory=_REPORT_ASSETS_DIR), name="report-app-assets")
+                print(f"[report-app] OK /assets 備援掛載：{_REPORT_ASSETS_DIR}")
+            except Exception as _e:
+                print(f"[report-app] /assets 掛載跳過（已被其他路由佔用）：{_e}")
 
     # 掛載兒童報告 React App（本機版，與成人版並列）
     _CHILD_REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "child-report-app")
