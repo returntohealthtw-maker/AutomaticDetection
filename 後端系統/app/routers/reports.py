@@ -1479,6 +1479,106 @@ def diag() -> dict:
     }
 
 
+@router.get("/diag/mbti/{session_id}")
+def diag_mbti(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """MBTI 診斷：顯示 session 的 lo_alpha/theta 數值、八卦計算過程、MBTI 結果。
+    用於排查「MBTI 永遠 ISTP」問題。"""
+    import math
+    from scipy.stats import norm as _norm
+    from app.services.algorithms import _norm100_to_raw, BandAverages, compute_mbti
+    from app.algorithms.bagua import Bagua
+    from app.algorithms.data_stats import DATA_STATS
+
+    require_user(authorization, db)
+
+    # 取 session
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} 不存在")
+
+    # 取腦波數據
+    caps = db.query(M.EegCapture).filter(M.EegCapture.session_id == session_id).all()
+    if not caps:
+        return {"session_id": session_id, "error": "此 session 無腦波資料"}
+
+    det = [c for c in caps if c.is_baseline == 0] or list(caps)
+    n = len(det)
+    def avg_attr(attr): return sum(getattr(c, attr, 0) or 0 for c in det) / n
+
+    lo_alpha_avg = avg_attr("low_alpha")
+    hi_alpha_avg = avg_attr("high_alpha")
+    theta_avg    = avg_attr("theta")
+
+    # 計算 MBTI
+    avg_obj = BandAverages(
+        delta=avg_attr("delta"), theta=theta_avg,
+        low_alpha=lo_alpha_avg, high_alpha=hi_alpha_avg,
+        low_beta=avg_attr("low_beta"), high_beta=avg_attr("high_beta"),
+        low_gamma=avg_attr("low_gamma"), high_gamma=avg_attr("high_gamma"),
+        attention=avg_attr("attention"), meditation=avg_attr("meditation"),
+        sample_count=n,
+    )
+    result = compute_mbti(avg_obj)
+
+    # 計算過程
+    raw_la = _norm100_to_raw(lo_alpha_avg)
+    raw_th = _norm100_to_raw(theta_avg)
+    la_mean = DATA_STATS["lowAlpha"]["mean"]
+    la_std  = DATA_STATS["lowAlpha"]["std"]
+    p_la = float(_norm.cdf(math.log10(max(raw_la, 0.1)), la_mean, la_std))
+    p_th = float(_norm.cdf(math.log10(max(raw_th, 0.1)), la_mean, la_std))
+    bagua = Bagua.calcBagua(None, raw_la)
+
+    bagua_zones = [
+        {"name": "qian", "range_norm": [0, 59.7], "pct": [0, 0.125], "mbti": ["INTJ","INTP"]},
+        {"name": "dui",  "range_norm": [59.7, 63.1], "pct": [0.125, 0.25], "mbti": ["ENTJ","ENTP"]},
+        {"name": "zhen", "range_norm": [63.1, 65.6], "pct": [0.25, 0.375], "mbti": ["ENFJ","ENFP"]},
+        {"name": "xun",  "range_norm": [65.6, 67.9], "pct": [0.375, 0.5], "mbti": ["ISTJ","ISFJ"]},
+        {"name": "kan",  "range_norm": [67.9, 70.1], "pct": [0.5, 0.625], "mbti": ["ESTJ","ESFJ"]},
+        {"name": "gen",  "range_norm": [70.1, 72.6], "pct": [0.625, 0.75], "mbti": ["ISTP","ISFP"]},
+        {"name": "kun",  "range_norm": [72.6, 100],  "pct": [0.75, 1.0],  "mbti": ["ESTP","ESFP"]},
+    ]
+
+    return {
+        "session_id":    session_id,
+        "subject_name":  sess.subject_name,
+        "db_values": {
+            "lo_alpha_avg_from_db": round(lo_alpha_avg, 2),
+            "hi_alpha_avg_from_db": round(hi_alpha_avg, 2),
+            "theta_avg_from_db":    round(theta_avg, 2),
+            "note": "DB 儲存的是 bandTo100 正規化值 (0-100)；若顯示 >100 則為舊版原始值"
+        },
+        "calculation": {
+            "lo_alpha_normalized": round(lo_alpha_avg, 2),
+            "lo_alpha_raw_inverted": round(raw_la, 0),
+            "lo_alpha_log10":       round(math.log10(max(raw_la, 0.1)), 4),
+            "lo_alpha_percentile":  round(p_la, 4),
+            "theta_normalized":     round(theta_avg, 2),
+            "theta_raw_inverted":   round(raw_th, 0),
+            "theta_percentile":     round(p_th, 4),
+            "theta_is_high":        p_th > 0.5,
+        },
+        "bagua_result": {
+            "bagua": bagua.id,
+            "bagua_name": bagua.name,
+            "gen_zone_range": "normalized lo_alpha in [70.1, 72.6] → ISTP/ISFP",
+            "current_zone": next((z for z in bagua_zones if z["name"] == bagua.id), None),
+        },
+        "mbti_result":   result,
+        "all_bagua_zones": bagua_zones,
+        "diagnosis": (
+            "⚠️ lo_alpha 落在艮(gen)卦區間 [70.1-72.6]，所有此範圍的使用者都會得到 ISTP/ISFP。"
+            "若多人總是得到 ISTP，表示受測者的 lo_alpha 頻段值相似，屬演算法正常行為。"
+            if bagua.id == "gen" else
+            f"lo_alpha={lo_alpha_avg:.1f} → {bagua.id}({bagua.name})卦 → {result['mbti_type']}"
+        ),
+    }
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # 管理員：跨帳號受測者全覽
 # ────────────────────────────────────────────────────────────────────────────
