@@ -321,6 +321,35 @@ def _run_lightweight_migrations():
                 print(f"[DB-MIGRATE] WARN {sql} -> {e}")
 
 
+async def _startup_self_audit():
+    """啟動後驗證關鍵靜態資源路徑，防止 React App 因絕對路徑導致 JS 404。
+
+    已知問題：Vite build 預設產生 /assets/... 絕對路徑，掛載在 /report-app/ 時
+    瀏覽器會找不到 JS bundle，React 永遠不啟動。
+    修法：index.html 改用 ./assets/ 相對路徑，並在此驗證。
+    """
+    import asyncio
+    await asyncio.sleep(5)
+    try:
+        static_dir = _STATIC_APP_DIR
+        for app_dir_name in ("report-app", "child-report-app"):
+            idx = os.path.join(static_dir, app_dir_name, "index.html")
+            if not os.path.isfile(idx):
+                continue
+            with open(idx, "r", encoding="utf-8") as f:
+                content = f.read()
+            # 偵測是否使用錯誤的絕對路徑（如 src="/assets/... 而非 ./assets/）
+            import re as _re
+            bad_patterns = _re.findall(r'src="/assets/[^"]+\.js"', content)
+            if bad_patterns:
+                print(f"[AUDIT-WARN] {app_dir_name}/index.html 含錯誤絕對路徑: {bad_patterns}")
+                print(f"[AUDIT-WARN] React App 在 headless 模式下將無法啟動！請改為 ./assets/ 相對路徑。")
+            else:
+                print(f"[AUDIT-OK] {app_dir_name}/index.html 靜態資源路徑正確")
+    except Exception as e:
+        print(f"[startup-audit] 路徑檢查失敗（無害）: {e}")
+
+
 async def _reset_orphan_generating_reports():
     """啟動後 10 秒，把所有卡在 generating/pending 的 Report 標記為 failed。
 
@@ -373,11 +402,11 @@ async def startup():
     except Exception as e:
         print(f"[DB] startup skipped: {e}")
 
-    # ── 重啟後自動修復孤兒報告 ────────────────────────────────────────────
-    # 每次 Railway 重新部署時 headless_renderer 的 _active_jobs 記憶體會清空，
-    # 但 DB 裡 status='generating' 的 Report 會永遠卡住。
-    # 啟動時把它們全部重設為 'failed' 讓管理員看得到，可手動重新觸發。
+    # ── 啟動自我審查：驗證關鍵靜態資源路徑 ────────────────────────────────
     import asyncio
+    asyncio.create_task(_startup_self_audit())
+
+    # ── 重啟後自動修復孤兒報告 ────────────────────────────────────────────
     asyncio.create_task(_reset_orphan_generating_reports())
 
 
