@@ -524,7 +524,25 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                 import json as _json
                 pdf_url   = result.get("result_url") or result.get("file_path") or ""
                 rep_kind  = f"{req.report_type}_{req.variant}"
-                summary   = _json.dumps({"subject_name": req.subject_name, "source": ext_mode}, ensure_ascii=False)
+
+                # 完整保存關係報告的所有成員資訊，供後台顯示與重新生成使用
+                summary_data: Dict[str, Any] = {
+                    "subject_name": req.subject_name,
+                    "source":       ext_mode,
+                    "husband_session_id": req.session_id,
+                }
+                if ext_mode == "marital_rest":
+                    summary_data["wife_session_id"] = merged_extra.get("wife_session_id")
+                    summary_data["wife_name"]        = merged_extra.get("wife_name") or merged_extra.get("wife_subject_name") or ""
+                    summary_data["husband_name"]     = req.subject_name
+                elif ext_mode == "parent_child_rest":
+                    # 保存所有成員 {name, session_id, role}
+                    members_summary = [
+                        {"name": m.get("name",""), "session_id": m.get("session_id"), "role": m.get("role","member")}
+                        for m in (merged_extra.get("members") or [])
+                    ]
+                    summary_data["members"] = members_summary
+                summary = _json.dumps(summary_data, ensure_ascii=False)
 
                 existing = None
                 if req.session_id:

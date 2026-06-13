@@ -572,36 +572,51 @@ def list_reports(
             subject_name = raw_name or "(無 session)"
             is_test = False
 
-        # 從 client_summary 取出 headless_error（若有）讓前端顯示
+        # 從 client_summary 取出 headless_error 與關係報告成員資訊
         headless_error = None
+        relation_members: list = []
         try:
             cs_data = _json.loads(rep.client_summary or "{}")
             headless_error = cs_data.get("headless_error")
+            kind_lower = (rep.talent_report_kind or "").lower()
+            if "marital" in kind_lower:
+                # 夫妻報告：從 client_summary 取出兩人姓名與 session_id
+                husband_name = cs_data.get("husband_name") or cs_data.get("subject_name") or ""
+                wife_name    = cs_data.get("wife_name") or ""
+                relation_members = [
+                    {"name": husband_name, "session_id": cs_data.get("husband_session_id") or rep.session_id, "role": "husband"},
+                    {"name": wife_name,    "session_id": cs_data.get("wife_session_id"),                       "role": "wife"},
+                ]
+            elif "parent_child" in kind_lower or "parent" in kind_lower:
+                # 親子報告：從 client_summary 取出所有成員
+                relation_members = cs_data.get("members") or []
         except Exception:
             pass
 
         out.append({
-            "report_id":      rep.report_id,
-            "session_id":     rep.session_id,
-            "subject_id":     sid,                          # 🔑 顯示是否已連結
-            "subject_name":   subject_name,
-            "subject_age":    subject_age,
-            "subject_gender": subject_gender,
-            "subject_email":  rep.notify_email or subject_email_real,
-            "report_kind":    rep.talent_report_kind,
-            "report_kind_zh": _kind_zh(rep.talent_report_kind),
-            "pdf_url":        rep.pdf_url,
-            "status":         rep.status,
-            "email_sent":     rep.email_sent,
-            "completed_at":   rep.completed_at.isoformat() if rep.completed_at else None,
-            "consultant":     (sess.consultant_name if sess else None),
-            "consultant_org": (cons.org if cons else None),
-            "consultant_role": (cons.role if cons else None),
-            "orphan":         (rep.session_id is None),
-            "is_test":        is_test,                      # 🧪 admin 可用 is_test 過濾或一鍵清理
-            "linked_to_subject": subj_record is not None,   # 🔗 是否已連結到 Subject 主檔
-            "headless_error": headless_error,               # 失敗原因（來自 headless_renderer）
-            "image_quality":  img_quality_by_sid.get(rep.session_id) if rep.session_id else None,
+            "report_id":        rep.report_id,
+            "session_id":       rep.session_id,
+            "subject_id":       sid,
+            "subject_name":     subject_name,
+            "subject_age":      subject_age,
+            "subject_gender":   subject_gender,
+            "subject_email":    rep.notify_email or subject_email_real,
+            "report_kind":      rep.talent_report_kind,
+            "report_kind_zh":   _kind_zh(rep.talent_report_kind),
+            "pdf_url":          rep.pdf_url,
+            "status":           rep.status,
+            "email_sent":       rep.email_sent,
+            "completed_at":     rep.completed_at.isoformat() if rep.completed_at else None,
+            "consultant":       (sess.consultant_name if sess else None),
+            "consultant_org":   (cons.org if cons else None),
+            "consultant_role":  (cons.role if cons else None),
+            "orphan":           (rep.session_id is None),
+            "is_test":          is_test,
+            "linked_to_subject": subj_record is not None,
+            "headless_error":   headless_error,
+            "image_quality":    img_quality_by_sid.get(rep.session_id) if rep.session_id else None,
+            # 關係報告專屬：所有成員姓名 + session_id（admin 後台顯示與重新生成用）
+            "relation_members": relation_members,
         })
     return {"ok": True, "count": len(out), "reports": out}
 
@@ -1093,6 +1108,25 @@ def _do_regenerate_one(
     # 所有類型統一走外部（Vercel headless 或 REST API）
     # life_script / child → headless + DB 輪詢確認 callback
     # marital / parent_child → 直接 REST API
+    regen_extra: dict = {"session_id": session_id, "subject_id": resolved_regen_sid}
+
+    # 關係報告重新生成：從 client_summary 取回配偶/成員資訊
+    if ext_report_type in ("marital", "parent_child"):
+        try:
+            import json as _rjson
+            cs_regen = _rjson.loads(r.client_summary or "{}")
+            if ext_report_type == "marital":
+                if cs_regen.get("wife_session_id"):
+                    regen_extra["wife_session_id"] = cs_regen["wife_session_id"]
+                if cs_regen.get("wife_name"):
+                    regen_extra["wife_name"] = cs_regen["wife_name"]
+                if cs_regen.get("husband_name"):
+                    regen_extra["husband_name"] = cs_regen["husband_name"]
+            elif ext_report_type == "parent_child" and cs_regen.get("members"):
+                regen_extra["members"] = cs_regen["members"]
+        except Exception as _re:
+            logger.warning("[_do_regenerate_one] 讀取 client_summary 關係成員失敗: %s", _re)
+
     try:
         result = report_orchestrator.trigger_external_report(
             report_type=ext_report_type,
@@ -1102,7 +1136,7 @@ def _do_regenerate_one(
             subject_gender=s.subject_gender or "",
             variant=resolved_variant,
             brainwave_data=bw,
-            extra={"session_id": session_id, "subject_id": resolved_regen_sid},
+            extra=regen_extra,
         )
     except Exception as e:
         return {"ok": False, "session_id": session_id,

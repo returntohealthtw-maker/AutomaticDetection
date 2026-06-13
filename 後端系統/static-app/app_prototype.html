@@ -9025,12 +9025,34 @@ function _filterAdminReports() {
         <div id="rpt-prog-txt-${r.report_id}" style="font-size:10px;color:#1565c0;margin-top:3px;font-weight:600;">⏳ 等待進度資料...</div>
       </div>` : '';
 
+    // 關係報告成員清單（含腦波展開）
+    const isRelation = (r.relation_members && r.relation_members.length > 0);
+    const memberNames = isRelation
+      ? r.relation_members.filter(m => m.name).map(m => esc(m.name)).join(' · ')
+      : '';
+    const membersBadge = isRelation ? `
+      <div style="margin-top:6px;background:#f3e5f5;border:1px solid #ce93d8;border-radius:8px;padding:6px 10px;">
+        <div style="font-size:10px;color:#7b1fa2;font-weight:700;margin-bottom:4px;">💞 關係報告成員</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+          ${r.relation_members.map((m,i) => `
+            <span style="background:white;border:1px solid #ce93d8;border-radius:12px;padding:2px 10px;font-size:11px;font-weight:600;color:#4a148c;">
+              ${['👨','👩','👦','👧','🧑'][i] || '👤'} ${esc(m.name || '(未知)')}
+              ${m.session_id ? `<span style="color:#9c27b0;font-size:10px;"> #${m.session_id}</span>` : ''}
+            </span>`).join('')}
+        </div>
+        <button onclick="_toggleRelationBrainwave(this, ${r.report_id}, ${JSON.stringify((r.relation_members||[]).map(m=>({n:m.name,s:m.session_id})))})"
+          style="background:#7b1fa2;color:white;border:none;font-size:10px;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:600;">
+          🧠 查看各成員腦波
+        </button>
+        <div id="relation-bw-${r.report_id}" style="display:none;margin-top:8px;"></div>
+      </div>` : '';
+
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${borderColor !== 'transparent' ? `border-left:4px solid ${borderColor};` : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:700;color:#1a3a6e;">
-            👤 ${esc(r.subject_name || '(未知)')}${subjMetaTxt}
+            ${isRelation ? '💞' : '👤'} ${isRelation ? memberNames : esc(r.subject_name || '(未知)')}${subjMetaTxt}
             <span style="color:#888;font-weight:400;font-size:11px;margin-left:4px;">#${r.report_id}</span>
           </div>
           <div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -9047,6 +9069,7 @@ function _filterAdminReports() {
             · ${statusLabel}
             · <span style="color:#aaa;">Session: ${r.session_id != null ? `<a href="#" onclick="event.preventDefault();_linkReportToSession(${r.report_id},'${esc(r.subject_name||'')}');return false;" title="點擊重新連結到其他 Session" style="color:#1976d2;text-decoration:underline;">#${r.session_id}</a>` : '<a href="#" onclick="event.preventDefault();_linkReportToSession('+r.report_id+',\''+esc(r.subject_name||'')+'\');return false;" style="color:#e65100;font-weight:700;text-decoration:underline;" title="尚未連結 Session，點擊設定">未連結 ⚠️</a>'}</span>
           </div>
+          ${membersBadge}
           ${r.image_quality === 'ok'
             ? '<div style="margin-top:3px;font-size:10px;color:#2e7d32;font-weight:600;">✅ 報告圖片正常</div>'
             : r.image_quality === 'fallback'
@@ -9150,6 +9173,49 @@ function _startGeneratingPoll() {
 }
 
 // 從「資料庫紀錄」tab 直接重新生成失敗報告
+// 關係報告：展開/收起各成員腦波資料
+async function _toggleRelationBrainwave(btn, reportId, members) {
+  const box = document.getElementById(`relation-bw-${reportId}`);
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; btn.textContent = '🧠 查看各成員腦波'; return; }
+  btn.textContent = '⏳ 載入中…'; btn.disabled = true;
+  box.style.display = 'block';
+  const bands7Labels = {theta:'θ 低頻',alpha_low:'α↓',alpha_high:'α↑',beta_low:'β↓',beta_high:'β↑',gamma_low:'γ↓',gamma_high:'γ↑'};
+  let html = '';
+  for (const m of members) {
+    if (!m.s) { html += `<div style="font-size:10px;color:#999;padding:4px 0;">${esc(m.n||'(未知)')}：無 session 資料</div>`; continue; }
+    try {
+      const res = await fetchWithAuth(`/api/v1/eeg/sessions/${m.s}/stats`);
+      const d = await res.json();
+      const st = d.eeg_stats;
+      if (!st) { html += `<div style="font-size:10px;color:#999;padding:4px 0;">${esc(m.n)}：無腦波記錄</div>`; continue; }
+      const ba = st.bands_avg || {};
+      const b7 = st.bands_7 || {};
+      const bandHtml = Object.entries(bands7Labels).map(([k,lbl]) => {
+        const v = b7[k] ?? Math.round((ba[k.replace('_low','').replace('_high','')] || 0));
+        const pct = Math.min(100, v);
+        const col = pct > 65 ? '#2196f3' : pct > 35 ? '#4caf50' : '#ff9800';
+        return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+          <span style="font-size:9px;color:#666;width:28px;text-align:right;flex-shrink:0;">${lbl}</span>
+          <div style="flex:1;height:5px;background:#eee;border-radius:3px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;"></div>
+          </div>
+          <span style="font-size:9px;color:#333;width:24px;">${v}</span>
+        </div>`;
+      }).join('');
+      html += `<div style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:4px;">
+          ${esc(m.n)} <span style="font-size:10px;color:#999;font-weight:400;">#${m.s}｜${st.sample_count||'?'} 秒</span>
+          <span style="font-size:10px;color:#555;margin-left:6px;">專注 ${st.attention_percentage??'?'} · 放鬆 ${st.meditation_percentage??'?'}</span>
+        </div>
+        ${bandHtml}
+      </div>`;
+    } catch(e) { html += `<div style="font-size:10px;color:#c00;padding:4px 0;">${esc(m.n)}：讀取失敗</div>`; }
+  }
+  box.innerHTML = html || '<div style="font-size:10px;color:#aaa;">無成員資料</div>';
+  btn.textContent = '🧠 收起腦波'; btn.disabled = false;
+}
+
 async function _regenFromDbRecords(sessionId, email, subjectName) {
   const nameLabel = subjectName ? `「${subjectName}」` : `Session #${sessionId}`;
   const emailInput = prompt(`重新生成 ${nameLabel} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, email || '');
