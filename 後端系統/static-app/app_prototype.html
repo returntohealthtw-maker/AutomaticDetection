@@ -1462,27 +1462,52 @@
         </div>
 
         <div style="flex:1;overflow-y:auto;padding-bottom:16px;">
+          <!-- ── 主要操作區 ── -->
           <div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:10px;">
-            <button class="start-btn" onclick="goto('screen-subject')">
-              <span class="icon">🧪</span>
-              <span class="text">
-                <div class="title">開始新檢測</div>
-                <div class="sub">填入受測者資料 · 選擇報告 · 開始採集</div>
+
+            <!-- 1. 開始新檢測（最主要，全寬大按鈕） -->
+            <button onclick="goto('screen-subject')"
+              style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#FF6B35,#E84393 90%);color:white;border:none;border-radius:18px;padding:16px 18px;text-align:left;cursor:pointer;box-shadow:0 4px 16px rgba(255,107,53,0.4);position:relative;overflow:hidden;">
+              <span style="font-size:28px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25));">🧪</span>
+              <span style="flex:1;">
+                <div style="font-size:16px;font-weight:800;letter-spacing:0.3px;">開始新檢測</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:3px;">填入受測者資料 · 選擇報告 · 開始採集</div>
               </span>
-              <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
+              <span style="font-size:22px;opacity:0.7;">›</span>
+              <span style="position:absolute;right:-20px;top:-20px;font-size:80px;opacity:0.07;pointer-events:none;">🧪</span>
             </button>
-            <div style="display:flex;gap:10px;">
-              <button class="start-btn" style="background:linear-gradient(135deg,#1a237e,#283593);padding:12px 14px;flex:1;" onclick="startEegTest()">
-                <span class="icon" style="font-size:20px;">🧠</span>
-                <span class="text">
-                  <div class="title" style="font-size:14px;">腦波儀健康檢查</div>
-                  <div class="sub">1 分鐘檢測訊號/電量/連線狀態</div>
-                </span>
-                <span style="color:rgba(255,255,255,0.6);font-size:20px;">›</span>
+
+            <!-- 2. 關係報告（次要主功能，全寬） -->
+            <button onclick="openRelationModal()"
+              style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#7C3AED,#A855F7 90%);color:white;border:none;border-radius:18px;padding:16px 18px;text-align:left;cursor:pointer;box-shadow:0 4px 16px rgba(124,58,237,0.35);position:relative;overflow:hidden;">
+              <span style="font-size:28px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25));">💞</span>
+              <span style="flex:1;">
+                <div style="font-size:16px;font-weight:800;letter-spacing:0.3px;">關係報告</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:3px;">從 VIP 名單直接生成 · 親子 / 夫妻 / 情侶</div>
+              </span>
+              <span style="font-size:22px;opacity:0.7;">›</span>
+              <span style="position:absolute;right:-20px;top:-20px;font-size:80px;opacity:0.07;pointer-events:none;">💞</span>
+            </button>
+
+            <!-- 3. 工具列（兩格並排） -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <!-- 腦波儀健康檢查 -->
+              <button onclick="startEegTest()"
+                style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:linear-gradient(135deg,#1a237e,#283593);color:white;border:none;border-radius:16px;padding:14px 14px;cursor:pointer;box-shadow:0 3px 10px rgba(26,35,126,0.35);">
+                <span style="font-size:24px;">🧠</span>
+                <div>
+                  <div style="font-size:13px;font-weight:700;line-height:1.2;">腦波儀<br>健康檢查</div>
+                  <div style="font-size:10px;opacity:0.75;margin-top:3px;">訊號 / 電量 / 連線</div>
+                </div>
               </button>
-              <button onclick="openPaidRedetectModal()" style="background:linear-gradient(135deg,#e65100,#bf360c);color:white;border:none;border-radius:16px;padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:72px;box-shadow:0 2px 8px rgba(230,81,0,0.3);">
-                <span style="font-size:20px;">🔁</span>
-                <span style="font-size:11px;line-height:1.2;text-align:center;">付款<br>重測</span>
+              <!-- 付款重測 -->
+              <button onclick="openPaidRedetectModal()"
+                style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:linear-gradient(135deg,#e65100,#bf360c);color:white;border:none;border-radius:16px;padding:14px 14px;cursor:pointer;box-shadow:0 3px 10px rgba(230,81,0,0.35);">
+                <span style="font-size:24px;">🔁</span>
+                <div>
+                  <div style="font-size:13px;font-weight:700;line-height:1.2;">付款<br>重測</div>
+                  <div style="font-size:10px;opacity:0.75;margin-top:3px;">補做腦波採集</div>
+                </div>
               </button>
             </div>
           </div>
@@ -1491,6 +1516,51 @@
           <div id="home-recent-list">
             <div class="history-item" style="opacity:0.6;">
               <div class="hi-top"><span class="hi-name">載入中…</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 關係報告 快選 Modal ===== -->
+        <div id="relation-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:flex-end;justify-content:center;padding:0;" onclick="if(event.target===this)closeRelationModal()">
+          <div style="background:white;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom,12px);overflow:hidden;">
+            <!-- 標題 -->
+            <div style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:white;padding:18px 20px 16px;display:flex;align-items:center;gap:10px;">
+              <span style="font-size:24px;">💞</span>
+              <div style="flex:1;">
+                <div style="font-size:16px;font-weight:800;">關係報告</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:2px;">從已完成 VIP 個人報告的名單中選人，無需重新檢測</div>
+              </div>
+              <button onclick="closeRelationModal()" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">×</button>
+            </div>
+            <!-- 三種報告類型卡片 -->
+            <div style="padding:16px 16px 20px;display:flex;flex-direction:column;gap:10px;">
+              <button onclick="closeRelationModal();openRelation('parent')"
+                style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#fff5f7,#fce4ec);border:1.5px solid #f48fb1;border-radius:16px;padding:14px 16px;text-align:left;cursor:pointer;">
+                <span style="font-size:32px;">👨‍👩‍👧</span>
+                <div style="flex:1;">
+                  <div style="font-size:14px;font-weight:700;color:#880e4f;">親子腦波共振關係報告</div>
+                  <div style="font-size:11px;color:#ad1457;margin-top:3px;opacity:0.85;">分析親子腦波共鳴與互動模式（選 3 位以上）</div>
+                </div>
+                <span style="font-size:18px;color:#f48fb1;">›</span>
+              </button>
+              <button onclick="closeRelationModal();openRelation('couple')"
+                style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#f3f0ff,#ede7f6);border:1.5px solid #b39ddb;border-radius:16px;padding:14px 16px;text-align:left;cursor:pointer;">
+                <span style="font-size:32px;">💑</span>
+                <div style="flex:1;">
+                  <div style="font-size:14px;font-weight:700;color:#4527a0;">夫妻腦波共振關係報告</div>
+                  <div style="font-size:11px;color:#512da8;margin-top:3px;opacity:0.85;">分析夫妻腦波同頻與相處模式（選 2 位）</div>
+                </div>
+                <span style="font-size:18px;color:#b39ddb;">›</span>
+              </button>
+              <button onclick="closeRelationModal();openRelation('lover')"
+                style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#fff8e1,#fff3e0);border:1.5px solid #ffcc80;border-radius:16px;padding:14px 16px;text-align:left;cursor:pointer;">
+                <span style="font-size:32px;">💕</span>
+                <div style="flex:1;">
+                  <div style="font-size:14px;font-weight:700;color:#e65100;">情侶腦波共振關係報告</div>
+                  <div style="font-size:11px;color:#bf360c;margin-top:3px;opacity:0.85;">分析情侶腦波契合度與溝通傾向（選 2 位）</div>
+                </div>
+                <span style="font-size:18px;color:#ffcc80;">›</span>
+              </button>
             </div>
           </div>
         </div>
@@ -10709,6 +10779,18 @@ async function _doRestoreReport() {
 // 🔁 付款重測（開啟 Modal → 選客戶 → 直接進採集流程）
 // ───────────────────────────────────────────────────────────────────────────
 let _redetectCache = [];
+
+// ── 關係報告快選 Modal ────────────────────────────────────────────────────────
+function openRelationModal() {
+  const modal = document.getElementById('relation-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  modal.style.pointerEvents = 'auto';
+}
+function closeRelationModal() {
+  const modal = document.getElementById('relation-modal');
+  if (modal) modal.style.display = 'none';
+}
 
 async function openPaidRedetectModal() {
   const modal = document.getElementById('paid-redetect-modal');
