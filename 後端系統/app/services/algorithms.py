@@ -413,5 +413,217 @@ def compute_mbti(avg: BandAverages) -> dict:
         "jp_label":   mbti_type[3],
         "confidence": round(
             (abs(ei_pct-50) + abs(ns_pct-50) + abs(tf_pct-50) + abs(jp_pct-50)) / 2, 1
-        )
+        ),
+        "secondary":  None,
+    }
+
+
+def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
+    """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 完全一致。"""
+    LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
+    LA_STD  = DATA_STATS["lowAlpha"]["std"]
+    BOUNDS  = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
+
+    la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD)) if raw_la > 0 else 0.4
+    bagua  = 6
+    for i in range(6):
+        if la_pct < BOUNDS[i + 1]:
+            bagua = i
+            break
+
+    th_pct = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD)) if raw_th > 0 else 0.4
+    high   = th_pct > 0.5
+    li_active = bagua == 2 and high
+
+    MAP = [
+        ("INTJ", "INTP"),
+        ("ENTJ", "ENTP"),
+        ("INFJ", "INFP") if li_active else ("ENFJ", "ENFP"),
+        ("ISTJ", "ISFJ"),
+        ("ESTJ", "ESFJ"),
+        ("ISTP", "ISFP"),
+        ("ESTP", "ESFP"),
+    ]
+    primary = MAP[bagua][0 if high else 1]
+
+    zone_start = BOUNDS[bagua]
+    zone_end   = BOUNDS[bagua + 1]
+    zone_half  = (zone_end - zone_start) / 2
+    dist       = min(la_pct - zone_start, zone_end - la_pct)
+    la_conf    = min(1.0, dist / zone_half) if zone_half else 0
+    th_conf    = min(1.0, abs(th_pct - 0.5) / 0.3)
+    confidence = round((la_conf * 0.65 + th_conf * 0.35) * 100)
+
+    secondary = None
+    if la_conf < 0.6:
+        closer_lower = (la_pct - zone_start) < (zone_end - la_pct)
+        adj = bagua - 1 if closer_lower else bagua + 1
+        if 0 <= adj <= 6:
+            adj_li = adj == 2 and high
+            adj_map = ("INFJ", "INFP") if adj_li else MAP[adj]
+            alt = adj_map[0 if high else 1]
+            if alt != primary:
+                secondary = alt
+    if not secondary and th_conf < 0.4:
+        alt = MAP[bagua][1 if high else 0]
+        if alt != primary:
+            secondary = alt
+
+    bagua_obj = Bagua.calcBaguaWithLi(raw_la, raw_th)
+    return {
+        "type": primary,
+        "secondary": secondary,
+        "confidence": confidence,
+        "la_pct": la_pct,
+        "th_pct": th_pct,
+        "bagua": bagua_obj.id,
+        "bagua_name": bagua_obj.name,
+    }
+
+
+def _mbti_layer_from_raw_arrays(r_la: list, r_th: list) -> dict:
+    if len(r_la) < 1 or len(r_th) < 1:
+        return {}
+    raw_la = sum(r_la) / len(r_la)
+    raw_th = sum(r_th) / len(r_th)
+    br = _bagua_mbti_from_raw(raw_la, raw_th)
+    mbti_type = br["type"]
+    la_pct, th_pct = br["la_pct"], br["th_pct"]
+
+    seg     = min(int(la_pct / 0.125), 6)
+    seg_pos = (la_pct - seg * 0.125) / 0.125
+    ei_str  = _clamp(seg_pos * 45 + 5, 5, 50)
+    ei_pct  = (50 + ei_str) if mbti_type[0] == "E" else (50 - ei_str)
+
+    ns_dist = ((0.375 - la_pct) / 0.375) if la_pct < 0.375 else ((la_pct - 0.375) / 0.625)
+    ns_base = _clamp(50 + ns_dist * 45, 50, 95)
+    ns_pct  = ns_base if mbti_type[1] == "N" else (100 - ns_base)
+
+    tf_str = _clamp(abs(th_pct - 0.5) * 80 + 10, 10, 45)
+    tf_pct = (50 + tf_str) if mbti_type[2] == "T" else (50 - tf_str)
+    jp_str = _clamp(abs(th_pct - 0.5) * 70 + 10, 10, 45)
+    jp_pct = (50 + jp_str) if mbti_type[3] == "J" else (50 - jp_str)
+
+    return {
+        "type": mbti_type,
+        "secondary": br["secondary"],
+        "confidence": br["confidence"],
+        "bagua": br["bagua"],
+        "bagua_name": br["bagua_name"],
+        "ei_score": round(ei_pct, 1),
+        "ns_score": round(ns_pct, 1),
+        "tf_score": round(tf_pct, 1),
+        "jp_score": round(jp_pct, 1),
+    }
+
+
+def compute_mbti_layers_from_captures(captures: list) -> dict:
+    """與前端 _etComputeMBTILayers 一致：全段 + 前/中/後 1/3 時間窗。"""
+    r_la = [_norm100_to_raw(c.get("low_alpha", 0) if isinstance(c, dict) else getattr(c, "low_alpha", 0))
+            for c in captures
+            if (c.get("low_alpha", 0) if isinstance(c, dict) else getattr(c, "low_alpha", 0) or 0) > 0]
+    r_th = [_norm100_to_raw(c.get("theta", 0) if isinstance(c, dict) else getattr(c, "theta", 0))
+            for c in captures
+            if (c.get("theta", 0) if isinstance(c, dict) else getattr(c, "theta", 0) or 0) > 0]
+
+    if len(r_la) < 4 or len(r_th) < 4:
+        fb = compute_mbti(compute_averages(captures))
+        fb = {**fb, "type": fb["mbti_type"]}
+        return {"archetype": fb, "family": fb, "social": fb, "peer": fb}
+
+    n  = min(len(r_la), len(r_th))
+    s1 = max(1, n // 3)
+    s2 = max(s1 + 1, n * 2 // 3)
+
+    archetype = _mbti_layer_from_raw_arrays(r_la, r_th)
+    social    = _mbti_layer_from_raw_arrays(r_la[:s1], r_th[:s1])
+    peer      = _mbti_layer_from_raw_arrays(r_la[s1:s2], r_th[s1:s2])
+    family    = _mbti_layer_from_raw_arrays(r_la[s2:], r_th[s2:])
+
+    base = archetype
+    return {
+        "archetype": archetype or base,
+        "family":    family or base,
+        "social":    social or base,
+        "peer":      peer or base,
+    }
+
+
+def aggregate_mbti_profiles(layers: dict) -> list:
+    """與前端 _renderEthrMbtiAnalysis 聚合邏輯一致，回傳 [{type, pct, layers}, ...]。"""
+    layer_order = ["archetype", "family", "social", "peer"]
+    type_score  = {}
+    type_layers = {}
+
+    for key in layer_order:
+        lay = layers.get(key) or {}
+        mbti_type = lay.get("type") or lay.get("mbti_type")
+        if not mbti_type:
+            continue
+        conf = lay.get("confidence", 70) or 70
+        primary_prob   = 50 + conf / 2
+        secondary_prob = 100 - primary_prob
+
+        type_score[mbti_type] = type_score.get(mbti_type, 0) + primary_prob / 4
+        type_layers.setdefault(mbti_type, [])
+        if key not in type_layers[mbti_type]:
+            type_layers[mbti_type].append(key)
+
+        secondary = lay.get("secondary")
+        if secondary:
+            type_score[secondary] = type_score.get(secondary, 0) + secondary_prob / 4
+
+    sorted_profiles = sorted(
+        [(t, round(s)) for t, s in type_score.items() if s >= 5],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    total = sum(p for _, p in sorted_profiles)
+    if total and total != 100 and sorted_profiles:
+        top = list(sorted_profiles[0])
+        top[1] += 100 - total
+        sorted_profiles[0] = tuple(top)
+
+    return [
+        {"type": t, "pct": p, "layers": type_layers.get(t, [])}
+        for t, p in sorted_profiles
+    ]
+
+
+def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
+    """
+    產出報告 App / headless 共用的 MBTI 欄位（強制與 APP 新演算法一致）。
+    傳入 captures 時啟用 4 層時間窗 + 多元性格聚合。
+    """
+    layers = compute_mbti_layers_from_captures(captures) if captures else None
+    primary = (layers or {}).get("archetype") or compute_mbti(avg)
+    mbti_type = primary.get("type") or primary.get("mbti_type")
+    profiles  = aggregate_mbti_profiles(layers) if layers else [{"type": mbti_type, "pct": 100, "layers": ["archetype"]}]
+
+    secondaries = []
+    if len(profiles) > 1:
+        for p in profiles[1:4]:
+            secondaries.append({
+                "mbti": p["type"],
+                "strength": p["pct"],
+                "reason": "、".join(p.get("layers") or []) or "邊界影響",
+            })
+    elif primary.get("secondary"):
+        secondaries.append({
+            "mbti": primary["secondary"],
+            "strength": max(5, 100 - int(primary.get("confidence", 70) or 70)),
+            "reason": "卦位邊界",
+        })
+
+    return {
+        "mbti_primary":      mbti_type,
+        "mbti_ei":           primary.get("ei_score"),
+        "mbti_ns":           primary.get("ns_score"),
+        "mbti_tf":           primary.get("tf_score"),
+        "mbti_jp":           primary.get("jp_score"),
+        "mbti_bagua":        primary.get("bagua", ""),
+        "mbti_bagua_name":   primary.get("bagua_name", ""),
+        "mbti_secondaries":  secondaries,
+        "mbti_profiles":     profiles,
+        "mbti_layers":       layers,
     }

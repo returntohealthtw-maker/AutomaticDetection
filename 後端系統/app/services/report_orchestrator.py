@@ -362,6 +362,27 @@ def _call_vite_prefill(
     """
     from . import headless_renderer
 
+    # 如果 brainwave_data 還沒帶 mbti_primary，嘗試即時計算補入
+    if brainwave_data and not brainwave_data.get("mbti_primary"):
+        try:
+            from app.services.algorithms import BandAverages, build_mbti_payload
+            ba_inner = (brainwave_data.get("bands_avg") or {})
+            _avg = BandAverages(
+                attention  = brainwave_data.get("attention_percentage", 50),
+                meditation = brainwave_data.get("meditation_percentage", 50),
+                delta      = ba_inner.get("delta", 50),
+                theta      = ba_inner.get("theta", 50),
+                low_alpha  = ba_inner.get("low_alpha", ba_inner.get("alpha", 50)),
+                high_alpha = ba_inner.get("high_alpha", ba_inner.get("alpha", 50)),
+                low_beta   = ba_inner.get("low_beta", ba_inner.get("beta", 50)),
+                high_beta  = ba_inner.get("high_beta", ba_inner.get("beta", 50)),
+                low_gamma  = ba_inner.get("low_gamma", ba_inner.get("gamma", 50)),
+                high_gamma = ba_inner.get("high_gamma", ba_inner.get("gamma", 50)),
+            )
+            brainwave_data = {**brainwave_data, **build_mbti_payload(_avg)}
+        except Exception as _me:
+            logger.warning("orchestrator: MBTI payload build failed: %s", _me)
+
     if headless_renderer.is_available():
         result = headless_renderer.start_headless_job(
             report_type=report_type,

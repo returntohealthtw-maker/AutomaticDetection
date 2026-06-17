@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.core.database import SessionLocal
 from app.core import models
 from app.core.config import settings
-from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
+from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti, build_mbti_payload
 
 
 def _clip_zh(text: str, max_len: int = 100) -> str:
@@ -238,6 +238,7 @@ async def generate_report_async(report_id: int, session_id: int):
                         "gamma_low":  max(0,   _sf(avg.low_gamma)),
                     },
                 }
+                bw.update(build_mbti_payload(avg, detection_captures))
 
                 # 取 api_base
                 import os as _os

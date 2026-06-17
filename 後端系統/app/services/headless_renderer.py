@@ -260,7 +260,19 @@ def start_headless_job(
         "sample_count":   (brainwave_data or {}).get("sample_count"),
         "session_id":     session_id,
         "bw_present":     bw_present,
+        # ── 後端統一 MBTI（直接帶入，讓 React App 不必重算）──
+        "mbti_primary":      (brainwave_data or {}).get("mbti_primary"),
+        "mbti_ei":           (brainwave_data or {}).get("mbti_ei"),
+        "mbti_ns":           (brainwave_data or {}).get("mbti_ns"),
+        "mbti_tf":           (brainwave_data or {}).get("mbti_tf"),
+        "mbti_jp":           (brainwave_data or {}).get("mbti_jp"),
+        "mbti_bagua":        (brainwave_data or {}).get("mbti_bagua"),
+        "mbti_bagua_name":   (brainwave_data or {}).get("mbti_bagua_name"),
+        "mbti_secondaries":  (brainwave_data or {}).get("mbti_secondaries"),
+        "mbti_profiles":     (brainwave_data or {}).get("mbti_profiles"),
     }
+    # 去除 None，避免 JSON 體積過大
+    bw_payload = {k: v for k, v in bw_payload.items() if v is not None}
     bw_b64 = base64.urlsafe_b64encode(_json.dumps(bw_payload).encode("utf-8")).decode("ascii")
 
     params = {

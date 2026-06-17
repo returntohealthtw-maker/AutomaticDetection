@@ -2869,14 +2869,30 @@
             </div>
           </div>
 
-          <!-- MBTI -->
-          <div class="et-section">
-            <div class="et-section-title">🔵 MBTI 性格傾向</div>
-            <div class="et-section-desc">
-              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源是來自外在互動或內在思考、直覺(N)/感官(S) 反映訊息處理偏好抽象想像或具體現實、理性(T)/情感(F) 反映決策依據邏輯或人際感受、計畫(J)/彈性(P) 反映生活節奏喜歡規劃或隨機應變。系統依即時腦波估算各維度傾向強度。
+          <!-- MBTI（多性格聚合，與健康檢查頁相同演算法）-->
+          <div class="et-section" id="r2-mbti-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div class="et-section-title" style="margin-bottom:0;">🧬 MBTI 性格分析</div>
+              <span id="r2-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
             </div>
-            <div class="et-mbti-type" id="r2-mbti-type">----</div>
-            <div class="et-mbti-dims" id="r2-mbti-dims"></div>
+            <div class="et-section-desc">
+              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源、直覺(N)/感官(S) 反映訊息處理偏好、理性(T)/情感(F) 反映決策依據、計畫(J)/彈性(P) 反映生活節奏。系統依即時腦波分段估算各維度傾向，並聚合出 1–4 種性格樣貌。
+            </div>
+            <!-- 多元性格摘要 -->
+            <div id="r2-mbti-summary" style="font-size:12px;color:#ccc;line-height:1.7;margin-bottom:12px;padding:10px;background:rgba(255,255,255,0.07);border-radius:10px;"></div>
+            <!-- 4 層 Tab -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="r2-mbti-layer-tabs">
+              <button class="ethr-layer-tab active" data-layer="archetype" style="background:#1a237e;color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">原型性格</button>
+              <button class="ethr-layer-tab" data-layer="family" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">原生家庭</button>
+              <button class="ethr-layer-tab" data-layer="social" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">社會化</button>
+              <button class="ethr-layer-tab" data-layer="peer" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">同儕關係</button>
+            </div>
+            <div id="r2-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
+            <!-- fallback：舊維度條（由 _renderBrainAnalysisInto 填入，多性格模式下隱藏）-->
+            <div id="r2-mbti-legacy" style="display:none;">
+              <div class="et-mbti-type" id="r2-mbti-type">----</div>
+              <div class="et-mbti-dims" id="r2-mbti-dims"></div>
+            </div>
           </div>
 
           <!-- 五大優勢 -->
@@ -7053,12 +7069,149 @@ const _ET_BRAIN_INFO = {
 
 function _renderEegTestResult() { _renderBrainAnalysisInto('et-'); }
 
+// ─── 3 分鐘檢測結果頁：多性格聚合 UI（與健康檢查頁完全相同邏輯）─────────
+let _r2MbtiLayerResults  = null;
+let _r2MbtiCurrentType   = '';
+let _r2MbtiActiveLayer   = 'archetype';
+
+function _renderR2MbtiList() {
+  const listEl = document.getElementById('r2-mbti-list');
+  if (!listEl) return;
+  const layer = _r2MbtiActiveLayer;
+  const layerMeta = _ETHR_MBTI_LAYERS[layer] || { label: layer, icon:'•', desc:'' };
+  const layerResult = (_r2MbtiLayerResults && _r2MbtiLayerResults[layer]) || null;
+  const id = (layerResult && layerResult.type) || _r2MbtiCurrentType;
+  const m = id ? _ETHR_MBTI_TABLE[id] : null;
+  if (!id || !m) {
+    listEl.innerHTML = '<div style="color:#aaa;font-size:12px;text-align:center;padding:14px;">尚未推論出性格類型</div>';
+    return;
+  }
+  let dimsHtml = '';
+  if (layerResult && layerResult.dims) {
+    dimsHtml = '<div style="font-size:11px;color:#ccc;margin:8px 0 6px;line-height:1.7;">'
+      + layerResult.dims.map(d =>
+          `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#ef9a9a' : '#90caf9'};font-weight:700;">${d.dominant}</span> (${Math.round(d.pct)}%)`
+        ).join(' · ')
+      + '</div>';
+  }
+  listEl.innerHTML = `<div class="ethr-mbti-card is-current" style="background:rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px;color:white;">
+    <div style="font-size:11px;color:#90caf9;font-weight:700;margin-bottom:6px;">${layerMeta.icon} ${layerMeta.label}　<span style="color:#aaa;font-weight:400;">${layerMeta.desc}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:16px;font-weight:800;color:#fff;">${m.emoji} ${id}</span>
+      <span style="font-size:12px;color:#90caf9;">${m.name}</span>
+    </div>
+    ${dimsHtml}
+    <div style="font-size:11px;color:#ccc;line-height:1.7;margin-top:6px;">${m[layer] || '—'}</div>
+  </div>`;
+}
+
+function _bindR2MbtiTabs() {
+  const tabs = document.querySelectorAll('#r2-mbti-layer-tabs .ethr-layer-tab');
+  if (!tabs.length) return;
+  tabs.forEach(btn => {
+    btn.onclick = () => {
+      tabs.forEach(b => { b.style.background = 'rgba(255,255,255,0.15)'; b.classList.remove('active'); });
+      btn.style.background = '#1a237e';
+      btn.classList.add('active');
+      _r2MbtiActiveLayer = btn.dataset.layer;
+      _renderR2MbtiList();
+    };
+  });
+}
+
+function _renderR2MbtiAnalysis(acc) {
+  const section = document.getElementById('r2-mbti-section');
+  if (!section || !acc) return;
+
+  let layers;
+  try { layers = _etComputeMBTILayers(acc); } catch(e) { layers = null; }
+  if (!layers || !layers.archetype || !layers.archetype.type) return;
+
+  _r2MbtiLayerResults = layers;
+  _r2MbtiCurrentType  = layers.archetype.type;
+  _r2MbtiActiveLayer  = 'archetype';
+
+  // 聚合（與 _renderEthrMbtiAnalysis 完全相同）
+  const layerOrder = ['archetype','family','social','peer'];
+  const typeScore  = {};
+  const typeLayerMap = {};
+  layerOrder.forEach(k => {
+    const lay = layers[k];
+    if (!lay || !lay.type) return;
+    const conf = (lay.confidence != null) ? lay.confidence : 70;
+    const pP = 50 + conf / 2;
+    const pS = 100 - pP;
+    typeScore[lay.type] = (typeScore[lay.type] || 0) + pP / 4;
+    if (!typeLayerMap[lay.type]) typeLayerMap[lay.type] = [];
+    if (!typeLayerMap[lay.type].includes(k)) typeLayerMap[lay.type].push(k);
+    if (lay.secondary) {
+      typeScore[lay.secondary] = (typeScore[lay.secondary] || 0) + pS / 4;
+      if (!typeLayerMap[lay.secondary]) typeLayerMap[lay.secondary] = [];
+    }
+  });
+  const sorted = Object.entries(typeScore)
+    .filter(([, s]) => s >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, score]) => ({ type, pct: Math.round(score), layers: typeLayerMap[type] || [] }));
+  const total = sorted.reduce((s, e) => s + e.pct, 0);
+  if (total > 0 && total !== 100 && sorted.length) sorted[0].pct += (100 - total);
+
+  const distinctCount = sorted.length;
+  _r2MbtiCurrentType = sorted[0].type;
+  const cur = _ETHR_MBTI_TABLE[sorted[0].type] || { name:'?', emoji:'❓' };
+
+  // 一致性描述
+  const consistencyMsg = (() => {
+    if (distinctCount === 1) return `<div style="background:rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">✨ <b>性格高度一致</b>：所有情境下均展現同一種人格樣貌，內外言行如一。</div>`;
+    if (distinctCount <= 2) return `<div style="background:rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">🎭 <b>雙面人格</b>：依情境切換 2 種人格，真實自我與對外形象之間有一定差異。</div>`;
+    if (distinctCount <= 4) return `<div style="background:rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">🌈 <b>多元人格層次</b>：在不同情境下呈現 ${distinctCount} 種人格樣貌，適應性強、情境敏感度高。</div>`;
+    return `<div style="background:rgba(255,255,255,0.1);padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;">🦋 <b>豐富多樣的性格</b>：腦波呈現 ${distinctCount} 種人格可能性，您是高度複雜且有深度的人。</div>`;
+  })();
+
+  const layerLabel = (k) => (_ETHR_MBTI_LAYERS[k] && _ETHR_MBTI_LAYERS[k].label) || k;
+  const groupSummary = sorted.map((g, idx) => {
+    const mEntry = _ETHR_MBTI_TABLE[g.type] || { name:'?', emoji:'❓' };
+    const barColor = idx === 0 ? '#90caf9' : '#7986cb';
+    const layersText = g.layers.length ? g.layers.map(layerLabel).join(' / ') : '邊界影響';
+    return `<div style="padding:8px 10px;background:rgba(255,255,255,0.07);border-radius:8px;margin-bottom:6px;border-left:3px solid ${barColor};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-weight:700;font-size:13px;color:#fff;">${mEntry.emoji} ${g.type} · ${mEntry.name}</div>
+        <span style="font-size:13px;font-weight:800;color:${barColor};">${g.pct}%</span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin-bottom:4px;">
+        <div style="height:100%;width:${g.pct}%;background:${barColor};border-radius:3px;transition:width 0.6s;"></div>
+      </div>
+      <div style="font-size:10px;color:#aaa;">${g.layers.length ? '情境：' + layersText : '(邊界相鄰型)'}</div>
+    </div>`;
+  }).join('');
+
+  const sampleCount = (acc.attn || []).length;
+  const summaryEl = document.getElementById('r2-mbti-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = `<div style="margin-bottom:8px;">本次 ${sampleCount} 筆腦波資料 · 推論出 <b>${distinctCount} 種性格樣貌</b>（佔比合計 100%）：</div>${consistencyMsg}${groupSummary}<div style="font-size:10px;color:#777;margin-top:8px;">點擊下方 tab 可看各情境層次的詳細說明。</div>`;
+  }
+
+  // 更新 tab 顏色 badge
+  const tag = document.getElementById('r2-mbti-current');
+  if (tag) tag.textContent = `${cur.emoji} ${sorted[0].type} · ${cur.name}`;
+
+  // 隱藏舊版維度條
+  const legacy = document.getElementById('r2-mbti-legacy');
+  if (legacy) legacy.style.display = 'none';
+
+  _bindR2MbtiTabs();
+  _renderR2MbtiList();
+}
+// ─── /r2 多性格 ──────────────────────────────────────────────────────────────
+
 // 將腦波分析結果渲染到帶有 prefix 的 DOM 元素（'et-' 給 eegtest-result，'r2-' 給 screen-results）
 function _renderBrainAnalysisInto(prefix) {
   if (!_eegLiveAccum) return;
   const acc = _eegLiveAccum;
   const indices = _etComputeAll(acc);
   const mbti    = _etComputeMBTI(acc);
+  // 如果是 r2- 前綴，觸發多性格聚合 UI
+  if (prefix === 'r2-') { try { _renderR2MbtiAnalysis(acc); } catch(e) { console.warn('r2 mbti', e); } }
   const colorKey= _etCalcBrainColor(acc);
   const info    = _ET_BRAIN_INFO[colorKey] || _ET_BRAIN_INFO.orange;
 

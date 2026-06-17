@@ -1523,7 +1523,7 @@ def diag_mbti(
     用於排查「MBTI 永遠 ISTP」問題。"""
     import math
     from scipy.stats import norm as _norm
-    from app.services.algorithms import _norm100_to_raw, BandAverages, compute_mbti
+    from app.services.algorithms import _norm100_to_raw, BandAverages, compute_mbti, compute_mbti_layers_from_captures, aggregate_mbti_profiles
     from app.algorithms.bagua import Bagua
     from app.algorithms.data_stats import DATA_STATS
 
@@ -1565,7 +1565,20 @@ def diag_mbti(
     la_std  = DATA_STATS["lowAlpha"]["std"]
     p_la = float(_norm.cdf(math.log10(max(raw_la, 0.1)), la_mean, la_std))
     p_th = float(_norm.cdf(math.log10(max(raw_th, 0.1)), la_mean, la_std))
-    bagua = Bagua.calcBagua(None, raw_la)
+    bagua     = Bagua.calcBagua(None, raw_la)
+    bagua_li  = Bagua.calcBaguaWithLi(raw_la, raw_th)
+
+    # 4 層時間窗 MBTI + 多性格聚合
+    det_dicts = [
+        {"low_alpha": getattr(c,"low_alpha",0), "theta": getattr(c,"theta",0),
+         "attention": getattr(c,"attention",0), "meditation": getattr(c,"meditation",0),
+         "delta": getattr(c,"delta",0), "high_alpha": getattr(c,"high_alpha",0),
+         "low_beta": getattr(c,"low_beta",0), "high_beta": getattr(c,"high_beta",0),
+         "low_gamma": getattr(c,"low_gamma",0), "high_gamma": getattr(c,"high_gamma",0)}
+        for c in det
+    ]
+    layers   = compute_mbti_layers_from_captures(det_dicts)
+    profiles = aggregate_mbti_profiles(layers)
 
     bagua_zones = [
         {"name": "qian", "range_norm": [0, 59.7], "pct": [0, 0.125], "mbti": ["INTJ","INTP"]},
@@ -1597,18 +1610,22 @@ def diag_mbti(
             "theta_is_high":        p_th > 0.5,
         },
         "bagua_result": {
-            "bagua": bagua.id,
-            "bagua_name": bagua.name,
+            "bagua_7gua":      bagua.id,
+            "bagua_8gua_li":   bagua_li.id,
+            "bagua_name":      bagua_li.name,
+            "note":            "8 卦（含離卦）與前端 _etBaguaMBTI(useLi=true) 一致，為報告使用的最終值",
             "gen_zone_range": "normalized lo_alpha in [70.1, 72.6] → ISTP/ISFP",
-            "current_zone": next((z for z in bagua_zones if z["name"] == bagua.id), None),
+            "current_zone": next((z for z in bagua_zones if z["name"] == bagua_li.id), None),
         },
         "mbti_result":   result,
+        "mbti_layers":   {k: {"type": v.get("type") or v.get("mbti_type"), "confidence": v.get("confidence")} for k, v in layers.items()},
+        "mbti_profiles": profiles,
         "all_bagua_zones": bagua_zones,
         "diagnosis": (
             "⚠️ lo_alpha 落在艮(gen)卦區間 [70.1-72.6]，所有此範圍的使用者都會得到 ISTP/ISFP。"
             "若多人總是得到 ISTP，表示受測者的 lo_alpha 頻段值相似，屬演算法正常行為。"
-            if bagua.id == "gen" else
-            f"lo_alpha={lo_alpha_avg:.1f} → {bagua.id}({bagua.name})卦 → {result['mbti_type']}"
+            if bagua_li.id == "gen" else
+            f"lo_alpha={lo_alpha_avg:.1f} → {bagua_li.id}({bagua_li.name})卦(8卦) → {result['mbti_type']}"
         ),
     }
 
