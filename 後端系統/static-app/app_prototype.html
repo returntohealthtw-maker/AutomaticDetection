@@ -6520,33 +6520,58 @@ function _etMakeMbtiResult(ei, ns, tf, jp) {
 // 輸入：原始 ThinkGear 頻段值（r_lalpha、r_theta 等，萬為單位）
 // 流程：lowAlpha 族群百分位 → 七卦（乾兌震巽坎艮坤）→ theta 百分位切兩型 → MBTI 16 型
 function _etBaguaMBTI(rawLA, rawTH) {
-  // 兩者都用 lowAlpha 的 mean/std（忠於原始 getPersonalityFromBagua 程式碼）
   const LA_MEAN = _ET_DATA_STATS.lowAlpha.mean;
   const LA_STD  = _ET_DATA_STATS.lowAlpha.std;
-  // 1. lowAlpha 族群百分位 → 七卦
+
+  // 1. lowAlpha 百分位 → 7 個區間（與 BrainDNA 原始演算法一致）
   const laPct = (rawLA > 0) ? _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD) : 0.4;
-  let bagua;
-  if      (laPct < 0.125) bagua = 0; // 乾 QIAN
-  else if (laPct < 0.250) bagua = 1; // 兌 DUI
-  else if (laPct < 0.375) bagua = 2; // 震 ZHEN
-  else if (laPct < 0.500) bagua = 3; // 巽 XUN
-  else if (laPct < 0.625) bagua = 4; // 坎 KAN
-  else if (laPct < 0.750) bagua = 5; // 艮 GEN
-  else                    bagua = 6; // 坤 KUN
-  // 2. theta 族群百分位（用 lowAlpha mean/std，忠於原始程式碼）
+  const BOUNDS = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0];
+  let bagua = 6;
+  for (let i = 0; i < 6; i++) { if (laPct < BOUNDS[i+1]) { bagua = i; break; } }
+
+  // 2. theta 百分位
   const thPct = (rawTH > 0) ? _etNormCdf((Math.log10(rawTH) - LA_MEAN) / LA_STD) : 0.4;
   const high  = thPct > 0.5;
-  // 3. 八卦 × theta → 16 型 MBTI
+
+  // 3. 區間 × theta → MBTI 16 型
   const MAP = [
-    ['INTJ','INTP'], // 0 乾  high→INTJ  low→INTP
-    ['ENTJ','ENTP'], // 1 兌  high→ENTJ  low→ENTP
-    ['ENFJ','ENFP'], // 2 震  high→ENFJ  low→ENFP
-    ['ISTJ','ISFJ'], // 3 巽  high→ISTJ  low→ISFJ
-    ['ESTJ','ESFJ'], // 4 坎  high→ESTJ  low→ESFJ
-    ['ISTP','ISFP'], // 5 艮  high→ISTP  low→ISFP
-    ['ESTP','ESFP'], // 6 坤  high→ESTP  low→ESFP
+    ['INTJ','INTP'],
+    ['ENTJ','ENTP'],
+    ['ENFJ','ENFP'],
+    ['ISTJ','ISFJ'],
+    ['ESTJ','ESFJ'],
+    ['ISTP','ISFP'],
+    ['ESTP','ESFP'],
   ];
-  return { type: MAP[bagua][high ? 0 : 1], laPct, thPct, bagua };
+  const primaryType = MAP[bagua][high ? 0 : 1];
+
+  // 4. 信心分數（0-100）
+  //    lowAlpha 信心：距離最近區間邊界越遠 → 越確定（邊界處=0, 區間中心=100）
+  const zoneStart = BOUNDS[bagua];
+  const zoneEnd   = BOUNDS[bagua + 1];
+  const zoneHalf  = (zoneEnd - zoneStart) / 2;
+  const distToBound = Math.min(laPct - zoneStart, zoneEnd - laPct);
+  const laConf = Math.min(1, distToBound / zoneHalf);
+  //    theta 信心：距離 0.5 切割線越遠 → 越確定
+  const thConf = Math.min(1, Math.abs(thPct - 0.5) / 0.3);
+  const confidence = Math.round((laConf * 0.65 + thConf * 0.35) * 100);
+
+  // 5. 邊界次型：當信心 < 75 時，計算相鄰區間的 MBTI 作為次要可能性
+  let secondary = null;
+  if (laConf < 0.6) {
+    const closerToLower = (laPct - zoneStart) < (zoneEnd - laPct);
+    const adjBagua = closerToLower ? bagua - 1 : bagua + 1;
+    if (adjBagua >= 0 && adjBagua <= 6) {
+      const adj = MAP[adjBagua][high ? 0 : 1];
+      if (adj !== primaryType) secondary = adj;
+    }
+  }
+  if (!secondary && thConf < 0.4) {
+    const alt = MAP[bagua][high ? 1 : 0];
+    if (alt !== primaryType) secondary = alt;
+  }
+
+  return { type: primaryType, laPct, thPct, bagua, confidence, secondary };
 }
 
 // 從 laPct / thPct 推導顯示用分數（方向與 type 一致，幅度反映信號強度）
@@ -6600,11 +6625,12 @@ function _etComputeMBTILayers(acc) {
   const mediMean = _etAvg(acc.medi || []);
   const mediStd  = _etStd(acc.medi || []);
 
-  // 3. 各層：乘以小幅情境係數後重跑完整八卦 pipeline
-  //    係數最大 ±12~15%，足以在族群百分位空間跨越一個卦的範圍（每卦寬 12.5%）
+  // 3. 各層：乘以小幅情境係數後重跑完整演算路徑
+  //    係數最大 ±12~15%，足以在族群百分位空間跨越一個區間範圍（每區間寬 12.5%）
   const mk = (laFac, thFac) => {
-    const { type, laPct, thPct } = _etBaguaMBTI(rawLA * laFac, rawTH * thFac);
-    return _etBaguaScores(type, laPct, thPct);
+    const br = _etBaguaMBTI(rawLA * laFac, rawTH * thFac);
+    const scores = _etBaguaScores(br.type, br.laPct, br.thPct);
+    return { ...scores, confidence: br.confidence, secondary: br.secondary };
   };
 
   return {
@@ -6803,82 +6829,91 @@ function _renderEthrMbtiAnalysis(state) {
   }
 
   _ethrMbtiLayerResults = layers;
-  _ethrMbtiCurrentType = layers.archetype.type;  // 主推論型 = 原型層次
+  _ethrMbtiCurrentType = layers.archetype.type;
 
-  // ─── 把 4 層按 MBTI 類型分組（找出不同 / 重複的層次）─────────────
-  // 例：4 層全部 INTJ → 1 種；2 層 INTJ + 2 層 ENFJ → 2 種；4 層各異 → 4 種
+  // ─── 聚合：4 層 × (主型 + 次型) → 各 MBTI 百分比 ───────────────
+  // 主型機率 = 50 + confidence/2（信心100%→100%確定；0%→50/50）
+  // 次型機率 = 100 - 主型機率
+  // 每層各占 25% 權重
   const layerOrder = ['archetype','family','social','peer'];
-  const groupsMap = {};  // { 'INTJ': ['archetype','family'], 'ENFJ': ['social','peer'] }
+  const typeScore = {};   // { 'INTJ': 加總分數(0-100), ... }
+  const typeLayerMap = {}; // { 'INTJ': ['archetype','family'], ... }
+
   layerOrder.forEach(k => {
-    const t = layers[k] && layers[k].type;
-    if (!t) return;
-    if (!groupsMap[t]) groupsMap[t] = [];
-    groupsMap[t].push(k);
+    const lay = layers[k];
+    if (!lay || !lay.type) return;
+    const conf = (lay.confidence != null) ? lay.confidence : 70;
+    const primaryProb   = 50 + conf / 2;     // 50~100
+    const secondaryProb = 100 - primaryProb;  // 0~50
+
+    typeScore[lay.type] = (typeScore[lay.type] || 0) + primaryProb / 4;
+    if (!typeLayerMap[lay.type]) typeLayerMap[lay.type] = [];
+    if (!typeLayerMap[lay.type].includes(k)) typeLayerMap[lay.type].push(k);
+
+    if (lay.secondary) {
+      typeScore[lay.secondary] = (typeScore[lay.secondary] || 0) + secondaryProb / 4;
+      if (!typeLayerMap[lay.secondary]) typeLayerMap[lay.secondary] = [];
+    }
   });
 
-  // 依照「該類型涵蓋的層次數」由多到少排序（最主導的人格樣貌排第一）
-  // 同票數時依層次優先順序：原型 > 原生家庭 > 社會化 > 同儕
-  const orderRank = (k) => layerOrder.indexOf(k);
-  const groups = Object.keys(groupsMap)
-    .map(type => ({
-      type,
-      layers: groupsMap[type].slice().sort((a,b) => orderRank(a) - orderRank(b)),
-      count: groupsMap[type].length,
-    }))
-    .sort((a,b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      return orderRank(a.layers[0]) - orderRank(b.layers[0]);
-    });
+  // 去掉佔比 < 5% 的邊緣型（避免雜訊），並由高到低排序
+  const sorted = Object.entries(typeScore)
+    .filter(([, s]) => s >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, score]) => ({ type, pct: Math.round(score), layers: typeLayerMap[type] || [] }));
 
-  const distinctCount = groups.length;  // 1 ~ 4
+  // 正規化到 100%（四捨五入誤差修正）
+  const total = sorted.reduce((s, e) => s + e.pct, 0);
+  if (total > 0 && total !== 100) sorted[0].pct += (100 - total);
 
-  // 主推論型改為「涵蓋層次最多」的那個（不再死綁原型）
-  _ethrMbtiCurrentType = groups[0].type;
-  const cur = _ETHR_MBTI_TABLE[groups[0].type] || { name:'?', emoji:'❓' };
+  const distinctCount = sorted.length;  // 1 ~ 7
+
+  // 主推論型 = 最高佔比的型
+  _ethrMbtiCurrentType = sorted[0].type;
+  const cur = _ETHR_MBTI_TABLE[sorted[0].type] || { name:'?', emoji:'❓' };
 
   section.style.display = 'block';
   const tag = document.getElementById('ethr-mbti-current');
-  if (tag) tag.textContent = `${cur.emoji} ${groups[0].type} · ${cur.name}`;
+  if (tag) tag.textContent = `${cur.emoji} ${sorted[0].type} · ${cur.name}`;
 
-  // ─── 一致性描述 ───────────────────────────────────────────────────
+  // ─── 一致性描述（依種數）─────────────────────────────────────────
   const consistencyMsg = (() => {
-    if (distinctCount === 1) {
-      return `<div style="background:linear-gradient(90deg,#e8eaf6,#f3e5f5);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-        ✨ <b>性格高度一致</b>：您在所有 4 個情境下都展現同一種人格樣貌，內外言行如一。
-      </div>`;
-    }
-    if (distinctCount === 2) {
-      return `<div style="background:linear-gradient(90deg,#e3f2fd,#fff3e0);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-        🎭 <b>雙重人格樣貌</b>：您依情境切換 2 種人格，內在自我與對外形象之間有明顯差異。
-      </div>`;
-    }
-    if (distinctCount === 3) {
-      return `<div style="background:linear-gradient(90deg,#fff3e0,#fce4ec);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-        🌈 <b>多元性格層次</b>：您在不同情境下呈現 3 種人格樣貌，是適應性高的個體。
-      </div>`;
-    }
+    if (distinctCount === 1) return `<div style="background:linear-gradient(90deg,#e8eaf6,#f3e5f5);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+      ✨ <b>性格高度一致</b>：所有情境下均展現同一種人格樣貌，內外言行如一。
+    </div>`;
+    if (distinctCount <= 2) return `<div style="background:linear-gradient(90deg,#e3f2fd,#fff3e0);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+      🎭 <b>雙面人格</b>：依情境切換 2 種人格，真實自我與對外形象之間有一定差異。
+    </div>`;
+    if (distinctCount <= 4) return `<div style="background:linear-gradient(90deg,#fff3e0,#fce4ec);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
+      🌈 <b>多元人格層次</b>：在不同情境下呈現 ${distinctCount} 種人格樣貌，適應性強、情境敏感度高。
+    </div>`;
     return `<div style="background:linear-gradient(90deg,#fce4ec,#e8eaf6);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-      🦋 <b>豐富多樣的性格</b>：您在 4 個情境下展現 4 種不同人格，內外世界有豐富的層次。
+      🦋 <b>豐富多樣的性格</b>：腦波呈現 ${distinctCount} 種人格可能性，您是高度複雜且有深度的人。
     </div>`;
   })();
 
-  // ─── 分組摘要：每個 MBTI 一行，後面接它代表的層次 ────────────────
+  // ─── 分組摘要：每個 MBTI 一行 + 百分比 ─────────────────────────
   const layerLabel = (k) => (_ETHR_MBTI_LAYERS[k] && _ETHR_MBTI_LAYERS[k].label) || k;
-  const groupSummary = groups.map(g => {
+  const groupSummary = sorted.map((g, idx) => {
     const mEntry = _ETHR_MBTI_TABLE[g.type] || { name:'?', emoji:'❓' };
-    const layersText = g.layers.map(layerLabel).join(' / ');
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f5f7ff;border-radius:8px;margin-bottom:6px;border-left:3px solid #1a237e;">
-      <div>
-        <div style="font-weight:700;font-size:14px;color:#1a237e;">${mEntry.emoji} ${g.type} ${mEntry.name}</div>
-        <div style="font-size:11px;color:#666;margin-top:2px;">適用於：${layersText}</div>
+    const layersText = g.layers.length ? g.layers.map(layerLabel).join(' / ') : '邊界影響';
+    const isMain = idx === 0;
+    const barColor = isMain ? '#1a237e' : '#7986cb';
+    return `<div style="padding:8px 10px;background:#f5f7ff;border-radius:8px;margin-bottom:6px;border-left:3px solid ${barColor};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-weight:700;font-size:13px;color:#1a237e;">${mEntry.emoji} ${g.type} · ${mEntry.name}</div>
+        <span style="font-size:13px;font-weight:800;color:${barColor};">${g.pct}%</span>
       </div>
-      <span style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">${g.count}/4 層</span>
+      <div style="height:5px;background:#e8eaf6;border-radius:3px;margin-bottom:4px;">
+        <div style="height:100%;width:${g.pct}%;background:${barColor};border-radius:3px;transition:width 0.6s;"></div>
+      </div>
+      <div style="font-size:10px;color:#888;">${g.layers.length ? '情境：' + layersText : '(邊界相鄰型)'}</div>
     </div>`;
   }).join('');
 
   const summary = document.getElementById('ethr-mbti-summary');
   if (summary) {
-    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 腦波演算法推論的 <b>${distinctCount} 種人格樣貌</b>：</div>${consistencyMsg}${groupSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 可看各層次（情境）下的詳細性格描述。</div>`;
+    summary.innerHTML = `<div style="margin-bottom:8px;font-size:12px;">本次 ${state.sampleCount} 筆腦波資料 · 推論出 <b>${distinctCount} 種性格樣貌</b>（佔比合計 100%）：</div>${consistencyMsg}${groupSummary}<div style="font-size:10px;color:#aaa;margin-top:8px;">點擊下方 tab 可看各情境層次的詳細說明。</div>`;
   }
 
   _bindEthrMbtiTabs();
