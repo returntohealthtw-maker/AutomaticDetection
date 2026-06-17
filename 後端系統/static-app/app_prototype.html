@@ -6519,7 +6519,10 @@ function _etMakeMbtiResult(ei, ns, tf, jp) {
 //
 // 輸入：原始 ThinkGear 頻段值（r_lalpha、r_theta 等，萬為單位）
 // 流程：lowAlpha 族群百分位 → 七卦（乾兌震巽坎艮坤）→ theta 百分位切兩型 → MBTI 16 型
-function _etBaguaMBTI(rawLA, rawTH) {
+// useLi=true 啟用 8 卦系統（含「離」卦）：
+//   在 laPct 0.250~0.375 帶，若 thPct > 0.5 → 離卦（INFJ/INFP），否則仍為震卦（ENFJ/ENFP）
+//   此改動引入 INFJ/INFP 兩型，增加多元性格覆蓋率
+function _etBaguaMBTI(rawLA, rawTH, useLi = false) {
   const LA_MEAN = _ET_DATA_STATS.lowAlpha.mean;
   const LA_STD  = _ET_DATA_STATS.lowAlpha.std;
 
@@ -6533,36 +6536,39 @@ function _etBaguaMBTI(rawLA, rawTH) {
   const thPct = (rawTH > 0) ? _etNormCdf((Math.log10(rawTH) - LA_MEAN) / LA_STD) : 0.4;
   const high  = thPct > 0.5;
 
-  // 3. 區間 × theta → MBTI 16 型
+  // 3. 8 卦（含離卦）：zone 2（0.250~0.375）且 theta 高 → 離卦映射 INFJ/INFP
+  //    否則維持 7 卦映射（震卦 → ENFJ/ENFP）
+  const liActive = useLi && bagua === 2 && high;
   const MAP = [
-    ['INTJ','INTP'],
-    ['ENTJ','ENTP'],
-    ['ENFJ','ENFP'],
-    ['ISTJ','ISFJ'],
-    ['ESTJ','ESFJ'],
-    ['ISTP','ISFP'],
-    ['ESTP','ESFP'],
+    ['INTJ','INTP'],                                  // 0: 乾 0.000~0.125
+    ['ENTJ','ENTP'],                                  // 1: 兌 0.125~0.250
+    liActive ? ['INFJ','INFP'] : ['ENFJ','ENFP'],     // 2: 離(8卦)/震(7卦) 0.250~0.375
+    ['ISTJ','ISFJ'],                                  // 3: 巽 0.375~0.500
+    ['ESTJ','ESFJ'],                                  // 4: 坎 0.500~0.625
+    ['ISTP','ISFP'],                                  // 5: 艮 0.625~0.750
+    ['ESTP','ESFP'],                                  // 6: 坤 0.750~1.000
   ];
   const primaryType = MAP[bagua][high ? 0 : 1];
 
   // 4. 信心分數（0-100）
-  //    lowAlpha 信心：距離最近區間邊界越遠 → 越確定（邊界處=0, 區間中心=100）
   const zoneStart = BOUNDS[bagua];
   const zoneEnd   = BOUNDS[bagua + 1];
   const zoneHalf  = (zoneEnd - zoneStart) / 2;
   const distToBound = Math.min(laPct - zoneStart, zoneEnd - laPct);
   const laConf = Math.min(1, distToBound / zoneHalf);
-  //    theta 信心：距離 0.5 切割線越遠 → 越確定
   const thConf = Math.min(1, Math.abs(thPct - 0.5) / 0.3);
   const confidence = Math.round((laConf * 0.65 + thConf * 0.35) * 100);
 
-  // 5. 邊界次型：當信心 < 75 時，計算相鄰區間的 MBTI 作為次要可能性
+  // 5. 邊界次型：laPct 靠近區間邊界時，計算相鄰卦位的 MBTI 作為次要可能性
   let secondary = null;
   if (laConf < 0.6) {
     const closerToLower = (laPct - zoneStart) < (zoneEnd - laPct);
     const adjBagua = closerToLower ? bagua - 1 : bagua + 1;
     if (adjBagua >= 0 && adjBagua <= 6) {
-      const adj = MAP[adjBagua][high ? 0 : 1];
+      // 相鄰卦位也需套用 liActive 判斷（僅限 zone 2）
+      const adjLiActive = useLi && adjBagua === 2 && high;
+      const adjMap = adjLiActive ? ['INFJ','INFP'] : MAP[adjBagua];
+      const adj = adjMap[high ? 0 : 1];
       if (adj !== primaryType) secondary = adj;
     }
   }
@@ -6594,21 +6600,20 @@ function _etBaguaScores(type, laPct, thPct) {
   return _etMakeMbtiResult(eiPct, nsPct, tfPct, jpPct);
 }
 
-// ─── 4 層 MBTI 推論 ────────────────────────────────────────────────
-// 每層用情境偏移乘以原始頻段值後，重跑完整八卦 pipeline
-//   原型（archetype）：天生本質，無偏移
-//   原生家庭（family）：α/θ 略增（冥想/放鬆態，alpha↑ theta↑）
-//   社會化（social）：α 略降（高度活化態，alpha↓）、θ 略降
-//   同儕關係（peer）：θ 略增（情感共鳴態）
+// ─── 4 層 MBTI 推論（時間窗分段 + 8 卦系統）─────────────────────────────
+// Direction C：將 3 分鐘原始腦波依序分成 3 段，各段算術均值跑獨立 MBTI
+//   全段平均  → archetype（整體核心）
+//   前段 0~1/3 → social  （初始警覺態，最接近公眾/社會化面）
+//   中段 1/3~2/3 → peer  （適應放鬆態，最接近同儕/朋友面）
+//   後段 2/3~1   → family（深度穩定態，最接近家庭/本我面）
+// Direction B：每段均啟用 8 卦系統（useLi=true），引入離卦 INFJ/INFP
 function _etComputeMBTILayers(acc) {
-  // 1. 原始 ThinkGear 頻段值：使用算術平均（與原始 BrainDNA 演算法完全一致）
-  //    後端流程：bandTo100(arithmetic_mean_raw) → 存 DB → Im() = arithmetic_mean → log10 = BrainDNA ✓
-  //    APP 採相同路徑：_etAvg(raw_i) = arithmetic_mean，三端完全一致
-  const rawLA = _etAvg(acc.r_lalpha || []);
-  const rawTH = _etAvg(acc.r_theta  || []);
+  // 過濾零值後的原始頻段陣列（零值表示設備遺漏包）
+  const r_la = (acc.r_lalpha || []).filter(v => v > 0);
+  const r_th = (acc.r_theta  || []).filter(v => v > 0);
 
-  // 原始頻段缺失時用 attn/medi fallback
-  if (!(rawLA > 0) || !(rawTH > 0)) {
+  // 原始頻段不足時（< 4 個樣本），退回 attn/medi fallback
+  if (r_la.length < 4 || r_th.length < 4) {
     const act  = _etClamp(_etAvg(acc.attn || []) / 100, 0, 1);
     const calm = _etClamp(_etAvg(acc.medi || []) / 100, 0, 1);
     const fb = _etMakeMbtiResult(
@@ -6620,24 +6625,33 @@ function _etComputeMBTILayers(acc) {
     return { archetype: fb, family: fb, social: fb, peer: fb };
   }
 
-  // 2. 情境因子（用於調整各層的 rawLA / rawTH 乘數）
-  const attnMean = _etAvg(acc.attn || []);
-  const mediMean = _etAvg(acc.medi || []);
-  const mediStd  = _etStd(acc.medi || []);
-
-  // 3. 各層：乘以小幅情境係數後重跑完整演算路徑
-  //    係數最大 ±12~15%，足以在族群百分位空間跨越一個區間範圍（每區間寬 12.5%）
-  const mk = (laFac, thFac) => {
-    const br = _etBaguaMBTI(rawLA * laFac, rawTH * thFac);
+  // 各時間段計算一個獨立 MBTI（8 卦含離卦）
+  const mk = (la_arr, th_arr) => {
+    if (!la_arr.length || !th_arr.length) return null;
+    const rawLA = _etAvg(la_arr);
+    const rawTH = _etAvg(th_arr);
+    const br     = _etBaguaMBTI(rawLA, rawTH, true);   // useLi=true（8 卦）
     const scores = _etBaguaScores(br.type, br.laPct, br.thPct);
     return { ...scores, confidence: br.confidence, secondary: br.secondary };
   };
 
+  // 以樣本數切三段（確保各段至少 1 個樣本）
+  const n  = Math.min(r_la.length, r_th.length);
+  const s1 = Math.max(1, Math.floor(n / 3));
+  const s2 = Math.max(s1 + 1, Math.floor(n * 2 / 3));
+
+  const archetype = mk(r_la,               r_th);                    // 全段
+  const social    = mk(r_la.slice(0, s1),  r_th.slice(0, s1));       // 前段
+  const peer      = mk(r_la.slice(s1, s2), r_th.slice(s1, s2));      // 中段
+  const family    = mk(r_la.slice(s2),     r_th.slice(s2));           // 後段
+
+  // 任何分段若為 null（邊界保護），以全段結果補位
+  const base = archetype;
   return {
-    archetype: mk(1.0,                                    1.0),
-    family:    mk(1 + (mediMean / 100) * 0.12,            1 + (mediMean / 100) * 0.10),
-    social:    mk(1 - (attnMean / 100) * 0.12,            1 - (attnMean / 100) * 0.08),
-    peer:      mk(1.0,                                    1 + (mediStd  /  50) * 0.12),
+    archetype: archetype || base,
+    family:    family    || base,
+    social:    social    || base,
+    peer:      peer      || base,
   };
 }
 
@@ -6738,10 +6752,10 @@ const _ETHR_MBTI_TABLE = {
 
 // 4 層性格的元資訊
 const _ETHR_MBTI_LAYERS = {
-  archetype: { label:'原型性格',   icon:'🌱', desc:'天生本質、最深層的人格驅動傾向' },
-  family:    { label:'原生家庭',   icon:'🏠', desc:'在父母/手足關係中形塑的角色性格' },
-  social:    { label:'社會化',     icon:'💼', desc:'在職場/公共場合對外的形象與行為' },
-  peer:      { label:'同儕關係',   icon:'👥', desc:'在朋友圈/親密同伴間的真實樣貌' },
+  archetype: { label:'原型性格',   icon:'🌱', desc:'全程腦波均值推論的整體核心性格，最接近天生本質' },
+  family:    { label:'原生家庭',   icon:'🏠', desc:'採集後段（放鬆穩定態）的腦波，最接近家庭/原生狀態' },
+  social:    { label:'社會化',     icon:'💼', desc:'採集前段（初始警覺態）的腦波，反映公眾/社會化面貌' },
+  peer:      { label:'同儕關係',   icon:'👥', desc:'採集中段（適應放鬆態）的腦波，反映同儕/朋友間的真實樣貌' },
 };
 
 // 4 層 MBTI 顯示狀態
