@@ -6442,6 +6442,13 @@ function _etComputeAll(acc) {
 
 // ─── 通用統計工具 ─────────────────────────────────────────────────
 function _etAvg(arr) { return arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+// 幾何平均（log 空間平均）：與後端 bandTo100→avg→Im 路徑等效，用於 MBTI 計算確保 APP 與報告一致
+function _etGeoMean(arr) {
+  const valid = (arr || []).filter(v => v > 0);
+  if (!valid.length) return 0;
+  const sumLog = valid.reduce((s, v) => s + Math.log10(v), 0);
+  return Math.pow(10, sumLog / valid.length);
+}
 function _etStd(arr) {
   if (!arr || arr.length < 2) return 0;
   const m = _etAvg(arr);
@@ -6562,9 +6569,11 @@ function _etBaguaScores(type, laPct, thPct) {
 //   社會化（social）：α 略降（高度活化態，alpha↓）、θ 略降
 //   同儕關係（peer）：θ 略增（情感共鳴態）
 function _etComputeMBTILayers(acc) {
-  // 1. 原始 ThinkGear 頻段值（r_lalpha 來自 Android raw_lalpha JSBridge 傳值）
-  const rawLA = _etAvg(acc.r_lalpha || []);
-  const rawTH = _etAvg(acc.r_theta  || []);
+  // 1. 原始 ThinkGear 頻段值：使用幾何平均（= log 空間算術平均）
+  //    後端流程：bandTo100(raw_i) → 存 DB → Im(avg) ≡ 10^avg(log10(raw_i)) = geometric_mean
+  //    APP 改用相同方式，確保兩端 MBTI 結果一致
+  const rawLA = _etGeoMean(acc.r_lalpha || []);
+  const rawTH = _etGeoMean(acc.r_theta  || []);
 
   // 原始頻段缺失時用 attn/medi fallback
   if (!(rawLA > 0) || !(rawTH > 0)) {
