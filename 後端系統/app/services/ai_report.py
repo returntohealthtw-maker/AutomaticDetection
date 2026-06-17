@@ -320,6 +320,17 @@ def _run_full_generation(
                             db.close()
                     except Exception as e:
                         logger.exception("DB 更新失敗：%s", e)
+
+                    # ── Firebase 同步：加入佇列（伺服器重啟不丟失，自動 retry）──
+                    try:
+                        from app.services import firebase_sync as _fb
+                        if _fb.is_configured():
+                            _fb.enqueue(
+                                session_id=job["session_id"],
+                                report_id=None,
+                            )
+                    except Exception as _fb_err:
+                        logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
             except Exception as e:
                 job["pdf_status"] = "failed"
                 job["pdf_error"] = f"{type(e).__name__}: {e}"

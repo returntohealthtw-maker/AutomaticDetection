@@ -306,6 +306,11 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN email_sent INTEGER DEFAULT 0")
     if not has_column("reports", "talent_report_kind"):
         pending.append("ALTER TABLE reports ADD COLUMN talent_report_kind VARCHAR(32) NULL")
+    # eeg_captures – BrainDNA 算術平均 MBTI 欄位
+    if not has_column("eeg_captures", "mbti_la"):
+        pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_la INTEGER NULL")
+    if not has_column("eeg_captures", "mbti_theta"):
+        pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_theta INTEGER NULL")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
@@ -408,6 +413,40 @@ async def startup():
 
     # ── 重啟後自動修復孤兒報告 ────────────────────────────────────────────
     asyncio.create_task(_reset_orphan_generating_reports())
+
+    # ── Firebase 同步服務：啟動排程 ──────────────────────────────────────
+    try:
+        from app.services import firebase_sync as _fb
+        if _fb.is_configured():
+            print("[Firebase Sync] ✅ 已設定，新報告將自動同步至 Firebase")
+            # 啟動 APScheduler：每 5 分鐘掃一次佇列補漏
+            try:
+                from apscheduler.schedulers.background import BackgroundScheduler
+                from app.core.database import SessionLocal as _SL
+                _sched = BackgroundScheduler(timezone="Asia/Taipei")
+                _sched.add_job(
+                    func=lambda: _fb.run_pending_syncs(_SL),
+                    trigger="interval",
+                    minutes=5,
+                    id="firebase_sync_job",
+                    replace_existing=True,
+                )
+                _sched.start()
+                print("[Firebase Sync] ⏱ 排程已啟動（每 5 分鐘補漏）")
+                # 啟動後立即跑一次，補漏前次重啟時未完成的記錄
+                import threading as _thr
+                _thr.Thread(
+                    target=lambda: _fb.run_pending_syncs(_SL),
+                    daemon=True, name="fb-sync-startup"
+                ).start()
+            except ImportError:
+                print("[Firebase Sync] ⚠ APScheduler 未安裝，排程停用（pip install apscheduler）")
+            except Exception as _sched_e:
+                print(f"[Firebase Sync] ⚠ 排程啟動失敗（無害）: {_sched_e}")
+        else:
+            print("[Firebase Sync] ⏭ 未設定（FIREBASE_API_KEY / FIREBASE_EMAIL / FIREBASE_PASSWORD），跳過同步")
+    except Exception as _fb_e:
+        print(f"[Firebase Sync] 初始化失敗（無害）: {_fb_e}")
 
 
 @app.get("/")

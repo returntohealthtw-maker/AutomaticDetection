@@ -149,6 +149,11 @@ def save_eeg_stats(
         hi = bands.get(f"high_{band_key}")
         return _i(hi if hi is not None else bands.get(band_key))
 
+    # BrainDNA 算術平均 MBTI 欄位（前端提供時儲存，否則 NULL）
+    def _mbti_v(key):
+        v = bands.get(key)
+        return _i(v) if v is not None else None
+
     cap = M.EegCapture(
         session_id   = sess.session_id,
         seq_num      = 0,
@@ -166,6 +171,8 @@ def save_eeg_stats(
         low_gamma    = _lo("gamma"),
         high_gamma   = _hi("gamma"),
         feedback     = 0,
+        mbti_la      = _mbti_v("mbti_la"),
+        mbti_theta   = _mbti_v("mbti_theta"),
     )
     db.add(cap)
     db.commit()

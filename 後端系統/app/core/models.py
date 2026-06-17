@@ -66,6 +66,9 @@ class EegCapture(Base):
     low_gamma    = Column(Integer, default=0)
     high_gamma   = Column(Integer, default=0)
     feedback     = Column(Integer, default=0)
+    # BrainDNA 算術平均 MBTI 專用：bandTo100(arithmetic_mean_raw_lowAlpha/theta)
+    mbti_la      = Column(Integer, nullable=True)
+    mbti_theta   = Column(Integer, nullable=True)
 
     session = relationship("Session", back_populates="captures")
 
@@ -256,3 +259,37 @@ class ShareRuleSet(Base):
     rules_json   = Column(Text, nullable=False)   # 整包 JSON
     updated_by   = Column(String(100), nullable=True)
     updated_at   = Column(Integer, default=0)
+
+
+class FirebaseSyncLog(Base):
+    """Firebase 同步佇列 / 日誌
+
+    每筆 session 完成後在此表插入一筆 pending 記錄。
+    背景排程定期掃 pending/failed（retry < 5）並嘗試推送 Firebase API。
+    已成功推送的記錄保留供稽核，不刪除。
+
+    狀態流：
+        pending  → synced  （成功）
+        pending  → failed  （失敗，retry_count < MAX_RETRY → 自動重試）
+        failed   → synced  （重試成功）
+        failed   → failed  （達 MAX_RETRY → 停止重試，需人工處理）
+    """
+    __tablename__ = "firebase_sync_log"
+
+    id                  = Column(Integer,     primary_key=True, autoincrement=True)
+    session_id          = Column(Integer,     ForeignKey("sessions.session_id", ondelete="SET NULL"),
+                                              nullable=True, index=True)
+    report_id           = Column(Integer,     nullable=True)
+    status              = Column(String(16),  default="pending", nullable=False, index=True)
+    # pending / syncing / synced / failed
+    fb_session_id       = Column(String(128), nullable=True)   # Firebase 端產生的 sessionId
+    fb_subject_id       = Column(String(128), nullable=True)   # Firebase 端產生的 subjectId
+    retry_count         = Column(Integer,     default=0)
+    last_error          = Column(Text,        nullable=True)
+    created_at          = Column(TIMESTAMP,   server_default=func.now())
+    synced_at           = Column(TIMESTAMP,   nullable=True)
+    next_retry_at       = Column(TIMESTAMP,   nullable=True)   # NULL = 立刻可重試
+
+    __table_args__ = (
+        Index("idx_fb_sync_status_retry", "status", "next_retry_at"),
+    )

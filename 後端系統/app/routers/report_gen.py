@@ -570,6 +570,16 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
 
                 db.commit()
                 logger.info("[report-gen/start] %s 報告已寫入 DB，session_id=%s", ext_mode, req.session_id)
+
+                # ── Firebase 同步：加入佇列（伺服器重啟不丟失，自動 retry）──
+                if req.session_id:
+                    try:
+                        from app.services import firebase_sync as _fb
+                        if _fb.is_configured():
+                            _fb.enqueue(session_id=req.session_id)
+                    except Exception as _fb_err:
+                        logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
+
             except Exception as db_err:
                 logger.warning("[report-gen/start] 寫入 DB 失敗（%s）: %s", ext_mode, db_err)
 

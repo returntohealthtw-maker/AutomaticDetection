@@ -5752,12 +5752,23 @@ function _ingestEegSample(s) {
 
 function _summarizeEegAccum(acc) {
   const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
+  // BrainDNA 算術平均法：對 raw ThinkGear 值取算術平均後再套 bandTo100
+  // 原始 BrainDNA 使用 log10(arithmetic_mean_raw)，此等價形式確保
+  // 後端 Im(bandTo100(arith_mean)) = arith_mean → log10 = BrainDNA ✓
+  const _rawArith = arr => (arr && arr.length) ? arr.reduce((s,v)=>s+v,0)/arr.length : 0;
+  const _b100 = v => Math.max(0, Math.min(100, Math.round(Math.log10(Math.max(v,0)+1)/6*100)));
+
   // 只要任何 sub-band 陣列有資料，就視為 8-band 模式（避免只有部分陣列有資料時漏存）
   const has8 = ['low_alpha','high_alpha','low_beta','high_beta','low_gamma','high_gamma']
     .some(k => acc[k] && acc[k].length > 0);
+
+  // theta：BrainDNA 算術平均（有 raw 值優先，否則退回 bandTo100 平均）
+  const rawThArith = _rawArith(acc.r_theta || []);
+  const thetaVal   = rawThArith > 0 ? _b100(rawThArith) : avg(acc.theta);
+
   const bands = {
     delta: avg(acc.delta),
-    theta: avg(acc.theta),
+    theta: thetaVal,
     alpha: avg(acc.alpha),
     beta:  avg(acc.beta),
     gamma: avg(acc.gamma),
@@ -5766,7 +5777,9 @@ function _summarizeEegAccum(acc) {
   let bands_7 = null;
   if (has8) {
     const _sub = k => (acc[k] && acc[k].length > 0) ? avg(acc[k]) : avg(acc[k.replace('low_','').replace('high_','')] || []);
-    const loA = _sub('low_alpha');
+    // low_alpha：BrainDNA 算術平均（有 raw 值優先，否則退回 bandTo100 平均）
+    const rawLaArith = _rawArith(acc.r_lalpha || []);
+    const loA = rawLaArith > 0 ? _b100(rawLaArith) : _sub('low_alpha');
     const hiA = _sub('high_alpha');
     const loB = _sub('low_beta');
     const hiB = _sub('high_beta');
@@ -5778,7 +5791,7 @@ function _summarizeEegAccum(acc) {
     bands.low_gamma  = loG;  bands.high_gamma = hiG;
     // 同時建立 bands_7（與後端 _session_to_brainwave_data 格式一致，讓 headless_renderer 優先讀取）
     bands_7 = {
-      theta:      bands.theta,
+      theta:      thetaVal,
       alpha_high: hiA, alpha_low: loA,
       beta_high:  hiB, beta_low:  loB,
       gamma_high: hiG, gamma_low: loG,
@@ -6442,13 +6455,7 @@ function _etComputeAll(acc) {
 
 // ─── 通用統計工具 ─────────────────────────────────────────────────
 function _etAvg(arr) { return arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
-// 幾何平均（log 空間平均）：與後端 bandTo100→avg→Im 路徑等效，用於 MBTI 計算確保 APP 與報告一致
-function _etGeoMean(arr) {
-  const valid = (arr || []).filter(v => v > 0);
-  if (!valid.length) return 0;
-  const sumLog = valid.reduce((s, v) => s + Math.log10(v), 0);
-  return Math.pow(10, sumLog / valid.length);
-}
+// _etGeoMean 已停用：改用 _etAvg（算術平均），與 BrainDNA 原始演算法一致
 function _etStd(arr) {
   if (!arr || arr.length < 2) return 0;
   const m = _etAvg(arr);
@@ -6569,11 +6576,11 @@ function _etBaguaScores(type, laPct, thPct) {
 //   社會化（social）：α 略降（高度活化態，alpha↓）、θ 略降
 //   同儕關係（peer）：θ 略增（情感共鳴態）
 function _etComputeMBTILayers(acc) {
-  // 1. 原始 ThinkGear 頻段值：使用幾何平均（= log 空間算術平均）
-  //    後端流程：bandTo100(raw_i) → 存 DB → Im(avg) ≡ 10^avg(log10(raw_i)) = geometric_mean
-  //    APP 改用相同方式，確保兩端 MBTI 結果一致
-  const rawLA = _etGeoMean(acc.r_lalpha || []);
-  const rawTH = _etGeoMean(acc.r_theta  || []);
+  // 1. 原始 ThinkGear 頻段值：使用算術平均（與原始 BrainDNA 演算法完全一致）
+  //    後端流程：bandTo100(arithmetic_mean_raw) → 存 DB → Im() = arithmetic_mean → log10 = BrainDNA ✓
+  //    APP 採相同路徑：_etAvg(raw_i) = arithmetic_mean，三端完全一致
+  const rawLA = _etAvg(acc.r_lalpha || []);
+  const rawTH = _etAvg(acc.r_theta  || []);
 
   // 原始頻段缺失時用 attn/medi fallback
   if (!(rawLA > 0) || !(rawTH > 0)) {
@@ -6871,7 +6878,7 @@ function _renderEthrMbtiAnalysis(state) {
 
   const summary = document.getElementById('ethr-mbti-summary');
   if (summary) {
-    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 八卦演算法推論的 <b>${distinctCount} 種人格樣貌</b>：</div>${consistencyMsg}${groupSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 可看各層次（情境）下的詳細性格描述。</div>`;
+    summary.innerHTML = `<div style="margin-bottom:8px;">本次 ${state.sampleCount} 筆腦波資料 · 腦波演算法推論的 <b>${distinctCount} 種人格樣貌</b>：</div>${consistencyMsg}${groupSummary}<div style="font-size:11px;color:#888;margin-top:8px;">點擊下方 tab 可看各層次（情境）下的詳細性格描述。</div>`;
   }
 
   _bindEthrMbtiTabs();
