@@ -5615,6 +5615,7 @@ function _persistEegStats(stats) {
           attention_percentage:  stats.attention_percentage,
           meditation_percentage: stats.meditation_percentage,
           bands_avg:             stats.bands_avg,
+          raw_arrays:            stats.raw_arrays || null,
         }),
       });
       if (r && r.ok) {
@@ -5804,6 +5805,21 @@ function _summarizeEegAccum(acc) {
     bands_avg:             bands,
   };
   if (bands_7) result.bands_7 = bands_7;
+
+  // 保留原始逐秒陣列（供 Firebase 腦波資料庫 & MBTI 時間窗分析使用）
+  // 每個陣列長度約 180（3 分鐘 × 1Hz），傳給後端後存入 Firebase Firestore + BigQuery
+  result.raw_arrays = {
+    attn:     (acc.attn    || []).slice(),   // 每秒 attention（0-100）
+    medi:     (acc.medi    || []).slice(),   // 每秒 meditation（0-100）
+    r_delta:  (acc.r_delta || []).slice(),   // 原始 ThinkGear delta 頻段功率
+    r_theta:  (acc.r_theta || []).slice(),   // 原始 theta（MBTI 時間窗分析核心）
+    r_lalpha: (acc.r_lalpha|| []).slice(),   // 原始 lowAlpha（MBTI 時間窗分析核心）
+    r_halpha: (acc.r_halpha|| []).slice(),   // 原始 highAlpha
+    r_lbeta:  (acc.r_lbeta || []).slice(),   // 原始 lowBeta
+    r_hbeta:  (acc.r_hbeta || []).slice(),   // 原始 highBeta
+    r_lgamma: (acc.r_lgamma|| []).slice(),   // 原始 lowGamma
+    r_hgamma: (acc.r_hgamma|| []).slice(),   // 原始 highGamma
+  };
   return result;
 }
 

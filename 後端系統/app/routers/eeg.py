@@ -2,11 +2,13 @@
 腦波檢測：採集完成後寫入 DB
 - 一次採集 = 1 個 Session (sessions table)
 - 統計值寫入 1 筆 EegCapture（seq_num=0），不存原始 sample
+- 原始 180 筆陣列（raw_arrays）非同步同步到 Firebase 腦波資料庫
 """
 from typing import Optional
+import asyncio
 import time
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -52,6 +54,12 @@ class EegStatsIn(BaseModel):
     # 兩種格式可混用：未提供個別 high/low 的頻帶自動退回合併值。
     bands_avg: dict = Field(default_factory=dict)
 
+    # 原始逐秒陣列（可選，約 180 筆/次）
+    # 用途：Firebase 腦波資料庫同步 & 未來 MBTI 時間窗重新分析
+    # 格式：{ attn, medi, r_delta, r_theta, r_lalpha, r_halpha,
+    #         r_lbeta, r_hbeta, r_lgamma, r_hgamma }
+    raw_arrays: Optional[dict] = None
+
 
 class EegStatsOut(BaseModel):
     ok: bool
@@ -65,6 +73,7 @@ class EegStatsOut(BaseModel):
 @router.post("/save-stats", response_model=EegStatsOut)
 def save_eeg_stats(
     payload: EegStatsIn,
+    background_tasks: BackgroundTasks,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
@@ -176,6 +185,23 @@ def save_eeg_stats(
     )
     db.add(cap)
     db.commit()
+
+    # ── 非同步同步到 Firebase 腦波資料庫（不阻塞主流程）────────────────────────
+    if payload.raw_arrays:
+        from app.services.firebase_sync import sync_to_firebase
+        from datetime import datetime, timezone
+
+        session_start = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+
+        def _run_firebase_sync():
+            asyncio.run(sync_to_firebase(
+                subject_name  = payload.subject_name,
+                session_id    = sess.session_id,
+                raw_arrays    = payload.raw_arrays,
+                session_start = session_start,
+            ))
+
+        background_tasks.add_task(_run_firebase_sync)
 
     return EegStatsOut(
         ok         = True,
