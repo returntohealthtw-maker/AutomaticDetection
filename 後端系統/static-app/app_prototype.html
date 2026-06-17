@@ -912,15 +912,22 @@
     padding-top: 10px !important;
   }
 
-  /* 商業版：dev-only 元素預設全部隱藏，僅管理員帳號登入後才顯示 */
+  /* 商業版：dev-only 元素預設全部隱藏，僅管理員/工作人員/專案人員登入後才顯示 */
   [data-dev-only] {
     display: none !important;
   }
-  /* 管理員登入後：非 screen 的 dev-only 元素（按鈕、區塊）才解除隱藏 */
+  /* 測試帳號登入後：非 screen 的 dev-only 元素（虛擬付款按鈕等）才解除隱藏 */
+  html.is-test-user [data-dev-only]:not(.screen) {
+    display: unset !important;
+  }
+  /* 測試帳號登入後：dev-only 的 screen 只有在 active 時才顯示（避免蓋住其他畫面） */
+  html.is-test-user .screen[data-dev-only].active {
+    display: flex !important;
+  }
+  /* 向下相容：管理員也視為測試帳號 */
   html.is-admin-user [data-dev-only]:not(.screen) {
     display: unset !important;
   }
-  /* 管理員登入後：dev-only 的 screen 只有在 active 時才顯示（避免蓋住其他畫面） */
   html.is-admin-user .screen[data-dev-only].active {
     display: flex !important;
   }
@@ -1715,7 +1722,22 @@
 
         <div style="flex:1;overflow-y:auto;padding:12px 16px 16px;">
 
-          <!-- 🧪 測試選項（僅 Android Debug；加盟商 Release 由 android-franchise 隱藏） -->
+          <!-- 管理員 / 工作人員 / 專案人員：切換直營商 / 加盟商介面預覽 -->
+          <div id="role-preview-bar" style="display:none;background:linear-gradient(135deg,#e8eaf6,#f3e5f5);border:1px solid #c5cae9;border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+            <div style="font-size:11px;color:#5c6bc0;font-weight:700;margin-bottom:8px;">🔍 介面預覽（測試用）</div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" id="role-btn-franchise" onclick="setPreviewRole('franchise')"
+                style="flex:1;padding:8px 0;border-radius:8px;border:2px solid #ff9800;background:#fff3e0;color:#e65100;font-size:12px;font-weight:700;cursor:pointer;">
+                🏪 加盟商介面
+              </button>
+              <button type="button" id="role-btn-direct" onclick="setPreviewRole('direct')"
+                style="flex:1;padding:8px 0;border-radius:8px;border:2px solid #e0e0e0;background:white;color:#666;font-size:12px;font-weight:700;cursor:pointer;">
+                🏬 直營商介面
+              </button>
+            </div>
+          </div>
+
+          <!-- 🧪 測試選項（僅測試帳號可見；加盟商 Release 由 android-franchise 隱藏） -->
           <div data-dev-only>
             <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
               <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">🧪 開發測試</span>
@@ -1920,7 +1942,7 @@
 
           <!-- 開發測試按鈕 -->
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-trial')">
-            🧪 開發測試：模擬付款成功
+            💳 虛擬付款（測試用，跳轉腦波檢測）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -1965,7 +1987,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-full')">
-            🧪 開發測試：模擬付款成功
+            💳 虛擬付款（測試用，跳轉腦波檢測）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -2010,7 +2032,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
-            🧪 開發測試：模擬付款成功
+            💳 虛擬付款（測試用，跳轉腦波檢測）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -2058,7 +2080,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-2000')">
-            🧪 開發測試：模擬升級付款成功
+            💳 虛擬付款（測試用，升級成功）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -2102,7 +2124,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-7000')">
-            🧪 開發測試：模擬升級付款成功
+            💳 虛擬付款（測試用，升級成功）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -2146,7 +2168,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-9000')">
-            🧪 開發測試：模擬升級付款成功
+            💳 虛擬付款（測試用，升級成功）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -2223,7 +2245,7 @@
           </div>
 
           <button type="button" data-dev-only class="btn" style="width:100%;background:#fce4ec;color:#c2185b;border:1px solid #ef9a9a;font-size:13px;" onclick="simulatePaid('screen-qr-test')">
-            🧪 開發測試：模擬付款成功
+            💳 虛擬付款（測試用，跳轉腦波檢測）
           </button>
           <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
         </div>
@@ -4379,7 +4401,52 @@ const REPORT_PRICING = {
   },
 };
 
+function _canPreviewRoles() {
+  const u = _currentUser || _getAuth() || {};
+  if (u.role === 'admin') return true;
+  const ot = u.org_type || '';
+  return ot === '工作人員' || ot === '專案人員';
+}
+
+// 管理員 / 工作人員 / 專案人員可切換預覽介面（直營商 vs 加盟商）
+let _adminPreviewRole = (() => {
+  try { return sessionStorage.getItem('adminPreviewRole') || 'franchise'; }
+  catch (e) { return 'franchise'; }
+})();
+
+function setPreviewRole(role) {
+  _adminPreviewRole = (role === 'direct') ? 'direct' : 'franchise';
+  try { sessionStorage.setItem('adminPreviewRole', _adminPreviewRole); } catch (e) {}
+  _renderRolePreviewBar();
+  _applyRolePricing();
+}
+
+function _renderRolePreviewBar() {
+  const bar = document.getElementById('role-preview-bar');
+  if (!bar) return;
+  const show = _canPreviewRoles();
+  bar.style.display = show ? 'block' : 'none';
+  if (!show) return;
+
+  const btnF = document.getElementById('role-btn-franchise');
+  const btnD = document.getElementById('role-btn-direct');
+  const active = _adminPreviewRole;
+  if (btnF) {
+    const on = active === 'franchise';
+    btnF.style.border = on ? '2px solid #ff9800' : '2px solid #e0e0e0';
+    btnF.style.background = on ? '#fff3e0' : 'white';
+    btnF.style.color = on ? '#e65100' : '#666';
+  }
+  if (btnD) {
+    const on = active === 'direct';
+    btnD.style.border = on ? '2px solid #4caf50' : '2px solid #e0e0e0';
+    btnD.style.background = on ? '#e8f5e9' : 'white';
+    btnD.style.color = on ? '#2e7d32' : '#666';
+  }
+}
+
 function _currentRole() {
+  if (_canPreviewRoles()) return _adminPreviewRole;
   const ot = (_currentUser && _currentUser.org_type) || '';
   return ot === '直營商' ? 'direct' : 'franchise';
 }
@@ -4393,6 +4460,7 @@ function getReportPricing(reportKey) {
 
 // 進入 screen-reports 時：依角色隱藏不賣的項目、改寫剩下項目的顯示價與 onclick。
 function _applyRolePricing() {
+  _renderRolePreviewBar();
   const role = _currentRole();
   const screen = document.getElementById('screen-reports');
   if (!screen) return;
@@ -4496,8 +4564,11 @@ function _getAuth() {
   return null;
 }
 function _syncAdminDevMode() {
-  const isAdmin = !!((_currentUser || {}).role === 'admin');
+  const u = _currentUser || {};
+  const isAdmin = !!(u.role === 'admin');
+  const isTestUser = isAdmin || u.org_type === '工作人員' || u.org_type === '專案人員';
   document.documentElement.classList.toggle('is-admin-user', isAdmin);
+  document.documentElement.classList.toggle('is-test-user', isTestUser);
 }
 function _saveAuth(obj) {
   const json = JSON.stringify(obj);
@@ -7099,15 +7170,15 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
   // NT$1 或其他明確指定 chaptersToGenerate 的 key，直接保留
   window._testModeChapters = parsed.chaptersToGenerate || null;
 
-  // 管理員帳號只做測試，強制限制為第1+2章（節省成本與時間）
+  // 測試帳號（管理員 / 工作人員 / 專案人員）只做測試，強制限制為第1+2章（節省成本與時間）
   // NT$1 本身已指定 chaptersToGenerate:[1,2]，不再覆蓋
   try {
-    const isAdmin = !!((_currentUser || _getAuth() || {}).role === 'admin');
-    if (isAdmin && !parsed.chaptersToGenerate) {
+    const isTestAcct = _canPreviewRoles();
+    if (isTestAcct && !parsed.chaptersToGenerate) {
       _currentReportVariant    = 'full';
       window._testModeChapters = [1, 2];
       _testMode_chapter1Only   = false;
-      console.log('[admin] 測試模式：只生成第1+2章');
+      console.log('[test] 測試模式：只生成第1+2章');
     }
   } catch(e) {}
 
