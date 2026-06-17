@@ -370,8 +370,9 @@ def compute_mbti(avg: BandAverages) -> dict:
     raw_la = _norm100_to_raw(avg.low_alpha)
     raw_th = _norm100_to_raw(avg.theta)
 
-    # 2. 八卦（calcBagua 不使用 brainColor 參數，只用 lowAlphaMean）
-    bagua = Bagua.calcBagua(None, raw_la)
+    # 2. 八卦（8 卦系統含離卦，與前端 _etBaguaMBTI(useLi=True) 完全一致）
+    #    laPct 0.250~0.375 帶：theta_p > 0.5 → 離卦(INFJ/INFP)，否則震卦(ENFJ/ENFP)
+    bagua = Bagua.calcBaguaWithLi(raw_la, raw_th)
 
     # 3. MBTI 16 型
     personality = Personality.getPersonalityFromBagua(bagua, raw_th)

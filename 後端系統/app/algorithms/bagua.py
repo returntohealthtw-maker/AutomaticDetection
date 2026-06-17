@@ -47,7 +47,7 @@ class Bagua:
 
     @classmethod
     def calcBagua(cls, brainColor, lowAlphaMean):
-        """方法 B：用 lowAlpha 對數值與人口分布計算 p 值（推薦）"""
+        """方法 B：用 lowAlpha 對數值與人口分布計算 p 值（7 卦，向下相容）"""
         if lowAlphaMean <= 0:
             return cls.XUN  # fallback
         try:
@@ -66,6 +66,49 @@ class Bagua:
         elif p_value < 0.625: return cls.KAN
         elif p_value < 0.750: return cls.GEN
         else:                 return cls.KUN
+
+    @classmethod
+    def calcBaguaWithLi(cls, lowAlphaMean, thetaMean):
+        """
+        方法 B+：8 卦系統（含離卦），與前端 _etBaguaMBTI(useLi=True) 完全一致。
+
+        在 laPct 0.250~0.375 帶，加入 theta 判斷：
+            theta_p > 0.5 → 離卦（LI）→ INFJ / INFP
+            theta_p ≤ 0.5 → 震卦（ZHEN）→ ENFJ / ENFP
+
+        所有其他區間行為與 calcBagua 相同。
+        報告生成（成人 & 兒童）應使用此方法以確保與 APP 顯示一致。
+        """
+        if lowAlphaMean <= 0:
+            return cls.XUN
+        try:
+            la_p = stats.norm.cdf(
+                math.log10(lowAlphaMean),
+                DATA_STATS["lowAlpha"]["mean"],
+                DATA_STATS["lowAlpha"]["std"],
+            )
+        except (ValueError, ZeroDivisionError):
+            return cls.XUN
+
+        if   la_p < 0.125: return cls.QIAN
+        elif la_p < 0.250: return cls.DUI
+        elif la_p < 0.375:
+            # 離/震 分割：theta 百分位 > 0.5 → 離卦（INFJ/INFP）
+            if thetaMean > 0:
+                try:
+                    th_p = stats.norm.cdf(
+                        math.log10(thetaMean),
+                        DATA_STATS["lowAlpha"]["mean"],
+                        DATA_STATS["lowAlpha"]["std"],
+                    )
+                    return cls.LI if th_p > 0.5 else cls.ZHEN
+                except (ValueError, ZeroDivisionError):
+                    pass
+            return cls.ZHEN
+        elif la_p < 0.500: return cls.XUN
+        elif la_p < 0.625: return cls.KAN
+        elif la_p < 0.750: return cls.GEN
+        else:              return cls.KUN
 
     @classmethod
     def calcBaguaFromColors(cls, colors):
