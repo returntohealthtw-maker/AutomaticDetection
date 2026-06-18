@@ -2774,9 +2774,13 @@
 
           <!-- 🧬 MBTI 八卦分析（採集到資料時才顯示）-->
           <div id="ethr-mbti-section" style="display:none;background:white;border-radius:18px;padding:18px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-top:14px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
               <div style="font-size:13px;font-weight:700;color:#1a237e;">🧬 MBTI 性格分析</div>
               <span id="ethr-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
+            </div>
+            <!-- ⚠️ 短時採集免責聲明 -->
+            <div style="background:#fff8e1;border-left:3px solid #f9a825;border-radius:8px;padding:8px 12px;font-size:11px;color:#5d4037;line-height:1.6;margin-bottom:12px;">
+              ⚠️ <b>採集時間僅 60 秒，結果僅供快速參考。</b>因採集時間短，腦波樣本較少，可能影響 MBTI 推論準確度，一切以完整報告結果為準。
             </div>
             <div id="ethr-mbti-summary" style="font-size:12px;color:#666;line-height:1.7;margin-bottom:14px;padding:10px;background:#f5f7ff;border-radius:10px;"></div>
 
@@ -2869,29 +2873,23 @@
             </div>
           </div>
 
-          <!-- MBTI（多性格聚合，與健康檢查頁相同演算法）-->
+          <!-- 腦波性格傾向（以腦波指標說明，不顯示 MBTI 標籤）-->
           <div class="et-section" id="r2-mbti-section">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div class="et-section-title" style="margin-bottom:0;">🧬 MBTI 性格分析</div>
-              <span id="r2-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
-            </div>
+            <div class="et-section-title">🔵 腦波性格傾向</div>
             <div class="et-section-desc">
-              MBTI 由四個維度組成：外向(E)/內向(I) 反映能量來源、直覺(N)/感官(S) 反映訊息處理偏好、理性(T)/情感(F) 反映決策依據、計畫(J)/彈性(P) 反映生活節奏。系統依即時腦波分段估算各維度傾向，並聚合出 1–4 種性格樣貌。
+              以下依本次腦波頻帶強度，說明你目前大腦在專注、放鬆、創造與社交能量上的即時狀態。MBTI 完整性格分析請參閱正式報告。
             </div>
-            <!-- 多元性格摘要 -->
-            <div id="r2-mbti-summary" style="font-size:12px;color:#ccc;line-height:1.7;margin-bottom:12px;padding:10px;background:rgba(255,255,255,0.07);border-radius:10px;"></div>
-            <!-- 4 層 Tab -->
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="r2-mbti-layer-tabs">
-              <button class="ethr-layer-tab active" data-layer="archetype" style="background:#1a237e;color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">原型性格</button>
-              <button class="ethr-layer-tab" data-layer="family" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">原生家庭</button>
-              <button class="ethr-layer-tab" data-layer="social" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">社會化</button>
-              <button class="ethr-layer-tab" data-layer="peer" data-scope="r2" style="background:rgba(255,255,255,0.15);color:white;border:none;border-radius:12px;padding:4px 12px;font-size:11px;cursor:pointer;">同儕關係</button>
+            <!-- 腦人顏色已在上方顯示；此區段改為顯示 4 維傾向條 -->
+            <div id="r2-mbti-dims-wrap" style="margin-top:10px;">
+              <div id="r2-mbti-dims"></div>
             </div>
-            <div id="r2-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
-            <!-- fallback：舊維度條（由 _renderBrainAnalysisInto 填入，多性格模式下隱藏）-->
-            <div id="r2-mbti-legacy" style="display:none;">
-              <div class="et-mbti-type" id="r2-mbti-type">----</div>
-              <div class="et-mbti-dims" id="r2-mbti-dims"></div>
+            <!-- 保留隱藏 id 供 JS 填充，不顯示 MBTI 字樣 -->
+            <div style="display:none;">
+              <div id="r2-mbti-type"></div>
+              <div id="r2-mbti-list"></div>
+              <div id="r2-mbti-summary"></div>
+              <div id="r2-mbti-current"></div>
+              <div id="r2-mbti-legacy"></div>
             </div>
           </div>
 
@@ -7227,21 +7225,37 @@ function _renderBrainAnalysisInto(prefix) {
   const ebi=Math.round(indices.EBI.pct); setW('bar-ebi', ebi); setTxt('pct-ebi', ebi+'%');
   const res=Math.round(indices.RES.pct); setW('bar-res', res); setTxt('pct-res', res+'%');
 
-  // ── MBTI（固定順序：E/I → N/S → T/F → J/P）──
-  setTxt('mbti-type', mbti.type);
+  // ── 腦波四維傾向條（r2- 不顯示 MBTI 代號，et- 保持原顯示）──
+  if (prefix !== 'r2-') {
+    // 健康檢查頁 / eegtest 頁：正常顯示 MBTI 代號
+    setTxt('mbti-type', mbti.type);
+  }
+  // 四維傾向條（兩個頁面都渲染，但 r2- 的 mbti-dims 填入 r2-mbti-dims-wrap 區）
+  const dimsTargetId = prefix === 'r2-' ? 'mbti-dims' : 'mbti-dims';
   const dimsEl = $('mbti-dims');
   if (dimsEl) {
-    dimsEl.innerHTML = mbti.dims.map((d) => {
+    // 定義腦波四維的中文說明（取代 E/I N/S T/F J/P 字母）
+    const dimLabels = prefix === 'r2-'
+      ? [
+          { left:'外向傾向', right:'內向傾向' },
+          { left:'直覺型',   right:'感官型'   },
+          { left:'理性決策', right:'情感決策' },
+          { left:'計畫性',   right:'彈性適應' },
+        ]
+      : null;
+    dimsEl.innerHTML = mbti.dims.map((d, i) => {
       const dominated = d.pct >= 50 ? d.pct : 100 - d.pct;
       const fillL = d.pct >= 50 ? d.pct : 0;
       const fillR = d.pct < 50  ? 100 - d.pct : 0;
+      const labelL = dimLabels ? dimLabels[i].left  : d.pair[0];
+      const labelR = dimLabels ? dimLabels[i].right : d.pair[2];
       return `<div class="et-dim-row">
-        <span class="et-dim-l" style="color:${fillL>50?'#90caf9':'rgba(255,255,255,0.3)'}">${d.pair[0]}</span>
+        <span class="et-dim-l" style="color:${fillL>50?'#90caf9':'rgba(255,255,255,0.3)'}${prefix==='r2-'?';font-size:10px':''}">${labelL}</span>
         <div class="et-dim-track">
           <div class="et-dim-fill-l" style="width:${fillL}%"></div>
           <div class="et-dim-fill-r" style="width:${fillR}%"></div>
         </div>
-        <span class="et-dim-r" style="color:${fillR>50?'#ce93d8':'rgba(255,255,255,0.3)'}">${d.pair[2]}</span>
+        <span class="et-dim-r" style="color:${fillR>50?'#ce93d8':'rgba(255,255,255,0.3)'}${prefix==='r2-'?';font-size:10px':''}">${labelR}</span>
         <span class="et-dim-strength">${Math.round(dominated)}%</span>
       </div>`;
     }).join('');
