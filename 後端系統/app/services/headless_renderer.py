@@ -426,15 +426,31 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     "Report uploaded: https://",
                 ]
                 fatal_err_keywords = [
+                    # ── Gemini API 金鑰 / 配額 ────────────────────────────────
                     "GEMINI_API_KEY 未設定", "AI 模型未能初始化",
-                    "GCS 設定錯誤", "上傳 GCS 失敗",
-                    "API key not valid", "quota exceeded",
-                    "上傳雲端失敗",                   # React app GCS 失敗訊息
+                    "API key not valid", "API_KEY_INVALID",
+                    "quota exceeded", "Quota exceeded",
+                    "RESOURCE_EXHAUSTED", "Resource has been exhausted",
+                    "rateLimitExceeded", "RATE_LIMIT_EXCEEDED",
+                    "billing", "Billing",        # 帳單未啟用
+                    "USER_LOCATION_INVALID",     # 地區不支援
+                    "SERVICE_DISABLED",          # API 未啟用
+                    "PERMISSION_DENIED",         # 金鑰無此 API 權限
+                    # ── GCS / 上傳 ───────────────────────────────────────────
+                    "GCS 設定錯誤", "上傳 GCS 失敗", "上傳雲端失敗",
+                    "GCS_BUCKET", "storage.googleapis.com",  # GCS 配置錯誤
+                    # ── React App 已知錯誤文字 ───────────────────────────────
                     "❌ PDF 渲染失敗",
+                    "❌ 報告生成失敗",
+                    "無法連線", "Network Error",
+                    # ── JS 執行期錯誤（通常出現在頁面空白或 crash）──────────
+                    "TypeError:", "ReferenceError:", "SyntaxError:",
+                    "Cannot read properties of undefined",
+                    "is not a function", "is not defined",
                 ]
                 final_msg = ""
                 fatal_err_msg = ""
-                poll_interval = 15   # 每 15 秒查一次 DB
+                poll_interval = 10   # 每 10 秒查一次（原 15 秒，加快偵測）
                 _last_txt_log = 0    # 上次記錄頁面文字的時間
 
                 while time.time() < deadline:
@@ -473,8 +489,8 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     with _active_lock:
                         _active_jobs[job_id]["page_text_preview"] = _preview
                         _active_jobs[job_id]["elapsed_sec"] = _elapsed
-                    # 每 60 秒記錄一次頁面狀態到 log
-                    if _now - _last_txt_log >= 60:
+                    # 每 30 秒記錄一次頁面狀態到 log（方便在 Railway 查原因）
+                    if _now - _last_txt_log >= 30:
                         _last_txt_log = _now
                         logger.info("[%s] ⏱ %ds 頁面狀態: %s", job_id, _elapsed, _preview[:300])
 
@@ -495,9 +511,12 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     await asyncio.sleep(poll_interval)
 
                 if fatal_err_msg:
+                    logger.error("[%s] ❌ 致命錯誤，頁面最後狀態: %s", job_id, txt[:500] if txt else "(empty)")
                     raise RuntimeError(fatal_err_msg)
 
                 if not final_msg:
+                    # 逾時時記錄最後頁面狀態，方便在 Railway log 排查原因
+                    logger.error("[%s] ⏰ 逾時！最後頁面狀態: %s", job_id, txt[:800] if txt else "(empty)")
                     raise TimeoutError(f"等待 Vercel App 完成超時（{timeout_sec}s）")
 
                 logger.info("[%s] ✅ 完成訊號：%s", job_id, final_msg)
