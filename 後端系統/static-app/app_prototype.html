@@ -3762,9 +3762,7 @@ async function _viewHistorySession(sessionId) {
         🧠 ${data.subject_name || '受測者'}${data.subject_age ? ` · ${data.subject_age}歲` : ''} ${createdStr ? '(' + createdStr + ')' : ''} · ${s.sample_count} 筆
       </div>
       ${bars}
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button onclick="_loadHistoryToResultsPage(${sessionId})" style="background:#2D3561;color:white;border:none;font-size:11px;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;">📊 在結果頁顯示</button>
-      </div>`;
+      `;
 
     // 把這筆 session 的腦波存起來備用
     window._historyEegCache = window._historyEegCache || {};
