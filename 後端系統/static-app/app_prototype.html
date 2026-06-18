@@ -3683,9 +3683,6 @@ function _renderHistoryList() {
       const subjAge = s.subject_age ? ` · ${s.subject_age}歲` : '';
       const dateStr = _formatTs(s.created_at);
       const captures = s.total_captures ? ` · ${s.total_captures} 筆` : '';
-      const reportLink = reportDone
-        ? `<a href="${s.report_url}" target="_blank" style="color:#2D3561;font-weight:600;text-decoration:none;font-size:12px;">📄 查看報告 →</a>`
-        : '';
 
       const bwBtn = isSuccess
         ? `<button onclick="_viewHistorySession(${s.session_id})" style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">🧠 查看腦波</button>`
@@ -3701,7 +3698,6 @@ function _renderHistoryList() {
           ${extraNote}
           <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures}</div>
           <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
-            ${reportLink}
             ${bwBtn}
           </div>
           <!-- 腦波展開區（預設隱藏）-->
@@ -3770,7 +3766,6 @@ async function _viewHistorySession(sessionId) {
       ${bars}
       <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="_loadHistoryToResultsPage(${sessionId})" style="background:#2D3561;color:white;border:none;font-size:11px;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;">📊 在結果頁顯示</button>
-        ${data.report_url ? `<a href="${data.report_url}" target="_blank" style="background:#4caf50;color:white;text-decoration:none;font-size:11px;padding:5px 12px;border-radius:6px;font-weight:600;">📄 查看報告</a>` : ''}
       </div>`;
 
     // 把這筆 session 的腦波存起來備用
