@@ -897,17 +897,17 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
             "family":    "情感共鳴",
             "群組評分":  "腦波共振群組",
         }
-        # Find which group the primary type belongs to for label
-        primary_group_label = "腦波共振群組"
-        for grp in PERSONALITY_GROUPS:
-            if mbti_type in grp:
-                primary_group_label = "、".join(grp)
-                break
+
+        # Threshold: only show secondary types with ≥15% to avoid forcing
+        # 4 types for every user. Stable users naturally show 1-2 types.
+        _SECONDARY_THRESHOLD = 15
 
         for p in profiles:
-            if p["type"] == mbti_type:      # skip the primary type
+            if p["type"] == mbti_type:
                 continue
-            if len(secondaries) >= 3:       # cap at 3 secondaries
+            if p["pct"] < _SECONDARY_THRESHOLD:  # skip low-score companions
+                continue
+            if len(secondaries) >= 3:
                 break
             raw_layers = p.get("layers") or []
             is_group_scoring = "群組評分" in raw_layers
