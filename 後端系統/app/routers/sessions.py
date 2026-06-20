@@ -265,6 +265,47 @@ def get_session(session_id: int, db: DbSession = Depends(get_db)):
     return session
 
 
+@router.get("/sessions/{session_id}/captures")
+def get_session_captures(session_id: int, db: DbSession = Depends(get_db)):
+    """取得場次所有逐秒腦波擷取資料（供 Firebase 同步等用途）"""
+    session = db.query(models.Session).filter(
+        models.Session.session_id == session_id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="場次不存在")
+
+    caps = (
+        db.query(models.EegCapture)
+        .filter(models.EegCapture.session_id == session_id)
+        .order_by(models.EegCapture.seq_num)
+        .all()
+    )
+    return {
+        "session_id":  session_id,
+        "total":       len(caps),
+        "captures": [
+            {
+                "seq_num":     c.seq_num,
+                "is_baseline": c.is_baseline,
+                "captured_at": c.captured_at,
+                "good_signal": c.good_signal,
+                "attention":   c.attention,
+                "meditation":  c.meditation,
+                "delta":       c.delta,
+                "theta":       c.theta,
+                "low_alpha":   c.low_alpha,
+                "high_alpha":  c.high_alpha,
+                "low_beta":    c.low_beta,
+                "high_beta":   c.high_beta,
+                "low_gamma":   c.low_gamma,
+                "high_gamma":  c.high_gamma,
+                "feedback":    c.feedback,
+            }
+            for c in caps
+        ],
+    }
+
+
 @router.get("/reports/{report_id}/status")
 def get_report_status(report_id: int, db: DbSession = Depends(get_db)):
     """查詢報告生成狀態（Android 可輪詢）"""
