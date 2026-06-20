@@ -7,6 +7,10 @@ _db_url = settings.get_database_url
 _engine_kwargs = dict(pool_pre_ping=True, pool_recycle=3600, echo=settings.DEBUG)
 if _db_url.startswith("sqlite"):
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif _db_url.startswith("postgresql"):
+    # Railway PostgreSQL 需要 SSL；若 URL 已含 sslmode 則不重複加
+    if "sslmode" not in _db_url:
+        _db_url = _db_url + ("&" if "?" in _db_url else "?") + "sslmode=require"
 
 engine = create_engine(_db_url, **_engine_kwargs)
 
