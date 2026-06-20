@@ -399,7 +399,12 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
 
                 # 把 console log 吐到 logger，INFO 層級方便在 Railway 查看
                 page.on("console", lambda msg: logger.info("[%s][console] %s", job_id, msg.text[:300]))
-                page.on("pageerror", lambda err: logger.warning("[%s][pageerror] %s", job_id, err))
+                # pageerror 同時記錄到共用串列，供主迴圈判斷是否提早失敗
+                _pageerrors: list = []
+                page.on("pageerror", lambda err: (
+                    logger.warning("[%s][pageerror] %s", job_id, str(err)),
+                    _pageerrors.append(str(err))
+                ))
 
                 try:
                     await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
@@ -447,11 +452,15 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     "TypeError:", "ReferenceError:", "SyntaxError:",
                     "Cannot read properties of undefined",
                     "is not a function", "is not defined",
+                    # ── React App 的 async 錯誤（Dl 函式拋出）────────────────
+                    "RATE_LIMIT:", "AUTH_ERROR:", "NETWORK_ERROR:",
+                    "SERVER_TIMEOUT:", "EMPTY_RESPONSE:",
                 ]
                 final_msg = ""
                 fatal_err_msg = ""
                 poll_interval = 10   # 每 10 秒查一次（原 15 秒，加快偵測）
                 _last_txt_log = 0    # 上次記錄頁面文字的時間
+                _pageerror_checked_at = 0  # 最後一次確認 pageerror 還未致命的時間
 
                 while time.time() < deadline:
                     # ── 主軌：DB 輪詢 ──────────────────────────────────────
@@ -507,6 +516,17 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                             break
                     if fatal_err_msg:
                         break
+
+                    # ── pageerror 偵測：JS crash 會讓頁面停在空白，60 秒後放棄 ──
+                    if _pageerrors:
+                        _now2 = time.time()
+                        if _pageerror_checked_at == 0:
+                            _pageerror_checked_at = _now2
+                            logger.warning("[%s] ⚠️ 偵測到 JS pageerror，等待 60s 確認是否致命: %s",
+                                           job_id, _pageerrors[-1][:200])
+                        elif _now2 - _pageerror_checked_at > 60:
+                            fatal_err_msg = f"JS執行期錯誤（頁面崩潰）: {_pageerrors[-1][:300]}"
+                            break
 
                     await asyncio.sleep(poll_interval)
 

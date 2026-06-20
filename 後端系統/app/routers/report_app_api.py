@@ -67,7 +67,11 @@ async def gemini_proxy(request: Request):
 
     async def _call(model: str, verb: str, payload: dict) -> dict:
         url = f"{GEMINI_API_BASE}/models/{model}:{verb}?key={key}"
-        async with httpx.AsyncClient(timeout=120) as cli:
+        # 45s per call：文字生成 30s 已足夠；Imagen 有時較慢，給 45s；
+        # 若超時會快速失敗並觸發 React App 內建的 429/重試邏輯，
+        # 避免單一掛起呼叫拖垮整份報告的 1 小時逾時限制
+        timeout = int(os.environ.get("GEMINI_CALL_TIMEOUT_SEC", "45"))
+        async with httpx.AsyncClient(timeout=timeout) as cli:
             r = await cli.post(url, json=payload, headers=headers)
         return r.status_code, r.json()
 
