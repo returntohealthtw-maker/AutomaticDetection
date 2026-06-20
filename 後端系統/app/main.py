@@ -793,11 +793,19 @@ def pay_page(order_id: str):
 @app.get("/health")
 def health():
     """Railway Healthcheck 端點（永遠回傳 200，DB 狀態另行回報）"""
+    db_ok = False
+    db_detail = ""
     try:
-        db_ok = check_connection()
-    except Exception:
-        db_ok = False
+        from app.core.database import engine
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            conn.execute(_text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        db_detail = f"{type(e).__name__}: {str(e)[:300]}"
     return {
         "api":      "ok",
-        "database": "ok" if db_ok else "error"
+        "database": "ok" if db_ok else "error",
+        "db_detail": db_detail if not db_ok else "",
+        "db_url_prefix": str(engine.url)[:40] if not db_ok else "",
     }
