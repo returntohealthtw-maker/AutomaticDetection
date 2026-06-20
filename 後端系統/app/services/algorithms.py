@@ -464,7 +464,10 @@ def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
             alt = adj_map[0 if high else 1]
             if alt != primary:
                 secondary = alt
-    if not secondary and th_conf < 0.4:
+    # Always compute the theta-flip type as fallback secondary (same bagua zone,
+    # opposite theta half).  This ensures every report has at least one secondary
+    # to display, mirroring the APP's 4-layer multi-personality behaviour.
+    if not secondary:
         alt = MAP[bagua][1 if high else 0]
         if alt != primary:
             secondary = alt
@@ -614,6 +617,24 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
             "strength": max(5, 100 - int(primary.get("confidence", 70) or 70)),
             "reason": "卦位邊界",
         })
+
+    # Guaranteed fallback: every report shows at least one secondary type.
+    # Uses the theta-flip type (same bagua zone, opposite theta half) — the most
+    # psychologically adjacent type in the bagua system.
+    if not secondaries and mbti_type:
+        _THETA_FLIP = {
+            "INTJ":"INTP","INTP":"INTJ","ENTJ":"ENTP","ENTP":"ENTJ",
+            "INFJ":"INFP","INFP":"INFJ","ENFJ":"ENFP","ENFP":"ENFJ",
+            "ISTJ":"ISFJ","ISFJ":"ISTJ","ESTJ":"ESFJ","ESFJ":"ESTJ",
+            "ISTP":"ISFP","ISFP":"ISTP","ESTP":"ESFP","ESFP":"ESTP",
+        }
+        alt = _THETA_FLIP.get(mbti_type)
+        if alt:
+            secondaries.append({
+                "mbti": alt,
+                "strength": 15,
+                "reason": "腦波邊界特質",
+            })
 
     return {
         "mbti_primary":      mbti_type,
