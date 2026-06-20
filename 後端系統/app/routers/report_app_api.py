@@ -85,14 +85,24 @@ async def gemini_proxy(request: Request):
                 "gemini-2.5-flash", "generateContent",
                 {
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.75 if req_type == "text" else 0.3, "maxOutputTokens": 8192},
+                    "generationConfig": {
+                        "temperature": 0.75 if req_type == "text" else 0.3,
+                        "maxOutputTokens": 32768,
+                        "thinkingConfig": {"thinkingBudget": 4096},
+                    },
                 }
             )
             if status >= 400:
                 logger.error("[report_app_api/gemini/%s] %s %s", req_type, status, str(d)[:200])
                 return JSONResponse({"error": d.get("error", {}).get("message", "Gemini 錯誤")},
                                     status_code=status, headers=_cors_headers())
-            text = d.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            # Gemini 2.5 Flash returns thinking in parts[0] (thought=True);
+            # the actual response is in the last non-thinking part.
+            parts = d.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            text = next(
+                (p.get("text", "") for p in reversed(parts) if not p.get("thought", False)),
+                parts[0].get("text", "") if parts else ""
+            )
             key_name = "text" if req_type == "text" else "svg"
             return JSONResponse({key_name: text}, headers=_cors_headers())
 
