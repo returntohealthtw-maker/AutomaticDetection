@@ -418,6 +418,75 @@ def compute_mbti(avg: BandAverages) -> dict:
     }
 
 
+def _bagua_mbti_from_pct(la_pct: float, th_pct: float) -> dict:
+    """
+    Bagua MBTI directly from 0-1 percentiles (skips log-normalization).
+    Used for non-lowAlpha/theta band pairs so each value is treated as a
+    relative percentile (val/100) of its own distribution.
+    """
+    BOUNDS = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
+    _BAGUA_NAMES = ["乾","兌","離/震","巽","坎","艮","坤"]
+
+    la_pct = max(0.001, min(0.999, la_pct))
+    th_pct = max(0.001, min(0.999, th_pct))
+
+    bagua = 6
+    for i in range(6):
+        if la_pct < BOUNDS[i + 1]:
+            bagua = i
+            break
+
+    high = th_pct > 0.5
+    li_active = bagua == 2 and high
+
+    MAP = [
+        ("INTJ", "INTP"),
+        ("ENTJ", "ENTP"),
+        ("INFJ", "INFP") if li_active else ("ENFJ", "ENFP"),
+        ("ISTJ", "ISFJ"),
+        ("ESTJ", "ESFJ"),
+        ("ISTP", "ISFP"),
+        ("ESTP", "ESFP"),
+    ]
+    primary = MAP[bagua][0 if high else 1]
+
+    zone_start = BOUNDS[bagua]
+    zone_end   = BOUNDS[bagua + 1]
+    zone_half  = (zone_end - zone_start) / 2
+    dist       = min(la_pct - zone_start, zone_end - la_pct)
+    la_conf    = min(1.0, dist / zone_half) if zone_half else 0
+    th_conf    = min(1.0, abs(th_pct - 0.5) / 0.3)
+    confidence = round((la_conf * 0.65 + th_conf * 0.35) * 100)
+
+    secondary = None
+    if la_conf < 0.6:
+        closer_lower = (la_pct - zone_start) < (zone_end - la_pct)
+        adj = bagua - 1 if closer_lower else bagua + 1
+        if 0 <= adj <= 6:
+            adj_li = adj == 2 and high
+            adj_map = ("INFJ", "INFP") if adj_li else MAP[adj]
+            alt = adj_map[0 if high else 1]
+            if alt != primary:
+                secondary = alt
+    if not secondary:
+        alt = MAP[bagua][1 if high else 0]
+        if alt != primary:
+            secondary = alt
+
+    bagua_obj = Bagua.calcBaguaWithLi(
+        _norm100_to_raw(la_pct * 100), _norm100_to_raw(th_pct * 100)
+    )
+    return {
+        "type":       primary,
+        "secondary":  secondary,
+        "confidence": confidence,
+        "la_pct":     la_pct,
+        "th_pct":     th_pct,
+        "bagua":      bagua_obj.id,
+        "bagua_name": bagua_obj.name,
+    }
+
+
 def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
     """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 完全一致。"""
     LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
@@ -521,34 +590,63 @@ def _mbti_layer_from_raw_arrays(r_la: list, r_th: list) -> dict:
 
 
 def compute_mbti_layers_from_captures(captures: list) -> dict:
-    """與前端 _etComputeMBTILayers 一致：全段 + 前/中/後 1/3 時間窗。"""
-    r_la = [_norm100_to_raw(c.get("low_alpha", 0) if isinstance(c, dict) else getattr(c, "low_alpha", 0))
-            for c in captures
-            if (c.get("low_alpha", 0) if isinstance(c, dict) else getattr(c, "low_alpha", 0) or 0) > 0]
-    r_th = [_norm100_to_raw(c.get("theta", 0) if isinstance(c, dict) else getattr(c, "theta", 0))
-            for c in captures
-            if (c.get("theta", 0) if isinstance(c, dict) else getattr(c, "theta", 0) or 0) > 0]
+    """
+    4 個性格面向，各使用不同的腦波頻段對作為輸入：
+
+      archetype（天生本質）: lowAlpha + theta       ← 原始八卦算法（核心性格）
+      social   （社交能量）: highGamma + focus       ← 外向社交 & 注意力
+      peer     （理性執行）: highBeta + lowBeta      ← 結構執行 & 邏輯分析
+      family   （情感共鳴）: lowGamma + highAlpha    ← 共情暖度 & 生命活力
+
+    每個面向用不同頻段自然映射到不同卦位，即使受測者資料穩定，
+    各頻段的相對強弱仍會分散到不同八卦區域，呈現出真實多面性格。
+    """
+    def _get(c, key):
+        v = c.get(key, 0) if isinstance(c, dict) else getattr(c, key, 0)
+        return float(v or 0)
+
+    def _pos_raw(key):
+        return [_norm100_to_raw(_get(c, key)) for c in captures if _get(c, key) > 0]
+
+    def _pos_avg_pct(key):
+        vals = [_get(c, key) for c in captures if _get(c, key) > 0]
+        return (sum(vals) / len(vals) / 100) if vals else 0.5
+
+    r_la = _pos_raw("low_alpha")
+    r_th = _pos_raw("theta")
 
     if len(r_la) < 4 or len(r_th) < 4:
         fb = compute_mbti(compute_averages(captures))
         fb = {**fb, "type": fb["mbti_type"]}
         return {"archetype": fb, "family": fb, "social": fb, "peer": fb}
 
-    n  = min(len(r_la), len(r_th))
-    s1 = max(1, n // 3)
-    s2 = max(s1 + 1, n * 2 // 3)
-
+    # Layer 1 – archetype（天生本質）: 沿用原始八卦 lowAlpha + theta
     archetype = _mbti_layer_from_raw_arrays(r_la, r_th)
-    social    = _mbti_layer_from_raw_arrays(r_la[:s1], r_th[:s1])
-    peer      = _mbti_layer_from_raw_arrays(r_la[s1:s2], r_th[s1:s2])
-    family    = _mbti_layer_from_raw_arrays(r_la[s2:], r_th[s2:])
+
+    # Layer 2 – social（社交能量）: highGamma（社交感知）+ focus（注意力）
+    social = _bagua_mbti_from_pct(
+        _pos_avg_pct("high_gamma"),
+        _pos_avg_pct("focus"),
+    )
+
+    # Layer 3 – peer（理性執行）: highBeta（執行驅動）+ lowBeta（邏輯分析）
+    peer = _bagua_mbti_from_pct(
+        _pos_avg_pct("high_beta"),
+        _pos_avg_pct("low_beta"),
+    )
+
+    # Layer 4 – family（情感共鳴）: lowGamma（共情力）+ highAlpha（生命活力）
+    family = _bagua_mbti_from_pct(
+        _pos_avg_pct("low_gamma"),
+        _pos_avg_pct("high_alpha"),
+    )
 
     base = archetype
     return {
         "archetype": archetype or base,
-        "family":    family or base,
-        "social":    social or base,
-        "peer":      peer or base,
+        "family":    family    or base,
+        "social":    social    or base,
+        "peer":      peer      or base,
     }
 
 
@@ -605,11 +703,23 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
 
     secondaries = []
     if len(profiles) > 1:
-        for p in profiles[1:4]:
+        _LAYER_ZH = {
+            "archetype": "天生本質",
+            "social":    "社交能量",
+            "peer":      "理性執行",
+            "family":    "情感共鳴",
+        }
+        for p in profiles:
+            if p["type"] == mbti_type:      # skip the primary type
+                continue
+            if len(secondaries) >= 3:       # cap at 3 secondaries
+                break
+            raw_layers = p.get("layers") or []
+            reason = "、".join(_LAYER_ZH.get(l, l) for l in raw_layers) or "邊界影響"
             secondaries.append({
                 "mbti": p["type"],
                 "strength": p["pct"],
-                "reason": "、".join(p.get("layers") or []) or "邊界影響",
+                "reason": reason,
             })
     elif primary.get("secondary"):
         secondaries.append({
