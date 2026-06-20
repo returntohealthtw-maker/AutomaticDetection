@@ -487,6 +487,175 @@ def _bagua_mbti_from_pct(la_pct: float, th_pct: float) -> dict:
     }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# 原始 BrainDNA MindColor + Group-Scoring 演算法
+# 來源：BrainDNA-master/braindna/algorithms/brainwave.py & MBTIPersonality.py
+# ──────────────────────────────────────────────────────────────────────────────
+
+_MC_ORANGE = 0
+_MC_GREEN  = 1
+_MC_BLUE   = 2
+_MC_YELLOW = 3
+
+_MC_CENTERS = {
+    _MC_ORANGE: (32.5, 42.5),
+    _MC_GREEN:  (32.5, 27.5),
+    _MC_BLUE:   (42.5, 52.5),
+    _MC_YELLOW: (25.0, 20.0),
+}
+
+# 原始 personalityGroups：同組的四種型別互相影響（群組評分機制的基礎）
+PERSONALITY_GROUPS: list = [
+    ["INFP", "ISFP", "ENFJ", "ESFJ"],  # Group 0 – 共感型
+    ["ESFP", "ESTP", "ISTJ", "ISFJ"],  # Group 1 – 感知型
+    ["ISTP", "INTP", "ENTJ", "ESTJ"],  # Group 2 – 理性型
+    ["ENTP", "ENFP", "INFJ", "INTJ"],  # Group 3 – 直覺型
+]
+
+
+def _calc_mind_color(ha: float, la: float, hb: float, lb: float,
+                     lg: float, hg: float) -> int:
+    """
+    原始 BrainDNA MindColorAlgorithm.calc()。
+    輸入為 0-100 正規化值（highAlpha, lowAlpha, highBeta, lowBeta, lowGamma, highGamma）。
+    傳回 _MC_ORANGE/GREEN/BLUE/YELLOW (0-3)。
+    """
+    alpha = ha + la
+    beta  = hb + lb
+    gamma = lg + hg
+    if alpha <= 0 or beta <= 0:
+        return _MC_ORANGE
+    f1 = gamma / alpha * 100   # gamma/alpha ratio × 100
+    f2 = gamma / beta  * 100   # gamma/beta  ratio × 100
+    best_color = _MC_ORANGE
+    min_dist   = float("inf")
+    for c, (cx, cy) in _MC_CENTERS.items():
+        d = math.sqrt((cx - f1) ** 2 + (cy - f2) ** 2)
+        if d < min_dist:
+            min_dist   = d
+            best_color = c
+    return best_color
+
+
+def _calc_personality_from_bagua_color(bagua: int, li_active: bool,
+                                        mind_color: int,
+                                        beta_norm: float,
+                                        theta_norm: float) -> str:
+    """
+    原始 BrainDNA Personality.calcPersonality()：
+    (卦位, 心靈色彩, beta, theta) → MBTI 字串。
+
+    大多數卦位用「心靈色彩」（GREEN/BLUE）區分兩個子型；
+    兌(1)/巽(3) 用 beta > theta 區分。
+    """
+    if bagua == 0:   # 乾: GREEN→ENTJ, else→ESTJ
+        return "ENTJ" if mind_color == _MC_GREEN else "ESTJ"
+    elif bagua == 1:  # 兌: beta>theta→ISFJ, else→ISTJ
+        return "ISFJ" if beta_norm > theta_norm else "ISTJ"
+    elif bagua == 2:  # 離(li_active) / 震(not li_active)
+        if li_active:
+            return "ENFJ" if mind_color == _MC_BLUE else "ESFJ"
+        else:
+            return "INFJ" if mind_color == _MC_BLUE else "INTJ"
+    elif bagua == 3:  # 巽: beta>theta→ESFP, else→ESTP
+        return "ESFP" if beta_norm > theta_norm else "ESTP"
+    elif bagua == 4:  # 坎: GREEN→INTP, else→ISTP
+        return "INTP" if mind_color == _MC_GREEN else "ISTP"
+    elif bagua == 5:  # 艮: BLUE→ENFP, else→ENTP
+        return "ENFP" if mind_color == _MC_BLUE else "ENTP"
+    else:             # 坤(6): BLUE→INFP, else→ISFP
+        return "INFP" if mind_color == _MC_BLUE else "ISFP"
+
+
+def compute_mbti_group_scoring(captures: list) -> list | None:
+    """
+    原始 BrainDNA calculateMBTIGroup 群組評分演算法：
+
+    對每筆 capture 計算 (卦位 + 心靈色彩) → 單一 MBTI，
+    然後進行群組累積：主型 +2 分，同組其他三型各 +1 分。
+
+    即使所有時間窗都算出同一型別（如 ISTJ），
+    也能自然產生 ISTJ(40%) + ESFP(20%) + ESTP(20%) + ISFJ(20%) 的分布。
+
+    傳回 [{type, pct, layers}, ...] 或 None（資料不足）。
+    """
+    LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
+    LA_STD  = DATA_STATS["lowAlpha"]["std"]
+    BOUNDS  = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
+
+    # 初始化分數表（16 種型別均為 0）
+    scores: dict[str, float] = {t: 0.0 for grp in PERSONALITY_GROUPS for t in grp}
+
+    def _get(c, key):
+        v = c.get(key, 0) if isinstance(c, dict) else getattr(c, key, 0)
+        return float(v or 0)
+
+    valid = 0
+    first_type: str | None = None
+
+    for c in captures:
+        la = _get(c, "low_alpha")
+        th = _get(c, "theta")
+        if la <= 0 or th <= 0:
+            continue
+
+        raw_la = _norm100_to_raw(la)
+        raw_th = _norm100_to_raw(th)
+        la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD))
+        th_pct = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD))
+
+        bagua = 6
+        for i in range(6):
+            if la_pct < BOUNDS[i + 1]:
+                bagua = i
+                break
+        li_active = (bagua == 2 and th_pct > 0.5)
+
+        ha = _get(c, "high_alpha")
+        hb = _get(c, "high_beta")
+        lb = _get(c, "low_beta")
+        lg = _get(c, "low_gamma")
+        hg = _get(c, "high_gamma")
+        mind_color = _calc_mind_color(ha, la, hb, lb, lg, hg)
+
+        beta_norm  = hb + lb   # 兌/巽 的 beta vs theta 比較使用正規化值
+        mbti_type  = _calc_personality_from_bagua_color(
+            bagua, li_active, mind_color, beta_norm, th
+        )
+
+        # 群組評分：主型 +2，同組其他 +1
+        for grp in PERSONALITY_GROUPS:
+            if mbti_type in grp:
+                for t in grp:
+                    scores[t] += 2 if t == mbti_type else 1
+                break
+
+        valid += 1
+        if first_type is None:
+            first_type = mbti_type
+
+    if valid == 0 or first_type is None:
+        return None
+
+    # 只保留有得分的型別，依分數排序
+    total = sum(scores.values())
+    if total == 0:
+        return None
+
+    sorted_items = sorted(
+        [(t, scores[t]) for t in scores if scores[t] > 0],
+        key=lambda x: x[1], reverse=True
+    )
+
+    # 轉換為百分比（整數），確保總和 = 100
+    pcts = [(t, max(1, round(s * 100 / total))) for t, s in sorted_items]
+    diff = 100 - sum(p for _, p in pcts)
+    if pcts:
+        pcts[0] = (pcts[0][0], pcts[0][1] + diff)
+
+    return [{"type": t, "pct": p, "layers": ["群組評分"]} for t, p in pcts]
+
+
 def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
     """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 完全一致。"""
     LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
@@ -693,13 +862,31 @@ def aggregate_mbti_profiles(layers: dict) -> list:
 
 def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
     """
-    產出報告 App / headless 共用的 MBTI 欄位（強制與 APP 新演算法一致）。
-    傳入 captures 時啟用 4 層時間窗 + 多元性格聚合。
+    產出報告 App / headless 共用的 MBTI 欄位。
+
+    優先使用原始 BrainDNA「群組評分演算法」(MindColor + Bagua + Group Scoring)：
+    ─ 每筆 capture 用 (卦位, 心靈色彩, beta/theta) → 一種 MBTI
+    ─ 同組 4 型累積（主型+2、其他+1），必然產生 ≥4 種不同強弱的性格
+
+    若 captures 不足則退回 4 頻段層演算法或單一平均值。
     """
-    layers = compute_mbti_layers_from_captures(captures) if captures else None
-    primary = (layers or {}).get("archetype") or compute_mbti(avg)
-    mbti_type = primary.get("type") or primary.get("mbti_type")
-    profiles  = aggregate_mbti_profiles(layers) if layers else [{"type": mbti_type, "pct": 100, "layers": ["archetype"]}]
+    # ── 優先：原始 BrainDNA 群組評分 ──────────────────────────────────────────
+    group_profiles = compute_mbti_group_scoring(captures) if captures else None
+
+    if group_profiles and len(group_profiles) >= 2:
+        # 群組評分成功：用第一名作為 primary
+        profiles  = group_profiles
+        mbti_type = profiles[0]["type"]
+        # archetype 仍取 lowAlpha+theta 的原始卦位，確保 ei/ns/tf/jp 分數正確
+        layers    = compute_mbti_layers_from_captures(captures) if captures else None
+        primary   = (layers or {}).get("archetype") or compute_mbti(avg)
+    else:
+        # ── 退回：4 頻段層演算法 ────────────────────────────────────────────────
+        layers    = compute_mbti_layers_from_captures(captures) if captures else None
+        primary   = (layers or {}).get("archetype") or compute_mbti(avg)
+        mbti_type = primary.get("type") or primary.get("mbti_type")
+        profiles  = (aggregate_mbti_profiles(layers) if layers
+                     else [{"type": mbti_type, "pct": 100, "layers": ["archetype"]}])
 
     secondaries = []
     if len(profiles) > 1:
@@ -708,14 +895,26 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
             "social":    "社交能量",
             "peer":      "理性執行",
             "family":    "情感共鳴",
+            "群組評分":  "腦波共振群組",
         }
+        # Find which group the primary type belongs to for label
+        primary_group_label = "腦波共振群組"
+        for grp in PERSONALITY_GROUPS:
+            if mbti_type in grp:
+                primary_group_label = "、".join(grp)
+                break
+
         for p in profiles:
             if p["type"] == mbti_type:      # skip the primary type
                 continue
             if len(secondaries) >= 3:       # cap at 3 secondaries
                 break
             raw_layers = p.get("layers") or []
-            reason = "、".join(_LAYER_ZH.get(l, l) for l in raw_layers) or "邊界影響"
+            is_group_scoring = "群組評分" in raw_layers
+            if is_group_scoring:
+                reason = "腦波共振群組特質"
+            else:
+                reason = "、".join(_LAYER_ZH.get(l, l) for l in raw_layers) or "邊界影響"
             secondaries.append({
                 "mbti": p["type"],
                 "strength": p["pct"],
@@ -728,9 +927,7 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
             "reason": "卦位邊界",
         })
 
-    # Guaranteed fallback: every report shows at least one secondary type.
-    # Uses the theta-flip type (same bagua zone, opposite theta half) — the most
-    # psychologically adjacent type in the bagua system.
+    # Guaranteed fallback: should not be needed with group scoring, but kept as safety net.
     if not secondaries and mbti_type:
         _THETA_FLIP = {
             "INTJ":"INTP","INTP":"INTJ","ENTJ":"ENTP","ENTP":"ENTJ",
