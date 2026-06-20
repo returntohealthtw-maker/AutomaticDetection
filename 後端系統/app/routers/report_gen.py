@@ -416,6 +416,25 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         use_ext = report_orchestrator.is_external_available(req.report_type)
 
     if use_ext:
+        # ── 若 session_id 缺失但有 subject_id，嘗試自動從 DB 找最近的 EEG Session ──
+        # 這修復「報告建立時 _lastEegSessionId 還未寫入 → session_id=null」的競態條件
+        if not req.session_id and req.subject_id:
+            try:
+                latest_sess = (
+                    db.query(M.Session)
+                    .filter(M.Session.subject_id == req.subject_id)
+                    .order_by(M.Session.session_id.desc())
+                    .first()
+                )
+                if latest_sess:
+                    req = req.copy(update={"session_id": latest_sess.session_id})
+                    logger.info(
+                        "[report-gen/start] session_id 缺失，已從 subject_id=%s 自動找到 session_id=%s",
+                        req.subject_id, latest_sess.session_id,
+                    )
+            except Exception as _ae:
+                logger.warning("[report-gen/start] 自動補 session_id 失敗: %s", _ae)
+
         # ── 先建立一筆「pending」Report，讓 admin「報告管理」可立刻看到「⏳ 生成中」狀態 ──
         # 若 Vercel callback /reports/record 成功，會 UPDATE 這筆（不會重覆建）
         # 若失敗或 timeout，這筆仍會保留在 DB 供 admin 查找

@@ -364,6 +364,29 @@ def record_report(
     # pending_send=1 表示外部系統尚未寄信，留給後台手動觸發
     email_sent_value = 0 if payload.pending_send else 1
 
+    # ── 若 session_id 為空，嘗試找最近的 generating/pending 孤兒報告（session_id=NULL）補連結 ──
+    # 常見場景：前端 session_id 競態→報告以 null 建立，React App 完成後 callback 但帶不到 session_id
+    if rep is None and not payload.session_id and resolved_sid:
+        try:
+            orphan_candidate = (
+                db.query(M.Report)
+                .filter(
+                    M.Report.subject_id  == resolved_sid,
+                    M.Report.session_id  == None,          # noqa: E711
+                    M.Report.status.in_(["generating", "pending", "failed"]),
+                )
+                .order_by(M.Report.report_id.desc())
+                .first()
+            )
+            if orphan_candidate:
+                rep = orphan_candidate
+                logger.info(
+                    "[/record] session_id 缺失，已找到孤兒報告 report_id=%s (subject_id=%s) 補連結",
+                    rep.report_id, resolved_sid,
+                )
+        except Exception as _oe:
+            logger.warning("[/record] 孤兒報告補連結失敗: %s", _oe)
+
     # ── 系統級規則：所有報告都必須走 admin 人工審核才能寄信 ──
     if rep is None:
         rep = M.Report(

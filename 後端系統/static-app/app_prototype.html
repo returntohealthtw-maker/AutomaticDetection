@@ -4824,14 +4824,17 @@ async function startFullReportGeneration(opts) {
   const emailText = document.getElementById('result-email-text');
   if (!card) return;
 
-  // 等 EEG 統計寫入 DB 取得 session_id（最多 8 秒），這樣外部 React App 才能 callback /reports/record
+  // 等 EEG 統計寫入 DB 取得 session_id（最多 15 秒），這樣外部 React App 才能 callback /reports/record
   if (window._lastEegPersistPromise && !window._lastEegSessionId) {
     try {
       await Promise.race([
         window._lastEegPersistPromise,
-        new Promise(res => setTimeout(res, 8000)),
+        new Promise(res => setTimeout(res, 15000)),
       ]);
     } catch (e) { /* 忽略：session_id 可選 */ }
+  }
+  if (!window._lastEegSessionId) {
+    console.warn('[startFullReportGeneration] ⚠️ session_id 仍未取得（EEG 資料可能尚未寫入 DB），報告將嘗試由 subject_id 自動補連結。');
   }
 
   // 優先順序：opts 明確傳入 > window._testModeChapters > 舊版 chapter1Only 旗標 > null（全章）
@@ -9395,7 +9398,10 @@ function _filterAdminReports() {
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
           <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
-          ${r.session_id ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>` : ''}
+          ${r.session_id
+            ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>`
+            : `<button onclick="_regenOrphanReport(${r.report_id},'${esc(r.subject_name||'')}','${esc(r.subject_email||'')}')" style="background:#e65100;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="此報告未連結 Session，請先連結再重新生成">🔗 連結並重生</button>`
+          }
           <button onclick="_uploadReplacementPdf(${r.report_id},'${esc(r.subject_name||'')}')" style="background:#e65100;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="上傳 PDF 取代現有檔案（修復掉圖等問題）">📤 上傳取代</button>
           <button onclick="_adminDeleteReport(${r.report_id},'${esc(r.subject_name||'(未知)')}')" style="background:#b71c1c;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="從資料庫刪除此報告紀錄">🗑️ 刪除</button>
         </div>
@@ -9526,6 +9532,38 @@ async function _toggleRelationBrainwave(btn, reportId, members) {
   }
   box.innerHTML = html || '<div style="font-size:10px;color:#aaa;">無成員資料</div>';
   btn.textContent = '🧠 收起腦波'; btn.disabled = false;
+}
+
+async function _regenOrphanReport(reportId, subjectName, subjectEmail) {
+  const nameLabel = subjectName || `Report #${reportId}`;
+  const sessionInput = prompt(
+    `「${nameLabel}」的報告未連結 Session。\n\n` +
+    `請輸入此受測者的 Session ID（可到「檢測↔報告」分頁查詢）：`
+  );
+  if (!sessionInput) return;
+  const sessionId = parseInt(sessionInput, 10);
+  if (!sessionId || isNaN(sessionId)) { alert('Session ID 格式錯誤，請輸入數字。'); return; }
+  const emailInput = prompt(`請輸入收件 Email（留空 = 之後再補）：`, subjectEmail || '');
+  if (emailInput === null) return;
+  if (!confirm(`確定將 Report #${reportId} 連結到 Session #${sessionId} 並重新生成？\n受測者：${nameLabel}\nEmail：${emailInput || '(無)'}`)) return;
+  try {
+    const r1 = await apiFetch(`/reports/${reportId}/link-session`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!r1.ok) {
+      const d = await r1.json().catch(() => ({}));
+      alert(`連結失敗：${d.detail || d.error || r1.status}`); return;
+    }
+    const r2 = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
+      method: 'POST',
+      body: JSON.stringify({ notify_email: emailInput || undefined }),
+    });
+    const data = await r2.json().catch(() => ({}));
+    if (!r2.ok) { alert(`重新生成失敗：${data.detail || data.error || r2.status}`); return; }
+    alert(`✅ 已連結 Session #${sessionId} 並送出重新生成指令！\n\n預計 20~30 分鐘後完成。`);
+    renderAdminReports();
+  } catch (e) { alert(`例外：${e.message}`); }
 }
 
 async function _regenFromDbRecords(sessionId, email, subjectName) {
