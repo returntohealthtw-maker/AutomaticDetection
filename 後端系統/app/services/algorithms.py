@@ -616,11 +616,19 @@ def compute_mbti_group_scoring(captures: list) -> list | None:
         lb = _get(c, "low_beta")
         lg = _get(c, "low_gamma")
         hg = _get(c, "high_gamma")
-        mind_color = _calc_mind_color(ha, la, hb, lb, lg, hg)
 
-        beta_norm  = hb + lb   # 兌/巽 的 beta vs theta 比較使用正規化值
+        # MindColor 必須用原始值計算（歸一化值的 gamma/alpha 比值不在正常範圍）
+        raw_ha = _norm100_to_raw(ha) if ha > 0 else 0.0
+        raw_hb = _norm100_to_raw(hb) if hb > 0 else 0.0
+        raw_lb = _norm100_to_raw(lb) if lb > 0 else 0.0
+        raw_lg = _norm100_to_raw(lg) if lg > 0 else 0.0
+        raw_hg = _norm100_to_raw(hg) if hg > 0 else 0.0
+        mind_color = _calc_mind_color(raw_ha, raw_la, raw_hb, raw_lb, raw_lg, raw_hg)
+
+        # 兌/巽 的 beta vs theta 比較也使用原始值（正規化後比例關係失真）
+        raw_beta = raw_hb + raw_lb
         mbti_type  = _calc_personality_from_bagua_color(
-            bagua, li_active, mind_color, beta_norm, th
+            bagua, li_active, mind_color, raw_beta, raw_th
         )
 
         # 群組評分：主型 +2，同組其他 +1
