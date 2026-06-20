@@ -1591,7 +1591,7 @@ def diag_mbti(
     bagua     = Bagua.calcBagua(None, raw_la)
     bagua_li  = Bagua.calcBaguaWithLi(raw_la, raw_th)
 
-    # 4 層時間窗 MBTI + 多性格聚合
+    # 4 層時間窗 MBTI + 多性格聚合 (使用最新群組評分演算法)
     det_dicts = [
         {"low_alpha": getattr(c,"low_alpha",0), "theta": getattr(c,"theta",0),
          "attention": getattr(c,"attention",0), "meditation": getattr(c,"meditation",0),
@@ -1600,8 +1600,12 @@ def diag_mbti(
          "low_gamma": getattr(c,"low_gamma",0), "high_gamma": getattr(c,"high_gamma",0)}
         for c in det
     ]
-    layers   = compute_mbti_layers_from_captures(det_dicts)
-    profiles = aggregate_mbti_profiles(layers)
+
+    # 使用新版 build_mbti_payload（包含 MindColor + 群組評分）
+    from app.services.algorithms import build_mbti_payload
+    mbti_payload = build_mbti_payload(avg_obj, det_dicts)
+    layers       = mbti_payload.get("mbti_layers") or {}
+    profiles     = mbti_payload.get("mbti_profiles") or []
 
     bagua_zones = [
         {"name": "qian", "range_norm": [0, 59.7], "pct": [0, 0.125], "mbti": ["INTJ","INTP"]},
@@ -1641,7 +1645,8 @@ def diag_mbti(
             "current_zone": next((z for z in bagua_zones if z["name"] == bagua_li.id), None),
         },
         "mbti_result":   result,
-        "mbti_layers":   {k: {"type": v.get("type") or v.get("mbti_type"), "confidence": v.get("confidence")} for k, v in layers.items()},
+        "mbti":          mbti_payload,          # 新版完整 payload（含群組評分）
+        "mbti_layers":   {k: {"type": v.get("type") or v.get("mbti_type"), "confidence": v.get("confidence")} for k, v in (layers or {}).items()},
         "mbti_profiles": profiles,
         "all_bagua_zones": bagua_zones,
         "diagnosis": (
