@@ -26,6 +26,51 @@ router = APIRouter(prefix="/api/v1/reports", tags=["報告管理"])
 BUILD_VERSION = "planc-v15-timeout-45min"
 
 
+@router.get("/session/{session_id}/signed-url")
+def get_report_signed_url(
+    session_id: int,
+    days: int = Query(default=7, ge=1, le=30),
+    db: Session = Depends(get_db),
+):
+    """
+    為指定 session 的報告重新產生有效的 GCS Signed URL。
+
+    供其他 APP 取得報告 PDF 連結使用（每次請求均產生新的有效連結）。
+    - days: 有效天數，預設 7 天，最長 30 天
+    """
+    rep = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    if not rep:
+        raise HTTPException(status_code=404, detail="此 session 尚無報告")
+    if rep.status != "completed":
+        raise HTTPException(status_code=409, detail=f"報告尚未完成（狀態：{rep.status}）")
+    if not rep.pdf_url:
+        raise HTTPException(status_code=404, detail="報告無 PDF 連結")
+
+    from app.services import gcs_uploader
+    from urllib.parse import urlparse, unquote
+
+    # 取得 GCS object name（去除簽名參數）
+    parsed = urlparse(rep.pdf_url)
+    raw_path = unquote(parsed.path)
+    bucket = gcs_uploader._bucket_name() if gcs_uploader.is_configured() else "brainwave-child-reports"
+    prefix = f"/{bucket}/"
+    gcs_path = raw_path[len(prefix):] if raw_path.startswith(prefix) else raw_path.lstrip("/")
+
+    signed_url = gcs_uploader.generate_fresh_signed_url(rep.pdf_url, days=days)
+    if not signed_url:
+        # GCS 未設定或失敗，直接回傳既有 URL（可能已過期）
+        signed_url = rep.pdf_url
+
+    return {
+        "session_id":  session_id,
+        "report_id":   rep.report_id,
+        "gcs_path":    gcs_path,
+        "signed_url":  signed_url,
+        "expires_days": days,
+        "status":      rep.status,
+    }
+
+
 @router.get("/diag/full")
 def diag_full(db: Session = Depends(get_db)) -> dict:
     """檢查 GCS、Email Proxy、Headless renderer、部署版本 + 計數（不需 auth）"""
