@@ -2903,6 +2903,30 @@
             <div id="r2-bands"></div>
           </div>
 
+          <!-- ── 原始腦波數值除錯面板（開發用，點擊展開）── -->
+          <div id="eeg-debug-panel" style="margin:0 12px 12px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);">
+            <div onclick="var b=document.getElementById('eeg-debug-body');b.style.display=b.style.display==='none'?'block':'none';"
+                 style="background:rgba(255,255,255,0.07);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:600;">🔬 原始腦波數值（開發驗證）</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.4);">點擊展開 ▸</span>
+            </div>
+            <div id="eeg-debug-body" style="display:none;padding:10px 14px;background:rgba(0,0,0,0.3);">
+              <div id="eeg-debug-content" style="font-family:monospace;font-size:11px;color:#aef;line-height:1.8;white-space:pre;"></div>
+            </div>
+          </div>
+
+          <!-- ── 原始腦波數值除錯面板（僅管理員/工作人員可見）── -->
+          <div id="eeg-debug-panel" style="display:none;margin:0 12px 12px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);">
+            <div onclick="var b=document.getElementById('eeg-debug-body');b.style.display=b.style.display==='none'?'block':'none';"
+                 style="background:rgba(255,255,255,0.07);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:600;">🔬 原始腦波數值（管理員驗證）</span>
+              <span style="font-size:10px;color:rgba(255,255,255,0.4);">點擊展開 ▸</span>
+            </div>
+            <div id="eeg-debug-body" style="display:none;padding:10px 14px;background:rgba(0,0,0,0.3);">
+              <div id="eeg-debug-content" style="font-family:monospace;font-size:11px;color:#aef;line-height:1.8;white-space:pre;"></div>
+            </div>
+          </div>
+
           <!-- ── 操作按鈕：返回首頁繼續下一位 ── -->
           <div style="padding:8px 16px 28px;">
             <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:700;background:linear-gradient(90deg,#FF6B35,#FF8E53);box-shadow:0 4px 16px rgba(255,107,53,0.3);" onclick="goto('screen-home')">
@@ -5947,6 +5971,30 @@ function _renderResultsFromEeg() {
   // 用即時分析渲染（與「腦波儀測試」結果頁同款，但 ID 前綴為 r2-）
   if (_eegLiveAccum && _eegLiveAccum.attn && _eegLiveAccum.attn.length) {
     _renderBrainAnalysisInto('r2-');
+  }
+  // 除錯面板：只有管理員/工作人員可見
+  const u = _currentUser || {};
+  const isStaff = u.role === 'admin' || u.org_type === '工作人員' || u.org_type === '專案人員';
+  const panel = document.getElementById('eeg-debug-panel');
+  if (panel) panel.style.display = isStaff ? '' : 'none';
+  if (isStaff && stats) {
+    const b7 = stats.bands_7 || {};
+    const ba = stats.bands_avg || {};
+    const lines = [
+      `樣本數:  ${stats.sample_count ?? '—'}`,
+      `注意力:  ${stats.attention_percentage ?? '—'}  放鬆度: ${stats.meditation_percentage ?? '—'}`,
+      `─── BrainDNA 佔比算法 ───────`,
+      `δ  delta:      ${b7.delta      ?? ba.delta      ?? '—'}`,
+      `θ  theta:      ${b7.theta      ?? ba.theta      ?? '—'}`,
+      `α  low_alpha:  ${b7.alpha_low  ?? b7.low_alpha  ?? ba.low_alpha  ?? '—'}`,
+      `α  high_alpha: ${b7.alpha_high ?? b7.high_alpha ?? ba.high_alpha ?? '—'}`,
+      `β  low_beta:   ${b7.beta_low   ?? b7.low_beta   ?? ba.low_beta   ?? '—'}`,
+      `β  high_beta:  ${b7.beta_high  ?? b7.high_beta  ?? ba.high_beta  ?? '—'}`,
+      `γ  low_gamma:  ${b7.gamma_low  ?? b7.low_gamma  ?? ba.low_gamma  ?? '—'}`,
+      `γ  high_gamma: ${b7.gamma_high ?? b7.high_gamma ?? ba.high_gamma ?? '—'}`,
+    ];
+    const dbgEl = document.getElementById('eeg-debug-content');
+    if (dbgEl) dbgEl.textContent = lines.join('\n');
   }
 }
 
