@@ -916,15 +916,7 @@
   [data-dev-only] {
     display: none !important;
   }
-  /* 測試帳號登入後：非 screen 的 dev-only 元素（虛擬付款按鈕等）才解除隱藏 */
-  html.is-test-user [data-dev-only]:not(.screen) {
-    display: unset !important;
-  }
-  /* 測試帳號登入後：dev-only 的 screen 只有在 active 時才顯示（避免蓋住其他畫面） */
-  html.is-test-user .screen[data-dev-only].active {
-    display: flex !important;
-  }
-  /* 向下相容：管理員也視為測試帳號 */
+  /* 虛擬付款按鈕（simulatePaid）僅系統管理員可見，工作人員/專案人員不得使用 */
   html.is-admin-user [data-dev-only]:not(.screen) {
     display: unset !important;
   }

@@ -494,6 +494,14 @@ async def payuni_notify(request: Request):
             payment_method=data.get("PayType") or None,
         )
         print(f"[PayUni Notify] 訂單 {order_id} 已標記付款成功（DB 已更新）")
+    else:
+        # 付款失敗：將訂單標記為 failed，停止 APP 輪詢繼續等待
+        fail_status = data.get("Status") or data.get("status") or "unknown"
+        order = _payment_store.get(order_id)
+        if order and order["status"] == "pending":
+            order["status"] = "failed"
+        _db_update_payment(order_id, status="failed")
+        print(f"[PayUni Notify] 訂單 {order_id} 付款失敗（Status={fail_status}），已標記 failed")
 
     return "SUCCESS"
 
@@ -588,15 +596,27 @@ async def _handle_payuni_return(request: Request, order_id_from_path: str = "") 
                     paid_ok = (order["status"] == "paid")
                 else:
                     # 記憶體沒有（後端重啟）→ 查 DB 判斷是否已付
-                    from app.core.database import SessionLocal
-                    with SessionLocal() as _db:
-                        _row = _db.query(M.Payment).filter(M.Payment.order_id == real_no).first()
-                        if _row and _row.status == "paid":
-                            paid_ok = True
-                            print(f"[PayUni Return] 訂單 {real_no} DB 已是 paid，確認成功")
-                        else:
-                            paid_ok = True   # PayUni 回報成功，信任之
-                            print(f"[PayUni Return] 訂單 {real_no} 記憶體已清，依 PayUni 回報確認付款")
+                    try:
+                        from app.core.database import SessionLocal
+                        with SessionLocal() as _db:
+                            _row = _db.query(M.Payment).filter(M.Payment.order_id == real_no).first()
+                            if _row and _row.status == "paid":
+                                paid_ok = True
+                                print(f"[PayUni Return] 訂單 {real_no} DB 已是 paid，確認成功")
+                            elif _row:
+                                # 訂單存在但狀態非 paid（pending/failed）→ 不允許通過
+                                result_kind = "fail"
+                                err_detail = f"PayUni 回報成功但 DB 訂單狀態為 {_row.status}，拒絕放行"
+                                print(f"[PayUni Return] {err_detail}")
+                            else:
+                                # DB 完全查無此訂單（可能從未寫入）→ 安全起見拒絕
+                                result_kind = "fail"
+                                err_detail = f"PayUni 回報成功但 DB 無此訂單記錄（{real_no}），拒絕放行"
+                                print(f"[PayUni Return] {err_detail}")
+                    except Exception as db_err:
+                        result_kind = "fail"
+                        err_detail = f"DB 查詢失敗，無法驗證付款狀態：{db_err}"
+                        print(f"[PayUni Return] {err_detail}")
                 # 確保 DB 持久化（無論記憶體是否存在）
                 if paid_ok:
                     trade_no = data.get("TradeNo") or data.get("PayUniTradeNo") or ""
