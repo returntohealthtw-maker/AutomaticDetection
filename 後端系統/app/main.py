@@ -793,6 +793,7 @@ def pay_page(order_id: str):
 @app.get("/health")
 def health():
     """Railway Healthcheck 端點（永遠回傳 200，DB 狀態另行回報）"""
+    import os
     db_ok = False
     db_detail = ""
     try:
@@ -803,9 +804,20 @@ def health():
         db_ok = True
     except Exception as e:
         db_detail = f"{type(e).__name__}: {str(e)[:300]}"
+
+    # 診斷：確認環境變數是否真的被注入（只顯示長度，不洩漏值）
+    env_diag = {
+        "DATABASE_URL_len":    len(os.environ.get("DATABASE_URL", "")),
+        "PAYUNI_MER_ID_len":   len(os.environ.get("PAYUNI_MER_ID", "")),
+        "PAYUNI_HASH_KEY_len": len(os.environ.get("PAYUNI_HASH_KEY", "")),
+        "PAYUNI_HASH_IV_len":  len(os.environ.get("PAYUNI_HASH_IV", "")),
+        "USE_SQLITE":          os.environ.get("USE_SQLITE", "(not set)"),
+    }
+
     return {
         "api":      "ok",
         "database": "ok" if db_ok else "error",
         "db_detail": db_detail if not db_ok else "",
         "db_url_prefix": str(engine.url)[:40] if not db_ok else "",
+        "env_diag": env_diag,
     }
