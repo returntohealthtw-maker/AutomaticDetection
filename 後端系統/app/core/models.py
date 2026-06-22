@@ -46,6 +46,23 @@ class Session(Base):
     # 用途：Firebase 補同步 / 未來 MBTI 時間窗重新分析 / 退款爭議舉證
     raw_arrays_json  = Column(Text, nullable=True)
 
+    # ── BrainDNA 計算結果（由 braindna_algorithms.compute_all 寫入）──────────
+    # 與 Firebase 的欄位名稱、型別、值域完全相同，方便兩庫資料對照
+    # mind_stress  : 0-100，壓力分數（MindStressAlgorithm）
+    # mind_balance : 0-100，平衡分數（MindBalanceAlgorithm）
+    # mind_energy  : 0-100，活力分數（MindEnergyAlgorithm）
+    # mind_color   : 0=橙 1=綠 2=藍 3=黃（MindColorAlgorithm）
+    # mbti         : 16型字串，如 "INFP"
+    # bagua        : 八卦 id，如 "kan"
+    # overall_score: 0-100，整體分數（balance×0.6 + energy×0.2 + (100-stress)×0.2）
+    mind_stress   = Column(Integer, nullable=True)
+    mind_balance  = Column(Integer, nullable=True)
+    mind_energy   = Column(Integer, nullable=True)
+    mind_color    = Column(Integer, nullable=True)   # 0=橙 1=綠 2=藍 3=黃
+    mbti          = Column(String(4), nullable=True)
+    bagua         = Column(String(20), nullable=True)
+    overall_score = Column(Integer, nullable=True)
+
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
     report      = relationship("Report", back_populates="session", uselist=False)
     company     = relationship("Company")

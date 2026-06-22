@@ -130,6 +130,7 @@ async def sync_to_firebase(
     session_id: int,
     raw_arrays: dict,
     session_start: Optional[datetime] = None,
+    braindna_result: Optional[dict] = None,
 ) -> bool:
     """
     非同步將 180 筆原始腦波資料同步到 Firebase 腦波資料庫。
@@ -214,15 +215,28 @@ async def sync_to_firebase(
             logger.info("[Firebase] 已上傳 %d 筆 EEG 特徵值 → fb_sid=%s",
                         total_uploaded, fb_session_id)
 
-            # ── 3. 標記 Session completed ─────────────────────────────────
+            # ── 3. 標記 Session completed + 寫入 BrainDNA 計算結果 ───────────
+            patch_body: dict = {
+                "status":      "completed",
+                "endedAt":     datetime.now(timezone.utc).isoformat(),
+                "durationSec": len(features),
+            }
+            # BrainDNA 聚合結果（與 PostgreSQL Session 欄位格式完全一致）
+            if braindna_result and braindna_result.get("valid"):
+                patch_body.update({
+                    "mindStress":   braindna_result.get("stress"),
+                    "mindBalance":  braindna_result.get("balance"),
+                    "mindEnergy":   braindna_result.get("energy"),
+                    "mindColor":    braindna_result.get("color"),
+                    "overallScore": braindna_result.get("overall_score"),
+                    "mbti":         braindna_result.get("mbti"),
+                    "bagua":        braindna_result.get("bagua"),
+                })
+                patch_body = {k: v for k, v in patch_body.items() if v is not None}
             await client.patch(
                 f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
                 headers=headers,
-                json={
-                    "status":      "completed",
-                    "endedAt":     datetime.now(timezone.utc).isoformat(),
-                    "durationSec": len(features),
-                },
+                json=patch_body,
             )
 
             return True

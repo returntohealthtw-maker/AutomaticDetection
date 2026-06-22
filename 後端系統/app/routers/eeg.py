@@ -105,12 +105,13 @@ def save_eeg_stats(
     now_ts = int(time.time())
 
     # ── BrainDNA 算法：若有 raw_arrays，用佔比算法覆寫頻段值（最高精度）──────────
+    _bdna_result = None   # 儲存完整結果，稍後寫入 Session 欄位
     if payload.raw_arrays:
         try:
             from app.services.braindna_algorithms import compute_all as _bdna_compute
-            _bdna = _bdna_compute(payload.raw_arrays)
-            if _bdna.get("valid") and _bdna.get("bands"):
-                _b = _bdna["bands"]
+            _bdna_result = _bdna_compute(payload.raw_arrays)
+            if _bdna_result.get("valid") and _bdna_result.get("bands"):
+                _b = _bdna_result["bands"]
                 # 用 BrainDNA 佔比值覆寫，確保 High ≠ Low，與原始算法一致
                 bands = dict(bands)  # 不改動原始物件
                 for _k in ("delta", "theta", "low_alpha", "high_alpha",
@@ -122,7 +123,7 @@ def save_eeg_stats(
                 bands["beta"]  = round((_b.get("low_beta",  0) + _b.get("high_beta",  0)) / 2)
                 bands["gamma"] = round((_b.get("low_gamma", 0) + _b.get("high_gamma", 0)) / 2)
         except Exception:
-            pass  # 算法失敗不影響主流程，退回前端傳入值
+            _bdna_result = None  # 算法失敗不影響主流程，退回前端傳入值
 
     # 🔑 受測者 FK 解析（核心修正：避免報告變孤兒）
     # 1. 優先用前端傳來的 subject_id
@@ -213,6 +214,40 @@ def save_eeg_stats(
         except Exception:
             pass  # 序列化失敗不影響主流程
 
+    # ── BrainDNA 計算結果寫入 Session（與 Firebase 欄位格式完全一致）────────────
+    if _bdna_result and _bdna_result.get("valid"):
+        try:
+            sess.mind_stress   = _bdna_result.get("stress")
+            sess.mind_balance  = _bdna_result.get("balance")
+            sess.mind_energy   = _bdna_result.get("energy")
+            sess.mind_color    = _bdna_result.get("color")
+            sess.overall_score = _bdna_result.get("overall_score")
+            # MBTI / bagua：從 algorithms/report.py 快速推算
+            try:
+                from app.algorithms.report import generate_quick_mbti as _qmbti
+                from app.services.braindna_algorithms import _select_best_window as _sbw
+                bw = _sbw(payload.raw_arrays)
+                import statistics as _stat
+                def _mean_raw(key):
+                    arr = bw.get(key) or []
+                    return _stat.mean(arr) if arr else 0.0
+                mbti_result = _qmbti({
+                    "lowAlpha":  _mean_raw("r_lalpha"),
+                    "highAlpha": _mean_raw("r_halpha"),
+                    "lowBeta":   _mean_raw("r_lbeta"),
+                    "highBeta":  _mean_raw("r_hbeta"),
+                    "lowGamma":  _mean_raw("r_lgamma"),
+                    "midGamma":  _mean_raw("r_hgamma"),
+                    "theta":     _mean_raw("r_theta"),
+                    "delta":     _mean_raw("r_delta"),
+                })
+                sess.mbti  = mbti_result.get("mbti")
+                sess.bagua = mbti_result.get("bagua")
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     db.commit()
 
     # ── 非同步同步到 Firebase 腦波資料庫（不阻塞主流程）────────────────────────
@@ -224,10 +259,11 @@ def save_eeg_stats(
 
         def _run_firebase_sync():
             asyncio.run(sync_to_firebase(
-                subject_name  = payload.subject_name,
-                session_id    = sess.session_id,
-                raw_arrays    = payload.raw_arrays,
-                session_start = session_start,
+                subject_name   = payload.subject_name,
+                session_id     = sess.session_id,
+                raw_arrays     = payload.raw_arrays,
+                session_start  = session_start,
+                braindna_result= _bdna_result,  # 同步 BrainDNA 計算結果到 Firebase
             ))
 
         background_tasks.add_task(_run_firebase_sync)

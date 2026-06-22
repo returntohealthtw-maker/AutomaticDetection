@@ -6617,10 +6617,13 @@ function _bdnaSelectBestWindow(acc) {
     const s = w * WIN, e = s + WIN;
     let ps = 0, vs = 0;
     for (let i = s; i < e; i++) {
-      const c = {}; let tot = 0;
-      for (const k of _BDNA_KEYS) { c[k] = Math.min((acc[k]||[])[i]||0, _BDNA_CAP[k]); tot += c[k]; }
-      if (tot <= 0) continue;
-      ps += c['r_lgamma'] / tot; vs++;
+      // BrainDNA calcColumnSumArray：分母用「未截斷」原始值
+      let uncappedTot = 0;
+      for (const k of _BDNA_KEYS) uncappedTot += ((acc[k]||[])[i]||0);
+      if (uncappedTot <= 0) continue;
+      // 分子才截斷（MindValueTop）
+      const cappedLg = Math.min((acc['r_lgamma']||[])[i]||0, _BDNA_CAP['r_lgamma']);
+      ps += cappedLg / uncappedTot; vs++;
     }
     if (vs > 0) {
       const score = _bdnaPR(ps/vs, 0.03, 0.06);
@@ -6646,10 +6649,15 @@ function _calcBrainDNABands(acc) {
   const ps = {}; for(const k of _BDNA_KEYS) ps[k]=0;
   let vs = 0;
   for(let i=0;i<wn;i++){
-    const c={}; let tot=0;
-    for(const k of _BDNA_KEYS){ c[k]=Math.min((win[k]||[])[i]||0, _BDNA_CAP[k]); tot+=c[k]; }
-    if(tot<=0) continue;
-    for(const k of _BDNA_KEYS) ps[k]+=c[k]/tot;
+    // BrainDNA calcColumnSumArray：分母用「未截斷」原始值（與後端一致）
+    let uncappedTot = 0;
+    for(const k of _BDNA_KEYS) uncappedTot += ((win[k]||[])[i]||0);
+    if(uncappedTot<=0) continue;
+    // 分子才截斷（MindValueTop）
+    for(const k of _BDNA_KEYS){
+      const capped = Math.min((win[k]||[])[i]||0, _BDNA_CAP[k]);
+      ps[k] += capped / uncappedTot;
+    }
     vs++;
   }
   if(vs===0) return null;

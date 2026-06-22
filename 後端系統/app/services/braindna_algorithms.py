@@ -155,13 +155,17 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     valid = 0
 
     for i in range(n):
-        c = {k: _clamp((raw_arrays.get(k) or [0])[i] if i < len(raw_arrays.get(k) or []) else 0, CAP[k])
-             for k in RAW_KEYS}
-        total = sum(c.values())
-        if total <= 0:
+        # BrainDNA calcColumnSumArray：分母用「未截斷」原始值加總（完全對應原碼）
+        # 分子才截斷（MindValueTop）；這讓 delta/theta 的龐大原始值壓低 beta/gamma 佔比
+        raw_row = {k: float((raw_arrays.get(k) or [0])[i]
+                            if i < len(raw_arrays.get(k) or []) else 0)
+                   for k in RAW_KEYS}
+        uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母
+        if uncapped_total <= 0:
             continue
         for k in RAW_KEYS:
-            prop_sum[k] += c[k] / total
+            capped = _clamp(raw_row[k], CAP[k])  # 截斷 → 分子
+            prop_sum[k] += capped / uncapped_total
         valid += 1
 
     if valid == 0:
@@ -352,11 +356,19 @@ def compute_all(raw_arrays: Dict[str, List]) -> Dict:
     if bands is None:
         return {"valid": False}
 
+    stress  = calc_stress_score(best_win)
+    balance = calc_mind_balance(attn, medi)
+    energy  = calc_mind_energy(attn, medi)
+    color   = calc_mind_color(raw_arrays)
+    # overall_score：對應 BrainDNA evaluationReport.py 的整體分數公式
+    overall = int(balance * 0.6 + energy * 0.2 + (100 - stress) * 0.2 + 0.5)
+
     return {
-        "valid":   True,
-        "bands":   bands,
-        "stress":  calc_stress_score(best_win),         # best 30s
-        "balance": calc_mind_balance(attn, medi),       # best 30s attn/medi
-        "energy":  calc_mind_energy(attn, medi),        # best 30s attn/medi
-        "color":   calc_mind_color(raw_arrays),         # 全部 180s（6視窗投票）
+        "valid":         True,
+        "bands":         bands,
+        "stress":        stress,
+        "balance":       balance,
+        "energy":        energy,
+        "color":         color,
+        "overall_score": max(0, min(100, overall)),
     }
