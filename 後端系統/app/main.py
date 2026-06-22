@@ -314,6 +314,21 @@ def _run_lightweight_migrations():
     # sessions – 逐秒原始腦波陣列（180 筆 × 8 頻段，JSON 格式永久保存）
     if not has_column("sessions", "raw_arrays_json"):
         pending.append("ALTER TABLE sessions ADD COLUMN raw_arrays_json TEXT NULL")
+    # sessions – BrainDNA 計算結果（與 Firebase 欄位名稱、格式完全一致）
+    if not has_column("sessions", "mind_stress"):
+        pending.append("ALTER TABLE sessions ADD COLUMN mind_stress INTEGER NULL")
+    if not has_column("sessions", "mind_balance"):
+        pending.append("ALTER TABLE sessions ADD COLUMN mind_balance INTEGER NULL")
+    if not has_column("sessions", "mind_energy"):
+        pending.append("ALTER TABLE sessions ADD COLUMN mind_energy INTEGER NULL")
+    if not has_column("sessions", "mind_color"):
+        pending.append("ALTER TABLE sessions ADD COLUMN mind_color INTEGER NULL")
+    if not has_column("sessions", "mbti"):
+        pending.append("ALTER TABLE sessions ADD COLUMN mbti VARCHAR(4) NULL")
+    if not has_column("sessions", "bagua"):
+        pending.append("ALTER TABLE sessions ADD COLUMN bagua VARCHAR(20) NULL")
+    if not has_column("sessions", "overall_score"):
+        pending.append("ALTER TABLE sessions ADD COLUMN overall_score INTEGER NULL")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
