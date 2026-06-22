@@ -1050,13 +1050,18 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     except Exception:
         pass  # 回退到 DB 平均值
 
+    # BrainDNA 重算結果覆寫全部 8 頻段（含 delta/theta）
+    _bdna_delta = _safe_float(avg.delta)
+    _bdna_theta = _safe_float(avg.theta)
     if _bdna_bands:
-        lo_alpha = float(_bdna_bands.get("low_alpha",  lo_alpha))
-        hi_alpha = float(_bdna_bands.get("high_alpha", hi_alpha))
-        lo_beta  = float(_bdna_bands.get("low_beta",   lo_beta))
-        hi_beta  = float(_bdna_bands.get("high_beta",  hi_beta))
-        lo_gamma = float(_bdna_bands.get("low_gamma",  lo_gamma))
-        hi_gamma = float(_bdna_bands.get("high_gamma", hi_gamma))
+        lo_alpha    = float(_bdna_bands.get("low_alpha",  lo_alpha))
+        hi_alpha    = float(_bdna_bands.get("high_alpha", hi_alpha))
+        lo_beta     = float(_bdna_bands.get("low_beta",   lo_beta))
+        hi_beta     = float(_bdna_bands.get("high_beta",  hi_beta))
+        lo_gamma    = float(_bdna_bands.get("low_gamma",  lo_gamma))
+        hi_gamma    = float(_bdna_bands.get("high_gamma", hi_gamma))
+        _bdna_delta = float(_bdna_bands.get("delta", _bdna_delta))
+        _bdna_theta = float(_bdna_bands.get("theta", _bdna_theta))
     # ─────────────────────────────────────────────────────────────────────────
 
     bw = {
@@ -1064,8 +1069,8 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         "meditation_percentage": _safe_int(avg.meditation),
         "sample_count":          real_sample_count,
         "bands_avg": {
-            "delta": _safe_float(avg.delta),
-            "theta": _safe_float(avg.theta),
+            "delta": _bdna_delta,
+            "theta": _bdna_theta,
             "alpha": _band_avg(lo_alpha, hi_alpha),
             "beta":  _band_avg(lo_beta,  hi_beta),
             "gamma": _band_avg(lo_gamma, hi_gamma),
@@ -1074,7 +1079,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
             "low_gamma":  lo_gamma, "high_gamma": hi_gamma,
         },
         "bands_7": {
-            "theta":      _safe_float(avg.theta),
+            "theta":      _bdna_theta,
             "alpha_high": hi_alpha,
             "alpha_low":  lo_alpha,
             "beta_high":  hi_beta,

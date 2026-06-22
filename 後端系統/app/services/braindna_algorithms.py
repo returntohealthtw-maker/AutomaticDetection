@@ -104,13 +104,14 @@ def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
         prop_sum = 0.0
         valid = 0
         for j in range(start, end):
-            c = {k: _clamp(
-                    (raw_arrays.get(k) or [])[j] if j < len(raw_arrays.get(k) or []) else 0.0,
-                    CAP[k])
-                 for k in RAW_KEYS}
-            total = sum(c.values())
-            if total > 0:
-                prop_sum += c["r_lgamma"] / total
+            # 分母：uncapped 原始值之和（與 BrainDNA calcColumnSumArray 一致）
+            raw_row = {k: float((raw_arrays.get(k) or [])[j]
+                                if j < len(raw_arrays.get(k) or []) else 0.0)
+                       for k in RAW_KEYS}
+            uncapped_total = sum(raw_row.values())
+            if uncapped_total > 0:
+                # 分子：capped lowGamma
+                prop_sum += _clamp(raw_row["r_lgamma"], CAP["r_lgamma"]) / uncapped_total
                 valid += 1
         if valid > 0:
             score = _proportion_range(prop_sum / valid, 0.03, 0.06)
@@ -250,26 +251,16 @@ def _arr_mean(arr: List) -> float:
     return sum(arr) / len(arr) if arr else 0.0
 
 
-def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
-    """
-    MindColorAlgorithm：回傳 0=橙, 1=綠, 2=藍, 3=黃
-    """
-    ha = _arr_mean(raw_arrays.get("r_halpha") or [])
-    la = _arr_mean(raw_arrays.get("r_lalpha") or [])
-    hb = _arr_mean(raw_arrays.get("r_hbeta")  or [])
-    lb = _arr_mean(raw_arrays.get("r_lbeta")  or [])
-    lg = _arr_mean(raw_arrays.get("r_lgamma") or [])
-    mg = _arr_mean(raw_arrays.get("r_hgamma") or [])
-
+def _calc_color_from_means(ha: float, la: float, hb: float, lb: float,
+                            lg: float, mg: float) -> int:
+    """給定 6 個頻段平均值，回傳 MindColor（0=橙, 1=綠, 2=藍, 3=黃）"""
     alpha = ha + la
     beta  = hb + lb
     gamma = lg + mg
     if alpha <= 0 or beta <= 0:
         return ORANGE
-
     f1 = (gamma / alpha) * 100
     f2 = (gamma / beta)  * 100
-
     min_dist = float("inf")
     best = "orange"
     for name, (cx, cy) in _COLOR_CENTERS.items():
@@ -278,6 +269,49 @@ def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
             min_dist = d
             best = name
     return _COLOR_TYPES[best]
+
+
+def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
+    """
+    MindColorAlgorithm：6 視窗投票（與 BrainDNA ReportResult.calcColor 一致）。
+
+    把 raw_arrays 切成 6 個 30 秒視窗，每個視窗各自計算一次腦色，
+    最後取得票最多的顏色（與 evaluationReport.py 的多視窗投票邏輯相同）。
+    資料不足 30 秒時退回單視窗計算。
+    """
+    KEYS = ["r_halpha", "r_lalpha", "r_hbeta", "r_lbeta", "r_lgamma", "r_hgamma"]
+    n = len(raw_arrays.get("r_lalpha") or [])
+
+    if n < WINDOW_SIZE:
+        # 資料不足 30 秒，用全段平均做一次計算
+        return _calc_color_from_means(
+            _arr_mean(raw_arrays.get("r_halpha") or []),
+            _arr_mean(raw_arrays.get("r_lalpha") or []),
+            _arr_mean(raw_arrays.get("r_hbeta")  or []),
+            _arr_mean(raw_arrays.get("r_lbeta")  or []),
+            _arr_mean(raw_arrays.get("r_lgamma") or []),
+            _arr_mean(raw_arrays.get("r_hgamma") or []),
+        )
+
+    # 最多取 6 個視窗（BrainDNA 用 mindArray = 6 windows）
+    num_windows = min(n // WINDOW_SIZE, 6)
+    votes: Dict[int, int] = {}
+
+    for i in range(num_windows):
+        start = i * WINDOW_SIZE
+        end   = start + WINDOW_SIZE
+        def _win_mean(key: str) -> float:
+            arr = raw_arrays.get(key) or []
+            seg = arr[start:min(end, len(arr))]
+            return sum(seg) / len(seg) if seg else 0.0
+        color = _calc_color_from_means(
+            _win_mean("r_halpha"), _win_mean("r_lalpha"),
+            _win_mean("r_hbeta"),  _win_mean("r_lbeta"),
+            _win_mean("r_lgamma"), _win_mean("r_hgamma"),
+        )
+        votes[color] = votes.get(color, 0) + 1
+
+    return max(votes, key=lambda c: votes[c]) if votes else ORANGE
 
 
 # ─────────────────────────────────────────────────────────────────────────────

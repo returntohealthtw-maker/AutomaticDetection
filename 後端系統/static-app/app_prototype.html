@@ -7203,12 +7203,25 @@ function _renderEthrMbtiAnalysis(state) {
 // ─── /MBTI ──────────────────────────────────────────────────────────────────
 
 function _etCalcBrainColor(acc) {
-  // 簡化版 MindColorAlgorithm.calc()（僅需 gamma/alpha, gamma/beta 兩個因子）
-  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
-  const alpha = avg(acc.alpha);
-  const beta  = avg(acc.beta);
-  const gamma = avg(acc.gamma);
-  if (alpha <= 0 || beta <= 0) return 0; // orange fallback
+  // MindColorAlgorithm：使用 raw 8-band 平均（r_lalpha 等），而非 bandTo100 的合併帶
+  // 與後端 calc_mind_color / BrainDNA MindColorAlgorithm.calc 保持一致
+  const _avg = arr => arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const hasRaw = (acc.r_lalpha && acc.r_lalpha.length > 0);
+
+  let alpha, beta, gamma;
+  if (hasRaw) {
+    // 優先用 raw 8-band 平均（BrainDNA 正式算法）
+    alpha = (_avg(acc.r_lalpha) + _avg(acc.r_halpha)) / 2;
+    beta  = (_avg(acc.r_lbeta)  + _avg(acc.r_hbeta))  / 2;
+    gamma = (_avg(acc.r_lgamma) + _avg(acc.r_hgamma))  / 2;
+  } else {
+    // Fallback：無 raw 8-band 時用 bandTo100 合併帶
+    alpha = _avg(acc.alpha);
+    beta  = _avg(acc.beta);
+    gamma = _avg(acc.gamma);
+  }
+
+  if (alpha <= 0 || beta <= 0) return 'orange';
   const f1 = (gamma / alpha) * 100;
   const f2 = (gamma / beta)  * 100;
   const centers = { orange:[32.5,42.5], green:[32.5,27.5], blue:[42.5,52.5], yellow:[25,20] };
@@ -8794,15 +8807,15 @@ function _renderAllSubjectCard(s) {
          <div style="font-size:9px;opacity:0.8;line-height:1.2;">${label}${sub ? `<br><span style='font-size:8px;opacity:0.75;'>${sub}</span>` : ''}</div>
          <div style="font-size:16px;font-weight:700;margin-top:2px;">${Math.round(val || 0)}</div>
        </div>`;
-    // 優先使用 bands_7（真實 high/low），若無則退回 bands_avg 估算
+    // 優先使用 bands_7（真實 high/low BrainDNA 佔比值），無則用合併帶原值（不估算）
     const hasB7 = Object.keys(b7).length > 0;
     const theta     = hasB7 ? b7.theta      : ba.theta;
-    const hiAlpha   = hasB7 ? b7.alpha_high : Math.round((ba.alpha||0)*1.1);
-    const loAlpha   = hasB7 ? b7.alpha_low  : Math.round((ba.alpha||0)*0.9);
-    const hiBeta    = hasB7 ? b7.beta_high  : Math.round((ba.beta ||0)*1.1);
-    const loBeta    = hasB7 ? b7.beta_low   : Math.round((ba.beta ||0)*0.9);
-    const hiGamma   = hasB7 ? b7.gamma_high : Math.round((ba.gamma||0)*1.1);
-    const loGamma   = hasB7 ? b7.gamma_low  : Math.round((ba.gamma||0)*0.9);
+    const hiAlpha   = hasB7 ? b7.alpha_high : (ba.high_alpha || ba.alpha || 0);
+    const loAlpha   = hasB7 ? b7.alpha_low  : (ba.low_alpha  || ba.alpha || 0);
+    const hiBeta    = hasB7 ? b7.beta_high  : (ba.high_beta  || ba.beta  || 0);
+    const loBeta    = hasB7 ? b7.beta_low   : (ba.low_beta   || ba.beta  || 0);
+    const hiGamma   = hasB7 ? b7.gamma_high : (ba.high_gamma || ba.gamma || 0);
+    const loGamma   = hasB7 ? b7.gamma_low  : (ba.low_gamma  || ba.gamma || 0);
     // 電極接觸不良警示：eSense 值兩者均為 0
     const badContact = (bw.attention_percentage === 0 && bw.meditation_percentage === 0);
     const contactWarn = badContact
