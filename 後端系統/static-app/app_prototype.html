@@ -2788,6 +2788,18 @@
             <div id="ethr-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
           </div>
 
+          <!-- 🔬 原始腦波數值除錯面板（管理員/工作人員限定）-->
+          <div id="ethr-debug-panel" style="display:none;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(26,35,126,0.15);">
+            <div onclick="var b=document.getElementById('ethr-debug-body');b.style.display=b.style.display==='none'?'block':'none';"
+                 style="background:#e8eaf6;padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:#1a237e;font-weight:600;">🔬 腦波數值驗證（管理員）</span>
+              <span style="font-size:10px;color:#7986cb;">點擊展開 ▸</span>
+            </div>
+            <div id="ethr-debug-body" style="display:none;padding:10px 14px;background:#fff;">
+              <div id="ethr-debug-content" style="font-family:monospace;font-size:11px;color:#1a237e;line-height:1.8;white-space:pre;"></div>
+            </div>
+          </div>
+
           <!-- 操作按鈕 -->
           <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
             <button class="btn btn-primary" onclick="goto('screen-home')">返回首頁</button>
@@ -5888,61 +5900,26 @@ function _summarizeEegAccum(acc) {
   // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
   let bands_7 = null;
   if (has8) {
-    // BrainDNA 佔比演算法（完整兩步驟，參考 brainwave.py MindValueCalcHelper）：
-    //   步驟一：每秒截斷（MindValueTop）→ 除以八頻段總和 → 180 秒平均佔比（0.0~1.0）
-    //   步驟二：proportionRange 正規化 → 映射到 0.0~1.0 → × 100 → 整數（0~100）
-    //   與 BrainDNA evaluationReport *Strip 值完全一致
-    const PROP_RANGE = {
-      r_delta:  [0.60, 0.80],
-      r_theta:  [0.15, 0.30],
-      r_lalpha: [0.10, 0.20],
-      r_halpha: [0.10, 0.20],
-      r_lbeta:  [0.05, 0.10],
-      r_hbeta:  [0.05, 0.10],
-      r_lgamma: [0.03, 0.06],
-      r_hgamma: [0.03, 0.06],
-    };
-    function _propRange(v, l1, l2) {
-      if (l1 > l2 || l1 < 0 || v <= 0) return 0;
-      if (v >= l2) return 1;
-      if (v <= l1) return (v / l1) * 0.5;
-      return (v - l1) / (l2 - l1) * 0.5 + 0.5;
-    }
-    const n = acc.r_lalpha.length;
-    const propSum = {};
-    for (const k of RKEYS) propSum[k] = 0;
-    let validSecs = 0;
-    for (let i = 0; i < n; i++) {
-      const c = {};
-      let total = 0;
-      for (const k of RKEYS) {
-        c[k] = Math.min((acc[k][i] || 0), CAP[k]);
-        total += c[k];
-      }
-      if (total <= 0) continue;
-      for (const k of RKEYS) propSum[k] += c[k] / total;
-      validSecs++;
-    }
-    // 步驟二：proportionRange 正規化到 0~100
-    const prop = (k) => {
-      if (validSecs <= 0) return 0;
-      const rawProp = propSum[k] / validSecs;  // 0.0~1.0
-      const [l1, l2] = PROP_RANGE[k];
-      return Math.round(_propRange(rawProp, l1, l2) * 100);
-    };
-    const loA = prop('r_lalpha');
-    const hiA = prop('r_halpha');
-    const loB = prop('r_lbeta');
-    const hiB = prop('r_hbeta');
-    const loG = prop('r_lgamma');
-    const hiG = prop('r_hgamma');
+    // BrainDNA 佔比演算法（完整兩步驟）：使用共用函式 _calcBrainDNABands
+    const bdna = _calcBrainDNABands(acc);
+    const deV = bdna ? bdna.deV : avg(acc.delta);
+    const thV = bdna ? bdna.thV : avg(acc.theta);
+    const loA = bdna ? bdna.loA : 0;
+    const hiA = bdna ? bdna.hiA : 0;
+    const loB = bdna ? bdna.loB : 0;
+    const hiB = bdna ? bdna.hiB : 0;
+    const loG = bdna ? bdna.loG : 0;
+    const hiG = bdna ? bdna.hiG : 0;
     // 寫入 bands_avg（方便舊路徑讀取）
+    bands.delta      = deV;
+    bands.theta      = thV;
     bands.low_alpha  = loA;  bands.high_alpha = hiA;
     bands.low_beta   = loB;  bands.high_beta  = hiB;
     bands.low_gamma  = loG;  bands.high_gamma = hiG;
     // 同時建立 bands_7（與後端 _session_to_brainwave_data 格式一致，讓 headless_renderer 優先讀取）
     bands_7 = {
-      theta:      thetaVal,
+      delta:      deV,
+      theta:      thV,   // 現在與後端 DB 一致（BrainDNA proportionRange）
       alpha_high: hiA, alpha_low: loA,
       beta_high:  hiB, beta_low:  loB,
       gamma_high: hiG, gamma_low: loG,
@@ -6577,6 +6554,33 @@ function _renderEegHealthResult(state, byUser) {
 
   // 🧬 MBTI 分析（採集到資料才會渲染，0 筆會自動隱藏整段）
   try { _renderEthrMbtiAnalysis(state); } catch(e) { console.warn('mbti render', e); }
+
+  // 🔬 管理員除錯面板：BrainDNA 數值驗證
+  const u2 = _currentUser || {};
+  const isStaff2 = u2.role === 'admin' || u2.org_type === '工作人員' || u2.org_type === '專案人員';
+  const dPanel = document.getElementById('ethr-debug-panel');
+  if (dPanel) dPanel.style.display = isStaff2 ? '' : 'none';
+  if (isStaff2 && window._ethrAccum && sampleCount > 0) {
+    const acc2 = window._ethrAccum;
+    const avg2 = arr => arr && arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+    const bdna2 = _calcBrainDNABands(acc2);
+    const lines2 = [
+      `樣本數:  ${sampleCount}（60秒健康檢查）`,
+      `注意力:  ${avg2(acc2.attn)}  放鬆度: ${avg2(acc2.medi)}`,
+      `─── BrainDNA 佔比算法（proportionRange）───`,
+      `δ  delta:      ${bdna2 ? bdna2.deV : avg2(acc2.delta) + ' (bandTo100 fallback)'}`,
+      `θ  theta:      ${bdna2 ? bdna2.thV : avg2(acc2.theta) + ' (bandTo100 fallback)'}`,
+      `α  low_alpha:  ${bdna2 ? bdna2.loA : '—'}`,
+      `α  high_alpha: ${bdna2 ? bdna2.hiA : '—'}`,
+      `β  low_beta:   ${bdna2 ? bdna2.loB : '—'}`,
+      `β  high_beta:  ${bdna2 ? bdna2.hiB : '—'}`,
+      `γ  low_gamma:  ${bdna2 ? bdna2.loG : '—'}`,
+      `γ  high_gamma: ${bdna2 ? bdna2.hiG : '—'}`,
+      bdna2 ? '' : '\n⚠️ r_lalpha 資料不足，無法計算 BrainDNA（需 APK v1.1.9+）',
+    ].filter(l => l !== undefined);
+    const dbgEl2 = document.getElementById('ethr-debug-content');
+    if (dbgEl2) dbgEl2.textContent = lines2.join('\n');
+  }
 }
 
 // 保留向後相容（舊頁面如返回首頁按鈕仍可能呼叫，但不再做任何主流程操作）
@@ -6590,18 +6594,50 @@ function _etSafeDiv(a, b, def = 0) { return b > 1e-6 ? a / b : def; }
 function _etClamp(v, lo = 0, hi = 100) { return Math.max(lo, Math.min(hi, v)); }
 function _etSigmoid(raw) { return 1 / (1 + Math.exp(-3 * (raw - 1))); }
 
+// ─── BrainDNA proportionRange 共用計算（_summarizeEegAccum 和 _etComputeAll 共用）──
+function _calcBrainDNABands(acc) {
+  const CAP_B = { r_delta:98000, r_theta:98000,
+                  r_lalpha:50000, r_halpha:50000,
+                  r_lbeta:50000,  r_hbeta:50000,
+                  r_lgamma:10000, r_hgamma:10000 };
+  const RKEYS_B = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
+  const PROP_RANGE_B = {
+    r_delta:[0.60,0.80], r_theta:[0.15,0.30],
+    r_lalpha:[0.10,0.20], r_halpha:[0.10,0.20],
+    r_lbeta:[0.05,0.10],  r_hbeta:[0.05,0.10],
+    r_lgamma:[0.03,0.06], r_hgamma:[0.03,0.06],
+  };
+  function pr(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
+  const n = (acc.r_lalpha||[]).length;
+  if (n < 5) return null;
+  const ps = {}; for(const k of RKEYS_B) ps[k]=0;
+  let vs = 0;
+  for(let i=0;i<n;i++){
+    const c={}; let tot=0;
+    for(const k of RKEYS_B){ c[k]=Math.min((acc[k]||[])[i]||0, CAP_B[k]); tot+=c[k]; }
+    if(tot<=0) continue;
+    for(const k of RKEYS_B) ps[k]+=c[k]/tot;
+    vs++;
+  }
+  if(vs===0) return null;
+  const p = k => Math.round(pr(ps[k]/vs, ...PROP_RANGE_B[k]) * 100);
+  return { deV:p('r_delta'), thV:p('r_theta'), loA:p('r_lalpha'), hiA:p('r_halpha'),
+           loB:p('r_lbeta'),  hiB:p('r_hbeta'),  loG:p('r_lgamma'), hiG:p('r_hgamma') };
+}
+
 function _etComputeAll(acc) {
-  // acc = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[] }
+  // acc = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[], r_lalpha:[], ... }
   const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
-  const d  = avg(acc.delta);
-  const t  = avg(acc.theta);
-  // 近似拆分 sub-bands（各半）
-  const la = avg(acc.alpha) * 0.5;
-  const ha = avg(acc.alpha) * 0.5;
-  const lb = avg(acc.beta)  * 0.5;
-  const hb = avg(acc.beta)  * 0.5;
-  const lg = avg(acc.gamma) * 0.5;
-  const hg = avg(acc.gamma) * 0.5;
+  // 優先用 BrainDNA proportionRange（與主流程和後端一致）
+  const bdna = _calcBrainDNABands(acc);
+  const d  = bdna ? bdna.deV : avg(acc.delta);
+  const t  = bdna ? bdna.thV : avg(acc.theta);
+  const la = bdna ? bdna.loA : avg(acc.alpha) * 0.5;
+  const ha = bdna ? bdna.hiA : avg(acc.alpha) * 0.5;
+  const lb = bdna ? bdna.loB : avg(acc.beta)  * 0.5;
+  const hb = bdna ? bdna.hiB : avg(acc.beta)  * 0.5;
+  const lg = bdna ? bdna.loG : avg(acc.gamma) * 0.5;
+  const hg = bdna ? bdna.hiG : avg(acc.gamma) * 0.5;
   const a  = la + ha;
   const b  = lb + hb;
   const g  = lg + hg;
