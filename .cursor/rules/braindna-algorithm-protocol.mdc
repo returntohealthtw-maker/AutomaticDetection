@@ -1,0 +1,64 @@
+---
+description: BrainDNA 演算法實作規則（從實際錯誤中歸納）
+alwaysApply: true
+---
+
+# BrainDNA 演算法實作規則
+
+## 移植前必做：完整讀取所有相關函式
+
+在實作任何 BrainDNA 演算法前，必須一次讀完以下所有函式，不得分批讀取後直接實作：
+- `MindValueCalcHelper.calcColumnSumArray`
+- `MindValueCalcHelper.calcXxx`（每個頻段）
+- `MindValueAlgorithm.proportion`
+- `MindValueAlgorithm.proportionRange`
+- `MindValueAlgorithm.calcBand`
+- `ReportResult.calcColor`
+- `evaluationReport.py` 完整主流程
+
+## 已確認的關鍵細節（錯過任何一條都會算錯）
+
+### 1. 分母必須使用「未截斷」原始值
+```python
+# ❌ 錯誤：分母用截斷值（之前的錯誤）
+total = sum(_clamp(v, CAP[k]) for k in RAW_KEYS)
+
+# ✅ 正確：分母未截斷，分子才截斷（BrainDNA calcColumnSumArray）
+uncapped_total = sum(raw_row[k] for k in RAW_KEYS)   # 分母：原始值
+capped_val = _clamp(raw_row[k], CAP[k])               # 分子：截斷後
+proportion = capped_val / uncapped_total
+```
+
+### 2. 佔比法是「每秒各自計算再平均」，不是「全部加總後除」
+```python
+# ❌ 錯誤：total/total 方式
+prop = sum(band_arr) / sum(all_bands)
+
+# ✅ 正確：mean of per-second proportions
+for i in range(n):
+    prop_sum[k] += capped[k][i] / uncapped_total[i]
+result = prop_sum[k] / n
+```
+
+### 3. proportionRange 兩層映射缺一不可
+- ≤ level1：`value/level1 * 0.5`（下半段 0~0.5）
+- level1~level2：`(value-level1)/(level2-level1)*0.5 + 0.5`（上半段 0.5~1.0）
+- ≥ level2：直接 1.0
+
+### 4. 各演算法的資料來源不同，不可混用
+| 演算法 | 資料來源 |
+|---|---|
+| 頻段 strip、Stress、Balance、Energy | `maxArray`（best 30s window） |
+| MindColor（腦色）| `mindArray`（全部 6 視窗投票） |
+
+### 5. Best 30s window 選取依據是 lowGamma proportionRange 最高值
+- 不是 lowGamma 原始值最高
+- 不是平均值最高
+- 是 `proportionRange(lowGamma佔比, 0.03, 0.06)` 分數最高的視窗
+
+## 實作流程強制步驟
+
+1. 讀完所有相關函式原碼
+2. 列出完整資料流（輸入 → 各步驟處理 → 輸出）
+3. 使用者確認後才開始實作
+4. 前端（JS）與後端（Python）必須同步修正，不可只改一端
