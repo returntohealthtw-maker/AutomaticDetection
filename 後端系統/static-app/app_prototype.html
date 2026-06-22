@@ -5538,7 +5538,8 @@ function _startEegLiveCapture() {
 
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
                     low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
-                    // ThinkGear 原始功率（用於 _summarizeEegAccum 精確計算 High≠Low）
+                    // ThinkGear 原始功率（8 頻段）：用於精確計算 High≠Low、Firebase 同步、MBTI 時間窗
+                    r_delta:[], r_theta:[],
                     r_lalpha:[], r_halpha:[], r_lbeta:[], r_hbeta:[], r_lgamma:[], r_hgamma:[],
                     _zeroConsec: 0,   // 相容舊命名
                     _poorConsec: 0 }; // 連續 att≤5 AND med≤5 計數（含全零）
@@ -5771,9 +5772,12 @@ function _ingestEegSample(s) {
   if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
   if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
 
-  // ThinkGear 原始功率（raw_lalpha 等）：用算術平均後套 _b100，
-  // 解決 bandTo100(int) 截斷導致 High/Low 壓縮成同一整數的問題
+  // ThinkGear 原始功率（全 8 頻段）：
+  //   1. 解決 bandTo100(int) 截斷導致 High/Low 壓縮成同一整數
+  //   2. Firebase 同步需要 r_delta/r_theta 才能計算每秒的功率特徵
   const _rpos = (v) => (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0;
+  const rd  = _rpos(s.raw_delta);  if (rd  > 0) _eegLiveAccum.r_delta.push(rd);
+  const rth = _rpos(s.raw_theta);  if (rth > 0) _eegLiveAccum.r_theta.push(rth);
   const rla = _rpos(s.raw_lalpha); if (rla > 0) _eegLiveAccum.r_lalpha.push(rla);
   const rha = _rpos(s.raw_halpha); if (rha > 0) _eegLiveAccum.r_halpha.push(rha);
   const rlb = _rpos(s.raw_lbeta);  if (rlb > 0) _eegLiveAccum.r_lbeta.push(rlb);

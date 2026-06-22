@@ -416,3 +416,43 @@ def admin_eeg_compare(
             "high_gamma":   c.high_gamma   if c else None,
         })
     return {"ok": True, "count": len(rows), "rows": rows}
+
+
+@router.get("/admin/firebase-diag")
+def admin_firebase_diag(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    【管理員】Firebase 同步診斷：
+    確認 FIREBASE_SERVICE_KEY 是否設定，並測試能否連線到 Firebase API。
+    """
+    import os, httpx, asyncio
+
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "需要管理員權限")
+
+    key = os.environ.get("FIREBASE_SERVICE_KEY", "")
+    result = {
+        "firebase_key_set":    bool(key),
+        "firebase_key_prefix": key[:6] + "..." if key else "(未設定)",
+        "firebase_api_reachable": False,
+        "firebase_api_status":    None,
+        "firebase_api_error":     None,
+    }
+
+    if key:
+        try:
+            from app.services.firebase_sync import FIREBASE_API_BASE
+            resp = httpx.get(
+                f"{FIREBASE_API_BASE}/health",
+                headers={"X-Service-Key": key},
+                timeout=8.0,
+            )
+            result["firebase_api_reachable"] = True
+            result["firebase_api_status"]    = resp.status_code
+        except Exception as e:
+            result["firebase_api_error"] = f"{type(e).__name__}: {str(e)[:200]}"
+
+    return result
