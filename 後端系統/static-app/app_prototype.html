@@ -5888,26 +5888,48 @@ function _summarizeEegAccum(acc) {
   // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
   let bands_7 = null;
   if (has8) {
-    // BrainDNA 佔比演算法（參考 MindValueCalcHelper.proportion）：
-    //   每秒先截斷（MindValueTop），再除以該秒八頻段總和，最後 180 秒取平均 × 100
+    // BrainDNA 佔比演算法（完整兩步驟，參考 brainwave.py MindValueCalcHelper）：
+    //   步驟一：每秒截斷（MindValueTop）→ 除以八頻段總和 → 180 秒平均佔比（0.0~1.0）
+    //   步驟二：proportionRange 正規化 → 映射到 0.0~1.0 → × 100 → 整數（0~100）
+    //   與 BrainDNA evaluationReport *Strip 值完全一致
+    const PROP_RANGE = {
+      r_delta:  [0.60, 0.80],
+      r_theta:  [0.15, 0.30],
+      r_lalpha: [0.10, 0.20],
+      r_halpha: [0.10, 0.20],
+      r_lbeta:  [0.05, 0.10],
+      r_hbeta:  [0.05, 0.10],
+      r_lgamma: [0.03, 0.06],
+      r_hgamma: [0.03, 0.06],
+    };
+    function _propRange(v, l1, l2) {
+      if (l1 > l2 || l1 < 0 || v <= 0) return 0;
+      if (v >= l2) return 1;
+      if (v <= l1) return (v / l1) * 0.5;
+      return (v - l1) / (l2 - l1) * 0.5 + 0.5;
+    }
     const n = acc.r_lalpha.length;
-    const propSum = { r_lalpha:0, r_halpha:0, r_lbeta:0, r_hbeta:0, r_lgamma:0, r_hgamma:0 };
+    const propSum = {};
+    for (const k of RKEYS) propSum[k] = 0;
     let validSecs = 0;
     for (let i = 0; i < n; i++) {
-      // 截斷至各頻段上限
       const c = {};
       let total = 0;
       for (const k of RKEYS) {
         c[k] = Math.min((acc[k][i] || 0), CAP[k]);
         total += c[k];
       }
-      if (total <= 0) continue; // 該秒無訊號跳過
-      for (const k of ['r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma']) {
-        propSum[k] += c[k] / total;
-      }
+      if (total <= 0) continue;
+      for (const k of RKEYS) propSum[k] += c[k] / total;
       validSecs++;
     }
-    const prop = (k) => validSecs > 0 ? Math.round(propSum[k] / validSecs * 100) : 0;
+    // 步驟二：proportionRange 正規化到 0~100
+    const prop = (k) => {
+      if (validSecs <= 0) return 0;
+      const rawProp = propSum[k] / validSecs;  // 0.0~1.0
+      const [l1, l2] = PROP_RANGE[k];
+      return Math.round(_propRange(rawProp, l1, l2) * 100);
+    };
     const loA = prop('r_lalpha');
     const hiA = prop('r_halpha');
     const loB = prop('r_lbeta');

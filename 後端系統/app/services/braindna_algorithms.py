@@ -45,16 +45,47 @@ def _clamp(v: float, cap: float) -> float:
     return max(0.0, min(float(v), cap))
 
 
+def _proportion_range(value: float, level1: float, level2: float) -> float:
+    """
+    MindValueAlgorithm.proportionRange（直接複製自 BrainDNA 原始碼）。
+    輸入原始佔比（0.0~1.0），映射到 0.0~1.0：
+      ≤ level1 → (value/level1) × 0.5          （低半段 0~0.5）
+      level1~level2 → (value-level1)/(level2-level1) × 0.5 + 0.5  （高半段 0.5~1.0）
+      ≥ level2 → 1.0
+    """
+    if level1 > level2 or level1 < 0 or value <= 0:
+        return 0.0
+    if value >= level2:
+        return 1.0
+    if value <= level1:
+        return (value / level1) * 0.5
+    return (value - level1) / (level2 - level1) * 0.5 + 0.5
+
+
+# proportionRange 各頻段標準範圍（來自 BrainDNA brainwave.py calcXxx 方法）
+_PROP_RANGE = {
+    "r_delta":  (0.60, 0.80),
+    "r_theta":  (0.15, 0.30),
+    "r_lalpha": (0.10, 0.20),
+    "r_halpha": (0.10, 0.20),
+    "r_lbeta":  (0.05, 0.10),
+    "r_hbeta":  (0.05, 0.10),
+    "r_lgamma": (0.03, 0.06),
+    "r_hgamma": (0.03, 0.06),
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MindValueCalcHelper（proportion 模式）
-# 每秒：各頻段值截斷 → 計算八頻段總和 → 個別佔比
-# 最終：180 秒佔比平均 × 100 → 顯示值（整數）
+# 步驟一：每秒截斷 → 八頻段總和 → 個別佔比 → 180 秒平均（0.0~1.0）
+# 步驟二：proportionRange 正規化 → 映射到 0~1 → × 100 → 整數（0~100）
+# 與 BrainDNA evaluationReport 的 *Strip 值完全一致。
 # ─────────────────────────────────────────────────────────────────────────────
 def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int]]:
     """
     輸入：raw_arrays（8 個頻段原始陣列，index 對齊）
-    輸出：{ "low_alpha": int, "high_alpha": int, "low_beta": ..., ... }
-          值域 0-100，表示該頻段佔八頻段總功率的百分比（×100）
+    輸出：{ "low_alpha": int, "high_alpha": int, ... }
+          值域 0-100，與 BrainDNA *Strip 顯示值相同。
     若資料不足（< 10 秒）回傳 None。
     """
     n = len(raw_arrays.get("r_lalpha") or [])
@@ -65,7 +96,6 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     valid = 0
 
     for i in range(n):
-        # 截斷
         c = {k: _clamp((raw_arrays.get(k) or [0])[i] if i < len(raw_arrays.get(k) or []) else 0, CAP[k])
              for k in RAW_KEYS}
         total = sum(c.values())
@@ -78,15 +108,20 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     if valid == 0:
         return None
 
+    def _norm(k: str) -> int:
+        raw_prop = prop_sum[k] / valid          # 步驟一：原始佔比 0.0~1.0
+        l1, l2 = _PROP_RANGE[k]
+        return round(_proportion_range(raw_prop, l1, l2) * 100)   # 步驟二
+
     return {
-        "delta":      round(prop_sum["r_delta"]  / valid * 100),
-        "theta":      round(prop_sum["r_theta"]  / valid * 100),
-        "low_alpha":  round(prop_sum["r_lalpha"] / valid * 100),
-        "high_alpha": round(prop_sum["r_halpha"] / valid * 100),
-        "low_beta":   round(prop_sum["r_lbeta"]  / valid * 100),
-        "high_beta":  round(prop_sum["r_hbeta"]  / valid * 100),
-        "low_gamma":  round(prop_sum["r_lgamma"] / valid * 100),
-        "high_gamma": round(prop_sum["r_hgamma"] / valid * 100),
+        "delta":      _norm("r_delta"),
+        "theta":      _norm("r_theta"),
+        "low_alpha":  _norm("r_lalpha"),
+        "high_alpha": _norm("r_halpha"),
+        "low_beta":   _norm("r_lbeta"),
+        "high_beta":  _norm("r_hbeta"),
+        "low_gamma":  _norm("r_lgamma"),
+        "high_gamma": _norm("r_hgamma"),
     }
 
 
