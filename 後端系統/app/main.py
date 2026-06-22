@@ -311,6 +311,9 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_la INTEGER NULL")
     if not has_column("eeg_captures", "mbti_theta"):
         pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_theta INTEGER NULL")
+    # sessions – 逐秒原始腦波陣列（180 筆 × 8 頻段，JSON 格式永久保存）
+    if not has_column("sessions", "raw_arrays_json"):
+        pending.append("ALTER TABLE sessions ADD COLUMN raw_arrays_json TEXT NULL")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")

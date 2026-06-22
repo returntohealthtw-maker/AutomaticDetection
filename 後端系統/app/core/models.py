@@ -39,6 +39,12 @@ class Session(Base):
     status           = Column(Integer, default=0)  # 0=進行中 1=成功 2=失敗
     failure_reason   = Column(String(100), nullable=True)
     created_at       = Column(Integer, default=0)
+    # 逐秒原始腦波陣列（JSON 字串）：
+    #   { attn:[...180], medi:[...180], r_delta:[...], r_theta:[...],
+    #     r_lalpha:[...], r_halpha:[...], r_lbeta:[...], r_hbeta:[...],
+    #     r_lgamma:[...], r_hgamma:[...] }
+    # 用途：Firebase 補同步 / 未來 MBTI 時間窗重新分析 / 退款爭議舉證
+    raw_arrays_json  = Column(Text, nullable=True)
 
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
     report      = relationship("Report", back_populates="session", uselist=False)

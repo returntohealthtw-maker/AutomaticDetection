@@ -184,6 +184,15 @@ def save_eeg_stats(
         mbti_theta   = _mbti_v("mbti_theta"),
     )
     db.add(cap)
+
+    # ── 逐秒原始陣列持久化到 Session.raw_arrays_json（永久保存，不再遺失）────────
+    if payload.raw_arrays:
+        import json as _json
+        try:
+            sess.raw_arrays_json = _json.dumps(payload.raw_arrays, ensure_ascii=False)
+        except Exception:
+            pass  # 序列化失敗不影響主流程
+
     db.commit()
 
     # ── 非同步同步到 Firebase 腦波資料庫（不阻塞主流程）────────────────────────
