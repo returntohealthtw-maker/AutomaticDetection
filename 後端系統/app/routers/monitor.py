@@ -2,11 +2,19 @@
 即時監控模組
 - WebSocket：儀表板頁面訂閱，有新資料時推送
 - broadcast()：供其他 router 在收到資料時呼叫
+- POST /api/admin/recompute-braindna：批次重算所有舊 Session 的 BrainDNA 值
 """
 import json
 import time
-from typing import List
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import statistics
+from typing import List, Optional
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Header, HTTPException
+from sqlalchemy.orm import Session as DBSession
+
+from app.core.database import get_db
+from app.core import models as M
+from app.routers.auth import require_admin
 
 router = APIRouter(tags=["監控"])
 
@@ -37,3 +45,185 @@ async def websocket_monitor(ws: WebSocket):
             await ws.receive_text()   # 保持連線（心跳）
     except WebSocketDisconnect:
         _clients.remove(ws)
+
+
+# ─── 管理員端點：批次重算舊 Session 的 BrainDNA 值 ────────────────────────────
+
+@router.post("/api/admin/recompute-braindna", tags=["管理員"])
+def recompute_braindna(
+    force: bool = False,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """
+    批次重算所有舊 Session 的 BrainDNA 計算結果。
+
+    - 只處理有 raw_arrays_json 且 r_lalpha 筆數 >= 10 的 Session
+    - force=false（預設）：跳過已有 mind_stress 的 Session
+    - force=true：強制重算所有有效 Session（更新已有的值）
+
+    回傳：{ total, updated, skipped_no_data, skipped_already_done, failed }
+    """
+    require_admin(authorization, db)
+
+    from app.services.braindna_algorithms import compute_all as _compute_all
+    from app.services.braindna_algorithms import _select_best_window
+    from app.algorithms.report import generate_quick_mbti
+
+    # 查所有有 raw_arrays_json 的 Session
+    query = db.query(M.Session).filter(M.Session.raw_arrays_json.isnot(None))
+    sessions = query.order_by(M.Session.session_id).all()
+
+    stats = {
+        "total": len(sessions),
+        "updated": 0,
+        "skipped_no_data": 0,     # raw_arrays 有值但 r_lalpha 資料不足
+        "skipped_already_done": 0, # 已有 mind_stress 且 force=False
+        "failed": 0,
+        "details": [],
+    }
+
+    for sess in sessions:
+        sid = sess.session_id
+        try:
+            # 跳過已算過的（除非 force）
+            if not force and sess.mind_stress is not None:
+                stats["skipped_already_done"] += 1
+                continue
+
+            raw = json.loads(sess.raw_arrays_json)
+            n_la = len(raw.get("r_lalpha") or [])
+
+            # 需要至少 10 筆 r_lalpha 才能用 BrainDNA 算法
+            if n_la < 10:
+                stats["skipped_no_data"] += 1
+                stats["details"].append({"session_id": sid, "status": "skip", "reason": f"r_lalpha only {n_la} samples"})
+                continue
+
+            # 重算 BrainDNA 核心指標
+            result = _compute_all(raw)
+            if not result.get("valid"):
+                stats["failed"] += 1
+                stats["details"].append({"session_id": sid, "status": "failed", "reason": "compute_all returned invalid"})
+                continue
+
+            sess.mind_stress   = result.get("stress")
+            sess.mind_balance  = result.get("balance")
+            sess.mind_energy   = result.get("energy")
+            sess.mind_color    = result.get("color")
+            sess.overall_score = result.get("overall_score")
+
+            # 同步更新 EegCapture(seq_num=0) 的頻段值（帶入修正後的 BrainDNA 算法結果）
+            cap = db.query(M.EegCapture).filter(
+                M.EegCapture.session_id == sid,
+                M.EegCapture.seq_num == 0,
+            ).first()
+            if cap and result.get("bands"):
+                b = result["bands"]
+                cap.delta      = b.get("delta",      cap.delta)
+                cap.theta      = b.get("theta",      cap.theta)
+                cap.low_alpha  = b.get("low_alpha",  cap.low_alpha)
+                cap.high_alpha = b.get("high_alpha", cap.high_alpha)
+                cap.low_beta   = b.get("low_beta",   cap.low_beta)
+                cap.high_beta  = b.get("high_beta",  cap.high_beta)
+                cap.low_gamma  = b.get("low_gamma",  cap.low_gamma)
+                cap.high_gamma = b.get("high_gamma", cap.high_gamma)
+
+            # 重算 MBTI / 八卦
+            try:
+                bw = _select_best_window(raw)
+                def _mean(key):
+                    arr = bw.get(key) or []
+                    return statistics.mean(arr) if arr else 0.0
+                mbti_r = generate_quick_mbti({
+                    "lowAlpha":  _mean("r_lalpha"), "highAlpha": _mean("r_halpha"),
+                    "lowBeta":   _mean("r_lbeta"),  "highBeta":  _mean("r_hbeta"),
+                    "lowGamma":  _mean("r_lgamma"),  "midGamma":  _mean("r_hgamma"),
+                    "theta":     _mean("r_theta"),   "delta":     _mean("r_delta"),
+                })
+                sess.mbti  = mbti_r.get("mbti")
+                sess.bagua = mbti_r.get("bagua")
+            except Exception:
+                pass  # MBTI 失敗不影響主要指標
+
+            stats["updated"] += 1
+            stats["details"].append({
+                "session_id": sid,
+                "status": "ok",
+                "samples": n_la,
+                "stress": sess.mind_stress,
+                "balance": sess.mind_balance,
+                "energy": sess.mind_energy,
+                "color": sess.mind_color,
+                "mbti": sess.mbti,
+                "bands": result.get("bands"),
+            })
+
+        except Exception as e:
+            stats["failed"] += 1
+            stats["details"].append({"session_id": sid, "status": "error", "reason": str(e)})
+
+    db.commit()
+
+    # 摘要（不含 details 保持回應簡潔）
+    return {
+        "ok": True,
+        "summary": {
+            "total_sessions_with_raw_data": stats["total"],
+            "updated": stats["updated"],
+            "skipped_no_data": stats["skipped_no_data"],
+            "skipped_already_done": stats["skipped_already_done"],
+            "failed": stats["failed"],
+        },
+        "details": stats["details"],
+    }
+
+
+@router.get("/api/admin/raw-arrays-health", tags=["管理員"])
+def raw_arrays_health(
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """
+    查詢所有 Session 的 raw_arrays 健康狀況：
+    - no_raw:       沒有 raw_arrays_json（舊版本或檢測失敗）
+    - too_short:    r_lalpha 筆數 < 10（無法使用 BrainDNA）
+    - partial:      r_lalpha 筆數 10–89（< 90 秒資料）
+    - full:         r_lalpha 筆數 >= 90（至少 1 個最佳窗口）
+    - braindna_ok:  已有 mind_stress（已計算過 BrainDNA）
+    """
+    require_admin(authorization, db)
+
+    all_sess = db.query(
+        M.Session.session_id,
+        M.Session.raw_arrays_json,
+        M.Session.mind_stress,
+    ).order_by(M.Session.session_id).all()
+
+    result = {"no_raw": [], "too_short": [], "partial": [], "full": [], "braindna_ok": []}
+
+    for sid, raw_json, mind_stress in all_sess:
+        if not raw_json:
+            result["no_raw"].append(sid)
+            continue
+        try:
+            raw = json.loads(raw_json)
+            n = len(raw.get("r_lalpha") or [])
+        except Exception:
+            result["no_raw"].append(sid)
+            continue
+
+        if n < 10:
+            result["too_short"].append({"session_id": sid, "samples": n})
+        elif n < 90:
+            result["partial"].append({"session_id": sid, "samples": n})
+        else:
+            result["full"].append({"session_id": sid, "samples": n})
+
+        if mind_stress is not None:
+            result["braindna_ok"].append(sid)
+
+    return {
+        "counts": {k: len(v) for k, v in result.items()},
+        "details": result,
+    }
