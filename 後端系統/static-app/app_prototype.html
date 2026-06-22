@@ -5538,6 +5538,8 @@ function _startEegLiveCapture() {
 
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
                     low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
+                    // ThinkGear 原始功率（用於 _summarizeEegAccum 精確計算 High≠Low）
+                    r_lalpha:[], r_halpha:[], r_lbeta:[], r_hbeta:[], r_lgamma:[], r_hgamma:[],
                     _zeroConsec: 0,   // 相容舊命名
                     _poorConsec: 0 }; // 連續 att≤5 AND med≤5 計數（含全零）
   // 清除上一次留下的警告元素和狀態標記
@@ -5769,6 +5771,16 @@ function _ingestEegSample(s) {
   if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
   if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
 
+  // ThinkGear 原始功率（raw_lalpha 等）：用算術平均後套 _b100，
+  // 解決 bandTo100(int) 截斷導致 High/Low 壓縮成同一整數的問題
+  const _rpos = (v) => (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0;
+  const rla = _rpos(s.raw_lalpha); if (rla > 0) _eegLiveAccum.r_lalpha.push(rla);
+  const rha = _rpos(s.raw_halpha); if (rha > 0) _eegLiveAccum.r_halpha.push(rha);
+  const rlb = _rpos(s.raw_lbeta);  if (rlb > 0) _eegLiveAccum.r_lbeta.push(rlb);
+  const rhb = _rpos(s.raw_hbeta);  if (rhb > 0) _eegLiveAccum.r_hbeta.push(rhb);
+  const rlg = _rpos(s.raw_lgamma); if (rlg > 0) _eegLiveAccum.r_lgamma.push(rlg);
+  const rhg = _rpos(s.raw_hgamma); if (rhg > 0) _eegLiveAccum.r_hgamma.push(rhg);
+
   // 連續低品質計數：att ≤ 5 AND med ≤ 5（含全零）= 電極接觸不良
   // ThinkGear 規格：att=0 明確代表「無讀數」；1-5 在正常配戴下極不可能出現
   if (a <= 5 && m <= 5) {
@@ -5851,14 +5863,20 @@ function _summarizeEegAccum(acc) {
   let bands_7 = null;
   if (has8) {
     const _sub = k => (acc[k] && acc[k].length > 0) ? avg(acc[k]) : avg(acc[k.replace('low_','').replace('high_','')] || []);
-    // low_alpha：BrainDNA 算術平均（有 raw 值優先，否則退回 bandTo100 平均）
+    // 優先用 raw 算術平均 → _b100（Math.round，解決截斷導致 High=Low 問題）
+    // 退回：用 bandTo100 壓縮後的 avg（來自舊版 5-band 格式，High/Low 無法區分）
     const rawLaArith = _rawArith(acc.r_lalpha || []);
+    const rawHaArith = _rawArith(acc.r_halpha || []);
+    const rawLbArith = _rawArith(acc.r_lbeta  || []);
+    const rawHbArith = _rawArith(acc.r_hbeta  || []);
+    const rawLgArith = _rawArith(acc.r_lgamma || []);
+    const rawHgArith = _rawArith(acc.r_hgamma || []);
     const loA = rawLaArith > 0 ? _b100(rawLaArith) : _sub('low_alpha');
-    const hiA = _sub('high_alpha');
-    const loB = _sub('low_beta');
-    const hiB = _sub('high_beta');
-    const loG = _sub('low_gamma');
-    const hiG = _sub('high_gamma');
+    const hiA = rawHaArith > 0 ? _b100(rawHaArith) : _sub('high_alpha');
+    const loB = rawLbArith > 0 ? _b100(rawLbArith) : _sub('low_beta');
+    const hiB = rawHbArith > 0 ? _b100(rawHbArith) : _sub('high_beta');
+    const loG = rawLgArith > 0 ? _b100(rawLgArith) : _sub('low_gamma');
+    const hiG = rawHgArith > 0 ? _b100(rawHgArith) : _sub('high_gamma');
     // 寫入 bands_avg（方便舊路徑讀取）
     bands.low_alpha  = loA;  bands.high_alpha = hiA;
     bands.low_beta   = loB;  bands.high_beta  = hiB;

@@ -742,7 +742,7 @@ public class WebAppActivity extends Activity {
     private int bandTo100(int raw) {
         if (raw <= 0) return 0;
         double normalized = Math.log10(raw + 1) / 6.0 * 100.0;
-        return (int) Math.max(0, Math.min(100, normalized));
+        return (int) Math.max(0, Math.min(100, Math.round(normalized)));
     }
 
     /**
