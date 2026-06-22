@@ -145,9 +145,11 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return None
-    # 步驟零：選 best window（與 BrainDNA evaluationReport.py maxArray 一致）
-    raw_arrays = _select_best_window(raw_arrays)
-    n = len(raw_arrays.get("r_lalpha") or [])
+    # 若輸入已是 best window（由 compute_all 傳入），直接使用；
+    # 若直接呼叫此函式（n >= 30），自動選 best window。
+    if n >= WINDOW_SIZE * 2:
+        raw_arrays = _select_best_window(raw_arrays)
+        n = len(raw_arrays.get("r_lalpha") or [])
 
     prop_sum = {k: 0.0 for k in RAW_KEYS}
     valid = 0
@@ -325,32 +327,36 @@ def calc_mind_energy(attn: List[int], medi: List[int]) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_all(raw_arrays: Dict[str, List]) -> Dict:
     """
-    輸入 raw_arrays，回傳完整的 BrainDNA 指標字典：
-    {
-        "bands": { "delta": int, "theta": int, "low_alpha": int, "high_alpha": int,
-                   "low_beta": int, "high_beta": int, "low_gamma": int, "high_gamma": int },
-        "stress":  int,   # 0-100
-        "balance": int,   # 0-100
-        "energy":  int,   # 0-100
-        "color":   int,   # 0=橙 1=綠 2=藍 3=黃
-        "valid":   bool,
-    }
+    輸入 raw_arrays，回傳完整的 BrainDNA 指標字典。
+    完全對應 BrainDNA evaluationReport.py 的資料流：
+
+      mindColor  → report.calcColor(mindArray)     ← 全部 6 個視窗投票
+      maxArray   → calcBand(mindArray)              ← best 30-second window
+      bands      → helper.calcXxx(maxArray)         ← best 30s
+      stress     → MindStressAlgorithm(maxArray)    ← best 30s
+      balance    → MindBalanceAlgorithm(maxArray)   ← best 30s attention/medi
+      energy     → MindEnergyAlgorithm(maxArray)    ← best 30s attention/medi
     """
-    # 選 best 30-second window（所有計算共用此視窗，與 BrainDNA evaluationReport 一致）
+    n = len(raw_arrays.get("r_lalpha") or [])
+    if n < 10:
+        return {"valid": False}
+
+    # best 30-second window（一次選取，傳給所有需要 best window 的算法）
     best_win = _select_best_window(raw_arrays)
 
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
 
-    bands = calc_band_proportions(raw_arrays)   # 內部會再次呼叫 _select_best_window
+    # bands：傳入 best_win 直接計算，避免 _select_best_window 被重複呼叫
+    bands = calc_band_proportions(best_win)
     if bands is None:
         return {"valid": False}
 
     return {
         "valid":   True,
         "bands":   bands,
-        "stress":  calc_stress_score(best_win),    # 使用 best window
-        "balance": calc_mind_balance(attn, medi),  # 使用 best window attn/medi
-        "energy":  calc_mind_energy(attn, medi),
-        "color":   calc_mind_color(best_win),      # 使用 best window
+        "stress":  calc_stress_score(best_win),         # best 30s
+        "balance": calc_mind_balance(attn, medi),       # best 30s attn/medi
+        "energy":  calc_mind_energy(attn, medi),        # best 30s attn/medi
+        "color":   calc_mind_color(raw_arrays),         # 全部 180s（6視窗投票）
     }
