@@ -6595,32 +6595,65 @@ function _etClamp(v, lo = 0, hi = 100) { return Math.max(lo, Math.min(hi, v)); }
 function _etSigmoid(raw) { return 1 / (1 + Math.exp(-3 * (raw - 1))); }
 
 // ─── BrainDNA proportionRange 共用計算（_summarizeEegAccum 和 _etComputeAll 共用）──
+// 完全對應後端 braindna_algorithms.py 的邏輯（含 best-30s window 選取）
+const _BDNA_CAP  = { r_delta:98000, r_theta:98000, r_lalpha:50000, r_halpha:50000,
+                     r_lbeta:50000, r_hbeta:50000, r_lgamma:10000, r_hgamma:10000 };
+const _BDNA_KEYS = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
+const _BDNA_PR   = { r_delta:[0.60,0.80], r_theta:[0.15,0.30],
+                     r_lalpha:[0.10,0.20], r_halpha:[0.10,0.20],
+                     r_lbeta:[0.05,0.10],  r_hbeta:[0.05,0.10],
+                     r_lgamma:[0.03,0.06], r_hgamma:[0.03,0.06] };
+function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
+
+// Best-30s window selection（對應 BrainDNA MindValueAlgorithm.calcBand）
+// 把 N 秒分成每 30 秒一個視窗，選 lowGamma 佔比最高的視窗
+function _bdnaSelectBestWindow(acc) {
+  const n = (acc.r_lalpha||[]).length;
+  const WIN = 30;
+  if (n < WIN) return acc;
+  const numW = Math.floor(n / WIN);
+  let bestIdx = 0, bestScore = -1;
+  for (let w = 0; w < numW; w++) {
+    const s = w * WIN, e = s + WIN;
+    let ps = 0, vs = 0;
+    for (let i = s; i < e; i++) {
+      const c = {}; let tot = 0;
+      for (const k of _BDNA_KEYS) { c[k] = Math.min((acc[k]||[])[i]||0, _BDNA_CAP[k]); tot += c[k]; }
+      if (tot <= 0) continue;
+      ps += c['r_lgamma'] / tot; vs++;
+    }
+    if (vs > 0) {
+      const score = _bdnaPR(ps/vs, 0.03, 0.06);
+      if (score > bestScore) { bestScore = score; bestIdx = w; }
+    }
+  }
+  // 回傳最佳視窗的切片
+  const s = bestIdx * WIN, e = s + WIN;
+  const result = {};
+  for (const k of [..._BDNA_KEYS, 'attn', 'medi']) {
+    result[k] = ((acc[k]||[]).slice(s, e));
+  }
+  return result;
+}
+
 function _calcBrainDNABands(acc) {
-  const CAP_B = { r_delta:98000, r_theta:98000,
-                  r_lalpha:50000, r_halpha:50000,
-                  r_lbeta:50000,  r_hbeta:50000,
-                  r_lgamma:10000, r_hgamma:10000 };
-  const RKEYS_B = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
-  const PROP_RANGE_B = {
-    r_delta:[0.60,0.80], r_theta:[0.15,0.30],
-    r_lalpha:[0.10,0.20], r_halpha:[0.10,0.20],
-    r_lbeta:[0.05,0.10],  r_hbeta:[0.05,0.10],
-    r_lgamma:[0.03,0.06], r_hgamma:[0.03,0.06],
-  };
-  function pr(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
   const n = (acc.r_lalpha||[]).length;
   if (n < 5) return null;
-  const ps = {}; for(const k of RKEYS_B) ps[k]=0;
+  // 步驟零：選 best 30-second window
+  const win = _bdnaSelectBestWindow(acc);
+  const wn = (win.r_lalpha||[]).length;
+  if (wn < 5) return null;
+  const ps = {}; for(const k of _BDNA_KEYS) ps[k]=0;
   let vs = 0;
-  for(let i=0;i<n;i++){
+  for(let i=0;i<wn;i++){
     const c={}; let tot=0;
-    for(const k of RKEYS_B){ c[k]=Math.min((acc[k]||[])[i]||0, CAP_B[k]); tot+=c[k]; }
+    for(const k of _BDNA_KEYS){ c[k]=Math.min((win[k]||[])[i]||0, _BDNA_CAP[k]); tot+=c[k]; }
     if(tot<=0) continue;
-    for(const k of RKEYS_B) ps[k]+=c[k]/tot;
+    for(const k of _BDNA_KEYS) ps[k]+=c[k]/tot;
     vs++;
   }
   if(vs===0) return null;
-  const p = k => Math.round(pr(ps[k]/vs, ...PROP_RANGE_B[k]) * 100);
+  const p = k => Math.round(_bdnaPR(ps[k]/vs, ..._BDNA_PR[k]) * 100);
   return { deV:p('r_delta'), thV:p('r_theta'), loA:p('r_lalpha'), hiA:p('r_halpha'),
            loB:p('r_lbeta'),  hiB:p('r_hbeta'),  loG:p('r_lgamma'), hiG:p('r_hgamma') };
 }

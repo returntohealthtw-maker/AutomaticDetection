@@ -76,21 +76,78 @@ _PROP_RANGE = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Best 30-second window selection（與 BrainDNA evaluationReport.py 完全一致）
+# 1. 把 N 秒資料切成每 30 秒一個視窗
+# 2. 每個視窗計算 lowGamma 佔比，再 proportionRange 評分
+# 3. 取得分最高的視窗（代表「腦波最佳狀態」）
+# ─────────────────────────────────────────────────────────────────────────────
+WINDOW_SIZE = 30   # 與 BrainDNA 一致
+
+
+def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
+    """
+    從 raw_arrays 中選出 lowGamma 佔比最佳的 30 秒視窗，
+    回傳該視窗的 raw_arrays（結構相同，長度約 30）。
+    若資料不足 30 秒，回傳原始資料。
+    """
+    n = len(raw_arrays.get("r_lalpha") or [])
+    if n < WINDOW_SIZE:
+        return raw_arrays  # 資料不足，用全部
+
+    num_windows = n // WINDOW_SIZE  # BrainDNA 用整除，最後不足 30 的捨棄
+    best_idx = 0
+    best_score = -1.0
+
+    for i in range(num_windows):
+        start = i * WINDOW_SIZE
+        end   = start + WINDOW_SIZE
+        prop_sum = 0.0
+        valid = 0
+        for j in range(start, end):
+            c = {k: _clamp(
+                    (raw_arrays.get(k) or [])[j] if j < len(raw_arrays.get(k) or []) else 0.0,
+                    CAP[k])
+                 for k in RAW_KEYS}
+            total = sum(c.values())
+            if total > 0:
+                prop_sum += c["r_lgamma"] / total
+                valid += 1
+        if valid > 0:
+            score = _proportion_range(prop_sum / valid, 0.03, 0.06)
+            if score > best_score:
+                best_score = score
+                best_idx = i
+
+    start = best_idx * WINDOW_SIZE
+    end   = start + WINDOW_SIZE
+    result: Dict[str, List] = {}
+    for k in list(RAW_KEYS) + ["attn", "medi"]:
+        arr = raw_arrays.get(k) or []
+        result[k] = arr[start:min(end, len(arr))]
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MindValueCalcHelper（proportion 模式）
-# 步驟一：每秒截斷 → 八頻段總和 → 個別佔比 → 180 秒平均（0.0~1.0）
+# 步驟零：選取 best 30-second window（evaluationReport.py maxArray）
+# 步驟一：每秒截斷 → 八頻段總和 → 個別佔比 → 30 秒平均（0.0~1.0）
 # 步驟二：proportionRange 正規化 → 映射到 0~1 → × 100 → 整數（0~100）
 # 與 BrainDNA evaluationReport 的 *Strip 值完全一致。
 # ─────────────────────────────────────────────────────────────────────────────
 def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int]]:
     """
-    輸入：raw_arrays（8 個頻段原始陣列，index 對齊）
+    輸入：raw_arrays（8 個頻段原始陣列，index 對齊，通常 180 秒）
     輸出：{ "low_alpha": int, "high_alpha": int, ... }
-          值域 0-100，與 BrainDNA *Strip 顯示值相同。
+          值域 0-100，與 BrainDNA evaluationReport *Strip 值完全一致。
+    步驟零：先選 best 30-second window（lowGamma 佔比最高）
     若資料不足（< 10 秒）回傳 None。
     """
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return None
+    # 步驟零：選 best window（與 BrainDNA evaluationReport.py maxArray 一致）
+    raw_arrays = _select_best_window(raw_arrays)
+    n = len(raw_arrays.get("r_lalpha") or [])
 
     prop_sum = {k: 0.0 for k in RAW_KEYS}
     valid = 0
@@ -279,18 +336,21 @@ def compute_all(raw_arrays: Dict[str, List]) -> Dict:
         "valid":   bool,
     }
     """
-    attn = [max(0, min(100, int(v))) for v in (raw_arrays.get("attn") or [])]
-    medi = [max(0, min(100, int(v))) for v in (raw_arrays.get("medi") or [])]
+    # 選 best 30-second window（所有計算共用此視窗，與 BrainDNA evaluationReport 一致）
+    best_win = _select_best_window(raw_arrays)
 
-    bands = calc_band_proportions(raw_arrays)
+    attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
+    medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
+
+    bands = calc_band_proportions(raw_arrays)   # 內部會再次呼叫 _select_best_window
     if bands is None:
         return {"valid": False}
 
     return {
         "valid":   True,
         "bands":   bands,
-        "stress":  calc_stress_score(raw_arrays),
-        "balance": calc_mind_balance(attn, medi),
+        "stress":  calc_stress_score(best_win),    # 使用 best window
+        "balance": calc_mind_balance(attn, medi),  # 使用 best window attn/medi
         "energy":  calc_mind_energy(attn, medi),
-        "color":   calc_mind_color(raw_arrays),
+        "color":   calc_mind_color(best_win),      # 使用 best window
     }
