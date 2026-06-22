@@ -5772,18 +5772,17 @@ function _ingestEegSample(s) {
   if (loGa != null) _eegLiveAccum.low_gamma.push(loGa);
   if (hiGa != null) _eegLiveAccum.high_gamma.push(hiGa);
 
-  // ThinkGear 原始功率（全 8 頻段）：
-  //   1. 解決 bandTo100(int) 截斷導致 High/Low 壓縮成同一整數
-  //   2. Firebase 同步需要 r_delta/r_theta 才能計算每秒的功率特徵
-  const _rpos = (v) => (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0;
-  const rd  = _rpos(s.raw_delta);  if (rd  > 0) _eegLiveAccum.r_delta.push(rd);
-  const rth = _rpos(s.raw_theta);  if (rth > 0) _eegLiveAccum.r_theta.push(rth);
-  const rla = _rpos(s.raw_lalpha); if (rla > 0) _eegLiveAccum.r_lalpha.push(rla);
-  const rha = _rpos(s.raw_halpha); if (rha > 0) _eegLiveAccum.r_halpha.push(rha);
-  const rlb = _rpos(s.raw_lbeta);  if (rlb > 0) _eegLiveAccum.r_lbeta.push(rlb);
-  const rhb = _rpos(s.raw_hbeta);  if (rhb > 0) _eegLiveAccum.r_hbeta.push(rhb);
-  const rlg = _rpos(s.raw_lgamma); if (rlg > 0) _eegLiveAccum.r_lgamma.push(rlg);
-  const rhg = _rpos(s.raw_hgamma); if (rhg > 0) _eegLiveAccum.r_hgamma.push(rhg);
+  // ThinkGear 原始功率（全 8 頻段）：每秒必須全部 push（含 0），保持 index 對齊
+  // 用途：BrainDNA 佔比演算法（每秒 個別頻段 ÷ 八頻段總和，再 180 秒平均）
+  const _raw = (v) => Math.max(0, Number(v) || 0);
+  _eegLiveAccum.r_delta.push(_raw(s.raw_delta));
+  _eegLiveAccum.r_theta.push(_raw(s.raw_theta));
+  _eegLiveAccum.r_lalpha.push(_raw(s.raw_lalpha));
+  _eegLiveAccum.r_halpha.push(_raw(s.raw_halpha));
+  _eegLiveAccum.r_lbeta.push(_raw(s.raw_lbeta));
+  _eegLiveAccum.r_hbeta.push(_raw(s.raw_hbeta));
+  _eegLiveAccum.r_lgamma.push(_raw(s.raw_lgamma));
+  _eegLiveAccum.r_hgamma.push(_raw(s.raw_hgamma));
 
   // 連續低品質計數：att ≤ 5 AND med ≤ 5（含全零）= 電極接觸不良
   // ThinkGear 規格：att=0 明確代表「無讀數」；1-5 在正常配戴下極不可能出現
@@ -5842,19 +5841,18 @@ function _ingestEegSample(s) {
 
 function _summarizeEegAccum(acc) {
   const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : 0;
-  // BrainDNA 算術平均法：對 raw ThinkGear 值取算術平均後再套 bandTo100
-  // 原始 BrainDNA 使用 log10(arithmetic_mean_raw)，此等價形式確保
-  // 後端 Im(bandTo100(arith_mean)) = arith_mean → log10 = BrainDNA ✓
-  const _rawArith = arr => (arr && arr.length) ? arr.reduce((s,v)=>s+v,0)/arr.length : 0;
-  const _b100 = v => Math.max(0, Math.min(100, Math.round(Math.log10(Math.max(v,0)+1)/6*100)));
 
-  // 只要任何 sub-band 陣列有資料，就視為 8-band 模式（避免只有部分陣列有資料時漏存）
-  const has8 = ['low_alpha','high_alpha','low_beta','high_beta','low_gamma','high_gamma']
-    .some(k => acc[k] && acc[k].length > 0);
+  // BrainDNA MindValueTop：每頻段的原始值上限（超過即截斷）
+  const CAP = { r_delta:98000, r_theta:98000,
+                r_lalpha:50000, r_halpha:50000,
+                r_lbeta:50000,  r_hbeta:50000,
+                r_lgamma:10000, r_hgamma:10000 };
+  const RKEYS = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
 
-  // theta：BrainDNA 算術平均（有 raw 值優先，否則退回 bandTo100 平均）
-  const rawThArith = _rawArith(acc.r_theta || []);
-  const thetaVal   = rawThArith > 0 ? _b100(rawThArith) : avg(acc.theta);
+  // 有 r_lalpha 資料就視為 8-band 模式（Android v1.1.9+）
+  const has8 = (acc.r_lalpha && acc.r_lalpha.length > 0);
+
+  const thetaVal = avg(acc.theta);
 
   const bands = {
     delta: avg(acc.delta),
@@ -5866,21 +5864,32 @@ function _summarizeEegAccum(acc) {
   // 若有 8-band 個別資料，一併加入（後端 eeg/save-stats 會分別儲存 low_* / high_*）
   let bands_7 = null;
   if (has8) {
-    const _sub = k => (acc[k] && acc[k].length > 0) ? avg(acc[k]) : avg(acc[k.replace('low_','').replace('high_','')] || []);
-    // 優先用 raw 算術平均 → _b100（Math.round，解決截斷導致 High=Low 問題）
-    // 退回：用 bandTo100 壓縮後的 avg（來自舊版 5-band 格式，High/Low 無法區分）
-    const rawLaArith = _rawArith(acc.r_lalpha || []);
-    const rawHaArith = _rawArith(acc.r_halpha || []);
-    const rawLbArith = _rawArith(acc.r_lbeta  || []);
-    const rawHbArith = _rawArith(acc.r_hbeta  || []);
-    const rawLgArith = _rawArith(acc.r_lgamma || []);
-    const rawHgArith = _rawArith(acc.r_hgamma || []);
-    const loA = rawLaArith > 0 ? _b100(rawLaArith) : _sub('low_alpha');
-    const hiA = rawHaArith > 0 ? _b100(rawHaArith) : _sub('high_alpha');
-    const loB = rawLbArith > 0 ? _b100(rawLbArith) : _sub('low_beta');
-    const hiB = rawHbArith > 0 ? _b100(rawHbArith) : _sub('high_beta');
-    const loG = rawLgArith > 0 ? _b100(rawLgArith) : _sub('low_gamma');
-    const hiG = rawHgArith > 0 ? _b100(rawHgArith) : _sub('high_gamma');
+    // BrainDNA 佔比演算法（參考 MindValueCalcHelper.proportion）：
+    //   每秒先截斷（MindValueTop），再除以該秒八頻段總和，最後 180 秒取平均 × 100
+    const n = acc.r_lalpha.length;
+    const propSum = { r_lalpha:0, r_halpha:0, r_lbeta:0, r_hbeta:0, r_lgamma:0, r_hgamma:0 };
+    let validSecs = 0;
+    for (let i = 0; i < n; i++) {
+      // 截斷至各頻段上限
+      const c = {};
+      let total = 0;
+      for (const k of RKEYS) {
+        c[k] = Math.min((acc[k][i] || 0), CAP[k]);
+        total += c[k];
+      }
+      if (total <= 0) continue; // 該秒無訊號跳過
+      for (const k of ['r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma']) {
+        propSum[k] += c[k] / total;
+      }
+      validSecs++;
+    }
+    const prop = (k) => validSecs > 0 ? Math.round(propSum[k] / validSecs * 100) : 0;
+    const loA = prop('r_lalpha');
+    const hiA = prop('r_halpha');
+    const loB = prop('r_lbeta');
+    const hiB = prop('r_hbeta');
+    const loG = prop('r_lgamma');
+    const hiG = prop('r_hgamma');
     // 寫入 bands_avg（方便舊路徑讀取）
     bands.low_alpha  = loA;  bands.high_alpha = hiA;
     bands.low_beta   = loB;  bands.high_beta  = hiB;

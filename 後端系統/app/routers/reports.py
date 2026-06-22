@@ -1035,22 +1035,44 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     lo_gamma = _safe_float(avg.low_gamma)
     hi_gamma = _safe_float(avg.high_gamma)
 
+    # ── BrainDNA 算法：優先從 raw_arrays_json 重算精確佔比值 ─────────────────
+    # 若 Session 有保存原始 180 秒陣列，用佔比算法覆寫頻段值（High ≠ Low，數值精確）
+    _bdna_bands = None
+    try:
+        import json as _json
+        from app.services.braindna_algorithms import compute_all as _bdna_compute
+        _sess_obj = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+        if _sess_obj and _sess_obj.raw_arrays_json:
+            _raw = _json.loads(_sess_obj.raw_arrays_json)
+            _result = _bdna_compute(_raw)
+            if _result.get("valid") and _result.get("bands"):
+                _bdna_bands = _result["bands"]
+    except Exception:
+        pass  # 回退到 DB 平均值
+
+    if _bdna_bands:
+        lo_alpha = float(_bdna_bands.get("low_alpha",  lo_alpha))
+        hi_alpha = float(_bdna_bands.get("high_alpha", hi_alpha))
+        lo_beta  = float(_bdna_bands.get("low_beta",   lo_beta))
+        hi_beta  = float(_bdna_bands.get("high_beta",  hi_beta))
+        lo_gamma = float(_bdna_bands.get("low_gamma",  lo_gamma))
+        hi_gamma = float(_bdna_bands.get("high_gamma", hi_gamma))
+    # ─────────────────────────────────────────────────────────────────────────
+
     bw = {
         "attention_percentage":  _safe_int(avg.attention),
         "meditation_percentage": _safe_int(avg.meditation),
-        "sample_count":          real_sample_count,   # 真實採集秒數，不是 DB 記錄筆數
+        "sample_count":          real_sample_count,
         "bands_avg": {
             "delta": _safe_float(avg.delta),
             "theta": _safe_float(avg.theta),
-            "alpha": _band_avg(avg.low_alpha, avg.high_alpha),
-            "beta":  _band_avg(avg.low_beta,  avg.high_beta),
-            "gamma": _band_avg(avg.low_gamma, avg.high_gamma),
-            # 8-band 真實子頻帶（一起帶出，避免報告生成層用 ×0.9/×1.1 估算）
+            "alpha": _band_avg(lo_alpha, hi_alpha),
+            "beta":  _band_avg(lo_beta,  hi_beta),
+            "gamma": _band_avg(lo_gamma, hi_gamma),
             "low_alpha":  lo_alpha, "high_alpha": hi_alpha,
             "low_beta":   lo_beta,  "high_beta":  hi_beta,
             "low_gamma":  lo_gamma, "high_gamma": hi_gamma,
         },
-        # 實際 High / Low 分類（來自 ThinkGear 原始數據）
         "bands_7": {
             "theta":      _safe_float(avg.theta),
             "alpha_high": hi_alpha,
@@ -1060,6 +1082,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
             "gamma_high": hi_gamma,
             "gamma_low":  lo_gamma,
         },
+        "_source": "braindna" if _bdna_bands else "db_avg",  # 偵錯用，不影響邏輯
     }
     return bw
 

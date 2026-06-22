@@ -104,6 +104,26 @@ def save_eeg_stats(
     bands = payload.bands_avg or {}
     now_ts = int(time.time())
 
+    # ── BrainDNA 算法：若有 raw_arrays，用佔比算法覆寫頻段值（最高精度）──────────
+    if payload.raw_arrays:
+        try:
+            from app.services.braindna_algorithms import compute_all as _bdna_compute
+            _bdna = _bdna_compute(payload.raw_arrays)
+            if _bdna.get("valid") and _bdna.get("bands"):
+                _b = _bdna["bands"]
+                # 用 BrainDNA 佔比值覆寫，確保 High ≠ Low，與原始算法一致
+                bands = dict(bands)  # 不改動原始物件
+                for _k in ("delta", "theta", "low_alpha", "high_alpha",
+                           "low_beta", "high_beta", "low_gamma", "high_gamma"):
+                    if _b.get(_k) is not None:
+                        bands[_k] = _b[_k]
+                # alpha/beta/gamma 合併值同步更新
+                bands["alpha"] = round((_b.get("low_alpha", 0) + _b.get("high_alpha", 0)) / 2)
+                bands["beta"]  = round((_b.get("low_beta",  0) + _b.get("high_beta",  0)) / 2)
+                bands["gamma"] = round((_b.get("low_gamma", 0) + _b.get("high_gamma", 0)) / 2)
+        except Exception:
+            pass  # 算法失敗不影響主流程，退回前端傳入值
+
     # 🔑 受測者 FK 解析（核心修正：避免報告變孤兒）
     # 1. 優先用前端傳來的 subject_id
     # 2. 若沒帶，依 (consultant_id + name + birth_date) 比對既存 Subject 記錄

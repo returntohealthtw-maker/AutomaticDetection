@@ -192,18 +192,18 @@ def start_headless_job(
     beta_val  = _val_or_50(beta_opt)
     gamma_val = _val_or_50(gamma_opt)
 
-    # 子頻帶：有實際量測值就直接用；沒有才用 ×0.9/×1.1 估算（fallback）
-    def _sub(actual_opt, base_val, scale):
+    # 子頻帶：有實際量測值就直接用；沒有才用合併帶原值（絕不用 ×0.9/×1.1 估算）
+    def _sub(actual_opt, base_val):
         if actual_opt is not None:
             return max(0, min(100, int(actual_opt)))
-        return max(0, min(100, int(base_val * scale)))
+        return max(0, min(100, int(base_val)))
 
-    lo_alpha_val = _sub(lo_alpha_opt, alpha_val, 0.9)
-    hi_alpha_val = _sub(hi_alpha_opt, alpha_val, 1.1)
-    lo_beta_val  = _sub(lo_beta_opt,  beta_val,  0.9)
-    hi_beta_val  = _sub(hi_beta_opt,  beta_val,  1.1)
-    lo_gamma_val = _sub(lo_gamma_opt, gamma_val, 0.9)
-    hi_gamma_val = _sub(hi_gamma_opt, gamma_val, 1.1)
+    lo_alpha_val = _sub(lo_alpha_opt, alpha_val)
+    hi_alpha_val = _sub(hi_alpha_opt, alpha_val)
+    lo_beta_val  = _sub(lo_beta_opt,  beta_val)
+    hi_beta_val  = _sub(hi_beta_opt,  beta_val)
+    lo_gamma_val = _sub(lo_gamma_opt, gamma_val)
+    hi_gamma_val = _sub(hi_gamma_opt, gamma_val)
 
     # 醒目記錄真正進入 URL 的值
     missing_keys = [
@@ -220,7 +220,7 @@ def start_headless_job(
         )
     sub_source = ("bands_7" if (_opt(b7,"alpha_low") is not None or _opt(b7,"alpha_high") is not None)
                   else "bands_avg" if (lo_alpha_opt is not None or hi_alpha_opt is not None)
-                  else "estimated(×0.9/×1.1)")
+                  else "fallback_to_combined_band")
     logger.info(
         "[headless] session=%s URL 帶腦波：attn=%d medi=%d δ=%d θ=%d α=%d β=%d γ=%d "
         "| α↓=%d α↑=%d β↓=%d β↑=%d γ↓=%d γ↑=%d (sub=%s, bw_present=%s)",

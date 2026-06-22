@@ -160,32 +160,35 @@ def _bw_to_seven_indices(bw: Dict[str, Any]) -> Dict[str, float]:
     把採集到的腦波資料轉成「七大腦波指標」(0-100)：
        high_alpha, low_alpha, theta, high_beta, low_beta, high_gamma, low_gamma
 
-    優先讀取 bands_avg 中的真實 8-band 子頻帶（low_alpha / high_alpha 等）；
-    若無實際值，才退回 alpha × 0.9 / × 1.1 的估算（舊行為）。
+    只使用真實量測值：優先讀 bands_7，其次讀 bands_avg 的個別子頻帶欄位。
+    若找不到實際子頻帶值，一律使用合併帶數值（不乘以估算係數）。
+    絕不使用 ×0.9/×1.1 等估算公式，以確保數值與管理後台一致。
     """
     def cap(v): return max(0, min(100, int(v)))
     def _g(d, k, fallback=None):
         v = d.get(k)
         return fallback if v is None else v
+    b7 = (bw or {}).get("bands_7") or {}
     ba = (bw or {}).get("bands_avg") or {}
     alpha  = _g(ba, "alpha",  50)
     theta  = _g(ba, "theta",  50)
     beta   = _g(ba, "beta",   50)
     gamma  = _g(ba, "gamma",  50)
 
-    # 優先讀實際子頻帶（相容兩種命名：low_alpha 與 alpha_low）
-    def _sub(ba, key1, key2, base, scale):
-        v = _g(ba, key1) if _g(ba, key1) is not None else _g(ba, key2)
-        return cap(v) if v is not None else cap(base * scale)
+    # 讀取實際子頻帶：bands_7 優先，再查 bands_avg 兩種命名，找不到就用合併帶原值（不估算）
+    def _sub(key_b7, key1, key2, base):
+        v = (_g(b7, key_b7)
+             or (_g(ba, key1) if _g(ba, key1) is not None else _g(ba, key2)))
+        return cap(v) if v is not None else cap(base)
 
     return {
-        "high_alpha": _sub(ba, "high_alpha", "alpha_high", alpha, 1.1),
-        "low_alpha":  _sub(ba, "low_alpha",  "alpha_low",  alpha, 0.9),
+        "high_alpha": _sub("alpha_high", "high_alpha", "alpha_high", alpha),
+        "low_alpha":  _sub("alpha_low",  "low_alpha",  "alpha_low",  alpha),
         "theta":      cap(theta),
-        "high_beta":  _sub(ba, "high_beta",  "beta_high",  beta,  1.1),
-        "low_beta":   _sub(ba, "low_beta",   "beta_low",   beta,  0.9),
-        "high_gamma": _sub(ba, "high_gamma", "gamma_high", gamma, 1.1),
-        "low_gamma":  _sub(ba, "low_gamma",  "gamma_low",  gamma, 0.9),
+        "high_beta":  _sub("beta_high",  "high_beta",  "beta_high",  beta),
+        "low_beta":   _sub("beta_low",   "low_beta",   "beta_low",   beta),
+        "high_gamma": _sub("gamma_high", "high_gamma", "gamma_high", gamma),
+        "low_gamma":  _sub("gamma_low",  "low_gamma",  "gamma_low",  gamma),
     }
 
 
@@ -310,10 +313,10 @@ def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
     def _g(d, k, fallback=50):
         v = d.get(k)
         return fallback if v is None else v
-    def _sub(key1, key2, base, scale):
-        """優先讀真實 sub-band；沒有才用合并帶 × scale 估算"""
+    def _sub(key1, key2, base):
+        """優先讀真實 sub-band；找不到就用合併帶原值，絕不估算"""
         v = ba.get(key1) if ba.get(key1) is not None else ba.get(key2)
-        return float(v) if v is not None else base * scale
+        return float(v) if v is not None else float(base)
     ba = (bw or {}).get("bands_avg") or {}
     delta = _g(ba, "delta")
     theta = _g(ba, "theta")
@@ -323,12 +326,12 @@ def _bw_to_metrics(bw: Dict[str, Any]) -> Dict[str, int]:
     return {
         "Delta":  cap(delta),
         "Theta":  cap(theta),
-        "High α": cap(_sub("high_alpha", "alpha_high", alpha, 1.1)),
-        "Low α":  cap(_sub("low_alpha",  "alpha_low",  alpha, 0.9)),
-        "High β": cap(_sub("high_beta",  "beta_high",  beta,  1.1)),
-        "Low β":  cap(_sub("low_beta",   "beta_low",   beta,  0.9)),
-        "High γ": cap(_sub("high_gamma", "gamma_high", gamma, 1.1)),
-        "Low γ":  cap(_sub("low_gamma",  "gamma_low",  gamma, 0.9)),
+        "High α": cap(_sub("high_alpha", "alpha_high", alpha)),
+        "Low α":  cap(_sub("low_alpha",  "alpha_low",  alpha)),
+        "High β": cap(_sub("high_beta",  "beta_high",  beta)),
+        "Low β":  cap(_sub("low_beta",   "beta_low",   beta)),
+        "High γ": cap(_sub("high_gamma", "gamma_high", gamma)),
+        "Low γ":  cap(_sub("low_gamma",  "gamma_low",  gamma)),
     }
 
 
@@ -420,20 +423,20 @@ def _call_vite_prefill(
     delta = _g(ba, "delta"); theta = _g(ba, "theta")
     alpha = _g(ba, "alpha"); beta  = _g(ba, "beta"); gamma = _g(ba, "gamma")
 
-    # 優先讀 bands_7（真實量測），再讀 bands_avg 子鍵，最後才用 ×0.9/×1.1 估算
-    def _sub_v(b7, ba, key_b7, key1, key2, base, scale):
+    # 優先讀 bands_7（真實量測），再讀 bands_avg 子鍵，找不到才用合併帶原值（不估算）
+    def _sub_v(b7, ba, key_b7, key1, key2, base):
         for d, k in [(b7, key_b7), (ba, key1), (ba, key2)]:
             v = d.get(k)
             if v is not None:
                 return int(max(0, min(100, v)))
-        return int(max(0, min(100, base * scale)))
+        return int(max(0, min(100, base)))
 
-    hi_alpha = _sub_v(b7, ba, "alpha_high", "high_alpha", "alpha_high", alpha, 1.1)
-    lo_alpha = _sub_v(b7, ba, "alpha_low",  "low_alpha",  "alpha_low",  alpha, 0.9)
-    hi_beta  = _sub_v(b7, ba, "beta_high",  "high_beta",  "beta_high",  beta,  1.1)
-    lo_beta  = _sub_v(b7, ba, "beta_low",   "low_beta",   "beta_low",   beta,  0.9)
-    hi_gamma = _sub_v(b7, ba, "gamma_high", "high_gamma", "gamma_high", gamma, 1.1)
-    lo_gamma = _sub_v(b7, ba, "gamma_low",  "low_gamma",  "gamma_low",  gamma, 0.9)
+    hi_alpha = _sub_v(b7, ba, "alpha_high", "high_alpha", "alpha_high", alpha)
+    lo_alpha = _sub_v(b7, ba, "alpha_low",  "low_alpha",  "alpha_low",  alpha)
+    hi_beta  = _sub_v(b7, ba, "beta_high",  "high_beta",  "beta_high",  beta)
+    lo_beta  = _sub_v(b7, ba, "beta_low",   "low_beta",   "beta_low",   beta)
+    hi_gamma = _sub_v(b7, ba, "gamma_high", "high_gamma", "gamma_high", gamma)
+    lo_gamma = _sub_v(b7, ba, "gamma_low",  "low_gamma",  "gamma_low",  gamma)
 
     params = {
         "auto":       "1",
