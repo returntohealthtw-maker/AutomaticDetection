@@ -6646,6 +6646,8 @@ function _calcBrainDNABands(acc) {
   const win = _bdnaSelectBestWindow(acc);
   const wn = (win.r_lalpha||[]).length;
   if (wn < 5) return null;
+  // 信號品質下限：delta < 10000 代表電極接觸不良，排除此秒（與後端邏輯一致）
+  const MIN_DELTA_QUALITY = 10000;
   const ps = {}; for(const k of _BDNA_KEYS) ps[k]=0;
   let vs = 0;
   for(let i=0;i<wn;i++){
@@ -6653,6 +6655,8 @@ function _calcBrainDNABands(acc) {
     let uncappedTot = 0;
     for(const k of _BDNA_KEYS) uncappedTot += ((win[k]||[])[i]||0);
     if(uncappedTot<=0) continue;
+    // 電極品質過濾：delta 極低代表接觸不良
+    if(((win['r_delta']||[])[i]||0) < MIN_DELTA_QUALITY) continue;
     // 分子才截斷（MindValueTop）
     for(const k of _BDNA_KEYS){
       const capped = Math.min((win[k]||[])[i]||0, _BDNA_CAP[k]);

@@ -162,6 +162,10 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     prop_sum = {k: 0.0 for k in RAW_KEYS}
     valid = 0
 
+    # 信號品質下限：delta < 10000 代表電極接觸不良（族群均值 ~198K，10K 僅其 5%）
+    # 這類秒數的 beta/gamma 比例會虛高，屬於量測雜訊而非真實腦波
+    MIN_DELTA_QUALITY = 10_000
+
     for i in range(n):
         # BrainDNA calcColumnSumArray：分母用「未截斷」原始值加總（完全對應原碼）
         # 分子才截斷（MindValueTop）；這讓 delta/theta 的龐大原始值壓低 beta/gamma 佔比
@@ -170,6 +174,9 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
                    for k in RAW_KEYS}
         uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母
         if uncapped_total <= 0:
+            continue
+        # 電極接觸品質過濾：delta 極低代表訊號不穩，排除此秒
+        if raw_row["r_delta"] < MIN_DELTA_QUALITY:
             continue
         for k in RAW_KEYS:
             capped = _clamp(raw_row[k], CAP[k])  # 截斷 → 分子
