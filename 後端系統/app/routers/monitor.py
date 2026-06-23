@@ -179,6 +179,60 @@ def recompute_braindna(
     }
 
 
+@router.get("/api/admin/raw-debug/{session_id}", tags=["管理員"])
+def raw_debug(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """診斷特定 session 的 raw_arrays 原始值範圍，用於確認 ThinkGear 資料尺度"""
+    require_admin(authorization, db)
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess or not sess.raw_arrays_json:
+        return {"error": "no raw data"}
+    raw = json.loads(sess.raw_arrays_json)
+
+    from app.services.braindna_algorithms import _select_best_window, RAW_KEYS, CAP
+    stats_all = {}
+    for k in RAW_KEYS:
+        arr = [v for v in (raw.get(k) or []) if v and v > 0]
+        if arr:
+            stats_all[k] = {
+                "n": len(arr),
+                "min": round(min(arr)),
+                "max": round(max(arr)),
+                "mean": round(sum(arr)/len(arr)),
+                "cap": CAP[k],
+                "pct_at_cap": round(sum(1 for v in arr if v >= CAP[k]) / len(arr) * 100, 1),
+            }
+
+    # best window 統計
+    best = _select_best_window(raw)
+    best_stats = {}
+    for k in RAW_KEYS:
+        arr = [v for v in (best.get(k) or []) if v and v > 0]
+        if arr:
+            uncapped_totals = []
+            for i in range(len((best.get(RAW_KEYS[0]) or []))):
+                t = sum((best.get(kk) or [0]*100)[i] for kk in RAW_KEYS if i < len(best.get(kk) or []))
+                if t > 0:
+                    uncapped_totals.append(t)
+            avg_total = round(sum(uncapped_totals)/len(uncapped_totals)) if uncapped_totals else 0
+            best_stats[k] = {
+                "mean": round(sum(arr)/len(arr)),
+                "max": round(max(arr)),
+                "cap": CAP[k],
+                "avg_uncapped_total": avg_total,
+                "avg_proportion_pct": round(min(sum(arr)/len(arr), CAP[k]) / avg_total * 100, 2) if avg_total > 0 else 0,
+            }
+
+    return {
+        "session_id": session_id,
+        "all_180s_raw_stats": stats_all,
+        "best_30s_window_stats": best_stats,
+    }
+
+
 @router.get("/api/admin/raw-arrays-health", tags=["管理員"])
 def raw_arrays_health(
     authorization: Optional[str] = Header(None),
