@@ -89,18 +89,25 @@ def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
     從 raw_arrays 中選出 lowGamma 佔比最佳的 30 秒視窗，
     回傳該視窗的 raw_arrays（結構相同，長度約 30）。
     若資料不足 30 秒，回傳原始資料。
+
+    與 BrainDNA evaluationReport.py 完全一致：
+    - 每 30 秒一個視窗，最後不足 30 秒的部分視窗也納入比較
+    - 分母用「未截斷」原始值總和（calcColumnSumArray 行為）
+    - 分子用截斷後 lowGamma，再 proportionRange 評分
     """
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < WINDOW_SIZE:
         return raw_arrays  # 資料不足，用全部
 
-    num_windows = n // WINDOW_SIZE  # BrainDNA 用整除，最後不足 30 的捨棄
+    # BrainDNA evaluationReport.py 第 36 行：`if len(tmpArr) > 0: mindArray.append(tmpArr)`
+    # 最後不足 30 秒的部分視窗也納入
+    num_windows = math.ceil(n / WINDOW_SIZE)
     best_idx = 0
     best_score = -1.0
 
     for i in range(num_windows):
         start = i * WINDOW_SIZE
-        end   = start + WINDOW_SIZE
+        end   = min(start + WINDOW_SIZE, n)  # 最後視窗可能短於 30 秒
         prop_sum = 0.0
         valid = 0
         for j in range(start, end):
@@ -231,60 +238,114 @@ def calc_stress_score(raw_arrays: Dict[str, List]) -> int:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MindColorAlgorithm：腦色（橙/綠/藍/黃）
-# 使用各頻段原始平均值，計算 gamma/alpha 和 gamma/beta 比值
+# 完全對應 BrainDNA MindColorAlgorithm.calcForWeights + ReportResult.calcColor
 # ─────────────────────────────────────────────────────────────────────────────
 ORANGE = 0
 GREEN  = 1
 BLUE   = 2
 YELLOW = 3
 
-_COLOR_CENTERS = {
-    "orange": (32.5, 42.5),
-    "green":  (32.5, 27.5),
-    "blue":   (42.5, 52.5),
-    "yellow": (25.0, 20.0),
+# BrainDNA MindColorAlgorithm.factorFirstRange 各顏色 f1=gamma/alpha 的範圍
+# 注意：calcForWeights 對 f2 也用同一個 factorFirstRange 做過濾
+_COLOR_F1_RANGE = {
+    ORANGE: (0.25, 0.40),
+    GREEN:  (0.20, 0.45),
+    BLUE:   (0.30, 0.55),
+    YELLOW: (0.15, 0.35),
 }
-_COLOR_TYPES = {"orange": ORANGE, "green": GREEN, "blue": BLUE, "yellow": YELLOW}
+
+# BrainDNA evaluationReport.py 常數
+_PRIORITY_ORDER = 213      # 決策優先順序：次位→1(綠)，首位→2(藍)
+_PRIORITY_THAN  = 0xD5F1   # 兩色決選時的優先矩陣
+_COUNT_GREEN    = 2        # 綠色至少需 2 票才算數
+_COUNT_BLUE     = 2        # 藍色至少需 2 票
+_COUNT_YELLOW   = 2        # 黃色至少需 2 票
 
 
 def _arr_mean(arr: List) -> float:
     return sum(arr) / len(arr) if arr else 0.0
 
 
-def _calc_color_from_means(ha: float, la: float, hb: float, lb: float,
-                            lg: float, mg: float) -> int:
-    """給定 6 個頻段平均值，回傳 MindColor（0=橙, 1=綠, 2=藍, 3=黃）"""
+def _factor_first_range(color: int, factor: float) -> bool:
+    """BrainDNA MindColorAlgorithm.factorFirstRange"""
+    r = _COLOR_F1_RANGE.get(color)
+    if r is None:
+        return False
+    bottom, top = r
+    return bottom < factor < top
+
+
+def _calc_color_for_weights(ha: float, la: float, hb: float, lb: float,
+                              lg: float, mg: float) -> int:
+    """
+    BrainDNA MindColorAlgorithm.calcForWeights（PRIORITY_ORDER=213）
+    給定 6 個頻段平均值，回傳 MindColor（0=橙, 1=綠, 2=藍, 3=黃）。
+
+    邏輯：
+    1. f1 = gamma/alpha，f2 = gamma/beta（不乘 100，直接用比例）
+    2. 第一輪：哪些顏色的 f1 在 factorFirstRange 內 → meets +1
+    3. 若剛好只有 1 個顏色符合：直接回傳
+    4. 第二輪：f2 不在 factorFirstRange 內的顏色 → meets -1
+    5. 依 PRIORITY_ORDER 取 meets > 0 的最高優先顏色
+    """
     alpha = ha + la
     beta  = hb + lb
     gamma = lg + mg
     if alpha <= 0 or beta <= 0:
         return ORANGE
-    f1 = (gamma / alpha) * 100
-    f2 = (gamma / beta)  * 100
-    min_dist = float("inf")
-    best = "orange"
-    for name, (cx, cy) in _COLOR_CENTERS.items():
-        d = math.sqrt((cx - f1) ** 2 + (cy - f2) ** 2)
-        if d < min_dist:
-            min_dist = d
-            best = name
-    return _COLOR_TYPES[best]
+
+    f1 = gamma / alpha   # BrainDNA 不乘 100
+    f2 = gamma / beta
+
+    meets = [0, 0, 0, 0]
+    meets2 = []
+
+    for color in range(4):
+        if _factor_first_range(color, f1):
+            meets[color] += 1
+            meets2.append(color)
+
+    if len(meets2) == 1:
+        return meets2[0]
+
+    # 第二輪：BrainDNA 用 factorFirstRange 檢查 f2（非 factorSecondRange）
+    for color in range(4):
+        if not _factor_first_range(color, f2):
+            meets[color] -= 1
+
+    # 優先順序解析：213 → 第一個從右數第二位 = 1(綠)，其次首位 = 2(藍)
+    weights = _PRIORITY_ORDER
+    while weights > 0:
+        weights = weights // 10
+        index = weights % 10
+        if 0 <= index < 4 and meets[index] > 0:
+            return index
+
+    return ORANGE
+
+
+def _than_to_bool(color1: int, color2: int) -> int:
+    """BrainDNA _than_to_bool：兩色決選，回傳勝出顏色（PRIORITY_THAN=0xD5F1）"""
+    color2_mask = 1 << color2
+    i = (_PRIORITY_THAN >> (4 * color1)) & 0xF
+    return color1 if (i & color2_mask) > 0 else color2
 
 
 def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
     """
-    MindColorAlgorithm：6 視窗投票（與 BrainDNA ReportResult.calcColor 一致）。
+    MindColorAlgorithm：6 視窗投票（完全對應 BrainDNA ReportResult.calcColor）
 
-    把 raw_arrays 切成 6 個 30 秒視窗，每個視窗各自計算一次腦色，
-    最後取得票最多的顏色（與 evaluationReport.py 的多視窗投票邏輯相同）。
-    資料不足 30 秒時退回單視窗計算。
+    每個視窗用 calcForWeights 算顏色，最後投票：
+    - green/blue/yellow 需 ≥ 2 票才進入決選
+    - 投票後 orange 票數歸零（BrainDNA：orange 只在沒有其他顏色時才勝出）
+    - 只剩 1 個顏色：直接回傳
+    - 只剩 2 個顏色：用 _than_to_bool 決選
+    - 包含最後不足 30 秒的部分視窗（與 evaluationReport.py 第 36 行一致）
     """
-    KEYS = ["r_halpha", "r_lalpha", "r_hbeta", "r_lbeta", "r_lgamma", "r_hgamma"]
     n = len(raw_arrays.get("r_lalpha") or [])
 
     if n < WINDOW_SIZE:
-        # 資料不足 30 秒，用全段平均做一次計算
-        return _calc_color_from_means(
+        return _calc_color_for_weights(
             _arr_mean(raw_arrays.get("r_halpha") or []),
             _arr_mean(raw_arrays.get("r_lalpha") or []),
             _arr_mean(raw_arrays.get("r_hbeta")  or []),
@@ -293,25 +354,59 @@ def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
             _arr_mean(raw_arrays.get("r_hgamma") or []),
         )
 
-    # 最多取 6 個視窗（BrainDNA 用 mindArray = 6 windows）
-    num_windows = min(n // WINDOW_SIZE, 6)
-    votes: Dict[int, int] = {}
+    # BrainDNA 最多 6 個視窗（含最後不足 30 秒的部分視窗）
+    num_windows = min(math.ceil(n / WINDOW_SIZE), 6)
+    mind_color_count = [0, 0, 0, 0]
+    mind_color_list  = []
 
     for i in range(num_windows):
         start = i * WINDOW_SIZE
         end   = start + WINDOW_SIZE
-        def _win_mean(key: str) -> float:
+
+        def _win_mean(key: str, _s: int = start, _e: int = end) -> float:
             arr = raw_arrays.get(key) or []
-            seg = arr[start:min(end, len(arr))]
+            seg = arr[_s:min(_e, len(arr))]
             return sum(seg) / len(seg) if seg else 0.0
-        color = _calc_color_from_means(
+
+        color = _calc_color_for_weights(
             _win_mean("r_halpha"), _win_mean("r_lalpha"),
             _win_mean("r_hbeta"),  _win_mean("r_lbeta"),
             _win_mean("r_lgamma"), _win_mean("r_hgamma"),
         )
-        votes[color] = votes.get(color, 0) + 1
+        mind_color_count[color] += 1
+        mind_color_list.append(color)
 
-    return max(votes, key=lambda c: votes[c]) if votes else ORANGE
+    # 套用 threshold：green/blue/yellow 需 ≥ 2 票
+    count_threshold = [0, _COUNT_GREEN, _COUNT_BLUE, _COUNT_YELLOW]
+    for i in range(4):
+        if mind_color_count[i] < count_threshold[i]:
+            mind_color_count[i] = 0
+
+    # 若 green/blue/yellow 全為 0：回傳第一個視窗顏色（BrainDNA 預設行為）
+    if mind_color_count[1] == 0 and mind_color_count[2] == 0 and mind_color_count[3] == 0:
+        return mind_color_list[0] if mind_color_list else ORANGE
+
+    # Orange 歸零（不參與最終決選）
+    mind_color_count[0] = 0
+
+    remaining = [i for i in range(4) if mind_color_count[i] > 0]
+
+    if len(remaining) == 0:
+        return ORANGE
+    if len(remaining) == 1:
+        return remaining[0]
+    if len(remaining) == 2:
+        return _than_to_bool(remaining[0], remaining[1])
+
+    # 3+ 顏色：依 PRIORITY_ORDER 決定
+    weights = _PRIORITY_ORDER
+    while weights > 0:
+        weights = weights // 10
+        index = weights % 10
+        if 0 <= index < 4 and mind_color_count[index] > 0:
+            return index
+
+    return ORANGE
 
 
 # ─────────────────────────────────────────────────────────────────────────────

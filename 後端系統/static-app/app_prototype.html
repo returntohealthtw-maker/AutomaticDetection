@@ -6874,12 +6874,162 @@ function _etBaguaScores(type, laPct, thPct) {
 //   中段 1/3~2/3 → peer  （適應放鬆態，最接近同儕/朋友面）
 //   後段 2/3~1   → family（深度穩定態，最接近家庭/本我面）
 // Direction B：每段均啟用 8 卦系統（useLi=true），引入離卦 INFJ/INFP
+// ─── BrainDNA 原始 Personality.calcPersonality()（與後端完全對應）────────────
+// 輸入：bagua(0-6), color('orange'/'green'/'blue'/'yellow'), rawBeta, rawTh（原始值）
+// 輸出：MBTI 字串
+function _etPersonalityFromBaguaColor(bagua, color, rawBeta, rawTh) {
+  if (bagua === 0) return color === 'green' ? 'ENTJ' : 'ESTJ';      // 乾
+  if (bagua === 1) return rawBeta > rawTh    ? 'ISFJ' : 'ISTJ';     // 兌
+  if (bagua === 2) return color === 'blue'   ? 'INFJ' : 'INTJ';     // 震（li_active=false）
+  if (bagua === 3) return rawBeta > rawTh    ? 'ESFP' : 'ESTP';     // 巽
+  if (bagua === 4) return color === 'green'  ? 'INTP' : 'ISTP';     // 坎
+  if (bagua === 5) return color === 'blue'   ? 'ENFP' : 'ENTP';     // 艮
+  return color === 'blue'   ? 'INFP' : 'ISFP';                      // 坤(6)
+}
+
+// ─── 腦色計算（BrainDNA MindColorAlgorithm.calcForWeights 完整版）──────────
+// factorFirstRange 各顏色的 f=gamma/alpha 範圍（不乘 100）
+const _ET_COLOR_F1_RANGE = {
+  orange: [0.25, 0.40],
+  green:  [0.20, 0.45],
+  blue:   [0.30, 0.55],
+  yellow: [0.15, 0.35],
+};
+const _ET_COLOR_ORDER = ['orange', 'green', 'blue', 'yellow'];
+const _ET_PRIORITY_ORDER = 213;   // BrainDNA PRIORITY_ORDER
+const _ET_PRIORITY_THAN  = 0xD5F1; // BrainDNA PRIORITY_THAN
+
+function _etFactorFirstRange(color, factor) {
+  const r = _ET_COLOR_F1_RANGE[color];
+  if (!r) return false;
+  return r[0] < factor && factor < r[1];
+}
+
+function _etThanToBool(color1, color2) {
+  // BrainDNA _than_to_bool：回傳勝出顏色
+  const i1 = _ET_COLOR_ORDER.indexOf(color1);
+  const i2 = _ET_COLOR_ORDER.indexOf(color2);
+  if (i1 < 0 || i2 < 0) return color1;
+  const mask = 1 << i2;
+  const bits = (_ET_PRIORITY_THAN >> (4 * i1)) & 0xF;
+  return (bits & mask) > 0 ? color1 : color2;
+}
+
+function _etColorForMeans(la, ha, lb, hb, lg, hg) {
+  // BrainDNA MindColorAlgorithm.calcForWeights（對應 brainwave.py line 336）
+  const alpha = la + ha, beta = lb + hb, gamma = lg + hg;
+  if (alpha <= 0 || beta <= 0) return 'orange';
+  const f1 = gamma / alpha;  // BrainDNA 直接用比例，不乘 100
+  const f2 = gamma / beta;
+
+  const meets = { orange: 0, green: 0, blue: 0, yellow: 0 };
+  const meets2 = [];
+
+  // 第一輪：f1 在範圍內 → meets +1
+  for (const color of _ET_COLOR_ORDER) {
+    if (_etFactorFirstRange(color, f1)) {
+      meets[color]++;
+      meets2.push(color);
+    }
+  }
+  if (meets2.length === 1) return meets2[0];
+
+  // 第二輪：f2 不在範圍內 → meets -1（BrainDNA 對 f2 也用 factorFirstRange）
+  for (const color of _ET_COLOR_ORDER) {
+    if (!_etFactorFirstRange(color, f2)) meets[color]--;
+  }
+
+  // 依優先順序（PRIORITY_ORDER=213：次位=1綠，首位=2藍）取 meets>0 的第一個
+  let w = _ET_PRIORITY_ORDER;
+  while (w > 0) {
+    w = Math.floor(w / 10);
+    const idx = w % 10;
+    if (idx < 4 && meets[_ET_COLOR_ORDER[idx]] > 0) return _ET_COLOR_ORDER[idx];
+  }
+  return 'orange';
+}
+
+// ─── MBTI 矛盾距離（Hamming distance，0-4）────────────────────────────────────
+function _etMbtiContradiction(a, b) {
+  if (!a || !b || a.length < 4 || b.length < 4) return 0;
+  let d = 0;
+  for (let i = 0; i < 4; i++) d += (a[i] !== b[i] ? 1 : 0);
+  return d;
+}
+
+// ─── 30 秒視窗 MBTI 樣本（BrainDNA calcBand 精神）────────────────────────────
+// 與後端 compute_window_mbtis 完全對應
+function _etComputeWindowMbtis(acc) {
+  const WINDOW = 30;
+  const LA_MEAN = _ET_DATA_STATS.lowAlpha.mean;
+  const LA_STD  = _ET_DATA_STATS.lowAlpha.std;
+  const BOUNDS  = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0];
+  const _arr = k => (acc[k] || []).map(Number);
+  const _segMean = (a, s, e) => {
+    const seg = a.slice(s, Math.min(e, a.length)).filter(v => v > 0);
+    return seg.length ? seg.reduce((x,y)=>x+y,0)/seg.length : 0;
+  };
+
+  const r_la = _arr('r_lalpha'), r_th = _arr('r_theta');
+  const r_ha = _arr('r_halpha'), r_hb = _arr('r_hbeta');
+  const r_lb = _arr('r_lbeta'),  r_lg = _arr('r_lgamma'), r_hg = _arr('r_hgamma');
+
+  const n = r_la.length;
+  if (n < WINDOW || !r_th.length) return [];
+
+  const results = [];
+  // BrainDNA evaluationReport.py 第 36 行：包含最後不足 30 秒的部分視窗
+  const numWindows = Math.ceil(n / WINDOW);
+  for (let wi = 0; wi < numWindows; wi++) {
+    const s = wi * WINDOW, e = (wi + 1) * WINDOW;
+    const rawLA = _segMean(r_la, s, e), rawTH = _segMean(r_th, s, e);
+    if (rawLA <= 0 || rawTH <= 0) continue;
+
+    const laPct = _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD);
+    let bagua = 6;
+    for (let i = 0; i < 6; i++) { if (laPct < BOUNDS[i+1]) { bagua = i; break; } }
+
+    const rawHA = _segMean(r_ha, s, e), rawHB = _segMean(r_hb, s, e);
+    const rawLB = _segMean(r_lb, s, e), rawLG = _segMean(r_lg, s, e);
+    const rawHG = _segMean(r_hg, s, e);
+    const color = _etColorForMeans(rawLA, rawHA, rawLB, rawHB, rawLG, rawHG);
+    const rawBeta = rawHB + rawLB;
+    const mbtiType = _etPersonalityFromBaguaColor(bagua, color, rawBeta, rawTH);
+
+    results.push({ type: mbtiType, windowIdx: wi, laMean: rawLA, thMean: rawTH, color, baguaInt: bagua });
+  }
+  return results;
+}
+
+// ─── 矛盾距離分配四層（與後端 assign_personality_layers 對應）─────────────────
+function _etAssignPersonalityLayers(archetypeType, windowMbtis) {
+  if (!windowMbtis || !windowMbtis.length) return {};
+  const scores = windowMbtis.map(w => ({
+    type: w.type, dist: _etMbtiContradiction(archetypeType, w.type), idx: w.windowIdx
+  }));
+  const peer   = scores.reduce((a,b) => (b.dist < a.dist || (b.dist===a.dist && b.idx<a.idx)) ? b : a);
+  const family = scores.reduce((a,b) => (b.dist > a.dist || (b.dist===a.dist && b.idx>a.idx)) ? b : a);
+  const mid    = (peer.dist + family.dist) / 2;
+  const remain = scores.filter(s => s.idx !== peer.idx && s.idx !== family.idx);
+  const social = remain.length
+    ? remain.reduce((a,b) => Math.abs(b.dist-mid) < Math.abs(a.dist-mid) ? b : a)
+    : { type: archetypeType, dist: 0 };
+
+  const _mk = type => ({ type, secondary: null, confidence: 70 });
+  return {
+    peer:   _mk(peer.type),
+    family: _mk(family.type),
+    social: _mk(social.type),
+    _contradiction: { peer: peer.dist, family: family.dist, social: Math.abs(social.dist - mid) },
+  };
+}
+
+// ─── 四層性格地圖主函式（BrainDNA 30s視窗 + 矛盾距離分配）──────────────────
 function _etComputeMBTILayers(acc) {
-  // 過濾零值後的原始頻段陣列（零值表示設備遺漏包）
+  // Archetype：全段 lowAlpha + theta 均值 → 八卦 → MBTI
   const r_la = (acc.r_lalpha || []).filter(v => v > 0);
   const r_th = (acc.r_theta  || []).filter(v => v > 0);
 
-  // 原始頻段不足時（< 4 個樣本），退回 attn/medi fallback
   if (r_la.length < 4 || r_th.length < 4) {
     const act  = _etClamp(_etAvg(acc.attn || []) / 100, 0, 1);
     const calm = _etClamp(_etAvg(acc.medi || []) / 100, 0, 1);
@@ -6889,36 +7039,36 @@ function _etComputeMBTILayers(acc) {
       _etClamp(50 + (act  - 0.5) * 40, 5, 95),
       _etClamp(50 + (calm - 0.5) * 40, 5, 95),
     );
-    return { archetype: fb, family: fb, social: fb, peer: fb };
+    return { archetype: fb, family: fb, social: fb, peer: fb, _source: 'fallback' };
   }
 
-  // 各時間段計算一個獨立 MBTI（8 卦含離卦）
-  const mk = (la_arr, th_arr) => {
-    if (!la_arr.length || !th_arr.length) return null;
-    const rawLA = _etAvg(la_arr);
-    const rawTH = _etAvg(th_arr);
-    const br     = _etBaguaMBTI(rawLA, rawTH, true);   // useLi=true（8 卦）
-    const scores = _etBaguaScores(br.type, br.laPct, br.thPct);
-    return { ...scores, confidence: br.confidence, secondary: br.secondary };
+  const rawLA = r_la.reduce((a,b)=>a+b,0) / r_la.length;
+  const rawTH = r_th.reduce((a,b)=>a+b,0) / r_th.length;
+  const archetypeBr  = _etBaguaMBTI(rawLA, rawTH, true);
+  const archetypeScores = _etBaguaScores(archetypeBr.type, archetypeBr.laPct, archetypeBr.thPct);
+  const archetype = { ...archetypeScores, confidence: archetypeBr.confidence, secondary: archetypeBr.secondary };
+  const archetypeType = archetype.type;
+
+  // 30 秒視窗 MBTI 樣本（BrainDNA 原始算法：八卦 + 腦色 → 型別）
+  const windowMbtis = _etComputeWindowMbtis(acc);
+
+  // 矛盾距離分配三層（peer / social / family）
+  const layerAssign = _etAssignPersonalityLayers(archetypeType, windowMbtis);
+
+  const _mkLayer = (src) => {
+    if (!src || !src.type) return archetype;
+    const br = _etBaguaMBTI(rawLA, rawTH, true);  // 取同一 laPct/thPct 作 scores
+    const s  = _etBaguaScores(src.type, archetypeBr.laPct, archetypeBr.thPct);
+    return { ...s, type: src.type, confidence: src.confidence || 70, secondary: src.secondary };
   };
 
-  // 以樣本數切三段（確保各段至少 1 個樣本）
-  const n  = Math.min(r_la.length, r_th.length);
-  const s1 = Math.max(1, Math.floor(n / 3));
-  const s2 = Math.max(s1 + 1, Math.floor(n * 2 / 3));
-
-  const archetype = mk(r_la,               r_th);                    // 全段
-  const social    = mk(r_la.slice(0, s1),  r_th.slice(0, s1));       // 前段
-  const peer      = mk(r_la.slice(s1, s2), r_th.slice(s1, s2));      // 中段
-  const family    = mk(r_la.slice(s2),     r_th.slice(s2));           // 後段
-
-  // 任何分段若為 null（邊界保護），以全段結果補位
-  const base = archetype;
   return {
-    archetype: archetype || base,
-    family:    family    || base,
-    social:    social    || base,
-    peer:      peer      || base,
+    archetype,
+    peer:   _mkLayer(layerAssign.peer),
+    social: _mkLayer(layerAssign.social),
+    family: _mkLayer(layerAssign.family),
+    _contradiction: layerAssign._contradiction || {},
+    _source: windowMbtis.length > 0 ? 'window_contradiction' : 'fallback',
   };
 }
 
@@ -7110,91 +7260,40 @@ function _renderEthrMbtiAnalysis(state) {
   }
 
   _ethrMbtiLayerResults = layers;
-  _ethrMbtiCurrentType = layers.archetype.type;
 
-  // ─── 聚合：4 層 × (主型 + 次型) → 各 MBTI 百分比 ───────────────
-  // 主型機率 = 50 + confidence/2（信心100%→100%確定；0%→50/50）
-  // 次型機率 = 100 - 主型機率
-  // 每層各占 25% 權重
-  const layerOrder = ['archetype','family','social','peer'];
-  const typeScore = {};   // { 'INTJ': 加總分數(0-100), ... }
-  const typeLayerMap = {}; // { 'INTJ': ['archetype','family'], ... }
-
-  layerOrder.forEach(k => {
-    const lay = layers[k];
-    if (!lay || !lay.type) return;
-    const conf = (lay.confidence != null) ? lay.confidence : 70;
-    const primaryProb   = 50 + conf / 2;     // 50~100
-    const secondaryProb = 100 - primaryProb;  // 0~50
-
-    typeScore[lay.type] = (typeScore[lay.type] || 0) + primaryProb / 4;
-    if (!typeLayerMap[lay.type]) typeLayerMap[lay.type] = [];
-    if (!typeLayerMap[lay.type].includes(k)) typeLayerMap[lay.type].push(k);
-
-    if (lay.secondary) {
-      typeScore[lay.secondary] = (typeScore[lay.secondary] || 0) + secondaryProb / 4;
-      if (!typeLayerMap[lay.secondary]) typeLayerMap[lay.secondary] = [];
-    }
-  });
-
-  // 去掉佔比 < 5% 的邊緣型（避免雜訊），並由高到低排序
-  const sorted = Object.entries(typeScore)
-    .filter(([, s]) => s >= 5)
-    .sort((a, b) => b[1] - a[1])
-    .map(([type, score]) => ({ type, pct: Math.round(score), layers: typeLayerMap[type] || [] }));
-
-  // 正規化到 100%（四捨五入誤差修正）
-  const total = sorted.reduce((s, e) => s + e.pct, 0);
-  if (total > 0 && total !== 100) sorted[0].pct += (100 - total);
-
-  const distinctCount = sorted.length;  // 1 ~ 7
-
-  // 主推論型 = 最高佔比的型
-  _ethrMbtiCurrentType = sorted[0].type;
-  const cur = _ETHR_MBTI_TABLE[sorted[0].type] || { name:'?', emoji:'❓' };
+  // ── 1 分鐘健檢：只顯示原型性格，其他三層 tab 隱藏 ────────────────────────
+  // 原型 = 全段 lowAlpha + theta 平均值算出的天生本質性格
+  _ethrMbtiActiveLayer   = 'archetype';
+  _ethrMbtiCurrentType   = layers.archetype.type;
+  const archetypeType    = layers.archetype.type;
+  const archetypeMeta    = _ETHR_MBTI_TABLE[archetypeType] || { name:'?', emoji:'❓' };
 
   section.style.display = 'block';
   const tag = document.getElementById('ethr-mbti-current');
-  if (tag) tag.textContent = `${cur.emoji} ${sorted[0].type} · ${cur.name}`;
+  if (tag) tag.textContent = `${archetypeMeta.emoji} ${archetypeType} · ${archetypeMeta.name}`;
 
-  // ─── 一致性描述（依種數）─────────────────────────────────────────
-  const consistencyMsg = (() => {
-    if (distinctCount === 1) return `<div style="background:linear-gradient(90deg,#e8eaf6,#f3e5f5);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-      ✨ <b>性格高度一致</b>：所有情境下均展現同一種人格樣貌，內外言行如一。
-    </div>`;
-    if (distinctCount <= 2) return `<div style="background:linear-gradient(90deg,#e3f2fd,#fff3e0);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-      🎭 <b>雙面人格</b>：依情境切換 2 種人格，真實自我與對外形象之間有一定差異。
-    </div>`;
-    if (distinctCount <= 4) return `<div style="background:linear-gradient(90deg,#fff3e0,#fce4ec);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-      🌈 <b>多元人格層次</b>：在不同情境下呈現 ${distinctCount} 種人格樣貌，適應性強、情境敏感度高。
-    </div>`;
-    return `<div style="background:linear-gradient(90deg,#fce4ec,#e8eaf6);padding:8px 12px;border-radius:8px;color:#1a237e;font-size:12px;margin-bottom:10px;">
-      🦋 <b>豐富多樣的性格</b>：腦波呈現 ${distinctCount} 種人格可能性，您是高度複雜且有深度的人。
-    </div>`;
-  })();
-
-  // ─── 分組摘要：每個 MBTI 一行 + 百分比 ─────────────────────────
-  const layerLabel = (k) => (_ETHR_MBTI_LAYERS[k] && _ETHR_MBTI_LAYERS[k].label) || k;
-  const groupSummary = sorted.map((g, idx) => {
-    const mEntry = _ETHR_MBTI_TABLE[g.type] || { name:'?', emoji:'❓' };
-    const layersText = g.layers.length ? g.layers.map(layerLabel).join(' / ') : '邊界影響';
-    const isMain = idx === 0;
-    const barColor = isMain ? '#1a237e' : '#7986cb';
-    return `<div style="padding:8px 10px;background:#f5f7ff;border-radius:8px;margin-bottom:6px;border-left:3px solid ${barColor};">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div style="font-weight:700;font-size:13px;color:#1a237e;">${mEntry.emoji} ${g.type} · ${mEntry.name}</div>
-        <span style="font-size:13px;font-weight:800;color:${barColor};">${g.pct}%</span>
-      </div>
-      <div style="height:5px;background:#e8eaf6;border-radius:3px;margin-bottom:4px;">
-        <div style="height:100%;width:${g.pct}%;background:${barColor};border-radius:3px;transition:width 0.6s;"></div>
-      </div>
-      <div style="font-size:10px;color:#888;">${g.layers.length ? '情境：' + layersText : '(邊界相鄰型)'}</div>
-    </div>`;
-  }).join('');
+  // 隱藏原生家庭 / 社會化 / 同儕三個 tab（1 分鐘採集不足以分層）
+  const layerTabs = document.getElementById('ethr-mbti-layer-tabs');
+  if (layerTabs) {
+    layerTabs.querySelectorAll('.ethr-layer-tab[data-layer="family"],' +
+      '.ethr-layer-tab[data-layer="social"],.ethr-layer-tab[data-layer="peer"]')
+      .forEach(btn => { btn.style.display = 'none'; });
+    const archBtn = layerTabs.querySelector('.ethr-layer-tab[data-layer="archetype"]');
+    if (archBtn) { archBtn.classList.add('active'); archBtn.style.display = ''; }
+  }
 
   const summary = document.getElementById('ethr-mbti-summary');
   if (summary) {
-    summary.innerHTML = `<div style="margin-bottom:8px;font-size:12px;">本次 ${state.sampleCount} 筆腦波資料 · 推論出 <b>${distinctCount} 種性格樣貌</b>（佔比合計 100%）：</div>${consistencyMsg}${groupSummary}<div style="font-size:10px;color:#aaa;margin-top:8px;">點擊下方 tab 可看各情境層次的詳細說明。</div>`;
+    summary.innerHTML = `
+      <div style="margin-bottom:8px;font-size:12px;">
+        本次 ${state.sampleCount} 筆腦波資料 · 已推論出您的<b>原型性格</b>。
+      </div>
+      <div style="background:#fff3e0;border-left:3px solid #ff9800;border-radius:8px;
+                  padding:8px 12px;font-size:11px;color:#5d4037;line-height:1.7;margin-bottom:8px;">
+        📊 <b>與完整報告的差異提示</b>：1 分鐘健檢資料量較少，僅能推論<b>原型性格（天生本質）</b>，
+        無法區分原生家庭 / 社會化 / 同儕關係等情境性格。完整四層性格地圖、性格矛盾分析及情緒地雷
+        詳見 <b>3 分鐘完整腦波報告</b>，準確度更高且包含多維度解析。
+      </div>`;
   }
 
   _bindEthrMbtiTabs();
@@ -7203,34 +7302,69 @@ function _renderEthrMbtiAnalysis(state) {
 // ─── /MBTI ──────────────────────────────────────────────────────────────────
 
 function _etCalcBrainColor(acc) {
-  // MindColorAlgorithm：使用 raw 8-band 平均（r_lalpha 等），而非 bandTo100 的合併帶
-  // 與後端 calc_mind_color / BrainDNA MindColorAlgorithm.calc 保持一致
+  // BrainDNA ReportResult.calcColor：6 視窗投票（含最後不足 30 秒的部分視窗）
+  // 每視窗用 calcForWeights；green/blue/yellow 需 ≥2 票；orange 最後歸零
+  const WINDOW = 30;
   const _avg = arr => arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const _seg = (arr, s, e) => { const a = (arr||[]).slice(s, Math.min(e,arr.length)); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; };
+
   const hasRaw = (acc.r_lalpha && acc.r_lalpha.length > 0);
+  const n = hasRaw ? acc.r_lalpha.length : 0;
 
-  let alpha, beta, gamma;
-  if (hasRaw) {
-    // 優先用 raw 8-band 平均（BrainDNA 正式算法）
-    alpha = (_avg(acc.r_lalpha) + _avg(acc.r_halpha)) / 2;
-    beta  = (_avg(acc.r_lbeta)  + _avg(acc.r_hbeta))  / 2;
-    gamma = (_avg(acc.r_lgamma) + _avg(acc.r_hgamma))  / 2;
-  } else {
-    // Fallback：無 raw 8-band 時用 bandTo100 合併帶
-    alpha = _avg(acc.alpha);
-    beta  = _avg(acc.beta);
-    gamma = _avg(acc.gamma);
+  if (!hasRaw || n < WINDOW) {
+    // Fallback：資料不足時用全段平均單次計算
+    if (hasRaw) {
+      return _etColorForMeans(_avg(acc.r_lalpha), _avg(acc.r_halpha),
+                               _avg(acc.r_lbeta),  _avg(acc.r_hbeta),
+                               _avg(acc.r_lgamma), _avg(acc.r_hgamma));
+    }
+    const alpha = _avg(acc.alpha), beta = _avg(acc.beta), gamma = _avg(acc.gamma);
+    if (alpha <= 0 || beta <= 0) return 'orange';
+    return _etColorForMeans(alpha/2, alpha/2, beta/2, beta/2, gamma/2, gamma/2);
   }
 
-  if (alpha <= 0 || beta <= 0) return 'orange';
-  const f1 = (gamma / alpha) * 100;
-  const f2 = (gamma / beta)  * 100;
-  const centers = { orange:[32.5,42.5], green:[32.5,27.5], blue:[42.5,52.5], yellow:[25,20] };
-  let best = null, bestDist = 9999;
-  for (const [k, [cx, cy]] of Object.entries(centers)) {
-    const d = Math.sqrt((cx-f1)**2 + (cy-f2)**2);
-    if (d < bestDist) { bestDist = d; best = k; }
+  // 最多 6 個視窗（BrainDNA mindArray 上限），含最後不足 30 秒部分視窗
+  const numWindows = Math.min(Math.ceil(n / WINDOW), 6);
+  const count = [0, 0, 0, 0];  // orange, green, blue, yellow
+  const colorList = [];
+
+  for (let i = 0; i < numWindows; i++) {
+    const s = i * WINDOW, e = (i + 1) * WINDOW;
+    const color = _etColorForMeans(
+      _seg(acc.r_lalpha, s, e), _seg(acc.r_halpha, s, e),
+      _seg(acc.r_lbeta,  s, e), _seg(acc.r_hbeta,  s, e),
+      _seg(acc.r_lgamma, s, e), _seg(acc.r_hgamma, s, e),
+    );
+    const idx = _ET_COLOR_ORDER.indexOf(color);
+    if (idx >= 0) count[idx]++;
+    colorList.push(color);
   }
-  return best || 'orange';
+
+  // 套用 threshold（green/blue/yellow 需 ≥2 票）
+  const threshold = [0, 2, 2, 2];
+  for (let i = 0; i < 4; i++) { if (count[i] < threshold[i]) count[i] = 0; }
+
+  // 若 green/blue/yellow 都是 0 → 回傳第一個視窗顏色
+  if (count[1] === 0 && count[2] === 0 && count[3] === 0) {
+    return colorList[0] || 'orange';
+  }
+
+  // Orange 歸零，進行決選
+  count[0] = 0;
+  const remaining = _ET_COLOR_ORDER.filter((c,i) => count[i] > 0);
+
+  if (remaining.length === 0) return 'orange';
+  if (remaining.length === 1) return remaining[0];
+  if (remaining.length === 2) return _etThanToBool(remaining[0], remaining[1]);
+
+  // 3+ 顏色：依 PRIORITY_ORDER
+  let w = _ET_PRIORITY_ORDER;
+  while (w > 0) {
+    w = Math.floor(w / 10);
+    const idx = w % 10;
+    if (idx < 4 && count[idx] > 0) return _ET_COLOR_ORDER[idx];
+  }
+  return 'orange';
 }
 
 const _ET_BRAIN_INFO = {
