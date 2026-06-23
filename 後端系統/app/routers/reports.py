@@ -1044,7 +1044,8 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         _sess_obj = db.query(M.Session).filter(M.Session.session_id == session_id).first()
         if _sess_obj and _sess_obj.raw_arrays_json:
             _raw = _json.loads(_sess_obj.raw_arrays_json)
-            _result = _bdna_compute(_raw)
+            _is_child = (getattr(_sess_obj, "report_type", None) or "").lower() in ("child", "child_report")
+            _result = _bdna_compute(_raw, is_child=_is_child)
             if _result.get("valid") and _result.get("bands"):
                 _bdna_bands = _result["bands"]
     except Exception:

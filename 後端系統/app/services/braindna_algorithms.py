@@ -88,6 +88,26 @@ WINDOW_SIZE = 30   # 與 BrainDNA 一致
 # 這類秒數的 beta/gamma 比例因分母過小而虛高，應排除
 MIN_DELTA_QUALITY: int = 30_000
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 兒童專用 proportionRange 閾值（report_type='child' 時使用）
+#
+# 背景：兒童腦波功率在所有頻段都遠高於成人均值，且 delta/theta 常超過 BrainDNA 的
+# CAP 值（98K），使得各頻段佔比均遠低於成人校準的 level1。
+# 以下閾值根據 Session #63（3 歲女孩）觀測值初步設定，
+# 讓正常活躍的兒童腦波在各頻段顯示 65~80 的合理分數。
+# ⚠ 僅有單一兒童樣本，後續應以更多兒童資料持續校準。
+# ─────────────────────────────────────────────────────────────────────────────
+CHILD_PROP_RANGE: Dict[str, tuple] = {
+    "r_delta":  (0.10, 0.30),   # 成人: 60~80%  | 兒童觀測: ~22%
+    "r_theta":  (0.06, 0.15),   # 成人: 15~30%  | 兒童觀測: ~10%
+    "r_lalpha": (0.01, 0.04),   # 成人: 10~20%  | 兒童觀測:  ~2.4%
+    "r_halpha": (0.01, 0.04),   # 成人: 10~20%  | 兒童觀測:  ~2.2%
+    "r_lbeta":  (0.010, 0.025), # 成人:  5~10%  | 兒童觀測:  ~1.7%
+    "r_hbeta":  (0.025, 0.070), # 成人:  5~10%  | 兒童觀測:  ~5.3%
+    "r_lgamma": (0.010, 0.030), # 成人:  3~ 6%  | 兒童觀測:  ~2.1%
+    "r_hgamma": (0.005, 0.018), # 成人:  3~ 6%  | 兒童觀測:  ~1.4%
+}
+
 
 def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
     """
@@ -147,7 +167,7 @@ def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
 # 步驟二：proportionRange 正規化 → 映射到 0~1 → × 100 → 整數（0~100）
 # 與 BrainDNA evaluationReport 的 *Strip 值完全一致。
 # ─────────────────────────────────────────────────────────────────────────────
-def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int]]:
+def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False) -> Optional[Dict[str, int]]:
     """
     輸入：raw_arrays（8 個頻段原始陣列，index 對齊，通常 180 秒）
     輸出：{ "low_alpha": int, "high_alpha": int, ... }
@@ -187,9 +207,11 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     if valid == 0:
         return None
 
+    prop_range_table = CHILD_PROP_RANGE if is_child else _PROP_RANGE
+
     def _norm(k: str) -> int:
         raw_prop = prop_sum[k] / valid          # 步驟一：原始佔比 0.0~1.0
-        l1, l2 = _PROP_RANGE[k]
+        l1, l2 = prop_range_table[k]
         return round(_proportion_range(raw_prop, l1, l2) * 100)   # 步驟二
 
     return {
@@ -466,7 +488,7 @@ def calc_mind_energy(attn: List[int], medi: List[int]) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 # 總入口：從 raw_arrays 計算全部 BrainDNA 指標
 # ─────────────────────────────────────────────────────────────────────────────
-def compute_all(raw_arrays: Dict[str, List]) -> Dict:
+def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
     """
     輸入 raw_arrays，回傳完整的 BrainDNA 指標字典。
     完全對應 BrainDNA evaluationReport.py 的資料流：
@@ -488,8 +510,8 @@ def compute_all(raw_arrays: Dict[str, List]) -> Dict:
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
 
-    # bands：傳入 best_win 直接計算，避免 _select_best_window 被重複呼叫
-    bands = calc_band_proportions(best_win)
+    # bands：傳入 best_win 直接計算（is_child 決定使用成人或兒童 proportionRange 閾值）
+    bands = calc_band_proportions(best_win, is_child=is_child)
     if bands is None:
         return {"valid": False}
 

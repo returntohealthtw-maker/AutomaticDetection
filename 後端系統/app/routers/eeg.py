@@ -109,7 +109,8 @@ def save_eeg_stats(
     if payload.raw_arrays:
         try:
             from app.services.braindna_algorithms import compute_all as _bdna_compute
-            _bdna_result = _bdna_compute(payload.raw_arrays)
+            _is_child = (getattr(payload, "report_type", None) or "").lower() in ("child", "child_report")
+            _bdna_result = _bdna_compute(payload.raw_arrays, is_child=_is_child)
             if _bdna_result.get("valid") and _bdna_result.get("bands"):
                 _b = _bdna_result["bands"]
                 # 用 BrainDNA 佔比值覆寫，確保 High ≠ Low，與原始算法一致

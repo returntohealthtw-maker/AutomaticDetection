@@ -100,8 +100,9 @@ def recompute_braindna(
                 stats["details"].append({"session_id": sid, "status": "skip", "reason": f"r_lalpha only {n_la} samples"})
                 continue
 
-            # 重算 BrainDNA 核心指標
-            result = _compute_all(raw)
+            # 重算 BrainDNA 核心指標（兒童報告使用兒童閾值）
+            _is_child = (getattr(sess, "report_type", None) or "").lower() in ("child", "child_report")
+            result = _compute_all(raw, is_child=_is_child)
             if not result.get("valid"):
                 stats["failed"] += 1
                 stats["details"].append({"session_id": sid, "status": "failed", "reason": "compute_all returned invalid"})
