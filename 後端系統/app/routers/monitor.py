@@ -233,6 +233,21 @@ def raw_debug(
     }
 
 
+@router.get("/api/admin/raw-export/{session_id}", tags=["管理員"])
+def raw_export(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """回傳 raw_arrays_json 原始內容，供本地深度分析用"""
+    require_admin(authorization, db)
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess or not sess.raw_arrays_json:
+        return {"error": "no raw data"}
+    raw = json.loads(sess.raw_arrays_json)
+    return {"session_id": session_id, "raw_arrays": raw}
+
+
 @router.get("/api/admin/compare-windows/{session_id}", tags=["管理員"])
 def compare_windows(
     session_id: int,
