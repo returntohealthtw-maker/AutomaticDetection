@@ -233,6 +233,93 @@ def raw_debug(
     }
 
 
+@router.get("/api/admin/compare-windows/{session_id}", tags=["管理員"])
+def compare_windows(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """
+    比較同一 Session 在不同視窗長度下的 BrainDNA 計算結果。
+    回傳：
+      window_30s  — 目前方式（選最佳 30 秒視窗）
+      window_full — 使用全部資料（不做視窗選取，170-180 秒全算）
+    """
+    require_admin(authorization, db)
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess or not sess.raw_arrays_json:
+        return {"error": "no raw data"}
+
+    raw = json.loads(sess.raw_arrays_json)
+    n_samples = len(raw.get("r_lalpha") or [])
+
+    from app.services.braindna_algorithms import (
+        calc_band_proportions, _select_best_window, WINDOW_SIZE
+    )
+
+    # ── 模式 A：目前方式（選最佳 30 秒視窗）─────────────────────────────────
+    best_win = _select_best_window(raw)
+    best_win_start_sec = None
+    # 找出 best window 對應的起始秒數
+    la_full = raw.get("r_lalpha") or []
+    la_best = best_win.get("r_lalpha") or []
+    if la_full and la_best:
+        for i in range(len(la_full)):
+            if la_full[i:i+len(la_best)] == la_best:
+                best_win_start_sec = i
+                break
+
+    result_30s = calc_band_proportions(best_win)
+
+    # ── 模式 B：全部資料（不做視窗選取）────────────────────────────────────
+    # 直接對完整 raw_arrays 計算（略過視窗選取步驟）
+    import math as _math
+    from app.services.braindna_algorithms import (
+        RAW_KEYS, CAP, _clamp, _proportion_range, _PROP_RANGE
+    )
+
+    prop_sum = {k: 0.0 for k in RAW_KEYS}
+    valid = 0
+    for i in range(n_samples):
+        raw_row = {
+            k: float((raw.get(k) or [0])[i] if i < len(raw.get(k) or []) else 0)
+            for k in RAW_KEYS
+        }
+        uncapped_total = sum(raw_row.values())
+        if uncapped_total <= 0:
+            continue
+        for k in RAW_KEYS:
+            prop_sum[k] += _clamp(raw_row[k], CAP[k]) / uncapped_total
+        valid += 1
+
+    result_full = None
+    if valid > 0:
+        result_full = {}
+        name_map = {
+            "r_delta":  "delta",      "r_theta":   "theta",
+            "r_lalpha": "low_alpha",  "r_halpha":  "high_alpha",
+            "r_lbeta":  "low_beta",   "r_hbeta":   "high_beta",
+            "r_lgamma": "low_gamma",  "r_hgamma":  "high_gamma",
+        }
+        for k, name in name_map.items():
+            raw_prop = prop_sum[k] / valid
+            l1, l2 = _PROP_RANGE[k]
+            result_full[name] = round(_proportion_range(raw_prop, l1, l2) * 100)
+
+    return {
+        "session_id":         session_id,
+        "total_samples":      n_samples,
+        "best_window_start":  best_win_start_sec,
+        "best_window_length": len(la_best),
+        "window_30s":         result_30s,
+        "window_full":        result_full,
+        "diff": {
+            k: (result_full.get(k, 0) - result_30s.get(k, 0))
+            for k in (result_30s or {})
+        } if result_30s and result_full else None,
+    }
+
+
 @router.get("/api/admin/raw-arrays-health", tags=["管理員"])
 def raw_arrays_health(
     authorization: Optional[str] = Header(None),
