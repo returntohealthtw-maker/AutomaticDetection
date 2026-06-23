@@ -67,7 +67,7 @@ def recompute_braindna(
     require_admin(authorization, db)
 
     from app.services.braindna_algorithms import compute_all as _compute_all
-    from app.services.braindna_algorithms import _select_best_window
+    from app.services.braindna_algorithms import _select_best_window, MIN_DELTA_QUALITY as _MDQ
     from app.algorithms.report import generate_quick_mbti
 
     # 查所有有 raw_arrays_json 的 Session
@@ -132,9 +132,13 @@ def recompute_braindna(
             # 重算 MBTI / 八卦
             try:
                 bw = _select_best_window(raw)
+                _bw_delta = bw.get("r_delta") or []
                 def _mean(key):
                     arr = bw.get(key) or []
-                    return statistics.mean(arr) if arr else 0.0
+                    # 排除 delta<MIN_DELTA_QUALITY 的低品質秒（與頻段比例計算一致）
+                    valid = [v for j, v in enumerate(arr)
+                             if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
+                    return statistics.mean(valid) if valid else (statistics.mean([v for v in arr if v > 0]) if arr else 0.0)
                 mbti_r = generate_quick_mbti({
                     "lowAlpha":  _mean("r_lalpha"), "highAlpha": _mean("r_halpha"),
                     "lowBeta":   _mean("r_lbeta"),  "highBeta":  _mean("r_hbeta"),
