@@ -162,9 +162,10 @@ def calc_band_proportions(raw_arrays: Dict[str, List]) -> Optional[Dict[str, int
     prop_sum = {k: 0.0 for k in RAW_KEYS}
     valid = 0
 
-    # 信號品質下限：delta < 10000 代表電極接觸不良（族群均值 ~198K，10K 僅其 5%）
-    # 這類秒數的 beta/gamma 比例會虛高，屬於量測雜訊而非真實腦波
-    MIN_DELTA_QUALITY = 10_000
+    # 信號品質下限：delta < 30000 代表電極接觸不良（族群均值 ~198K，30K 約其 15%）
+    # 實測分析：Session delta 有 74x 秒間波動，低 delta 秒導致 beta/gamma 比例虛高
+    # 30K 閾值可有效排除明顯雜訊秒，同時保留真實低 delta 的合理秒（>30K 仍可接受）
+    MIN_DELTA_QUALITY = 30_000
 
     for i in range(n):
         # BrainDNA calcColumnSumArray：分母用「未截斷」原始值加總（完全對應原碼）

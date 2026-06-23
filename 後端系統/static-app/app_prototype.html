@@ -6646,8 +6646,9 @@ function _calcBrainDNABands(acc) {
   const win = _bdnaSelectBestWindow(acc);
   const wn = (win.r_lalpha||[]).length;
   if (wn < 5) return null;
-  // 信號品質下限：delta < 10000 代表電極接觸不良，排除此秒（與後端邏輯一致）
-  const MIN_DELTA_QUALITY = 10000;
+  // 信號品質下限：delta < 30000 代表電極接觸不良（族群均值 198K，30K≈15%）
+  // 排除此秒以防止 beta/gamma 因分母過小而虛高（與後端邏輯一致）
+  const MIN_DELTA_QUALITY = 30000;
   const ps = {}; for(const k of _BDNA_KEYS) ps[k]=0;
   let vs = 0;
   for(let i=0;i<wn;i++){
