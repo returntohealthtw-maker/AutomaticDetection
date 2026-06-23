@@ -21,7 +21,7 @@ import logging
 import math
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, List, Optional
 
 import httpx
 
@@ -243,4 +243,162 @@ async def sync_to_firebase(
 
     except Exception as exc:
         logger.exception("[Firebase] 同步例外: %s", exc)
+        return False
+
+
+def _captures_to_features(captures: List[Any]) -> list:
+    """
+    將 Android 上傳的 180 筆 ThinkGear bandTo100 擷取值轉換為 Firebase EEG 特徵格式。
+
+    captures 是 CaptureItem 或 EegCapture 物件列表；
+    其中的 delta/theta/... 均為 ThinkGear bandTo100 值（0~100 scale）。
+    直接用這些值計算相對功率比例，無需再做 bandTo100 轉換。
+    """
+    features = []
+    for cap in captures:
+        d  = float(getattr(cap, "delta",      0) or 0)
+        th = float(getattr(cap, "theta",      0) or 0)
+        la = float(getattr(cap, "low_alpha",  0) or 0)
+        ha = float(getattr(cap, "high_alpha", 0) or 0)
+        lb = float(getattr(cap, "low_beta",   0) or 0)
+        hb = float(getattr(cap, "high_beta",  0) or 0)
+        lg = float(getattr(cap, "low_gamma",  0) or 0)
+        hg = float(getattr(cap, "high_gamma", 0) or 0)
+        attn = float(getattr(cap, "attention",   0) or 0)
+        medi = float(getattr(cap, "meditation",  0) or 0)
+
+        total = d + th + la + ha + lb + hb + lg + hg
+
+        def ratio(v: float) -> float:
+            return round(v / total * 100, 2) if total > 0 else 0.0
+
+        # captured_at 是毫秒 Unix timestamp
+        captured_ms = int(getattr(cap, "captured_at", 0) or 0)
+        if captured_ms > 0:
+            ts = datetime.fromtimestamp(captured_ms / 1000.0, tz=timezone.utc).isoformat()
+        else:
+            ts = datetime.now(timezone.utc).isoformat()
+
+        feat: dict = {
+            "timestamp":       ts,
+            "windowSec":       1.0,
+            "deltaRatio":      ratio(d),
+            "thetaRatio":      ratio(th),
+            "alphaRatio":      ratio(la + ha),
+            "betaRatio":       ratio(lb + hb),
+            "gammaRatio":      ratio(lg + hg),
+            "lowAlphaRatio":   ratio(la),
+            "highAlphaRatio":  ratio(ha),
+            "lowBetaRatio":    ratio(lb),
+            "highBetaRatio":   ratio(hb),
+            "lowGammaRatio":   ratio(lg),
+            "highGammaRatio":  ratio(hg),
+        }
+        if attn > 0:
+            feat["attentionIndex"]  = round(attn / 100.0, 4)
+        if medi > 0:
+            feat["meditationIndex"] = round(medi / 100.0, 4)
+
+        features.append(feat)
+
+    return features
+
+
+async def sync_captures_to_firebase(
+    subject_name: str,
+    session_id: int,
+    captures: List[Any],
+) -> bool:
+    """
+    將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
+
+    captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
+    回傳 True 表示成功，False 表示失敗（不拋例外）。
+    """
+    if not FIREBASE_SERVICE_KEY:
+        logger.warning("[Firebase] FIREBASE_SERVICE_KEY 未設定，跳過 Android captures 同步")
+        return False
+
+    if not captures:
+        logger.warning("[Firebase] captures 為空，跳過同步")
+        return False
+
+    headers = {
+        "X-Service-Key": FIREBASE_SERVICE_KEY,
+        "Content-Type":  "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. 建立 Firebase Session
+            sess_resp = await client.post(
+                f"{FIREBASE_API_BASE}/sessions",
+                headers=headers,
+                json={
+                    "sourceApp":    SOURCE_APP,
+                    "deviceType":   "ThinkGear",
+                    "samplingRate": 1,
+                    "platform":     "android",
+                    "metadata": {
+                        "railway_session_id": session_id,
+                        "subject_name":       subject_name,
+                        "data_format":        "bandTo100",
+                    },
+                },
+            )
+            if sess_resp.status_code not in (200, 201):
+                logger.error("[Firebase] Android 建立 session 失敗 %s: %s",
+                             sess_resp.status_code, sess_resp.text[:200])
+                return False
+
+            fb_session_id = sess_resp.json().get("sessionId")
+            if not fb_session_id:
+                logger.error("[Firebase] Android session 回應無 sessionId")
+                return False
+
+            logger.info("[Firebase] Android session 建立成功 fb_sid=%s", fb_session_id)
+
+            # 2. 轉換並批次上傳 180 筆特徵值
+            features = _captures_to_features(captures)
+            if not features:
+                logger.warning("[Firebase] captures 轉換後為空，跳過上傳")
+                return False
+
+            batch_size = 100
+            total_uploaded = 0
+            for i in range(0, len(features), batch_size):
+                batch = features[i:i + batch_size]
+                eeg_resp = await client.post(
+                    f"{FIREBASE_API_BASE}/eeg/batch",
+                    headers=headers,
+                    json={
+                        "sessionId": fb_session_id,
+                        "sourceApp": SOURCE_APP,
+                        "features":  batch,
+                    },
+                )
+                if eeg_resp.status_code not in (200, 201):
+                    logger.error("[Firebase] Android EEG batch 失敗 %s: %s",
+                                 eeg_resp.status_code, eeg_resp.text[:200])
+                    return False
+                total_uploaded += len(batch)
+
+            logger.info("[Firebase] Android 已上傳 %d 筆 EEG → fb_sid=%s",
+                        total_uploaded, fb_session_id)
+
+            # 3. 標記 Session completed
+            await client.patch(
+                f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
+                headers=headers,
+                json={
+                    "status":   "completed",
+                    "endedAt":  datetime.now(timezone.utc).isoformat(),
+                    "durationSec": len(features),
+                },
+            )
+
+            return True
+
+    except Exception as exc:
+        logger.exception("[Firebase] Android captures 同步例外: %s", exc)
         return False

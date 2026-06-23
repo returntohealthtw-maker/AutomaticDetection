@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.orm import Session as DbSession
 from pydantic import BaseModel
 from typing import List, Optional
+import asyncio
 import time
 import uuid
 
@@ -195,7 +196,22 @@ async def upload_session(
     db.commit()
     db.refresh(report)
 
-    # 4. 廣播到監控儀表板（即時顯示）
+    # 4. 非同步同步 180 筆擷取記錄到 Firebase 腦波資料庫
+    # （與 /eeg/save-stats 路徑的 Firebase 同步對齊，補足原本缺失的 Android 路徑同步）
+    def _run_firebase_sync_captures():
+        try:
+            from app.services.firebase_sync import sync_captures_to_firebase
+            asyncio.run(sync_captures_to_firebase(
+                subject_name = req.subject_name,
+                session_id   = session.session_id,
+                captures     = req.captures,
+            ))
+        except Exception:
+            pass  # Firebase 同步失敗不影響主流程
+
+    background_tasks.add_task(_run_firebase_sync_captures)
+
+    # 5. 廣播到監控儀表板（即時顯示）
     background_tasks.add_task(broadcast, "new_session", {
         "session_id":      session.session_id,
         "report_id":       report.report_id,
@@ -208,7 +224,7 @@ async def upload_session(
         "status":          "success" if req.is_success else "failed",
     })
 
-    # 5. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
+    # 6. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
     if req.is_success and len(req.captures) >= 150:
         background_tasks.add_task(
             generate_report_async,
