@@ -682,6 +682,7 @@ def list_reports(
             "is_test":          is_test,
             "linked_to_subject": subj_record is not None,
             "headless_error":   headless_error,
+            "error_message":    rep.error_message or headless_error,  # 優先用 error_message 欄位，fallback 到 client_summary
             "image_quality":    img_quality_by_sid.get(rep.session_id) if rep.session_id else None,
             # 關係報告專屬：所有成員姓名 + session_id（admin 後台顯示與重新生成用）
             "relation_members": relation_members,

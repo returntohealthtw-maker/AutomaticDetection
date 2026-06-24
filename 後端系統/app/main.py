@@ -306,6 +306,8 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN email_sent INTEGER DEFAULT 0")
     if not has_column("reports", "talent_report_kind"):
         pending.append("ALTER TABLE reports ADD COLUMN talent_report_kind VARCHAR(32) NULL")
+    if not has_column("reports", "error_message"):
+        pending.append("ALTER TABLE reports ADD COLUMN error_message TEXT NULL")
     # eeg_captures – BrainDNA 算術平均 MBTI 欄位
     if not has_column("eeg_captures", "mbti_la"):
         pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_la INTEGER NULL")

@@ -573,7 +573,9 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         ).first()
                         if rep and rep.status in ("generating", "pending"):
                             rep.status = "failed"
-                            # 把失敗原因寫入 client_summary（這欄有存在）
+                            # 1. 寫入專用 error_message 欄位（管理員後台查詢用）
+                            rep.error_message = err_msg[:1000]
+                            # 2. 同時寫入 client_summary 保留向後相容
                             try:
                                 existing = _json.loads(rep.client_summary or "{}")
                             except Exception:

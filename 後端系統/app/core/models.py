@@ -115,6 +115,7 @@ class Report(Base):
     talent_report_kind = Column(String(32), nullable=True)
     line_sent    = Column(Integer, default=0)
     line_user_id = Column(String(100), nullable=True)
+    error_message = Column(Text, nullable=True)   # 失敗原因（headless 或其他生成錯誤）
     created_at   = Column(TIMESTAMP, server_default=func.now())
     completed_at = Column(TIMESTAMP, nullable=True)
 
