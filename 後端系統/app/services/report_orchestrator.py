@@ -348,6 +348,8 @@ def _call_vite_prefill(
     api_base:             str = "",
     report_type:          str = "life_script",
     chapters_to_generate: Optional[List[int]] = None,
+    subject_age:          Optional[int] = None,
+    subject_gender:       str = "",
 ) -> Dict[str, Any]:
     """
     在主後端用 Playwright Chromium 在背景打開 Vercel React App，
@@ -397,6 +399,8 @@ def _call_vite_prefill(
             session_id=session_id,
             api_base=api_base,
             chapters_to_generate=chapters_to_generate,
+            subject_age=subject_age,
+            subject_gender=subject_gender,
         )
         if result.get("ok"):
             return {
@@ -571,6 +575,8 @@ def trigger_external_report(
         api_base=api_base,
         report_type=report_type,
         chapters_to_generate=chapters_to_generate,
+        subject_age=subject_age,
+        subject_gender=subject_gender,
     )
 
 

@@ -126,6 +126,8 @@ def start_headless_job(
     api_base:             str = "",
     job_id:               Optional[str] = None,
     chapters_to_generate: Optional[List[int]] = None,
+    subject_age:          Optional[int] = None,
+    subject_gender:       str = "",
 ) -> Dict[str, Any]:
     """
     在背景啟動一個 headless Chromium 任務，立即回傳 job_id。
@@ -323,6 +325,10 @@ def start_headless_job(
         "brainwave_data":  bw_b64,
         "bw_b64":          bw_b64,
         "bw_present":      "1" if bw_present else "0",
+
+        # ── 受測者基本資訊 ──
+        "age":             str(subject_age) if subject_age is not None else "",
+        "gender":          subject_gender or "",
     }
     # 把 REPORTS_INGEST_SECRET 一併帶到 URL，讓 React app 在 callback /events 與 /record 時
     # 能加上 X-Ingest-Secret header（否則後端有設 secret 時會被 401 擋掉，導致監看 + 報告管理都看不到資料）
