@@ -6600,13 +6600,21 @@ function _etSigmoid(raw) { return 1 / (1 + Math.exp(-3 * (raw - 1))); }
 const _BDNA_CAP  = { r_delta:98000, r_theta:98000, r_lalpha:50000, r_halpha:50000,
                      r_lbeta:50000, r_hbeta:50000, r_lgamma:10000, r_hgamma:10000 };
 const _BDNA_KEYS = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
-// 兒童專用 proportionRange 閾值（report_type='child' 時使用）
-// 兒童腦波全頻段功率均高於成人，各頻段佔比因大分母而偏低，需獨立校準
+// 兒童專用 CAP 值（report_type='child' 時使用）
+// 依據 Springer Nature 2025（450名健康兒童）：delta 應佔 ~44%、theta ~25%
+// 成人 CAP=98K 在兒童 delta 均值 826K 下只截到 12%，需提高 CAP 保留比例意義
+const _BDNA_CAP_CHILD = {
+  r_delta:400000, r_theta:230000,
+  r_lalpha:50000, r_halpha:50000,
+  r_lbeta:50000, r_hbeta:50000,
+  r_lgamma:20000, r_hgamma:20000,
+};
+// 兒童專用 proportionRange 閾值（正確 CAP 後的實際佔比區間）
 const _BDNA_PR_CHILD = {
-  r_delta:[0.10,0.30], r_theta:[0.06,0.15],
-  r_lalpha:[0.01,0.04], r_halpha:[0.01,0.04],
-  r_lbeta:[0.010,0.025], r_hbeta:[0.025,0.070],
-  r_lgamma:[0.010,0.030], r_hgamma:[0.005,0.018],
+  r_delta:[0.35,0.55], r_theta:[0.08,0.22],
+  r_lalpha:[0.015,0.060], r_halpha:[0.015,0.060],
+  r_lbeta:[0.010,0.040], r_hbeta:[0.020,0.070],
+  r_lgamma:[0.015,0.040], r_hgamma:[0.010,0.030],
 };
 const _BDNA_PR   = { r_delta:[0.60,0.80], r_theta:[0.15,0.30],
                      r_lalpha:[0.10,0.20], r_halpha:[0.10,0.20],
@@ -6616,26 +6624,30 @@ function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(
 
 // Best-30s window selection（對應 BrainDNA MindValueAlgorithm.calcBand）
 // 把 N 秒分成每 30 秒一個視窗，選 lowGamma 佔比最高的視窗
-function _bdnaSelectBestWindow(acc) {
+function _bdnaSelectBestWindow(acc, isChild) {
   const n = (acc.r_lalpha||[]).length;
   const WIN = 30;
   if (n < WIN) return acc;
-  const numW = Math.floor(n / WIN);
+  // 兒童使用較高的 lgamma CAP 和對應的 proportionRange 閾值
+  const lgCap = isChild ? _BDNA_CAP_CHILD['r_lgamma'] : _BDNA_CAP['r_lgamma'];
+  const prL1  = isChild ? 0.015 : 0.03;
+  const prL2  = isChild ? 0.040 : 0.06;
+  const numW = Math.ceil(n / WIN);
   let bestIdx = 0, bestScore = -1;
   for (let w = 0; w < numW; w++) {
-    const s = w * WIN, e = s + WIN;
+    const s = w * WIN, e = Math.min(s + WIN, n);
     let ps = 0, vs = 0;
     for (let i = s; i < e; i++) {
       // BrainDNA calcColumnSumArray：分母用「未截斷」原始值
       let uncappedTot = 0;
       for (const k of _BDNA_KEYS) uncappedTot += ((acc[k]||[])[i]||0);
       if (uncappedTot <= 0) continue;
-      // 分子才截斷（MindValueTop）
-      const cappedLg = Math.min((acc['r_lgamma']||[])[i]||0, _BDNA_CAP['r_lgamma']);
+      // 分子才截斷（使用對應的 lgamma CAP）
+      const cappedLg = Math.min((acc['r_lgamma']||[])[i]||0, lgCap);
       ps += cappedLg / uncappedTot; vs++;
     }
     if (vs > 0) {
-      const score = _bdnaPR(ps/vs, 0.03, 0.06);
+      const score = _bdnaPR(ps/vs, prL1, prL2);
       if (score > bestScore) { bestScore = score; bestIdx = w; }
     }
   }
@@ -6651,8 +6663,10 @@ function _bdnaSelectBestWindow(acc) {
 function _calcBrainDNABands(acc, isChild) {
   const n = (acc.r_lalpha||[]).length;
   if (n < 5) return null;
-  // 步驟零：選 best 30-second window
-  const win = _bdnaSelectBestWindow(acc);
+  // 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平（Springer 2025）
+  const capTable = isChild ? _BDNA_CAP_CHILD : _BDNA_CAP;
+  // 步驟零：選 best 30-second window（lgamma 閾值隨 CAP 調整）
+  const win = _bdnaSelectBestWindow(acc, isChild);
   const wn = (win.r_lalpha||[]).length;
   if (wn < 5) return null;
   // 信號品質下限：delta < 30000 代表電極接觸不良（族群均值 198K，30K≈15%）
@@ -6667,9 +6681,9 @@ function _calcBrainDNABands(acc, isChild) {
     if(uncappedTot<=0) continue;
     // 電極品質過濾：delta 極低代表接觸不良
     if(((win['r_delta']||[])[i]||0) < MIN_DELTA_QUALITY) continue;
-    // 分子才截斷（MindValueTop）
+    // 分子才截斷（使用對應的 CAP 表）
     for(const k of _BDNA_KEYS){
-      const capped = Math.min((win[k]||[])[i]||0, _BDNA_CAP[k]);
+      const capped = Math.min((win[k]||[])[i]||0, capTable[k]);
       ps[k] += capped / uncappedTot;
     }
     vs++;

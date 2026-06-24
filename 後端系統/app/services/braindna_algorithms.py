@@ -89,27 +89,45 @@ WINDOW_SIZE = 30   # 與 BrainDNA 一致
 MIN_DELTA_QUALITY: int = 30_000
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 兒童專用 proportionRange 閾值（report_type='child' 時使用）
+# 兒童專用 CAP 值與 proportionRange 閾值（report_type='child' 時使用）
 #
-# 背景：兒童腦波功率在所有頻段都遠高於成人均值，且 delta/theta 常超過 BrainDNA 的
-# CAP 值（98K），使得各頻段佔比均遠低於成人校準的 level1。
-# 以下閾值根據 Session #63（3 歲女孩）觀測值初步設定，
-# 讓正常活躍的兒童腦波在各頻段顯示 65~80 的合理分數。
-# ⚠ 僅有單一兒童樣本，後續應以更多兒童資料持續校準。
+# 設計依據：
+#   1. Springer Nature 2025（450名健康兒童）：3歲清醒兒童
+#      delta 佔相對功率 39~49%，theta ~25%，gamma ~2%
+#   2. BrainDNA 成人 CAP（delta=98K）在兒童 delta 均值 826K 下只截到 12%，
+#      嚴重失真。需提高 CAP 讓比例回到文獻水平。
+#   3. CAP 計算方式：目標佔比 × 觀測未截斷總和（929K）
+#      delta: 0.44 × 929K ≈ 400K | theta: 0.25 × 929K ≈ 230K
+#      lgamma/hgamma: 0.02 × 929K ≈ 20K（原 10K）
+#   4. proportionRange 閾值根據正確 CAP 後的實際比例設計，
+#      讓正常活躍兒童落在 58~83 區間（有層次分佈、不均一）
+# ⚠ 目前基於單一兒童樣本（Session #63，3歲），須以更多兒童資料持續校準
 # ─────────────────────────────────────────────────────────────────────────────
+CHILD_CAP: Dict[str, int] = {
+    "r_delta":  400_000,   # 成人: 98K  | 兒童均值: ~826K → 提高至 400K
+    "r_theta":  230_000,   # 成人: 98K  | 兒童均值: ~167K → 提高至 230K
+    "r_lalpha":  50_000,   # 不變（兒童 lalpha 均值 34K，未超過 cap）
+    "r_halpha":  50_000,
+    "r_lbeta":   50_000,
+    "r_hbeta":   50_000,
+    "r_lgamma":  20_000,   # 成人: 10K  | 兒童均值: ~42K → 提高至 20K
+    "r_hgamma":  20_000,   # 成人: 10K  | 兒童均值: ~17K → 提高至 20K
+}
+
 CHILD_PROP_RANGE: Dict[str, tuple] = {
-    "r_delta":  (0.10, 0.30),   # 成人: 60~80%  | 兒童觀測: ~22%
-    "r_theta":  (0.06, 0.15),   # 成人: 15~30%  | 兒童觀測: ~10%
-    "r_lalpha": (0.01, 0.04),   # 成人: 10~20%  | 兒童觀測:  ~2.4%
-    "r_halpha": (0.01, 0.04),   # 成人: 10~20%  | 兒童觀測:  ~2.2%
-    "r_lbeta":  (0.010, 0.025), # 成人:  5~10%  | 兒童觀測:  ~1.7%
-    "r_hbeta":  (0.025, 0.070), # 成人:  5~10%  | 兒童觀測:  ~5.3%
-    "r_lgamma": (0.010, 0.030), # 成人:  3~ 6%  | 兒童觀測:  ~2.1%
-    "r_hgamma": (0.005, 0.018), # 成人:  3~ 6%  | 兒童觀測:  ~1.4%
+    # key: (level1, level2) — 兒童以正確 CAP 計算後的實際佔比區間
+    "r_delta":  (0.35, 0.55),   # 文獻: 39~49% | 觀測(新CAP): ~44.6% → 74分
+    "r_theta":  (0.08, 0.22),   # 文獻: ~25%   | 觀測(新CAP): ~12.3% → 66分
+    "r_lalpha": (0.015, 0.060), # 文獻: ~7.5%  | 觀測(新CAP): ~2.4%  → 60分
+    "r_halpha": (0.015, 0.060), # 文獻: ~7.5%  | 觀測(新CAP): ~2.2%  → 58分
+    "r_lbeta":  (0.010, 0.040), # 文獻: ~4%    | 觀測(新CAP): ~1.7%  → 62分
+    "r_hbeta":  (0.020, 0.070), # 文獻: ~4%    | 觀測(新CAP): ~5.3%  → 83分
+    "r_lgamma": (0.015, 0.040), # 文獻: ~2%    | 觀測(新CAP): ~3.1%  → 82分
+    "r_hgamma": (0.010, 0.030), # 文獻: ~2%    | 觀測(新CAP): ~1.8%  → 70分
 }
 
 
-def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
+def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None) -> Dict[str, List]:
     """
     從 raw_arrays 中選出 lowGamma 佔比最佳的 30 秒視窗，
     回傳該視窗的 raw_arrays（結構相同，長度約 30）。
@@ -123,6 +141,12 @@ def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < WINDOW_SIZE:
         return raw_arrays  # 資料不足，用全部
+
+    active_cap = cap if cap is not None else CAP
+    lgamma_cap = active_cap.get("r_lgamma", CAP["r_lgamma"])
+    # 兒童使用較寬的 lgamma proportionRange（0.015~0.040），成人用標準（0.03~0.06）
+    pr_l1 = 0.015 if lgamma_cap > CAP["r_lgamma"] else 0.03
+    pr_l2 = 0.040 if lgamma_cap > CAP["r_lgamma"] else 0.06
 
     # BrainDNA evaluationReport.py 第 36 行：`if len(tmpArr) > 0: mindArray.append(tmpArr)`
     # 最後不足 30 秒的部分視窗也納入
@@ -142,11 +166,11 @@ def _select_best_window(raw_arrays: Dict[str, List]) -> Dict[str, List]:
                        for k in RAW_KEYS}
             uncapped_total = sum(raw_row.values())
             if uncapped_total > 0:
-                # 分子：capped lowGamma
-                prop_sum += _clamp(raw_row["r_lgamma"], CAP["r_lgamma"]) / uncapped_total
+                # 分子：capped lowGamma（使用 active_cap）
+                prop_sum += _clamp(raw_row["r_lgamma"], lgamma_cap) / uncapped_total
                 valid += 1
         if valid > 0:
-            score = _proportion_range(prop_sum / valid, 0.03, 0.06)
+            score = _proportion_range(prop_sum / valid, pr_l1, pr_l2)
             if score > best_score:
                 best_score = score
                 best_idx = i
@@ -178,10 +202,14 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False) -
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return None
+
+    # 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平
+    active_cap = CHILD_CAP if is_child else CAP
+
     # 若輸入已是 best window（由 compute_all 傳入），直接使用；
     # 若直接呼叫此函式（n >= 30），自動選 best window。
     if n >= WINDOW_SIZE * 2:
-        raw_arrays = _select_best_window(raw_arrays)
+        raw_arrays = _select_best_window(raw_arrays, cap=active_cap)
         n = len(raw_arrays.get("r_lalpha") or [])
 
     prop_sum = {k: 0.0 for k in RAW_KEYS}
@@ -193,14 +221,14 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False) -
         raw_row = {k: float((raw_arrays.get(k) or [0])[i]
                             if i < len(raw_arrays.get(k) or []) else 0)
                    for k in RAW_KEYS}
-        uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母
+        uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母（永遠不截斷）
         if uncapped_total <= 0:
             continue
         # 電極接觸品質過濾：delta 極低代表訊號不穩，排除此秒
         if raw_row["r_delta"] < MIN_DELTA_QUALITY:
             continue
         for k in RAW_KEYS:
-            capped = _clamp(raw_row[k], CAP[k])  # 截斷 → 分子
+            capped = _clamp(raw_row[k], active_cap[k])  # 截斷 → 分子
             prop_sum[k] += capped / uncapped_total
         valid += 1
 
@@ -504,8 +532,9 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
     if n < 10:
         return {"valid": False}
 
-    # best 30-second window（一次選取，傳給所有需要 best window 的算法）
-    best_win = _select_best_window(raw_arrays)
+    # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
+    active_cap = CHILD_CAP if is_child else CAP
+    best_win = _select_best_window(raw_arrays, cap=active_cap)
 
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
