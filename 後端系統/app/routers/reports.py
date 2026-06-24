@@ -1232,6 +1232,7 @@ def _do_regenerate_one(
             subject_email=resolved_regen_email,
             subject_age=s.subject_age,
             subject_gender=s.subject_gender or "",
+            subject_birthday=s.subject_birthday or "",
             variant=resolved_variant,
             brainwave_data=bw,
             extra=regen_extra,

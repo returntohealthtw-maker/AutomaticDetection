@@ -350,6 +350,7 @@ def _call_vite_prefill(
     chapters_to_generate: Optional[List[int]] = None,
     subject_age:          Optional[int] = None,
     subject_gender:       str = "",
+    subject_birthday:     str = "",
 ) -> Dict[str, Any]:
     """
     在主後端用 Playwright Chromium 在背景打開 Vercel React App，
@@ -401,6 +402,7 @@ def _call_vite_prefill(
             chapters_to_generate=chapters_to_generate,
             subject_age=subject_age,
             subject_gender=subject_gender,
+            subject_birthday=subject_birthday,
         )
         if result.get("ok"):
             return {
@@ -492,6 +494,7 @@ def trigger_external_report(
     subject_email:         str,
     subject_age:           Optional[int],
     subject_gender:        str,
+    subject_birthday:      str = "",
     variant:               str = "full",
     chapters_to_generate:  Optional[List[int]] = None,
     brainwave_data:        Optional[Dict[str, Any]] = None,
@@ -577,6 +580,7 @@ def trigger_external_report(
         chapters_to_generate=chapters_to_generate,
         subject_age=subject_age,
         subject_gender=subject_gender,
+        subject_birthday=subject_birthday,
     )
 
 
