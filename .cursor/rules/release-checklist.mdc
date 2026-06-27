@@ -1,0 +1,40 @@
+---
+description: APK 發版完整 checklist，每次修改 APK 版本或部署時必須執行
+globs: ["Android source code/app/build.gradle", "後端系統/app/main.py", "後端系統/static-app/apk/*.apk"]
+alwaysApply: true
+---
+
+# APK 發版 Checklist
+
+每次發布新版 APK，以下步驟**缺一不可**，必須全部完成才算完成發版。
+
+## 必須同步修改的三個數字
+
+| 檔案 | 欄位 | 說明 |
+|------|------|------|
+| `Android source code/app/build.gradle` | `versionCode` | 整數，每次 +1 |
+| `Android source code/app/build.gradle` | `versionName` | 語意版本，例如 1.2.5 |
+| `後端系統/app/main.py` | `APK_LATEST_VERSION_CODE` | 必須與 versionCode 一致 |
+| `後端系統/app/main.py` | `APK_LATEST_VERSION_NAME` | 必須與 versionName 一致 |
+| `後端系統/app/main.py` | `APP_HTML_VERSION` | 改為今天日期，格式 `YYYY.MM.DD.01` |
+
+> ❌ 只改 APK 不改 `APP_HTML_VERSION`，使用者無法視覺確認版本已更新。
+
+## 發版步驟
+
+1. 修改上表所有欄位
+2. `gradlew assembleDebug` 建置 APK
+3. 複製 APK 到 `後端系統/static-app/apk/BrainReport-LUKE.apk`
+4. git add + commit + push
+
+## 部署後驗證（必做）
+
+```
+GET /api/v1/app/version  → latest_apk_version 必須是新版號
+GET /health              → 200 OK
+```
+
+## 告知使用者
+
+- 右下角版本號格式為 `vYYYY.MM.DD.XX`，重開 APP 後生效
+- APK versionCode 與 WebApp 版本號是**兩個不同的數字**，兩者都需更新
