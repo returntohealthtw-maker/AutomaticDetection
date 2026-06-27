@@ -1,5 +1,4 @@
 apply plugin: 'com.android.application'
-apply plugin: 'com.google.firebase.appdistribution'
 
 android {
     namespace 'com.sh.simpleeeg'
@@ -33,17 +32,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            firebaseAppDistribution {
-                releaseNotes = "腦波上傳穩定性改善（自動重試、延長逾時）"
-                groups = "testers"
-            }
         }
         debug {
             minifyEnabled false
-            firebaseAppDistribution {
-                releaseNotes = "腦波上傳穩定性改善（自動重試、延長逾時）"
-                groups = "testers"
-            }
         }
     }
 
