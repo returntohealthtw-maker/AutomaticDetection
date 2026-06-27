@@ -5666,7 +5666,23 @@ function _stopEegLiveCapture() {
   // 把累積資料丟到全域，後續驗證通過後才呼叫 _persistEegStats 存 DB
   // （不在此處存，避免品質不良的數據被寫入資料庫）
   if (_eegLiveAccum) {
-    window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
+    try {
+      window._lastEegCapture = _summarizeEegAccum(_eegLiveAccum);
+    } catch (e) {
+      console.error('[EEG] _summarizeEegAccum 失敗，使用原始累積資料', e);
+      // fallback：直接用累積陣列的平均值，確保不因 JS 例外阻擋後續跳頁
+      const avg = (arr) => arr && arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+      window._lastEegCapture = {
+        sample_count:          _eegLiveAccum.attn.length,
+        attention_percentage:  avg(_eegLiveAccum.attn),
+        meditation_percentage: avg(_eegLiveAccum.medi),
+        bands_avg: {
+          delta: avg(_eegLiveAccum.delta), theta: avg(_eegLiveAccum.theta),
+          alpha: avg(_eegLiveAccum.alpha), beta:  avg(_eegLiveAccum.beta),
+          gamma: avg(_eegLiveAccum.gamma),
+        },
+      };
+    }
   }
 }
 
@@ -5866,8 +5882,9 @@ function _summarizeEegAccum(acc) {
                 r_lgamma:10000, r_hgamma:10000 };
   const RKEYS = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
 
-  // 有 r_lalpha 資料就視為 8-band 模式（Android v1.1.9+）
-  const has8 = (acc.r_lalpha && acc.r_lalpha.length > 0);
+  // 有 r_lalpha 非零資料才視為 8-band 模式（Android v1.1.9+ 送 raw_lalpha）
+  // 注意：_ingestEegSample 會無條件 push 0，故需檢查是否有非零值
+  const has8 = (acc.r_lalpha && acc.r_lalpha.some(v => v > 0));
 
   const thetaVal = avg(acc.theta);
 
@@ -5882,7 +5899,8 @@ function _summarizeEegAccum(acc) {
   let bands_7 = null;
   if (has8) {
     // BrainDNA 佔比演算法（完整兩步驟）：兒童使用 CHILD_PROP_RANGE 閾值
-    const bdna = _calcBrainDNABands(acc, reportType === 'child');
+    const _isChild = (_currentReportType || '').startsWith('child_') || _currentReportType === 'child';
+    const bdna = _calcBrainDNABands(acc, _isChild);
     const deV = bdna ? bdna.deV : avg(acc.delta);
     const thV = bdna ? bdna.thV : avg(acc.theta);
     const loA = bdna ? bdna.loA : 0;
