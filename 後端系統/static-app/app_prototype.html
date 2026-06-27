@@ -6725,7 +6725,10 @@ function _etComputeAll(acc, isChild) {
     LDR: { label:'領導力',    cat:'leadership', pct: pct(_etSafeDiv(ha + t*0.7 + hg*0.3, hb*1.2 + lb*0.8), true) },
     ACT: { label:'積極主動',  cat:'leadership', pct: pct(_etSafeDiv(b+g, d+t), true) },
     VIS: { label:'願景思維',  cat:'leadership', pct: pct(_etSafeDiv(t, b),     true) },
-    CRE: { label:'創造力',    cat:'leadership', pct: pct(_etSafeDiv(t, a),     true) },
+    // 創造力（修正版）：θ靈感洞察×0.6 + low_alpha放鬆覺察×0.4
+    //   ÷ high_beta焦慮×0.8 + delta×0.2（焦慮或深眠均不利創意）
+    // 舊公式 θ/α 因 α 極小時分母失真，導致任何θ值都被放大
+    CRE: { label:'創造力',    cat:'leadership', pct: pct(_etSafeDiv(t*0.6 + la*0.4, hb*0.8 + d*0.2), true) },
     RES: { label:'抗壓韌性',  cat:'leadership', pct: pct(_etSafeDiv(a, b+d+t), true) },
     FOC: { label:'高度聚焦',  cat:'leadership', pct: pct(_etSafeDiv(hb, total)*100, false) },
     // 認知
@@ -6743,7 +6746,10 @@ function _etComputeAll(acc, isChild) {
     // 人際
     SOC: { label:'社交敏感',  cat:'social',     pct: pct(_etSafeDiv(g, a+b), true) },
     EMP: { label:'同理共鳴',  cat:'social',     pct: pct(_etSafeDiv(t+lg, total)*100, false) },
-    COM: { label:'溝通表達',  cat:'social',     pct: pct(_etSafeDiv(b, t+d), true) },
+    // 溝通表達（修正版）：冷靜在場感(high_alpha)×0.6 + 社交γ感知(high_gamma)×0.4
+    //   ÷ 焦慮執行壓力(high_beta×0.7 + low_beta×0.3)
+    // 舊公式 β/(θ+δ) 量的是「大腦主動性」≠ 溝通能力
+    COM: { label:'溝通表達',  cat:'social',     pct: pct(_etSafeDiv(ha*0.6 + hg*0.4, hb*0.7 + lb*0.3), true) },
     OBS: { label:'環境觀察',  cat:'social',     pct: pct(_etSafeDiv(hg, total)*100, false) },
     _bands: { d, t, la, ha, lb, hb, lg, hg, a, b, g, att, med },
   };
