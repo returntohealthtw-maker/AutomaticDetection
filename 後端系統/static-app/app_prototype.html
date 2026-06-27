@@ -6718,19 +6718,19 @@ function _etComputeAll(acc, isChild) {
 
   return {
     // 決策領導
+    // 決策力（修正版）：冷靜自信(ha) + 適度果斷(hb×0.4) ÷ 猶豫θ×0.8 + 遲鈍δ×0.2
+    // 舊公式 hb/(lb+a) 以高壓β衡量決斷，壓力大≠決策好
+    DEC: { label:'決策力',    cat:'leadership', pct: pct(_etSafeDiv(ha + hb*0.4, t*0.8 + d*0.2), true) },
     // 領導力（修正版）：冷靜自信（high_alpha）+ 策略思維（theta）+ 社交洞察（high_gamma）
     //   ÷ 焦慮執行壓力（high_beta × 1.2 + low_beta × 0.8）
-    // 高 alpha + 適度 theta → 指揮若定的領導者；高 beta → 服從執行型，非領導型
-    DEC: { label:'決策力',    cat:'leadership', pct: pct(_etSafeDiv(hb, lb+a), true) },
     LDR: { label:'領導力',    cat:'leadership', pct: pct(_etSafeDiv(ha + t*0.7 + hg*0.3, hb*1.2 + lb*0.8), true) },
     ACT: { label:'積極主動',  cat:'leadership', pct: pct(_etSafeDiv(b+g, d+t), true) },
     VIS: { label:'願景思維',  cat:'leadership', pct: pct(_etSafeDiv(t, b),     true) },
-    // 創造力（修正版）：θ靈感洞察×0.6 + low_alpha放鬆覺察×0.4
-    //   ÷ high_beta焦慮×0.8 + delta×0.2（焦慮或深眠均不利創意）
-    // 舊公式 θ/α 因 α 極小時分母失真，導致任何θ值都被放大
+    // 創造力（修正版）：θ靈感洞察×0.6 + low_alpha放鬆覺察×0.4 ÷ high_beta焦慮×0.8 + delta×0.2
     CRE: { label:'創造力',    cat:'leadership', pct: pct(_etSafeDiv(t*0.6 + la*0.4, hb*0.8 + d*0.2), true) },
     RES: { label:'抗壓韌性',  cat:'leadership', pct: pct(_etSafeDiv(a, b+d+t), true) },
-    FOC: { label:'高度聚焦',  cat:'leadership', pct: pct(_etSafeDiv(hb, total)*100, false) },
+    // 高度聚焦（修正版）：以 hb 佔 1/8 總量為 50% 基準，sigmoid 正規化（舊版 hb/total 永遠偏低）
+    FOC: { label:'高度聚焦',  cat:'leadership', pct: pct(_etSafeDiv(hb*8, total), true) },
     // 認知
     ATT: { label:'專注力',    cat:'cognitive',  pct: _etClamp(att, 0, 100) },
     MED: { label:'放鬆指數',  cat:'cognitive',  pct: _etClamp(med, 0, 100) },
@@ -6739,16 +6739,16 @@ function _etComputeAll(acc, isChild) {
     // 情緒
     EI:  { label:'情緒穩定',  cat:'emotional',  pct: pct(_etSafeDiv(a, b+d), true) },
     EQ:  { label:'情緒商數',  cat:'emotional',  pct: pct(_etSafeDiv(a+t, b), true) },
-    INN: { label:'內在安定',  cat:'emotional',  pct: pct(_etSafeDiv(la, total)*100, false) },
-    VIT: { label:'生命活力',  cat:'emotional',  pct: pct(_etSafeDiv(ha, total)*100, false) },
-    INS: { label:'直覺感受',  cat:'emotional',  pct: pct(_etSafeDiv(t,  total)*100, false) },
-    EMO: { label:'慈悲連結',  cat:'emotional',  pct: pct(_etSafeDiv(lg, total)*100, false) },
+    // 以下比例型指標統一修正：sigmoid(x×8÷total)，以 1/8 總量為 50% 中點，解決舊版永遠偏低問題
+    INN: { label:'內在安定',  cat:'emotional',  pct: pct(_etSafeDiv(la*8, total), true) },
+    VIT: { label:'生命活力',  cat:'emotional',  pct: pct(_etSafeDiv(ha*8, total), true) },
+    INS: { label:'直覺感受',  cat:'emotional',  pct: pct(_etSafeDiv(t*8,  total), true) },
+    EMO: { label:'慈悲連結',  cat:'emotional',  pct: pct(_etSafeDiv(lg*8, total), true) },
     // 人際
     SOC: { label:'社交敏感',  cat:'social',     pct: pct(_etSafeDiv(g, a+b), true) },
-    EMP: { label:'同理共鳴',  cat:'social',     pct: pct(_etSafeDiv(t+lg, total)*100, false) },
-    // 溝通表達（修正版）：冷靜在場感(high_alpha)×0.6 + 社交γ感知(high_gamma)×0.4
-    //   ÷ 焦慮執行壓力(high_beta×0.7 + low_beta×0.3)
-    // 舊公式 β/(θ+δ) 量的是「大腦主動性」≠ 溝通能力
+    // EMP 含兩頻段，乘 4（=8÷2）使雙頻段平均時仍落 50%
+    EMP: { label:'同理共鳴',  cat:'social',     pct: pct(_etSafeDiv((t+lg)*4, total), true) },
+    // 溝通表達（修正版）：冷靜在場感(ha)×0.6 + 社交感知(hg)×0.4 ÷ 焦慮β
     COM: { label:'溝通表達',  cat:'social',     pct: pct(_etSafeDiv(ha*0.6 + hg*0.4, hb*0.7 + lb*0.3), true) },
     OBS: { label:'環境觀察',  cat:'social',     pct: pct(_etSafeDiv(hg, total)*100, false) },
     _bands: { d, t, la, ha, lb, hb, lg, hg, a, b, g, att, med },
