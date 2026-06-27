@@ -32,9 +32,9 @@ public class ApiUploader {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private static final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(90, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
             .build();
 
     public interface UploadCallback {
@@ -42,41 +42,54 @@ public class ApiUploader {
         void onFailure(String error);
     }
 
+    private static final int MAX_RETRY = 3;
+
     /**
      * 上傳整場腦波資料（在背景執行緒呼叫，不會阻塞 UI）
+     * 失敗時自動重試最多 3 次（間隔 5 秒）
      */
     public static void upload(SessionEntity session,
                               List<EegCaptureEntity> captures,
                               UploadCallback callback) {
         new Thread(() -> {
-            try {
-                JSONObject body = buildRequestBody(session, captures);
+            Exception lastEx = null;
+            for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
+                try {
+                    JSONObject body = buildRequestBody(session, captures);
+                    RequestBody reqBody = RequestBody.create(body.toString(), JSON);
+                    Request request = new Request.Builder()
+                            .url(BASE_URL + "/api/v1/sessions/upload")
+                            .post(reqBody)
+                            .build();
 
-                RequestBody reqBody = RequestBody.create(body.toString(), JSON);
-                Request request = new Request.Builder()
-                        .url(BASE_URL + "/api/v1/sessions/upload")
-                        .post(reqBody)
-                        .build();
-
-                try (Response response = client.newCall(request).execute()) {
-                    String respStr = response.body() != null ? response.body().string() : "";
-
-                    if (response.isSuccessful()) {
-                        JSONObject resp = new JSONObject(respStr);
-                        int sid = resp.getInt("session_id");
-                        int rid = resp.getInt("report_id");
-                        Log.i(TAG, "Upload success: session=" + sid + " report=" + rid);
-                        if (callback != null) callback.onSuccess(sid, rid);
-                    } else {
-                        Log.e(TAG, "Upload failed HTTP " + response.code() + ": " + respStr);
-                        if (callback != null) callback.onFailure("HTTP " + response.code());
+                    try (Response response = client.newCall(request).execute()) {
+                        String respStr = response.body() != null ? response.body().string() : "";
+                        if (response.isSuccessful()) {
+                            JSONObject resp = new JSONObject(respStr);
+                            int sid = resp.getInt("session_id");
+                            int rid = resp.getInt("report_id");
+                            Log.i(TAG, "Upload success (attempt " + attempt + "): session=" + sid + " report=" + rid);
+                            if (callback != null) callback.onSuccess(sid, rid);
+                            return;
+                        } else {
+                            Log.e(TAG, "Upload failed HTTP " + response.code() + " (attempt " + attempt + "): " + respStr);
+                            // HTTP 4xx 不重試（資料問題，重試也沒用）
+                            if (response.code() >= 400 && response.code() < 500) {
+                                if (callback != null) callback.onFailure("HTTP " + response.code());
+                                return;
+                            }
+                        }
                     }
+                } catch (Exception e) {
+                    lastEx = e;
+                    Log.e(TAG, "Upload exception (attempt " + attempt + "): " + e.getMessage(), e);
                 }
 
-            } catch (Exception e) {
-                Log.e(TAG, "Upload exception: " + e.getMessage(), e);
-                if (callback != null) callback.onFailure(e.getMessage());
+                if (attempt < MAX_RETRY) {
+                    try { Thread.sleep(5000L * attempt); } catch (InterruptedException ignored) {}
+                }
             }
+            if (callback != null) callback.onFailure(lastEx != null ? lastEx.getMessage() : "上傳失敗，已重試 " + MAX_RETRY + " 次");
         }).start();
     }
 
