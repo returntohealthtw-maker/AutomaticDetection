@@ -2764,29 +2764,6 @@
             <div id="ethr-checks" style="display:flex;flex-direction:column;gap:10px;font-size:13px;"></div>
           </div>
 
-          <!-- 🧬 MBTI 八卦分析（採集到資料時才顯示）-->
-          <div id="ethr-mbti-section" style="display:none;background:white;border-radius:18px;padding:18px 20px;box-shadow:0 4px 16px rgba(26,35,126,0.08);margin-top:14px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <div style="font-size:13px;font-weight:700;color:#1a237e;">🧬 MBTI 性格分析</div>
-              <span id="ethr-mbti-current" style="font-size:11px;color:white;background:#1a237e;padding:3px 10px;border-radius:10px;font-weight:600;">計算中</span>
-            </div>
-            <!-- ⚠️ 短時採集免責聲明 -->
-            <div style="background:#fff8e1;border-left:3px solid #f9a825;border-radius:8px;padding:8px 12px;font-size:11px;color:#5d4037;line-height:1.6;margin-bottom:12px;">
-              ⚠️ <b>採集時間僅 60 秒，結果僅供快速參考。</b>因採集時間短，腦波樣本較少，可能影響 MBTI 推論準確度，一切以完整報告結果為準。
-            </div>
-            <div id="ethr-mbti-summary" style="font-size:12px;color:#666;line-height:1.7;margin-bottom:14px;padding:10px;background:#f5f7ff;border-radius:10px;"></div>
-
-            <!-- 4 個性格層次 切換 -->
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;" id="ethr-mbti-layer-tabs">
-              <button class="ethr-layer-tab active" data-layer="archetype">原型性格</button>
-              <button class="ethr-layer-tab" data-layer="family">原生家庭</button>
-              <button class="ethr-layer-tab" data-layer="social">社會化</button>
-              <button class="ethr-layer-tab" data-layer="peer">同儕關係</button>
-            </div>
-
-            <!-- 受測者 MBTI 在 4 個性格層次下的描述（依上方 tab 切換）-->
-            <div id="ethr-mbti-list" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
-          </div>
 
           <!-- 🔬 原始腦波數值除錯面板（管理員/工作人員限定）-->
           <div id="ethr-debug-panel" style="display:none;margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(26,35,126,0.15);">
@@ -2807,7 +2784,7 @@
           </div>
 
           <div style="text-align:center;font-size:11px;color:#aaa;padding:16px;line-height:1.6;">
-            本檢查不採集分析、不寫入資料庫、不生成報告。MBTI 性格分析僅供個人參考，不構成醫療或心理諮詢建議。
+            本檢查不採集分析、不寫入資料庫、不生成報告。腦波數值僅供快速健康參考，不構成醫療診斷建議。
           </div>
         </div>
       </div>
@@ -6552,9 +6529,6 @@ function _renderEegHealthResult(state, byUser) {
     checkBox.innerHTML = html;
   }
 
-  // 🧬 MBTI 分析（採集到資料才會渲染，0 筆會自動隱藏整段）
-  try { _renderEthrMbtiAnalysis(state); } catch(e) { console.warn('mbti render', e); }
-
   // 🔬 管理員除錯面板：BrainDNA 數值驗證
   const u2 = _currentUser || {};
   const isStaff2 = u2.role === 'admin' || u2.org_type === '工作人員' || u2.org_type === '專案人員';
@@ -7197,138 +7171,6 @@ const _ETHR_MBTI_TABLE = {
 };
 
 // 4 層性格的元資訊
-const _ETHR_MBTI_LAYERS = {
-  archetype: { label:'原型性格',   icon:'🌱', desc:'全程腦波均值推論的整體核心性格，最接近天生本質' },
-  family:    { label:'原生家庭',   icon:'🏠', desc:'採集後段（放鬆穩定態）的腦波，最接近家庭/原生狀態' },
-  social:    { label:'社會化',     icon:'💼', desc:'採集前段（初始警覺態）的腦波，反映公眾/社會化面貌' },
-  peer:      { label:'同儕關係',   icon:'👥', desc:'採集中段（適應放鬆態）的腦波，反映同儕/朋友間的真實樣貌' },
-};
-
-// 4 層 MBTI 顯示狀態
-let _ethrMbtiActiveLayer = 'archetype';
-let _ethrMbtiCurrentType = '';                  // 主推論型（原型層次的 MBTI）
-let _ethrMbtiLayerResults = null;               // { archetype:{type,dims}, family:{}, social:{}, peer:{} }
-
-function _renderEthrMbtiList() {
-  // 顯示「目前 tab 所對應層次」的獨立推論 MBTI（4 層可能 4 種不同 MBTI）
-  const listEl = document.getElementById('ethr-mbti-list');
-  if (!listEl) return;
-  const layer = _ethrMbtiActiveLayer;
-  const layerMeta = _ETHR_MBTI_LAYERS[layer] || { label: layer, icon:'•', desc:'' };
-
-  // 取出該 layer 的推論結果；fallback 用主推論型
-  const layerResult = (_ethrMbtiLayerResults && _ethrMbtiLayerResults[layer]) || null;
-  const id = (layerResult && layerResult.type) || _ethrMbtiCurrentType;
-  const m = id ? _ETHR_MBTI_TABLE[id] : null;
-  if (!id || !m) {
-    listEl.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:14px;">尚未推論出性格類型</div>';
-    return;
-  }
-
-  // 該層次的維度百分比
-  let dimsHtml = '';
-  if (layerResult && layerResult.dims) {
-    dimsHtml = '<div style="font-size:11px;color:#666;margin:8px 0 6px;line-height:1.7;">'
-      + layerResult.dims.map(d =>
-          `<b>${d.pair}</b>：<span style="color:${d.dominant === d.pair[0] ? '#d32f2f' : '#1976d2'};font-weight:700;">${d.dominant}</span> (${Math.round(d.pct)}%)`
-        ).join(' · ')
-      + '</div>';
-  }
-
-  listEl.innerHTML = `<div class="ethr-mbti-card is-current">
-    <div style="font-size:11px;color:#1a237e;font-weight:700;margin-bottom:6px;">${layerMeta.icon} ${layerMeta.label}　<span style="color:#888;font-weight:400;">${layerMeta.desc}</span></div>
-    <div class="mbti-head">
-      <span class="mbti-id">${m.emoji} ${id}</span>
-      <span class="mbti-name">${m.name}</span>
-    </div>
-    ${dimsHtml}
-    <div class="mbti-desc">${m[layer] || '—'}</div>
-  </div>`;
-}
-
-function _bindEthrMbtiTabs() {
-  const tabs = document.querySelectorAll('.ethr-layer-tab');
-  if (!tabs.length) return;
-  tabs.forEach(btn => {
-    btn.onclick = () => {
-      tabs.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _ethrMbtiActiveLayer = btn.dataset.layer;
-      _renderEthrMbtiList();
-    };
-  });
-}
-
-// 把採集到的腦波資料計算出 MBTI 並渲染到健康檢查結果頁
-function _renderEthrMbtiAnalysis(state) {
-  const section = document.getElementById('ethr-mbti-section');
-  if (!section) return;
-
-  // 沒採集到任何資料 → 整段隱藏
-  if (!state || (state.sampleCount || 0) === 0) {
-    section.style.display = 'none';
-    return;
-  }
-
-  // 把健康檢查 sink 收到的樣本轉成 _etComputeMBTI 預期的 acc 結構
-  // _eegHealthSampleSink 會直接把樣本累計，但只記 sampleCount。
-  // 這裡用 state.signals/batteries 之外的全域 acc — 採集期間我們需把樣本進階累積。
-  // 實際資料來自 window._ethrAccum（下方 sink 會填入）
-  const acc = window._ethrAccum || null;
-  if (!acc || acc.attn.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
-
-  // 計算 4 層獨立 MBTI（原型 / 原生家庭 / 社會化 / 同儕關係）
-  let layers;
-  try { layers = _etComputeMBTILayers(acc); } catch(e) { layers = null; }
-  if (!layers || !layers.archetype || !layers.archetype.type) {
-    section.style.display = 'none';
-    return;
-  }
-
-  _ethrMbtiLayerResults = layers;
-
-  // ── 1 分鐘健檢：只顯示原型性格，其他三層 tab 隱藏 ────────────────────────
-  // 原型 = 全段 lowAlpha + theta 平均值算出的天生本質性格
-  _ethrMbtiActiveLayer   = 'archetype';
-  _ethrMbtiCurrentType   = layers.archetype.type;
-  const archetypeType    = layers.archetype.type;
-  const archetypeMeta    = _ETHR_MBTI_TABLE[archetypeType] || { name:'?', emoji:'❓' };
-
-  section.style.display = 'block';
-  const tag = document.getElementById('ethr-mbti-current');
-  if (tag) tag.textContent = `${archetypeMeta.emoji} ${archetypeType} · ${archetypeMeta.name}`;
-
-  // 隱藏原生家庭 / 社會化 / 同儕三個 tab（1 分鐘採集不足以分層）
-  const layerTabs = document.getElementById('ethr-mbti-layer-tabs');
-  if (layerTabs) {
-    layerTabs.querySelectorAll('.ethr-layer-tab[data-layer="family"],' +
-      '.ethr-layer-tab[data-layer="social"],.ethr-layer-tab[data-layer="peer"]')
-      .forEach(btn => { btn.style.display = 'none'; });
-    const archBtn = layerTabs.querySelector('.ethr-layer-tab[data-layer="archetype"]');
-    if (archBtn) { archBtn.classList.add('active'); archBtn.style.display = ''; }
-  }
-
-  const summary = document.getElementById('ethr-mbti-summary');
-  if (summary) {
-    summary.innerHTML = `
-      <div style="margin-bottom:8px;font-size:12px;">
-        本次 ${state.sampleCount} 筆腦波資料 · 已推論出您的<b>原型性格</b>。
-      </div>
-      <div style="background:#fff3e0;border-left:3px solid #ff9800;border-radius:8px;
-                  padding:8px 12px;font-size:11px;color:#5d4037;line-height:1.7;margin-bottom:8px;">
-        📊 <b>與完整報告的差異提示</b>：1 分鐘健檢資料量較少，僅能推論<b>原型性格（天生本質）</b>，
-        無法區分原生家庭 / 社會化 / 同儕關係等情境性格。完整四層性格地圖、性格矛盾分析及情緒地雷
-        詳見 <b>3 分鐘完整腦波報告</b>，準確度更高且包含多維度解析。
-      </div>`;
-  }
-
-  _bindEthrMbtiTabs();
-  _renderEthrMbtiList();
-}
-// ─── /MBTI ──────────────────────────────────────────────────────────────────
 
 function _etCalcBrainColor(acc) {
   // BrainDNA ReportResult.calcColor：6 視窗投票（含最後不足 30 秒的部分視窗）
@@ -7410,6 +7252,14 @@ const _ET_BRAIN_INFO = {
 function _renderEegTestResult() { _renderBrainAnalysisInto('et-'); }
 
 // ─── 3 分鐘檢測結果頁：多性格聚合 UI（與健康檢查頁完全相同邏輯）─────────
+// MBTI 層次描述（供 3 分鐘報告顯示用）
+const _ETHR_MBTI_LAYERS = {
+  archetype: { label:'原型性格',   icon:'🌱', desc:'全程腦波均值推論的整體核心性格，最接近天生本質' },
+  family:    { label:'原生家庭',   icon:'🏠', desc:'採集後段（放鬆穩定態）的腦波，最接近家庭/原生狀態' },
+  social:    { label:'社會化',     icon:'💼', desc:'採集前段（初始警覺態）的腦波，反映公眾/社會化面貌' },
+  peer:      { label:'同儕關係',   icon:'👥', desc:'採集中段（適應放鬆態）的腦波，反映同儕/朋友間的真實樣貌' },
+};
+
 let _r2MbtiLayerResults  = null;
 let _r2MbtiCurrentType   = '';
 let _r2MbtiActiveLayer   = 'archetype';
@@ -7471,7 +7321,7 @@ function _renderR2MbtiAnalysis(acc) {
   _r2MbtiCurrentType  = layers.archetype.type;
   _r2MbtiActiveLayer  = 'archetype';
 
-  // 聚合（與 _renderEthrMbtiAnalysis 完全相同）
+  // 聚合各層 MBTI 推論結果
   const layerOrder = ['archetype','family','social','peer'];
   const typeScore  = {};
   const typeLayerMap = {};
