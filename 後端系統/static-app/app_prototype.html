@@ -6718,8 +6718,12 @@ function _etComputeAll(acc, isChild) {
 
   return {
     // 決策領導
+    // 領導力（修正版）：冷靜自信（high_alpha）+ 策略思維（theta）+ 社交洞察（high_gamma）
+    //   ÷ 焦慮執行壓力（high_beta × 1.2 + low_beta × 0.8）
+    // 高 alpha + 適度 theta → 指揮若定的領導者；高 beta → 服從執行型，非領導型
     DEC: { label:'決策力',    cat:'leadership', pct: pct(_etSafeDiv(hb, lb+a), true) },
-    LDR: { label:'領導力',    cat:'leadership', pct: pct(_etSafeDiv(b+g, d+t), true) },
+    LDR: { label:'領導力',    cat:'leadership', pct: pct(_etSafeDiv(ha + t*0.7 + hg*0.3, hb*1.2 + lb*0.8), true) },
+    ACT: { label:'積極主動',  cat:'leadership', pct: pct(_etSafeDiv(b+g, d+t), true) },
     VIS: { label:'願景思維',  cat:'leadership', pct: pct(_etSafeDiv(t, b),     true) },
     CRE: { label:'創造力',    cat:'leadership', pct: pct(_etSafeDiv(t, a),     true) },
     RES: { label:'抗壓韌性',  cat:'leadership', pct: pct(_etSafeDiv(a, b+d+t), true) },
