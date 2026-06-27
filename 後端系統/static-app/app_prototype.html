@@ -5548,6 +5548,10 @@ function _startEegLiveCapture() {
   window._lastEegCapture    = null;
   window._lastEegSessionId  = null;
   window._lastEegPersistPromise = null;
+  // 強制重置健康檢查路由旗標：若之前執行健康檢查後異常退出，
+  // _eegHealthActive 可能殘留 true，導致正式採集的 EEG 樣本全部
+  // 進入健康檢查 sink 而非主流程，造成 3 分鐘後驗證失敗、不跳頁
+  window._eegHealthActive = false;
 
   _eegLiveAccum = { attn:[], medi:[], delta:[], theta:[], alpha:[], beta:[], gamma:[],
                     low_alpha:[], high_alpha:[], low_beta:[], high_beta:[], low_gamma:[], high_gamma:[],
