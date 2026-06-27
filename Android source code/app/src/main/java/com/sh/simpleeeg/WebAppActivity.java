@@ -651,7 +651,12 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onPause()   { super.onPause();   webView.onPause();  }
     @Override
-    protected void onResume()  { super.onResume();  webView.onResume(); }
+    protected void onResume() {
+        super.onResume();
+        webView.onResume();
+        // 從背景切回前景時也檢查更新（AppUpdater 內有 cooldown 保護，不會重複彈）
+        try { AppUpdater.checkForUpdate(this, false); } catch (Throwable ignored) {}
+    }
     @Override
     protected void onDestroy() {
         if (webView != null) {
