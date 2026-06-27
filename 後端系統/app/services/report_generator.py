@@ -159,6 +159,18 @@ async def generate_report_async(report_id: int, session_id: int):
         # 2. 計算頻帶平均值
         avg = compute_averages(detection_captures)
 
+        # 2b. 載入 raw_arrays_json（若有），供 30 秒視窗矛盾距離 MBTI 分層使用
+        _raw_arrays_for_mbti: dict | None = None
+        try:
+            import json as _json
+            _sess_for_raw = db.query(models.Session).filter(
+                models.Session.session_id == session_id
+            ).first()
+            if _sess_for_raw and _sess_for_raw.raw_arrays_json:
+                _raw_arrays_for_mbti = _json.loads(_sess_for_raw.raw_arrays_json)
+        except Exception:
+            _raw_arrays_for_mbti = None
+
         # 3. 計算 30 個指標
         indices = compute_all_indices(avg)
 
@@ -238,7 +250,7 @@ async def generate_report_async(report_id: int, session_id: int):
                         "gamma_low":  max(0,   _sf(avg.low_gamma)),
                     },
                 }
-                bw.update(build_mbti_payload(avg, detection_captures))
+                bw.update(build_mbti_payload(avg, detection_captures, _raw_arrays_for_mbti))
 
                 # 取 api_base
                 import os as _os

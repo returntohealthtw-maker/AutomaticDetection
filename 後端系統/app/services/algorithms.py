@@ -766,64 +766,219 @@ def _mbti_layer_from_raw_arrays(r_la: list, r_th: list) -> dict:
     }
 
 
-def compute_mbti_layers_from_captures(captures: list) -> dict:
+def _mbti_contradiction(a: str, b: str) -> int:
+    """MBTI 矛盾距離（Hamming distance，0-4），每個不同維度各計 1 分。"""
+    if not a or not b or len(a) < 4 or len(b) < 4:
+        return 0
+    return sum(a[i] != b[i] for i in range(4))
+
+
+def compute_window_mbtis(raw_arrays: dict) -> list:
     """
-    4 個性格面向，各使用不同的腦波頻段對作為輸入：
+    BrainDNA 原始算法：每 30 秒視窗各自計算一個 MBTI（狀態性格樣本）。
 
-      archetype（天生本質）: lowAlpha + theta       ← 原始八卦算法（核心性格）
-      social   （社交能量）: highGamma + focus       ← 外向社交 & 注意力
-      peer     （理性執行）: highBeta + lowBeta      ← 結構執行 & 邏輯分析
-      family   （情感共鳴）: lowGamma + highAlpha    ← 共情暖度 & 生命活力
+    對應 BrainDNA reports.py 的 reportMBTI()：
+    - 每段取 lowAlpha 均值 → calcBagua → getPersonalityFromBagua(theta)
+    - 腦色用 MindColor 原始算法（gamma/alpha, gamma/beta 距離）
+    - 最終用 calcPersonality(bagua, color, theta, beta)
 
-    每個面向用不同頻段自然映射到不同卦位，即使受測者資料穩定，
-    各頻段的相對強弱仍會分散到不同八卦區域，呈現出真實多面性格。
+    回傳 list of dict，每個 dict:
+        { type, window_idx, la_mean, th_mean, color, bagua_int }
+    """
+    WINDOW = 30
+    LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
+    LA_STD  = DATA_STATS["lowAlpha"]["std"]
+    BOUNDS  = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
+
+    def _arr(key):
+        return [float(v) for v in (raw_arrays.get(key) or []) if v]
+
+    r_la = _arr("r_lalpha")
+    r_th = _arr("r_theta")
+    r_ha = _arr("r_halpha")
+    r_hb = _arr("r_hbeta")
+    r_lb = _arr("r_lbeta")
+    r_lg = _arr("r_lgamma")
+    r_hg = _arr("r_hgamma")
+
+    n = len(r_la)
+    if n < WINDOW or not r_th:
+        return []
+
+    num_windows = n // WINDOW
+    results = []
+
+    for wi in range(num_windows):
+        s, e = wi * WINDOW, (wi + 1) * WINDOW
+
+        def _seg_mean(arr):
+            seg = arr[s:min(e, len(arr))]
+            return sum(seg) / len(seg) if seg else 0.0
+
+        raw_la = _seg_mean(r_la)
+        raw_th = _seg_mean(r_th)
+        raw_ha = _seg_mean(r_ha)
+        raw_hb = _seg_mean(r_hb)
+        raw_lb = _seg_mean(r_lb)
+        raw_lg = _seg_mean(r_lg)
+        raw_hg = _seg_mean(r_hg)
+
+        if raw_la <= 0 or raw_th <= 0:
+            continue
+
+        # 卦位（7 卦，不含離卦，與 BrainDNA calcBagua 一致）
+        la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD))
+        bagua_int = 6
+        for i in range(6):
+            if la_pct < BOUNDS[i + 1]:
+                bagua_int = i
+                break
+
+        # 腦色（原始 gamma/alpha, gamma/beta 距離）
+        color = _calc_mind_color(raw_ha, raw_la, raw_hb, raw_lb, raw_lg, raw_hg)
+
+        # 兌(1)/巽(3) 用 beta vs theta 分兩型
+        raw_beta = raw_hb + raw_lb
+        mbti_type = _calc_personality_from_bagua_color(
+            bagua_int, False, color, raw_beta, raw_th
+        )
+
+        results.append({
+            "type":       mbti_type,
+            "window_idx": wi,
+            "la_mean":    raw_la,
+            "th_mean":    raw_th,
+            "color":      color,
+            "bagua_int":  bagua_int,
+        })
+
+    return results
+
+
+def assign_personality_layers(archetype_type: str, window_mbtis: list) -> dict:
+    """
+    依矛盾距離（Hamming distance）把視窗 MBTI 分配到四層：
+
+      peer     → 與 archetype 矛盾最小（最接近本我，無需偽裝）
+      family   → 與 archetype 矛盾最大（訓練最深的討好性格）
+      social   → 矛盾程度介於 peer 與 family 之間
+
+    若所有視窗 MBTI 相同（全等於 archetype），四層均相同。
+    若視窗不足，以 archetype 填位。
+    """
+    if not window_mbtis:
+        return {}
+
+    types_with_idx = [(w["type"], w["window_idx"]) for w in window_mbtis]
+    scores = [(t, _mbti_contradiction(archetype_type, t), idx)
+              for t, idx in types_with_idx]
+
+    # peer = 矛盾最小（同分時取最早視窗）
+    peer_entry = min(scores, key=lambda x: (x[1], x[2]))
+    # family = 矛盾最大（同分時取最晚視窗，深層穩定態）
+    family_entry = max(scores, key=lambda x: (x[1], -x[2]))
+
+    peer_score   = peer_entry[1]
+    family_score = family_entry[1]
+    mid_target   = (peer_score + family_score) / 2
+
+    # social = 剩餘中矛盾分最接近中點的視窗
+    remaining = [s for s in scores
+                 if s[2] != peer_entry[2] and s[2] != family_entry[2]]
+    if remaining:
+        social_entry = min(remaining, key=lambda x: abs(x[1] - mid_target))
+    else:
+        # peer/family 同一視窗（資料只有 1 段）→ social = archetype
+        social_entry = (archetype_type, 0, -1)
+
+    def _build(t: str) -> dict:
+        return _mbti_layer_from_raw_arrays([], []) if not t else {
+            "type":       t,
+            "secondary":  None,
+            "confidence": 70,
+        }
+
+    return {
+        "peer":   _build(peer_entry[0]),
+        "family": _build(family_entry[0]),
+        "social": _build(social_entry[0]),
+        # 矛盾分數供報告第二章使用
+        "_contradiction": {
+            "peer":   peer_entry[1],
+            "family": family_entry[1],
+            "social": abs(social_entry[1] - mid_target) if remaining else 0,
+        },
+    }
+
+
+def compute_mbti_layers_from_captures(captures: list, raw_arrays: dict = None) -> dict:
+    """
+    四層 MBTI 地圖（BrainDNA 矛盾距離分配算法）。
+
+    優先使用 raw_arrays（30 秒視窗 × 腦色 × 八卦，與 BrainDNA 原始一致）。
+    無 raw_arrays 時，退回 captures 均值計算原型，並將四層均設為原型。
+
+    四層含義：
+      archetype  天生本質（全段均值，未受環境訓練）
+      peer       同儕關係（與原型矛盾最小，最接近真我）
+      social     社會化  （矛盾介於同儕與原生之間）
+      family     原生家庭（與原型矛盾最大，訓練最深的討好性格）
     """
     def _get(c, key):
         v = c.get(key, 0) if isinstance(c, dict) else getattr(c, key, 0)
         return float(v or 0)
 
-    def _pos_raw(key):
-        return [_norm100_to_raw(_get(c, key)) for c in captures if _get(c, key) > 0]
-
-    def _pos_avg_pct(key):
-        vals = [_get(c, key) for c in captures if _get(c, key) > 0]
-        return (sum(vals) / len(vals) / 100) if vals else 0.5
-
-    r_la = _pos_raw("low_alpha")
-    r_th = _pos_raw("theta")
+    # ── Archetype：全段 lowAlpha + theta 均值 → 八卦 → MBTI ──────────────────
+    if raw_arrays:
+        r_la = [float(v) for v in (raw_arrays.get("r_lalpha") or []) if v]
+        r_th = [float(v) for v in (raw_arrays.get("r_theta")  or []) if v]
+    else:
+        r_la = [_norm100_to_raw(_get(c, "low_alpha")) for c in captures if _get(c, "low_alpha") > 0]
+        r_th = [_norm100_to_raw(_get(c, "theta"))     for c in captures if _get(c, "theta")     > 0]
 
     if len(r_la) < 4 or len(r_th) < 4:
-        fb = compute_mbti(compute_averages(captures))
-        fb = {**fb, "type": fb["mbti_type"]}
-        return {"archetype": fb, "family": fb, "social": fb, "peer": fb}
+        fb = compute_mbti(compute_averages(captures)) if captures else {"mbti_type": "INTP", "type": "INTP"}
+        fb = {**fb, "type": fb.get("type") or fb.get("mbti_type", "INTP")}
+        return {"archetype": fb, "family": fb, "social": fb, "peer": fb,
+                "_source": "fallback"}
 
-    # Layer 1 – archetype（天生本質）: 沿用原始八卦 lowAlpha + theta
     archetype = _mbti_layer_from_raw_arrays(r_la, r_th)
+    archetype_type = archetype.get("type") or "INTP"
 
-    # Layer 2 – social（社交能量）: highGamma（社交感知）+ focus（注意力）
-    social = _bagua_mbti_from_pct(
-        _pos_avg_pct("high_gamma"),
-        _pos_avg_pct("focus"),
-    )
+    # ── 30 秒視窗 MBTI 樣本 ─────────────────────────────────────────────────
+    if raw_arrays:
+        window_mbtis = compute_window_mbtis(raw_arrays)
+    else:
+        # 沒有 raw_arrays：把 captures 每 30 筆視為一個視窗
+        window_mbtis = []
+        for wi in range(len(captures) // 30):
+            seg = captures[wi*30:(wi+1)*30]
+            seg_la = [_norm100_to_raw(_get(c, "low_alpha")) for c in seg if _get(c, "low_alpha") > 0]
+            seg_th = [_norm100_to_raw(_get(c, "theta"))     for c in seg if _get(c, "theta")     > 0]
+            if seg_la and seg_th:
+                r = _mbti_layer_from_raw_arrays(seg_la, seg_th)
+                window_mbtis.append({"type": r.get("type", archetype_type), "window_idx": wi,
+                                     "la_mean": sum(seg_la)/len(seg_la),
+                                     "th_mean": sum(seg_th)/len(seg_th), "color": 0, "bagua_int": 0})
 
-    # Layer 3 – peer（理性執行）: highBeta（執行驅動）+ lowBeta（邏輯分析）
-    peer = _bagua_mbti_from_pct(
-        _pos_avg_pct("high_beta"),
-        _pos_avg_pct("low_beta"),
-    )
+    # ── 矛盾距離分配 ────────────────────────────────────────────────────────
+    if window_mbtis:
+        layers = assign_personality_layers(archetype_type, window_mbtis)
+    else:
+        layers = {}
 
-    # Layer 4 – family（情感共鳴）: lowGamma（共情力）+ highAlpha（生命活力）
-    family = _bagua_mbti_from_pct(
-        _pos_avg_pct("low_gamma"),
-        _pos_avg_pct("high_alpha"),
-    )
+    def _layer(key: str) -> dict:
+        if layers.get(key):
+            return layers[key]
+        return {**archetype}  # fallback to archetype
 
-    base = archetype
     return {
-        "archetype": archetype or base,
-        "family":    family    or base,
-        "social":    social    or base,
-        "peer":      peer      or base,
+        "archetype": archetype,
+        "peer":      _layer("peer"),
+        "social":    _layer("social"),
+        "family":    _layer("family"),
+        "_contradiction": layers.get("_contradiction", {}),
+        "_source": "window_contradiction" if window_mbtis else "fallback",
     }
 
 
@@ -868,7 +1023,8 @@ def aggregate_mbti_profiles(layers: dict) -> list:
     ]
 
 
-def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
+def build_mbti_payload(avg: BandAverages, captures: list = None,
+                       raw_arrays: dict = None) -> dict:
     """
     產出報告 App / headless 共用的 MBTI 欄位。
 
@@ -876,7 +1032,8 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
     ─ 每筆 capture 用 (卦位, 心靈色彩, beta/theta) → 一種 MBTI
     ─ 同組 4 型累積（主型+2、其他+1），必然產生 ≥4 種不同強弱的性格
 
-    若 captures 不足則退回 4 頻段層演算法或單一平均值。
+    若 captures 不足則退回矛盾距離四層演算法或單一平均值。
+    raw_arrays 可傳入原始 8-band 180 秒資料，啟用 30 秒視窗矛盾距離分層。
     """
     # ── 優先：原始 BrainDNA 群組評分 ──────────────────────────────────────────
     group_profiles = compute_mbti_group_scoring(captures) if captures else None
@@ -886,11 +1043,11 @@ def build_mbti_payload(avg: BandAverages, captures: list = None) -> dict:
         profiles  = group_profiles
         mbti_type = profiles[0]["type"]
         # archetype 仍取 lowAlpha+theta 的原始卦位，確保 ei/ns/tf/jp 分數正確
-        layers    = compute_mbti_layers_from_captures(captures) if captures else None
+        layers    = compute_mbti_layers_from_captures(captures, raw_arrays) if captures else None
         primary   = (layers or {}).get("archetype") or compute_mbti(avg)
     else:
-        # ── 退回：4 頻段層演算法 ────────────────────────────────────────────────
-        layers    = compute_mbti_layers_from_captures(captures) if captures else None
+        # ── 退回：矛盾距離四層演算法 ────────────────────────────────────────────
+        layers    = compute_mbti_layers_from_captures(captures, raw_arrays) if captures else None
         primary   = (layers or {}).get("archetype") or compute_mbti(avg)
         mbti_type = primary.get("type") or primary.get("mbti_type")
         profiles  = (aggregate_mbti_profiles(layers) if layers
