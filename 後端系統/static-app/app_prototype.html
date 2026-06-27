@@ -5972,7 +5972,7 @@ function _renderResultsFromEeg() {
   }
   // 除錯面板：只有管理員/工作人員可見
   const u = _currentUser || {};
-  const isStaff = u.role === 'admin' || u.org_type === '工作人員' || u.org_type === '專案人員';
+  const isStaff = u.role === 'admin' || u.org_type === '工作人員';
   const panel = document.getElementById('eeg-debug-panel');
   if (panel) panel.style.display = isStaff ? '' : 'none';
   if (isStaff && stats) {
@@ -6553,7 +6553,7 @@ function _renderEegHealthResult(state, byUser) {
 
   // 🔬 管理員除錯面板：BrainDNA 數值驗證
   const u2 = _currentUser || {};
-  const isStaff2 = u2.role === 'admin' || u2.org_type === '工作人員' || u2.org_type === '專案人員';
+  const isStaff2 = u2.role === 'admin' || u2.org_type === '工作人員';
   const dPanel = document.getElementById('ethr-debug-panel');
   if (dPanel) dPanel.style.display = isStaff2 ? '' : 'none';
   if (isStaff2 && window._ethrAccum && sampleCount > 0) {
