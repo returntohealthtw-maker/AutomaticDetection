@@ -72,7 +72,7 @@ class SessionResponse(BaseModel):
 # ─── API 端點 ────────────────────────────────────────────────────────────────
 
 @router.post("/sessions/upload", response_model=SessionResponse)
-async def upload_session(
+def upload_session(
     req: UploadSessionRequest,
     background_tasks: BackgroundTasks,
     db: DbSession = Depends(get_db)
