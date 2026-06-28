@@ -488,6 +488,61 @@ async def startup():
 def root():
     return {"status": "ok", "message": "腦波報告系統 API 運行中"}
 
+
+@app.get("/debug/test-sessions-insert")
+def debug_test_sessions_insert():
+    """臨時診斷：直接測試 sessions + reports INSERT 是否成功（測試後刪除）"""
+    import traceback
+    import uuid
+    from app.core.database import SessionLocal
+    from app.core import models
+    db = SessionLocal()
+    result = {"step": "start", "error": None}
+    try:
+        # Step 1: sessions INSERT
+        result["step"] = "sessions_insert"
+        import time as _t
+        now = int(_t.time() * 1000)
+        session = models.Session(
+            consultant_name="診斷測試", subject_name="診斷測試", subject_birthday="",
+            subject_gender="M", subject_age=0, company_id=None, report_type="adult",
+            report_audience="student", start_time=now, end_time=now, total_captures=1,
+            status=2, failure_reason="diag", created_at=now
+        )
+        db.add(session)
+        db.flush()
+        result["session_id"] = session.session_id
+        result["step"] = "eeg_capture_insert"
+        cap = models.EegCapture(
+            session_id=session.session_id, seq_num=0, is_baseline=0,
+            captured_at=int(_t.time()), good_signal=0, attention=65, meditation=55,
+            delta=30, theta=60, low_alpha=40, high_alpha=35, low_beta=45,
+            high_beta=40, low_gamma=20, high_gamma=15, feedback=0
+        )
+        db.bulk_save_objects([cap])
+        result["step"] = "report_insert"
+        report = models.Report(
+            session_id=session.session_id, status="pending",
+            line_user_id=None, qr_token=uuid.uuid4().hex, notify_email=None
+        )
+        db.add(report)
+        db.commit()
+        result["report_id"] = report.report_id
+        result["step"] = "done"
+        result["success"] = True
+        # Cleanup: delete the test records
+        db.delete(report)
+        db.delete(session)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        result["error"] = f"{type(e).__name__}: {str(e)}"
+        result["traceback"] = traceback.format_exc()
+        result["success"] = False
+    finally:
+        db.close()
+    return result
+
 @app.get("/healthz")
 def healthz():
     """Railway Healthcheck 專用，永遠回 200，不依賴 DB"""
