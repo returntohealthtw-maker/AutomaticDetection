@@ -248,15 +248,26 @@ def save_eeg_stats(
             # MBTI / bagua：從 algorithms/report.py 快速推算
             try:
                 from app.algorithms.report import generate_quick_mbti as _qmbti
-                from app.services.braindna_algorithms import _select_best_window as _sbw, MIN_DELTA_QUALITY as _MDQ
-                bw = _sbw(payload.raw_arrays)
+                from app.services.braindna_algorithms import (
+                    _select_best_window as _sbw,
+                    MIN_DELTA_QUALITY as _MDQ,
+                    _detect_input_scale as _scale_detect,
+                )
+                _mbti_scale = _bdna_result.get("input_scale", "raw")
+                _mbti_cap = {k: 100 for k in ["r_delta","r_theta","r_lalpha","r_halpha","r_lbeta","r_hbeta","r_lgamma","r_hgamma"]} \
+                            if _mbti_scale == "norm100" else None
+                bw = _sbw(payload.raw_arrays, cap=_mbti_cap)
                 import statistics as _stat
                 _bw_delta = bw.get("r_delta") or []
                 def _mean_raw(key):
-                    # 排除 delta<MIN_DELTA_QUALITY 的低品質秒（與頻段比例計算保持一致）
                     arr = bw.get(key) or []
-                    valid = [v for j, v in enumerate(arr)
-                             if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
+                    if _mbti_scale == "raw":
+                        # raw 模式：排除 delta<MIN_DELTA_QUALITY 的低品質秒
+                        valid = [v for j, v in enumerate(arr)
+                                 if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
+                    else:
+                        # norm100 模式：不套用 delta 品質過濾，直接取所有非零秒
+                        valid = [v for v in arr if v > 0]
                     return _stat.mean(valid) if valid else (_stat.mean([v for v in arr if v > 0]) if arr else 0.0)
                 mbti_result = _qmbti({
                     "lowAlpha":  _mean_raw("r_lalpha"),

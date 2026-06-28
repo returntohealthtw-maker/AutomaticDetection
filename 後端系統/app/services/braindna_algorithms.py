@@ -94,19 +94,24 @@ MIN_DELTA_QUALITY: int = 30_000
 def _detect_input_scale(raw_arrays: Dict[str, List]) -> str:
     """
     自動偵測 raw_arrays 的數值尺度：
-    - 'raw'     : 原始 ThinkGear 值（delta 通常 10,000~500,000）
-    - 'norm100' : bandTo100 正規化值（0~100）
+    - 'raw'     : 原始 ThinkGear 值（任一頻段 > 1,000，通常 delta 可達 10,000~500,000）
+    - 'norm100' : bandTo100 正規化值（全部頻段 ≤ 1,000）
     - 'unknown' : 資料不足無法判斷
 
-    判斷規則：取 r_delta 最大值
-      > 1000  → raw（原始 ThinkGear 輸出）
-      ≤ 1000  → norm100（bandTo100 或 BLE 裝置輸出）
+    判斷規則：取所有 8 個頻段的最大值（不只看 r_delta，避免 5-band 裝置 r_delta=0 誤判）
+      any_band > 1000  → raw（原始 ThinkGear 輸出）
+      all_bands ≤ 1000 → norm100（bandTo100、BLE 或 5-band 裝置輸出）
     """
-    deltas = [float(v) for v in (raw_arrays.get("r_delta") or []) if v]
-    if not deltas:
+    overall_max = 0.0
+    for k in RAW_KEYS:
+        arr = raw_arrays.get(k) or []
+        if arr:
+            band_max = max((float(v) for v in arr if v), default=0.0)
+            if band_max > overall_max:
+                overall_max = band_max
+    if overall_max == 0.0:
         return "unknown"
-    max_delta = max(deltas)
-    if max_delta > 1000:
+    if overall_max > 1000:
         return "raw"
     return "norm100"
 

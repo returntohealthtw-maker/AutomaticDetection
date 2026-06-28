@@ -5985,20 +5985,62 @@ function _summarizeEegAccum(acc) {
   };
   if (bands_7) result.bands_7 = bands_7;
 
-  // 保留原始逐秒陣列（供 Firebase 腦波資料庫 & MBTI 時間窗分析使用）
-  // 每個陣列長度約 180（3 分鐘 × 1Hz），傳給後端後存入 Firebase Firestore + BigQuery
-  result.raw_arrays = {
-    attn:     (acc.attn    || []).slice(),   // 每秒 attention（0-100）
-    medi:     (acc.medi    || []).slice(),   // 每秒 meditation（0-100）
-    r_delta:  (acc.r_delta || []).slice(),   // 原始 ThinkGear delta 頻段功率
-    r_theta:  (acc.r_theta || []).slice(),   // 原始 theta（MBTI 時間窗分析核心）
-    r_lalpha: (acc.r_lalpha|| []).slice(),   // 原始 lowAlpha（MBTI 時間窗分析核心）
-    r_halpha: (acc.r_halpha|| []).slice(),   // 原始 highAlpha
-    r_lbeta:  (acc.r_lbeta || []).slice(),   // 原始 lowBeta
-    r_hbeta:  (acc.r_hbeta || []).slice(),   // 原始 highBeta
-    r_lgamma: (acc.r_lgamma|| []).slice(),   // 原始 lowGamma
-    r_hgamma: (acc.r_hgamma|| []).slice(),   // 原始 highGamma
-  };
+  // ─── 保留原始逐秒陣列（供 Firebase & BrainDNA 佔比演算法使用）───────────────
+  // 優先使用 ThinkGear 原始值（千~百萬量級）；若裝置為 5-band 或舊版 APK
+  // 導致原始值全為 0，自動降級為 bandTo100 逐秒值，確保後端仍可執行佔比演算。
+  // 三種情境：
+  //   A. 8-band 原始值（raw_delta > 0）           → 最高精度
+  //   B. 8-band bandTo100（有 low/high 子頻但無 raw）→ 次高精度
+  //   C. 5-band bandTo100（只有合併頻段）           → 最低精度（low=high=合併值）
+  const _hasRawDelta  = (acc.r_delta  || []).some(v => v > 1000);  // > 1000 才算原始值
+  const _hasRawAlpha  = (acc.r_lalpha || []).some(v => v > 1000);
+  const _hasSub8Band  = (acc.low_alpha || []).some(v => v > 0);    // 8-band bandTo100 子頻段
+
+  let _ra;
+  if (_hasRawDelta || _hasRawAlpha) {
+    // A: ThinkGear 原始值（所有原始值同量級，用哪個偵測都可以）
+    _ra = {
+      attn:     (acc.attn    || []).slice(),
+      medi:     (acc.medi    || []).slice(),
+      r_delta:  (acc.r_delta || []).slice(),
+      r_theta:  (acc.r_theta || []).slice(),
+      r_lalpha: (acc.r_lalpha|| []).slice(),
+      r_halpha: (acc.r_halpha|| []).slice(),
+      r_lbeta:  (acc.r_lbeta || []).slice(),
+      r_hbeta:  (acc.r_hbeta || []).slice(),
+      r_lgamma: (acc.r_lgamma|| []).slice(),
+      r_hgamma: (acc.r_hgamma|| []).slice(),
+    };
+  } else if (_hasSub8Band) {
+    // B: 8-band bandTo100（有區分 low/high，但 APK 未送 raw 值）
+    _ra = {
+      attn:     (acc.attn      || []).slice(),
+      medi:     (acc.medi      || []).slice(),
+      r_delta:  (acc.delta     || []).slice(),   // bandTo100 值（0-100）
+      r_theta:  (acc.theta     || []).slice(),
+      r_lalpha: (acc.low_alpha || []).slice(),
+      r_halpha: (acc.high_alpha|| []).slice(),
+      r_lbeta:  (acc.low_beta  || []).slice(),
+      r_hbeta:  (acc.high_beta || []).slice(),
+      r_lgamma: (acc.low_gamma || []).slice(),
+      r_hgamma: (acc.high_gamma|| []).slice(),
+    };
+  } else {
+    // C: 5-band bandTo100（只有合併頻段，low=high=合併值，精度最低但仍為每秒佔比）
+    _ra = {
+      attn:     (acc.attn  || []).slice(),
+      medi:     (acc.medi  || []).slice(),
+      r_delta:  (acc.delta || []).slice(),
+      r_theta:  (acc.theta || []).slice(),
+      r_lalpha: (acc.alpha || []).slice(),   // low = high = 合併值（5-band 無法區分）
+      r_halpha: (acc.alpha || []).slice(),
+      r_lbeta:  (acc.beta  || []).slice(),
+      r_hbeta:  (acc.beta  || []).slice(),
+      r_lgamma: (acc.gamma || []).slice(),
+      r_hgamma: (acc.gamma || []).slice(),
+    };
+  }
+  result.raw_arrays = _ra;
   return result;
 }
 
