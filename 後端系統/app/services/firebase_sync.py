@@ -29,7 +29,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-FIREBASE_API_BASE = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api"
+FIREBASE_API_BASE = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api"
 SOURCE_APP = "BrainReport-LUKE"
 
 # ── 認證環境變數 ──────────────────────────────────────────────────────────────
