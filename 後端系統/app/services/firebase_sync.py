@@ -325,11 +325,13 @@ async def sync_to_firebase(
                     "bagua":        braindna_result.get("bagua"),
                 })
                 patch_body = {k: v for k, v in patch_body.items() if v is not None}
-            await client.patch(
+            patch_resp = await client.patch(
                 f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
                 headers=headers,
                 json=patch_body,
             )
+            if patch_resp.status_code not in (200, 204):
+                logger.warning("[Firebase] PATCH session 狀態非預期: %s", patch_resp.status_code)
 
             return True
 
@@ -487,7 +489,7 @@ async def sync_captures_to_firebase(
                         total_uploaded, fb_session_id)
 
             # 3. 標記 Session completed
-            await client.patch(
+            patch_resp = await client.patch(
                 f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
                 headers=headers,
                 json={
@@ -496,9 +498,132 @@ async def sync_captures_to_firebase(
                     "durationSec": len(features),
                 },
             )
+            if patch_resp.status_code not in (200, 204):
+                logger.warning("[Firebase] Android PATCH session 狀態非預期: %s", patch_resp.status_code)
 
             return True
 
     except Exception as exc:
         logger.exception("[Firebase] Android captures 同步例外: %s", exc)
         return False
+
+
+# ── 佇列 API（供 main.py / report_gen.py / ai_report.py 呼叫）─────────────────
+
+def is_configured() -> bool:
+    """回傳 True 表示 Firebase 同步已設定（有 Service Key 或備用認證）。"""
+    return bool(
+        FIREBASE_SERVICE_KEY
+        or (FIREBASE_API_KEY and FIREBASE_SYNC_EMAIL and FIREBASE_SYNC_PASSWORD)
+    )
+
+
+def enqueue(session_id: int, report_id: Optional[int] = None) -> None:
+    """將 session 加入 firebase_sync_log 佇列（pending），等待排程補漏同步。
+
+    若資料庫不可用或寫入失敗，僅記錄 warning，不拋例外，主流程不受影響。
+    """
+    try:
+        from app.core.database import SessionLocal
+        from app.core.models import FirebaseSyncLog
+        db = SessionLocal()
+        try:
+            # 避免同一 session 重複入列
+            existing = (
+                db.query(FirebaseSyncLog)
+                .filter(
+                    FirebaseSyncLog.session_id == session_id,
+                    FirebaseSyncLog.status.in_(["pending", "syncing", "synced"]),
+                )
+                .first()
+            )
+            if existing:
+                logger.debug("[Firebase] session %s 已在佇列中（%s），跳過入列", session_id, existing.status)
+                return
+            log = FirebaseSyncLog(
+                session_id  = session_id,
+                report_id   = report_id,
+                status      = "pending",
+            )
+            db.add(log)
+            db.commit()
+            logger.info("[Firebase] session %s 已加入同步佇列", session_id)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("[Firebase] enqueue 失敗（session %s）: %s", session_id, e)
+
+
+MAX_RETRY = 5
+
+
+def run_pending_syncs(SessionLocalFactory) -> None:
+    """掃描 firebase_sync_log 中 pending/failed（retry < MAX_RETRY）的記錄並嘗試同步。
+
+    設計為在背景 thread 或 APScheduler 中執行；失敗不影響主流程。
+    """
+    if not is_configured():
+        return
+    try:
+        from app.core.models import FirebaseSyncLog, Session as SessionModel, EegCapture
+        from datetime import datetime, timezone
+        db = SessionLocalFactory()
+        try:
+            cutoff = datetime.now(timezone.utc)
+            pending = (
+                db.query(FirebaseSyncLog)
+                .filter(
+                    FirebaseSyncLog.status.in_(["pending", "failed"]),
+                    FirebaseSyncLog.retry_count < MAX_RETRY,
+                    (FirebaseSyncLog.next_retry_at == None)
+                    | (FirebaseSyncLog.next_retry_at <= cutoff),
+                )
+                .limit(20)
+                .all()
+            )
+            if not pending:
+                return
+            logger.info("[Firebase] 排程掃描：發現 %d 筆待同步", len(pending))
+            for log in pending:
+                log.status = "syncing"
+                db.commit()
+                try:
+                    sess = db.query(SessionModel).filter(
+                        SessionModel.session_id == log.session_id
+                    ).first()
+                    if not sess:
+                        log.status = "failed"
+                        log.last_error = "session not found"
+                        db.commit()
+                        continue
+
+                    captures = (
+                        db.query(EegCapture)
+                        .filter(EegCapture.session_id == log.session_id)
+                        .order_by(EegCapture.seq_num)
+                        .all()
+                    )
+                    ok = asyncio.run(sync_captures_to_firebase(sess, captures))
+                    if ok:
+                        log.status   = "synced"
+                        log.synced_at = datetime.now(timezone.utc)
+                        log.last_error = None
+                    else:
+                        log.status = "failed"
+                        log.retry_count += 1
+                        # 指數退避：1 分、2 分、4 分、8 分、16 分
+                        backoff_min = 2 ** log.retry_count
+                        from datetime import timedelta
+                        log.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=backoff_min)
+                        log.last_error = "sync returned False"
+                    db.commit()
+                except Exception as e:
+                    log.status = "failed"
+                    log.retry_count += 1
+                    log.last_error = str(e)[:500]
+                    db.commit()
+                    logger.warning("[Firebase] 排程同步 session %s 失敗: %s", log.session_id, e)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.exception("[Firebase] run_pending_syncs 例外: %s", e)
