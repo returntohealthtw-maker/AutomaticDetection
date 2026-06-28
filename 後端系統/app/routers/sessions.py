@@ -105,11 +105,11 @@ def upload_session(
 
     # ── 防重複上傳：同一顧問 + 同受測者 + 相近擷取數，15 分鐘內只建一筆 ──
     # 原因：Android App 在網路逾時後可能自動重試，導致同一場測建兩筆 session
-    DEDUP_WINDOW_MS  = 15 * 60 * 1000   # 15 分鐘
+    DEDUP_WINDOW_S   = 15 * 60          # 15 分鐘（秒）
     DEDUP_CAPTURE_DELTA = 10            # 擷取數差距容忍值
-    now_ms = int(time.time() * 1000)
+    now_s = int(time.time())
     if req.subject_name and req.consultant_name and len(req.captures) >= 150:
-        cutoff = now_ms - DEDUP_WINDOW_MS
+        cutoff = now_s - DEDUP_WINDOW_S
         existing = (
             db.query(models.Session)
             .filter(
@@ -138,6 +138,14 @@ def upload_session(
                 client_view_url  = client_url,
             )
 
+    def _to_unix_s(ms_val: int) -> int:
+        """Android App 傳來的是毫秒時間戳，PostgreSQL INTEGER 欄位只支援 32-bit (~2.1B)，
+        需轉換成秒。若值已是秒（< 1e11）則直接返回。"""
+        now_s = int(time.time())
+        if not ms_val:
+            return now_s
+        return ms_val // 1000 if ms_val > 10_000_000_000 else ms_val
+
     # 1. 建立場次記錄
     session = models.Session(
         consultant_name  = req.consultant_name,
@@ -148,12 +156,12 @@ def upload_session(
         company_id       = req.company_id,
         report_type      = req.report_type,
         report_audience  = aud,
-        start_time       = req.start_time or int(time.time() * 1000),
-        end_time         = req.end_time   or int(time.time() * 1000),
+        start_time       = _to_unix_s(req.start_time),
+        end_time         = _to_unix_s(req.end_time),
         total_captures   = len(req.captures),
         status           = 1 if req.is_success else 2,
         failure_reason   = req.failure_reason,
-        created_at       = int(time.time() * 1000)
+        created_at       = int(time.time())
     )
     db.add(session)
     db.flush()  # 取得 session_id
