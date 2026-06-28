@@ -64,6 +64,13 @@ class Session(Base):
     mbti          = Column(String(4), nullable=True)
     bagua         = Column(String(20), nullable=True)
     overall_score = Column(Integer, nullable=True)
+    # 演算模式記錄（每個 session 儲存的資料品質標記）：
+    # 'bdna_raw'           = BrainDNA 完整演算（原始 ThinkGear 值，最高精度）
+    # 'bdna_norm100'       = BrainDNA 降級演算（bandTo100 值做佔比，次高精度）
+    # 'fallback_no_raw'    = 無 raw_arrays，使用前端 bandTo100 平均（最低精度）
+    # 'fallback_exception' = BrainDNA 例外失敗，使用前端值
+    # 'fallback_bdna_invalid_*' = BrainDNA valid=False，使用前端值
+    bdna_mode     = Column(String(40), nullable=True)
 
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
     report      = relationship("Report", back_populates="session", uselist=False)

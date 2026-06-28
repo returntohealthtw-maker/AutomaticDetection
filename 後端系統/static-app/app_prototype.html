@@ -3701,6 +3701,14 @@ function _renderHistoryList() {
       const subjAge = s.subject_age ? ` · ${s.subject_age}歲` : '';
       const dateStr = _formatTs(s.created_at);
       const captures = s.total_captures ? ` · ${s.total_captures} 筆` : '';
+      // bdna_mode 標籤：顯示演算來源（新 session 才有）
+      const bdnaModeLabel = (() => {
+        const m = s.bdna_mode || '';
+        if (m === 'bdna_raw')    return '<span title="BrainDNA 完整演算（原始 ThinkGear 值）" style="font-size:10px;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px;">🟢 BrainDNA-RAW</span>';
+        if (m === 'bdna_norm100') return '<span title="BrainDNA 降級演算（bandTo100 值做佔比）" style="font-size:10px;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;">🟡 BrainDNA-佔比</span>';
+        if (m.startsWith('fallback')) return '<span title="BrainDNA 失敗，使用前端平均值（精度最低）" style="font-size:10px;background:#f8d7da;color:#721c24;border-radius:4px;padding:1px 5px;">🔴 Fallback</span>';
+        return '';
+      })();
 
       const bwBtn = isSuccess
         ? `<button onclick="_viewHistorySession(${s.session_id})" style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">🧠 查看腦波</button>`
@@ -3714,7 +3722,7 @@ function _renderHistoryList() {
           </div>
           ${reportTagsHtml}
           ${extraNote}
-          <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures}</div>
+          <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures} ${bdnaModeLabel}</div>
           <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
             ${bwBtn}
           </div>

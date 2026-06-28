@@ -86,7 +86,29 @@ WINDOW_SIZE = 30   # 與 BrainDNA 一致
 # 信號品質下限（供 calc_band_proportions 及 MBTI 計算共用）
 # delta < 30K = 電極接觸不良（族群均值 ~198K，30K ≈ 15%）
 # 這類秒數的 beta/gamma 比例因分母過小而虛高，應排除
+# ⚠ 此值僅適用於原始 ThinkGear 值；對 bandTo100(0~100) 輸入會全部過濾
+#   → 自動偵測模式：見 _detect_input_scale()
 MIN_DELTA_QUALITY: int = 30_000
+
+
+def _detect_input_scale(raw_arrays: Dict[str, List]) -> str:
+    """
+    自動偵測 raw_arrays 的數值尺度：
+    - 'raw'     : 原始 ThinkGear 值（delta 通常 10,000~500,000）
+    - 'norm100' : bandTo100 正規化值（0~100）
+    - 'unknown' : 資料不足無法判斷
+
+    判斷規則：取 r_delta 最大值
+      > 1000  → raw（原始 ThinkGear 輸出）
+      ≤ 1000  → norm100（bandTo100 或 BLE 裝置輸出）
+    """
+    deltas = [float(v) for v in (raw_arrays.get("r_delta") or []) if v]
+    if not deltas:
+        return "unknown"
+    max_delta = max(deltas)
+    if max_delta > 1000:
+        return "raw"
+    return "norm100"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 兒童專用 CAP 值與 proportionRange 閾值（report_type='child' 時使用）
@@ -191,20 +213,35 @@ def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None)
 # 步驟二：proportionRange 正規化 → 映射到 0~1 → × 100 → 整數（0~100）
 # 與 BrainDNA evaluationReport 的 *Strip 值完全一致。
 # ─────────────────────────────────────────────────────────────────────────────
-def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False) -> Optional[Dict[str, int]]:
+def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
+                          _scale: str = "") -> Optional[Dict[str, int]]:
     """
     輸入：raw_arrays（8 個頻段原始陣列，index 對齊，通常 180 秒）
     輸出：{ "low_alpha": int, "high_alpha": int, ... }
           值域 0-100，與 BrainDNA evaluationReport *Strip 值完全一致。
     步驟零：先選 best 30-second window（lowGamma 佔比最高）
     若資料不足（< 10 秒）回傳 None。
+
+    自動偵測輸入尺度：
+    - 'raw'     原始 ThinkGear 值 → 使用 MIN_DELTA_QUALITY=30,000 品質過濾
+    - 'norm100' bandTo100 值      → 品質門檻降至 0（不過濾）, CAP 縮放至 100
     """
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return None
 
-    # 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平
-    active_cap = CHILD_CAP if is_child else CAP
+    # 自動偵測輸入尺度（若呼叫端已傳入 _scale 則直接使用，避免重複運算）
+    scale = _scale or _detect_input_scale(raw_arrays)
+
+    if scale == "norm100":
+        # bandTo100 輸入：CAP 縮放為 100，不套用 delta 品質門檻
+        # 比例計算邏輯與 raw 完全相同，只是數值尺度不同
+        active_cap = {k: 100 for k in CAP}
+        min_delta_q = 0.0  # 不過濾（bandTo100 delta 最大只有 100）
+    else:
+        # 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平
+        active_cap = CHILD_CAP if is_child else CAP
+        min_delta_q = float(MIN_DELTA_QUALITY)
 
     # 若輸入已是 best window（由 compute_all 傳入），直接使用；
     # 若直接呼叫此函式（n >= 30），自動選 best window。
@@ -224,8 +261,8 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False) -
         uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母（永遠不截斷）
         if uncapped_total <= 0:
             continue
-        # 電極接觸品質過濾：delta 極低代表訊號不穩，排除此秒
-        if raw_row["r_delta"] < MIN_DELTA_QUALITY:
+        # 電極接觸品質過濾（僅 raw 模式有效；norm100 模式 min_delta_q=0）
+        if raw_row["r_delta"] < min_delta_q:
             continue
         for k in RAW_KEYS:
             capped = _clamp(raw_row[k], active_cap[k])  # 截斷 → 分子
@@ -527,22 +564,32 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
       stress     → MindStressAlgorithm(maxArray)    ← best 30s
       balance    → MindBalanceAlgorithm(maxArray)   ← best 30s attention/medi
       energy     → MindEnergyAlgorithm(maxArray)    ← best 30s attention/medi
+
+    自動偵測輸入尺度（raw vs norm100），確保 bandTo100 輸入也能正確運算。
+    回傳字典包含 'input_scale' 欄位，標記使用的演算模式。
     """
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
-        return {"valid": False}
+        return {"valid": False, "input_scale": "unknown"}
 
-    # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
-    active_cap = CHILD_CAP if is_child else CAP
+    # 自動偵測輸入尺度（一次偵測，傳給所有子函式）
+    scale = _detect_input_scale(raw_arrays)
+
+    if scale == "norm100":
+        # bandTo100 輸入：CAP 縮放為 100
+        active_cap = {k: 100 for k in CAP}
+    else:
+        # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
+        active_cap = CHILD_CAP if is_child else CAP
     best_win = _select_best_window(raw_arrays, cap=active_cap)
 
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
 
-    # bands：傳入 best_win 直接計算（is_child 決定使用成人或兒童 proportionRange 閾值）
-    bands = calc_band_proportions(best_win, is_child=is_child)
+    # bands：傳入 best_win + 偵測到的 scale，讓子函式不必重複偵測
+    bands = calc_band_proportions(best_win, is_child=is_child, _scale=scale)
     if bands is None:
-        return {"valid": False}
+        return {"valid": False, "input_scale": scale}
 
     stress  = calc_stress_score(best_win)
     balance = calc_mind_balance(attn, medi)
@@ -553,6 +600,7 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
 
     return {
         "valid":         True,
+        "input_scale":   scale,    # 'raw' 或 'norm100'，供 eeg.py 記錄 bdna_mode
         "bands":         bands,
         "stress":        stress,
         "balance":       balance,

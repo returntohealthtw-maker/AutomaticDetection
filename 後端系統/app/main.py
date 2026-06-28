@@ -348,6 +348,9 @@ def _run_lightweight_migrations():
     if not has_column("sessions", "overall_score"):
         pending.append("ALTER TABLE sessions ADD COLUMN overall_score INTEGER NULL")
 
+    if "bdna_mode" not in cols:
+        pending.append("ALTER TABLE sessions ADD COLUMN bdna_mode VARCHAR(40) NULL")
+
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
         return

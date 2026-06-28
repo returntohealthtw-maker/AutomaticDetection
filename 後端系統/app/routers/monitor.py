@@ -113,6 +113,7 @@ def recompute_braindna(
             sess.mind_energy   = result.get("energy")
             sess.mind_color    = result.get("color")
             sess.overall_score = result.get("overall_score")
+            sess.bdna_mode     = f"bdna_{result.get('input_scale', 'unknown')}"
 
             # 同步更新 EegCapture(seq_num=0) 的頻段值（帶入修正後的 BrainDNA 算法結果）
             cap = db.query(M.EegCapture).filter(

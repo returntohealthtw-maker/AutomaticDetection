@@ -105,13 +105,23 @@ def save_eeg_stats(
     now_ts = int(time.time())
 
     # ── BrainDNA 算法：若有 raw_arrays，用佔比算法覆寫頻段值（最高精度）──────────
+    import logging as _logging
+    _bdna_log = _logging.getLogger("braindna")
     _bdna_result = None   # 儲存完整結果，稍後寫入 Session 欄位
+    _bdna_mode = "fallback_no_raw"   # 預設：未提供 raw_arrays
+
     if payload.raw_arrays:
+        # 確認 raw_arrays 資料量
+        _arr_len = len(list(payload.raw_arrays.values())[0]) if payload.raw_arrays else 0
+        _bdna_log.info(f"[BrainDNA] raw_arrays 收到，樣本數={_arr_len}")
         try:
             from app.services.braindna_algorithms import compute_all as _bdna_compute
             _is_child = (getattr(payload, "report_type", None) or "").lower() in ("child", "child_report") \
                         or (getattr(payload, "report_type", None) or "").lower().startswith("child_")
             _bdna_result = _bdna_compute(payload.raw_arrays, is_child=_is_child)
+            _input_scale = _bdna_result.get("input_scale", "unknown")
+            _bdna_log.info(f"[BrainDNA] 執行完成：valid={_bdna_result.get('valid')}, input_scale={_input_scale}, bands={_bdna_result.get('bands')}")
+
             if _bdna_result.get("valid") and _bdna_result.get("bands"):
                 _b = _bdna_result["bands"]
                 # 用 BrainDNA 佔比值覆寫，確保 High ≠ Low，與原始算法一致
@@ -124,8 +134,18 @@ def save_eeg_stats(
                 bands["alpha"] = round((_b.get("low_alpha", 0) + _b.get("high_alpha", 0)) / 2)
                 bands["beta"]  = round((_b.get("low_beta",  0) + _b.get("high_beta",  0)) / 2)
                 bands["gamma"] = round((_b.get("low_gamma", 0) + _b.get("high_gamma", 0)) / 2)
-        except Exception:
-            _bdna_result = None  # 算法失敗不影響主流程，退回前端傳入值
+                # 演算成功：記錄模式（raw=最高精度 / norm100=降級佔比）
+                _bdna_mode = f"bdna_{_input_scale}"
+            else:
+                # 演算失敗：回退前端 bandTo100 平均值
+                _bdna_mode = f"fallback_bdna_invalid_{_input_scale}"
+                _bdna_log.warning(f"[BrainDNA] 演算失敗(valid=False)，退回前端 bandTo100 平均值。input_scale={_input_scale}")
+        except Exception as _bdna_ex:
+            _bdna_result = None
+            _bdna_mode = "fallback_exception"
+            _bdna_log.error(f"[BrainDNA] 算法例外，退回前端 bandTo100 平均值。錯誤：{_bdna_ex}", exc_info=True)
+    else:
+        _bdna_log.warning("[BrainDNA] 未收到 raw_arrays，使用前端 bandTo100 平均值（最低精度）")
 
     # 🔑 受測者 FK 解析（核心修正：避免報告變孤兒）
     # 1. 優先用前端傳來的 subject_id
@@ -159,6 +179,7 @@ def save_eeg_stats(
         total_captures  = int(payload.sample_count or 0),
         status          = 1,  # 1=成功
         created_at      = now_ts,
+        bdna_mode       = _bdna_mode,  # 記錄演算來源（bdna_raw / bdna_norm100 / fallback_*）
     )
     db.add(sess)
     db.flush()  # 拿到 session_id
@@ -415,6 +436,7 @@ def list_my_sessions(
             "created_at":    s.created_at,
             "status":        s.status,
             "failure_reason":s.failure_reason,
+            "bdna_mode":     getattr(s, "bdna_mode", None),  # 演算來源標記
             "report_status": (rep.status if rep else None),
             "report_url":    (rep.pdf_url if rep else None),
             "report_variant":(getattr(rep, "variant", None) if rep else None),
