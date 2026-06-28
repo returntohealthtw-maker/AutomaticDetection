@@ -598,7 +598,38 @@ async def debug_test_firebase_sync():
     return result
 
 
-@app.get("/healthz")
+@app.get("/debug/test-firebase-sync-session/{session_id}")
+async def debug_test_firebase_sync_session(session_id: int):
+    """直接同步指定 session 到 Firebase 並回傳結果（診斷用）"""
+    import traceback
+    from app.core.database import SessionLocal
+    from app.core import models
+    from app.services import firebase_sync as _fb
+
+    db = SessionLocal()
+    result = {"session_id": session_id}
+    try:
+        sess = db.query(models.Session).filter(models.Session.session_id == session_id).first()
+        if not sess:
+            return {"error": "session not found"}
+        captures = db.query(models.EegCapture).filter(
+            models.EegCapture.session_id == session_id
+        ).order_by(models.EegCapture.seq_num).all()
+        result["captures_count"] = len(captures)
+        result["subject_name"] = sess.subject_name
+
+        ok = await _fb.sync_captures_to_firebase(
+            subject_name=sess.subject_name,
+            session_id=sess.session_id,
+            captures=captures,
+        )
+        result["sync_ok"] = ok
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        result["traceback"] = traceback.format_exc()
+    finally:
+        db.close()
+    return result
 def healthz():
     """Railway Healthcheck 專用，永遠回 200，不依賴 DB"""
     return {"ok": True}
