@@ -205,17 +205,20 @@ def upload_session(
     db.refresh(report)
 
     # 4. 非同步同步 180 筆擷取記錄到 Firebase 腦波資料庫
-    # （與 /eeg/save-stats 路徑的 Firebase 同步對齊，補足原本缺失的 Android 路徑同步）
     def _run_firebase_sync_captures():
+        import logging as _log
+        _logger = _log.getLogger(__name__)
         try:
             from app.services.firebase_sync import sync_captures_to_firebase
-            asyncio.run(sync_captures_to_firebase(
+            ok = asyncio.run(sync_captures_to_firebase(
                 subject_name = req.subject_name,
                 session_id   = session.session_id,
                 captures     = req.captures,
             ))
-        except Exception:
-            pass  # Firebase 同步失敗不影響主流程
+            if not ok:
+                _logger.warning("[Firebase] session %s 同步回傳 False", session.session_id)
+        except Exception as _e:
+            _logger.exception("[Firebase] session %s 同步例外: %s", session.session_id, _e)
 
     background_tasks.add_task(_run_firebase_sync_captures)
 

@@ -566,24 +566,32 @@ async def debug_test_firebase_sync():
         result["bearer_refresh"] = f"ERROR: {e}"
         result["traceback"] = traceback.format_exc()
 
-    # 嘗試建立一個測試 Firebase session
+    # 嘗試建立一個測試 Firebase session（先用 X-Service-Key，再用 Bearer）
     try:
         import httpx
-        headers = _fb._get_auth_headers(force_bearer=True)
+        # Test 1: X-Service-Key
+        sk_headers = _fb._get_auth_headers(force_bearer=False)
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.post(
+            r_sk = await client.post(
                 f"{_fb.FIREBASE_API_BASE}/sessions",
-                headers=headers,
-                json={
-                    "sourceApp": "debug-test",
-                    "deviceType": "ThinkGear",
-                    "samplingRate": 1,
-                    "platform": "android",
-                    "metadata": {"railway_session_id": -1, "subject_name": "debug"},
-                }
+                headers=sk_headers,
+                json={"sourceApp": "debug-test", "deviceType": "ThinkGear", "samplingRate": 1,
+                      "platform": "android", "metadata": {"railway_session_id": -2, "subject_name": "debug-sk"}},
             )
-            result["firebase_post_status"] = r.status_code
-            result["firebase_post_body"]   = r.text[:300]
+            result["service_key_post_status"] = r_sk.status_code
+            result["service_key_post_body"]   = r_sk.text[:200]
+
+        # Test 2: Bearer Token
+        bt_headers = _fb._get_auth_headers(force_bearer=True)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r_bt = await client.post(
+                f"{_fb.FIREBASE_API_BASE}/sessions",
+                headers=bt_headers,
+                json={"sourceApp": "debug-test", "deviceType": "ThinkGear", "samplingRate": 1,
+                      "platform": "android", "metadata": {"railway_session_id": -3, "subject_name": "debug-bt"}},
+            )
+            result["bearer_post_status"] = r_bt.status_code
+            result["bearer_post_body"]   = r_bt.text[:200]
     except Exception as e:
         result["firebase_post_error"] = f"{type(e).__name__}: {e}"
 
