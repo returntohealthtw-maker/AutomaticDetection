@@ -829,12 +829,19 @@ def health():
     import os
     db_ok = False
     db_detail = ""
+    reports_cols = []
     try:
         from app.core.database import engine
-        from sqlalchemy import text as _text
+        from sqlalchemy import text as _text, inspect as _inspect
         with engine.connect() as conn:
             conn.execute(_text("SELECT 1"))
         db_ok = True
+        # 額外：列出 reports 表的欄位（用於診斷遷移）
+        try:
+            insp = _inspect(engine)
+            reports_cols = [c["name"] for c in insp.get_columns("reports")]
+        except Exception:
+            pass
     except Exception as e:
         db_detail = f"{type(e).__name__}: {str(e)[:300]}"
 
@@ -853,4 +860,5 @@ def health():
         "db_detail": db_detail if not db_ok else "",
         "db_url_prefix": str(engine.url)[:40] if not db_ok else "",
         "env_diag": env_diag,
+        "reports_cols": reports_cols,
     }
