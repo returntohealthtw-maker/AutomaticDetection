@@ -310,6 +310,10 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN talent_report_kind VARCHAR(32) NULL")
     if not has_column("reports", "error_message"):
         pending.append("ALTER TABLE reports ADD COLUMN error_message TEXT NULL")
+    if not has_column("sessions", "needs_retest"):
+        pending.append("ALTER TABLE sessions ADD COLUMN needs_retest BOOLEAN DEFAULT FALSE")
+    if not has_column("sessions", "retest_reason"):
+        pending.append("ALTER TABLE sessions ADD COLUMN retest_reason VARCHAR(200) NULL")
     if not has_column("reports", "line_user_id"):
         pending.append("ALTER TABLE reports ADD COLUMN line_user_id VARCHAR(100) NULL")
     if not has_column("reports", "line_sent"):

@@ -890,6 +890,11 @@ def admin_paid_not_detected(
         if has_valid_eeg:
             continue   # 已有有效腦波資料，不需重測
 
+        # ── Fix1：沒有付款紀錄 → 不列入付款重測名單 ──────────────────────────
+        pay = pay_by_subj_name.get(subj.name)
+        if not pay:
+            continue
+
         seen_subject_ids.add(subj.subject_id)
 
         # 計算未完成原因
@@ -902,8 +907,7 @@ def admin_paid_not_detected(
         else:
             reason.append(f"有 {len(sessions)} 次 session，但全部無腦波採集資料")
 
-        # 嘗試從付款記錄取得報告類型
-        pay = pay_by_subj_name.get(subj.name)
+        # 從付款記錄取得報告類型（pay 已在上方確認非 None）
         report_type = ""
         if pay:
             rt = pay.report_type or ""
@@ -1018,6 +1022,58 @@ def admin_paid_not_detected(
             "payment_id":      p.payment_id,
             "paid_at":         p.paid_at,
             "days_since_paid": (int((time.time() - (p.paid_at or p.created_at)) / 86400) if p.paid_at or p.created_at else None),
+        })
+
+    # ── 來源 C：管理員標記需重測的 Session（不論是否有付款紀錄）────────────
+    retest_q = db.query(M.Session).filter(
+        M.Session.needs_retest == True,
+    )
+    if not is_admin:
+        retest_q = retest_q.filter(M.Session.consultant_id == user.consultant_id)
+
+    seen_session_ids_from_above = set()  # 已被來源 B 涵蓋的 session_id
+    for item in out:
+        if item.get("source") == "payment" and item.get("session_id"):
+            seen_session_ids_from_above.add(item["session_id"])
+
+    for sess_r in retest_q.all():
+        # 來源 A/B 已納入的跳過（避免重複）
+        if sess_r.subject_id and sess_r.subject_id in seen_subject_ids:
+            continue
+
+        subj_name = sess_r.subject_name or "(未知)"
+        rt = sess_r.report_type or ""
+        if rt.startswith("life") or rt == "adult":   report_type = "life_script"
+        elif rt.startswith("child"):                  report_type = "child"
+        elif rt.startswith("marital"):                report_type = "marital"
+        elif rt.startswith("parent"):                 report_type = "parent_child"
+        else:                                         report_type = rt or "life_script"
+
+        reason_text = sess_r.retest_reason or "管理員標記需重測"
+
+        # 算年齡
+        subj_age_r = None
+        if sess_r.subject_age:
+            subj_age_r = sess_r.subject_age
+
+        out.append({
+            "source":          "admin_retest",
+            "session_id":      sess_r.session_id,
+            "subject_id":      sess_r.subject_id,
+            "subject_name":    subj_name,
+            "subject_email":   "",
+            "subject_age":     subj_age_r,
+            "subject_gender":  sess_r.subject_gender or "",
+            "consultant_id":   sess_r.consultant_id,
+            "consultant_name": None,
+            "report_type":     report_type,
+            "report_variant":  "full",
+            "session_count":   1,
+            "eeg_count":       0,
+            "blocked_reason":  f"🔴 {reason_text}",
+            "payment_id":      None,
+            "paid_at":         None,
+            "days_since_paid": None,
         })
 
     return {"ok": True, "count": len(out), "orders": out}

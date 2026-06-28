@@ -388,3 +388,44 @@ def raw_arrays_health(
         "counts": {k: len(v) for k, v in result.items()},
         "details": result,
     }
+
+
+# ── 管理員標記 Session 需要重測 ──────────────────────────────────────────────
+from pydantic import BaseModel as _PydBaseModel
+
+class MarkRetestIn(_PydBaseModel):
+    reason: str = ""
+
+@router.post("/sessions/{session_id}/mark-retest")
+def mark_session_needs_retest(
+    session_id: int,
+    body: MarkRetestIn,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """管理員將某 session 標記為「需要重測」，使其出現在付款重測名單中。"""
+    require_admin(authorization, db)
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} 不存在")
+    sess.needs_retest  = True
+    sess.retest_reason = body.reason[:200] if body.reason else ""
+    db.commit()
+    return {"ok": True, "session_id": session_id, "message": "已標記需重測，將出現在付款重測名單"}
+
+
+@router.delete("/sessions/{session_id}/mark-retest")
+def unmark_session_needs_retest(
+    session_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """取消重測標記。"""
+    require_admin(authorization, db)
+    sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} 不存在")
+    sess.needs_retest  = False
+    sess.retest_reason = None
+    db.commit()
+    return {"ok": True, "session_id": session_id, "message": "已取消重測標記"}

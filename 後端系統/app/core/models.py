@@ -45,6 +45,8 @@ class Session(Base):
     #     r_lgamma:[...], r_hgamma:[...] }
     # 用途：Firebase 補同步 / 未來 MBTI 時間窗重新分析 / 退款爭議舉證
     raw_arrays_json  = Column(Text, nullable=True)
+    needs_retest     = Column(Boolean, default=False, nullable=True)  # 管理員標記需重測
+    retest_reason    = Column(String(200), nullable=True)             # 標記原因（選填）
 
     # ── BrainDNA 計算結果（由 braindna_algorithms.compute_all 寫入）──────────
     # 與 Firebase 的欄位名稱、型別、值域完全相同，方便兩庫資料對照

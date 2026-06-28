@@ -5808,14 +5808,44 @@ function _ingestEegSample(s) {
   // ThinkGear 原始功率（全 8 頻段）：每秒必須全部 push（含 0），保持 index 對齊
   // 用途：BrainDNA 佔比演算法（每秒 個別頻段 ÷ 八頻段總和，再 180 秒平均）
   const _raw = (v) => Math.max(0, Number(v) || 0);
-  _eegLiveAccum.r_delta.push(_raw(s.raw_delta));
-  _eegLiveAccum.r_theta.push(_raw(s.raw_theta));
-  _eegLiveAccum.r_lalpha.push(_raw(s.raw_lalpha));
-  _eegLiveAccum.r_halpha.push(_raw(s.raw_halpha));
-  _eegLiveAccum.r_lbeta.push(_raw(s.raw_lbeta));
-  _eegLiveAccum.r_hbeta.push(_raw(s.raw_hbeta));
-  _eegLiveAccum.r_lgamma.push(_raw(s.raw_lgamma));
-  _eegLiveAccum.r_hgamma.push(_raw(s.raw_hgamma));
+  const _rD  = _raw(s.raw_delta);
+  const _rTh = _raw(s.raw_theta);
+  const _rLa = _raw(s.raw_lalpha);
+  const _rHa = _raw(s.raw_halpha);
+  const _rLb = _raw(s.raw_lbeta);
+  const _rHb = _raw(s.raw_hbeta);
+  const _rLg = _raw(s.raw_lgamma);
+  const _rHg = _raw(s.raw_hgamma);
+  _eegLiveAccum.r_delta.push(_rD);
+  _eegLiveAccum.r_theta.push(_rTh);
+  _eegLiveAccum.r_lalpha.push(_rLa);
+  _eegLiveAccum.r_halpha.push(_rHa);
+  _eegLiveAccum.r_lbeta.push(_rLb);
+  _eegLiveAccum.r_hbeta.push(_rHb);
+  _eegLiveAccum.r_lgamma.push(_rLg);
+  _eegLiveAccum.r_hgamma.push(_rHg);
+
+  // ─── 採集畫面即時 bar：與結果頁/報告使用完全相同的 BrainDNA proportionRange 演算法 ───
+  // 資料 ≥ 5 秒後啟用；不足 5 秒時以「當前秒原始佔比」過渡顯示
+  let displayD = d, displayTh = th, displayAl = al, displayBe = be, displayGa = ga;
+  const _isChildLive = (_currentReportType || '').toLowerCase().indexOf('child') !== -1;
+  const _liveBdna = _calcBrainDNABands(_eegLiveAccum, _isChildLive);
+  if (_liveBdna) {
+    displayD  = _liveBdna.deV;
+    displayTh = _liveBdna.thV;
+    displayAl = Math.round((_liveBdna.loA + _liveBdna.hiA) / 2);
+    displayBe = Math.round((_liveBdna.loB + _liveBdna.hiB) / 2);
+    displayGa = Math.round((_liveBdna.loG + _liveBdna.hiG) / 2);
+  } else {
+    const _rTot = _rD + _rTh + _rLa + _rHa + _rLb + _rHb + _rLg + _rHg;
+    if (_rTot > 0) {
+      displayD  = Math.round(_rD  / _rTot * 100);
+      displayTh = Math.round(_rTh / _rTot * 100);
+      displayAl = Math.round((_rLa + _rHa) / _rTot * 100);
+      displayBe = Math.round((_rLb + _rHb) / _rTot * 100);
+      displayGa = Math.round((_rLg + _rHg) / _rTot * 100);
+    }
+  }
 
   // 連續低品質計數：att ≤ 5 AND med ≤ 5（含全零）= 電極接觸不良
   // ThinkGear 規格：att=0 明確代表「無讀數」；1-5 在正常配戴下極不可能出現
@@ -5836,14 +5866,14 @@ function _ingestEegSample(s) {
   set('metric-attn-val', a); setW('metric-attn-bar', a);
   set('metric-medi-val', m); setW('metric-medi-bar', m);
 
-  set('band-val-delta', lvl(d)); setH('band-bar-delta', d);
-  set('band-val-theta', lvl(th));setH('band-bar-theta', th);
-  set('band-val-alpha', lvl(al));setH('band-bar-alpha', al);
-  set('band-val-beta',  lvl(be));setH('band-bar-beta',  be);
-  set('band-val-gamma', lvl(ga));setH('band-bar-gamma', ga);
+  set('band-val-delta', lvl(displayD)); setH('band-bar-delta', displayD);
+  set('band-val-theta', lvl(displayTh));setH('band-bar-theta', displayTh);
+  set('band-val-alpha', lvl(displayAl));setH('band-bar-alpha', displayAl);
+  set('band-val-beta',  lvl(displayBe));setH('band-bar-beta',  displayBe);
+  set('band-val-gamma', lvl(displayGa));setH('band-bar-gamma', displayGa);
 
-  // β/α 比值
-  const ratio = al > 0 ? (be / al) : 0;
+  // β/α 比值（同樣使用 BrainDNA proportionRange 值）
+  const ratio = displayAl > 0 ? (displayBe / displayAl) : 0;
   const ratioEl = document.getElementById('faa-ratio');
   const hintEl  = document.getElementById('faa-hint');
   const barEl   = document.getElementById('faa-bar');
@@ -5863,9 +5893,9 @@ function _ingestEegSample(s) {
     else if (a <= 35) tags.push({txt:'🔴 專注偏低', c:'#ef5350', bg:'rgba(239,83,80,0.2)'});
     if (m >= 60) tags.push({txt:'🟢 放鬆良好',  c:'#00BCD4', bg:'rgba(0,188,212,0.2)'});
     else if (m <= 35) tags.push({txt:'🟠 偏緊繃',  c:'#ff9800', bg:'rgba(255,152,0,0.2)'});
-    if (al >= Math.max(be, th)) tags.push({txt:'💡 Alpha 主導', c:'#4caf50', bg:'rgba(76,175,80,0.2)'});
-    if (be >  al) tags.push({txt:'⚡ Beta 主導', c:'#ff9800', bg:'rgba(255,152,0,0.2)'});
-    if (th >  al) tags.push({txt:'🌙 Theta 主導', c:'#9c27b0', bg:'rgba(156,39,176,0.2)'});
+    if (displayAl >= Math.max(displayBe, displayTh)) tags.push({txt:'💡 Alpha 主導', c:'#4caf50', bg:'rgba(76,175,80,0.2)'});
+    if (displayBe >  displayAl) tags.push({txt:'⚡ Beta 主導', c:'#ff9800', bg:'rgba(255,152,0,0.2)'});
+    if (displayTh >  displayAl) tags.push({txt:'🌙 Theta 主導', c:'#9c27b0', bg:'rgba(156,39,176,0.2)'});
     chips.innerHTML = tags.map(t =>
       `<span style="background:${t.bg};color:${t.c};padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">${t.txt}</span>`
     ).join('') || '<span style="color:rgba(255,255,255,0.4);font-size:12px;">資料收集中…</span>';
@@ -9040,6 +9070,14 @@ function _filterMissingList() {
     const del = canDelete && s.report_id
       ? `<button onclick="_deleteSessionReport(${s.session_id}, ${s.report_id}, '${(s.subject_name || '').replace(/'/g, "\\'")}')" style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;" title="刪除報告（含 GCS）讓其可重新生成">🗑️ 刪除報告</button>`
       : '';
+    const isAdmin = (_currentUser || {}).role === 'admin';
+    const retestBtn = isAdmin
+      ? `<button onclick="_toggleMarkRetest(${s.session_id}, this)"
+           data-marked="${s.needs_retest ? '1' : '0'}"
+           style="background:${s.needs_retest ? '#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7' : '#fff3e0;color:#e65100;border:1px solid #ffcc80'};font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;"
+           title="${s.needs_retest ? '取消重測標記' : '標記此 session 需重測，使其出現在付款重測名單'}">
+           ${s.needs_retest ? '✅ 已標重測' : '🔁 標記重測'}</button>`
+      : '';
     return `
     <div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);${meta.border ? `border-left:4px solid ${meta.color};` : ''}">
       <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -9067,6 +9105,7 @@ function _filterMissingList() {
           ${view}
           ${regen}
           ${del}
+          ${retestBtn}
         </div>
       </div>
     </div>
@@ -9109,6 +9148,48 @@ function _updateMissingSelectedCount() {
       btn.style.opacity = '0.5';
       btn.textContent = '🔄 批次重新生成';
     }
+  }
+}
+
+// ── 管理員標記 / 取消標記 Session 需重測 ──────────────────────────────────
+async function _toggleMarkRetest(sessionId, btn) {
+  const isMarked = btn.dataset.marked === '1';
+  const action   = isMarked ? 'DELETE' : 'POST';
+
+  let reason = '';
+  if (!isMarked) {
+    reason = prompt('標記原因（選填，例如：電極接觸不良，腦波數值全 0）', '') ?? '';
+  }
+
+  try {
+    btn.disabled = true;
+    btn.textContent = '處理中…';
+    const r = await apiFetch(`/monitor/sessions/${sessionId}/mark-retest`, {
+      method: action,
+      headers: { 'Content-Type': 'application/json' },
+      body:    action === 'POST' ? JSON.stringify({ reason }) : undefined,
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
+    // 切換顯示狀態
+    if (isMarked) {
+      btn.dataset.marked = '0';
+      btn.textContent    = '🔁 標記重測';
+      btn.style.cssText  = 'background:#fff3e0;color:#e65100;border:1px solid #ffcc80;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;';
+      btn.title          = '標記此 session 需重測，使其出現在付款重測名單';
+    } else {
+      btn.dataset.marked = '1';
+      btn.textContent    = '✅ 已標重測';
+      btn.style.cssText  = 'background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:11px;padding:5px 8px;border-radius:6px;font-weight:600;cursor:pointer;';
+      btn.title          = '取消重測標記';
+    }
+    btn.disabled = false;
+  } catch (e) {
+    alert('操作失敗：' + e.message);
+    btn.disabled = false;
+    btn.textContent = isMarked ? '✅ 已標重測' : '🔁 標記重測';
   }
 }
 

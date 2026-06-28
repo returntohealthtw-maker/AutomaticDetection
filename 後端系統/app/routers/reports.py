@@ -941,9 +941,11 @@ def sessions_with_status(
             "email_sent":   r.email_sent if r else 0,
             "notify_email": r.notify_email if r else None,
             "completed_at": r.completed_at.isoformat() if (r and r.completed_at) else None,
-            "health":       health,
-            "is_missing":   is_missing,
+            "health":        health,
+            "is_missing":    is_missing,
             "headless_error": headless_error_sw,   # 失敗原因（headless_renderer 寫入）
+            "needs_retest":  bool(s.needs_retest),  # 管理員標記需重測
+            "retest_reason": s.retest_reason or "",
         })
 
     return {
