@@ -312,6 +312,8 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN line_user_id VARCHAR(100) NULL")
     if not has_column("reports", "line_sent"):
         pending.append("ALTER TABLE reports ADD COLUMN line_sent INTEGER DEFAULT 0")
+    if not has_column("reports", "completed_at"):
+        pending.append("ALTER TABLE reports ADD COLUMN completed_at TIMESTAMP NULL")
     # firebase_sync_log 表（若不存在則由 SQLAlchemy create_all 建立，這裡補保護性欄位檢查）
     if not has_column("firebase_sync_log", "id"):
         # 整張表不存在，用 create_all 建立（Base.metadata.create_all 已在啟動時呼叫）
