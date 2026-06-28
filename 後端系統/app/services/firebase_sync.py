@@ -572,8 +572,17 @@ def firebase_features_to_raw_arrays(features: List[dict]) -> dict:
         "r_hgamma": [float, ...],
     }
     """
-    # 按時間戳排序，確保順序正確
-    sorted_features = sorted(features, key=lambda f: f.get("timestamp", ""))
+    # 按時間戳或序號排序，確保順序正確
+    # Firestore timestamp 格式：{"_seconds": 1782625206, "_nanoseconds": 0}
+    def _sort_key(f):
+        ts = f.get("timestamp")
+        if isinstance(ts, dict):
+            return ts.get("_seconds", 0)
+        if isinstance(ts, (int, float)):
+            return ts
+        # 字串 ISO 格式（備用）
+        return str(ts or "")
+    sorted_features = sorted(features, key=_sort_key)
 
     # 判斷是否有分頻功率欄位（Railway 新格式）或只有比例欄位
     has_sub_power = any(
