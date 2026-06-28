@@ -7,9 +7,10 @@ firebase_sync.py
   https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api
   （見 D:/Write program/Database/ToOtherProject/API_INTEGRATION_GUIDE.md）
 
-認證方式：
-  X-Service-Key header，對應 Firebase Cloud Functions 的 INTERNAL_SERVICE_KEY
-  本服務從環境變數 FIREBASE_SERVICE_KEY 讀取金鑰。
+認證方式（優先順序）：
+  1. X-Service-Key header：環境變數 FIREBASE_SERVICE_KEY（Railway 內部 service key）
+  2. Firebase Bearer Token：用 FIREBASE_API_KEY + FIREBASE_SYNC_EMAIL + FIREBASE_SYNC_PASSWORD
+     透過 Firebase Auth REST API 取得 id_token，自動快取並在到期前刷新。
 
 資料轉換：
   ThinkGear raw 值（0 ~ 16,777,215）→ bandTo100 正規化 → 比例（ratio）
@@ -20,6 +21,7 @@ import asyncio
 import logging
 import math
 import os
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, List, Optional
 
@@ -28,8 +30,90 @@ import httpx
 logger = logging.getLogger(__name__)
 
 FIREBASE_API_BASE = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api"
-FIREBASE_SERVICE_KEY = os.getenv("FIREBASE_SERVICE_KEY", "")
 SOURCE_APP = "BrainReport-LUKE"
+
+# ── 認證環境變數 ──────────────────────────────────────────────────────────────
+
+# 方法 1：X-Service-Key（最優先）
+FIREBASE_SERVICE_KEY = os.getenv("FIREBASE_SERVICE_KEY", "")
+
+# 方法 2：Firebase User Auth（備用）
+FIREBASE_API_KEY      = os.getenv("FIREBASE_API_KEY",      "AIzaSyBc-ZEcT8fvyn-dBZ0Bhm5IsakncVp1ngQ")
+FIREBASE_SYNC_EMAIL   = os.getenv("FIREBASE_SYNC_EMAIL",   "migration@returntohealthtw.com")
+FIREBASE_SYNC_PASSWORD = os.getenv("FIREBASE_SYNC_PASSWORD", "MigrateEEG@2026")
+
+# ── Token 快取（模組級別，避免每次 API call 都重新登入）────────────────────────
+_cached_token: str = ""
+_token_expires_at: float = 0.0
+
+
+def _refresh_bearer_token() -> str:
+    """
+    用 Firebase email/password 取得 id_token，並快取至到期前 120 秒。
+    使用同步 httpx（在 asyncio 事件迴圈外呼叫時安全）。
+    """
+    global _cached_token, _token_expires_at
+    import httpx as _httpx
+    try:
+        resp = _httpx.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+            f"?key={FIREBASE_API_KEY}",
+            json={
+                "email": FIREBASE_SYNC_EMAIL,
+                "password": FIREBASE_SYNC_PASSWORD,
+                "returnSecureToken": True,
+            },
+            timeout=15.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            _cached_token = data["idToken"]
+            expires_in = int(data.get("expiresIn", 3600))
+            _token_expires_at = time.time() + expires_in - 120  # 提前 2 分鐘刷新
+            logger.info("[Firebase] Bearer token 取得成功，有效至 %s",
+                        datetime.fromtimestamp(_token_expires_at + 120).strftime("%H:%M:%S"))
+            return _cached_token
+        else:
+            logger.error("[Firebase] Firebase 登入失敗 %s: %s", resp.status_code, resp.text[:200])
+            return ""
+    except Exception as e:
+        logger.error("[Firebase] Firebase 登入例外: %s", e)
+        return ""
+
+
+def _get_auth_headers(force_bearer: bool = False) -> dict:
+    """
+    取得正確的認證 header。
+    優先使用 X-Service-Key；若 force_bearer=True 或未設定，改用 Firebase Bearer Token。
+    """
+    global _cached_token, _token_expires_at
+
+    if FIREBASE_SERVICE_KEY and not force_bearer:
+        return {
+            "X-Service-Key": FIREBASE_SERVICE_KEY,
+            "Content-Type":  "application/json",
+        }
+
+    # Firebase Bearer Token 備用
+    if not (FIREBASE_API_KEY and FIREBASE_SYNC_EMAIL and FIREBASE_SYNC_PASSWORD):
+        logger.warning("[Firebase] 既無 FIREBASE_SERVICE_KEY 也無 Firebase 登入憑證，無法同步")
+        return {}
+
+    if time.time() >= _token_expires_at or not _cached_token:
+        _refresh_bearer_token()
+
+    if not _cached_token:
+        return {}
+
+    return {
+        "Authorization": f"Bearer {_cached_token}",
+        "Content-Type":  "application/json",
+    }
+
+
+def _needs_bearer_fallback(status_code: int) -> bool:
+    """401/403 時嘗試用 Bearer Token 替代 X-Service-Key。"""
+    return status_code in (401, 403) and bool(FIREBASE_SERVICE_KEY)
 
 
 def _band_to_100(raw: float) -> float:
@@ -142,8 +226,9 @@ async def sync_to_firebase(
 
     返回 True 表示成功，False 表示失敗（不拋例外，避免影響主流程）。
     """
-    if not FIREBASE_SERVICE_KEY:
-        logger.warning("[Firebase] FIREBASE_SERVICE_KEY 未設定，跳過同步")
+    headers = _get_auth_headers()
+    if not headers:
+        logger.warning("[Firebase] 無可用認證憑證，跳過同步（設定 FIREBASE_SERVICE_KEY 或 FIREBASE_SYNC_EMAIL/PASSWORD）")
         return False
 
     if not raw_arrays:
@@ -153,9 +238,15 @@ async def sync_to_firebase(
     if session_start is None:
         session_start = datetime.now(timezone.utc)
 
-    headers = {
-        "X-Service-Key": FIREBASE_SERVICE_KEY,
-        "Content-Type":  "application/json",
+    _sess_payload = {
+        "sourceApp":    SOURCE_APP,
+        "deviceType":   "ThinkGear",
+        "samplingRate": 1,
+        "platform":     "android",
+        "metadata": {
+            "railway_session_id": session_id,
+            "subject_name":       subject_name,
+        },
     }
 
     try:
@@ -164,21 +255,22 @@ async def sync_to_firebase(
             sess_resp = await client.post(
                 f"{FIREBASE_API_BASE}/sessions",
                 headers=headers,
-                json={
-                    "sourceApp":    SOURCE_APP,
-                    "deviceType":   "ThinkGear",
-                    "samplingRate": 1,
-                    "platform":     "android",
-                    "metadata": {
-                        "railway_session_id": session_id,
-                        "subject_name":       subject_name,
-                    },
-                },
+                json=_sess_payload,
             )
             if sess_resp.status_code not in (200, 201):
-                logger.error("[Firebase] 建立 session 失敗 %s: %s",
-                             sess_resp.status_code, sess_resp.text[:200])
-                return False
+                if _needs_bearer_fallback(sess_resp.status_code):
+                    logger.warning("[Firebase] X-Service-Key 被拒（%s），切換 Bearer Token 重試...",
+                                   sess_resp.status_code)
+                    _refresh_bearer_token()
+                    headers = _get_auth_headers(force_bearer=True)
+                    if headers:
+                        sess_resp = await client.post(
+                            f"{FIREBASE_API_BASE}/sessions", headers=headers, json=_sess_payload
+                        )
+                if sess_resp.status_code not in (200, 201):
+                    logger.error("[Firebase] 建立 session 失敗 %s: %s",
+                                 sess_resp.status_code, sess_resp.text[:200])
+                    return False
 
             fb_session_id = sess_resp.json().get("sessionId")
             if not fb_session_id:
@@ -315,17 +407,25 @@ async def sync_captures_to_firebase(
     captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
     回傳 True 表示成功，False 表示失敗（不拋例外）。
     """
-    if not FIREBASE_SERVICE_KEY:
-        logger.warning("[Firebase] FIREBASE_SERVICE_KEY 未設定，跳過 Android captures 同步")
+    headers = _get_auth_headers()
+    if not headers:
+        logger.warning("[Firebase] 無可用認證憑證，跳過 Android captures 同步")
         return False
 
     if not captures:
         logger.warning("[Firebase] captures 為空，跳過同步")
         return False
 
-    headers = {
-        "X-Service-Key": FIREBASE_SERVICE_KEY,
-        "Content-Type":  "application/json",
+    _sess_payload = {
+        "sourceApp":    SOURCE_APP,
+        "deviceType":   "ThinkGear",
+        "samplingRate": 1,
+        "platform":     "android",
+        "metadata": {
+            "railway_session_id": session_id,
+            "subject_name":       subject_name,
+            "data_format":        "bandTo100",
+        },
     }
 
     try:
@@ -334,22 +434,22 @@ async def sync_captures_to_firebase(
             sess_resp = await client.post(
                 f"{FIREBASE_API_BASE}/sessions",
                 headers=headers,
-                json={
-                    "sourceApp":    SOURCE_APP,
-                    "deviceType":   "ThinkGear",
-                    "samplingRate": 1,
-                    "platform":     "android",
-                    "metadata": {
-                        "railway_session_id": session_id,
-                        "subject_name":       subject_name,
-                        "data_format":        "bandTo100",
-                    },
-                },
+                json=_sess_payload,
             )
             if sess_resp.status_code not in (200, 201):
-                logger.error("[Firebase] Android 建立 session 失敗 %s: %s",
-                             sess_resp.status_code, sess_resp.text[:200])
-                return False
+                if _needs_bearer_fallback(sess_resp.status_code):
+                    logger.warning("[Firebase] X-Service-Key 被拒（%s），切換 Bearer Token...",
+                                   sess_resp.status_code)
+                    _refresh_bearer_token()
+                    headers = _get_auth_headers(force_bearer=True)
+                    if headers:
+                        sess_resp = await client.post(
+                            f"{FIREBASE_API_BASE}/sessions", headers=headers, json=_sess_payload
+                        )
+                if sess_resp.status_code not in (200, 201):
+                    logger.error("[Firebase] Android 建立 session 失敗 %s: %s",
+                                 sess_resp.status_code, sess_resp.text[:200])
+                    return False
 
             fb_session_id = sess_resp.json().get("sessionId")
             if not fb_session_id:
