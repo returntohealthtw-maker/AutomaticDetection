@@ -543,6 +543,49 @@ def debug_test_sessions_insert():
         db.close()
     return result
 
+@app.get("/debug/test-firebase-sync")
+async def debug_test_firebase_sync():
+    """診斷：直接測試 Firebase 同步認證與連線（不寫 DB）"""
+    import traceback
+    from app.services import firebase_sync as _fb
+    result = {
+        "is_configured": _fb.is_configured(),
+        "service_key_set": bool(_fb.FIREBASE_SERVICE_KEY),
+        "bearer_credentials_set": bool(_fb.FIREBASE_API_KEY and _fb.FIREBASE_SYNC_EMAIL and _fb.FIREBASE_SYNC_PASSWORD),
+        "cached_token_set": bool(_fb._cached_token),
+    }
+    try:
+        _fb._refresh_bearer_token()
+        result["bearer_refresh"] = "ok"
+        result["cached_token_after"] = bool(_fb._cached_token)
+    except Exception as e:
+        result["bearer_refresh"] = f"ERROR: {e}"
+        result["traceback"] = traceback.format_exc()
+
+    # 嘗試建立一個測試 Firebase session
+    try:
+        import httpx
+        headers = _fb._get_auth_headers(force_bearer=True)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                f"{_fb.FIREBASE_API_BASE}/sessions",
+                headers=headers,
+                json={
+                    "sourceApp": "debug-test",
+                    "deviceType": "ThinkGear",
+                    "samplingRate": 1,
+                    "platform": "android",
+                    "metadata": {"railway_session_id": -1, "subject_name": "debug"},
+                }
+            )
+            result["firebase_post_status"] = r.status_code
+            result["firebase_post_body"]   = r.text[:300]
+    except Exception as e:
+        result["firebase_post_error"] = f"{type(e).__name__}: {e}"
+
+    return result
+
+
 @app.get("/healthz")
 def healthz():
     """Railway Healthcheck 專用，永遠回 200，不依賴 DB"""
