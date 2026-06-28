@@ -291,6 +291,8 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE sessions ADD COLUMN company_id INTEGER NULL")
     if not has_column("sessions", "report_audience"):
         pending.append("ALTER TABLE sessions ADD COLUMN report_audience VARCHAR(20) DEFAULT 'student'")
+    if not has_column("sessions", "failure_reason"):
+        pending.append("ALTER TABLE sessions ADD COLUMN failure_reason VARCHAR(100) NULL")
     # reports – new columns added over time
     if not has_column("reports", "subject_id"):
         pending.append("ALTER TABLE reports ADD COLUMN subject_id INTEGER NULL")
@@ -830,16 +832,18 @@ def health():
     db_ok = False
     db_detail = ""
     reports_cols = []
+    sessions_cols = []
     try:
         from app.core.database import engine
         from sqlalchemy import text as _text, inspect as _inspect
         with engine.connect() as conn:
             conn.execute(_text("SELECT 1"))
         db_ok = True
-        # 額外：列出 reports 表的欄位（用於診斷遷移）
+        # 額外：列出 reports / sessions 表的欄位（用於診斷遷移）
         try:
             insp = _inspect(engine)
             reports_cols = [c["name"] for c in insp.get_columns("reports")]
+            sessions_cols = [c["name"] for c in insp.get_columns("sessions")]
         except Exception:
             pass
     except Exception as e:
@@ -861,4 +865,5 @@ def health():
         "db_url_prefix": str(engine.url)[:40] if not db_ok else "",
         "env_diag": env_diag,
         "reports_cols": reports_cols,
+        "sessions_cols": sessions_cols,
     }
