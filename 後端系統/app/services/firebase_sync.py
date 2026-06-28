@@ -226,7 +226,7 @@ async def sync_to_firebase(
 
     返回 True 表示成功，False 表示失敗（不拋例外，避免影響主流程）。
     """
-    headers = _get_auth_headers()
+    headers = _get_auth_headers(force_bearer=True)
     if not headers:
         logger.warning("[Firebase] 無可用認證憑證，跳過同步（設定 FIREBASE_SERVICE_KEY 或 FIREBASE_SYNC_EMAIL/PASSWORD）")
         return False
@@ -409,7 +409,8 @@ async def sync_captures_to_firebase(
     captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
     回傳 True 表示成功，False 表示失敗（不拋例外）。
     """
-    headers = _get_auth_headers()
+    # 強制使用 Bearer Token 認證（X-Service-Key 在某些部署環境下無效）
+    headers = _get_auth_headers(force_bearer=True)
     if not headers:
         logger.warning("[Firebase] 無可用認證憑證，跳過 Android captures 同步")
         return False
