@@ -70,8 +70,11 @@ def recompute_braindna(
     from app.services.braindna_algorithms import _select_best_window, MIN_DELTA_QUALITY as _MDQ
     from app.algorithms.report import generate_quick_mbti
 
-    # 查所有有 raw_arrays_json 的 Session
-    query = db.query(M.Session).filter(M.Session.raw_arrays_json.isnot(None))
+    # 查所有有 raw_arrays_json 或 firebase_session_id 的 Session
+    query = db.query(M.Session).filter(
+        (M.Session.raw_arrays_json.isnot(None)) |
+        (M.Session.firebase_session_id.isnot(None))
+    )
     sessions = query.order_by(M.Session.session_id).all()
 
     stats = {
@@ -91,17 +94,41 @@ def recompute_braindna(
                 stats["skipped_already_done"] += 1
                 continue
 
-            raw = json.loads(sess.raw_arrays_json)
+            _is_child = (getattr(sess, "report_type", None) or "").lower() in ("child", "child_report")
+            raw = None
+            _raw_source = "none"
+
+            # 來源 1：Firebase 180 筆特徵（最高優先）
+            if sess.firebase_session_id:
+                try:
+                    import asyncio as _aio
+                    from app.services.firebase_sync import fetch_eeg_features, firebase_features_to_raw_arrays
+                    _fb_features = _aio.run(fetch_eeg_features(sess.firebase_session_id))
+                    if _fb_features and len(_fb_features) >= 10:
+                        raw = firebase_features_to_raw_arrays(_fb_features)
+                        _raw_source = "firebase"
+                except Exception:
+                    pass  # Firebase 失敗則繼續 fallback
+
+            # 來源 2：PostgreSQL raw_arrays_json
+            if raw is None and sess.raw_arrays_json:
+                raw = json.loads(sess.raw_arrays_json)
+                _raw_source = "pg_raw"
+
+            if raw is None:
+                stats["skipped_no_data"] += 1
+                stats["details"].append({"session_id": sid, "status": "skip", "reason": "no raw data (no firebase_session_id and no raw_arrays_json)"})
+                continue
+
             n_la = len(raw.get("r_lalpha") or [])
 
             # 需要至少 10 筆 r_lalpha 才能用 BrainDNA 算法
             if n_la < 10:
                 stats["skipped_no_data"] += 1
-                stats["details"].append({"session_id": sid, "status": "skip", "reason": f"r_lalpha only {n_la} samples"})
+                stats["details"].append({"session_id": sid, "status": "skip", "reason": f"r_lalpha only {n_la} samples (source={_raw_source})"})
                 continue
 
             # 重算 BrainDNA 核心指標（兒童報告使用兒童閾值）
-            _is_child = (getattr(sess, "report_type", None) or "").lower() in ("child", "child_report")
             result = _compute_all(raw, is_child=_is_child)
             if not result.get("valid"):
                 stats["failed"] += 1

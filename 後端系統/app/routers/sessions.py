@@ -205,20 +205,41 @@ def upload_session(
     db.refresh(report)
 
     # 4. 非同步同步 180 筆擷取記錄到 Firebase 腦波資料庫
+    _android_session_id = session.session_id
+
     def _run_firebase_sync_captures():
         import logging as _log
         _logger = _log.getLogger(__name__)
         try:
             from app.services.firebase_sync import sync_captures_to_firebase
-            ok = asyncio.run(sync_captures_to_firebase(
+            fb_sid = asyncio.run(sync_captures_to_firebase(
                 subject_name = req.subject_name,
-                session_id   = session.session_id,
+                session_id   = _android_session_id,
                 captures     = req.captures,
             ))
-            if not ok:
-                _logger.warning("[Firebase] session %s 同步回傳 False", session.session_id)
+            if not fb_sid:
+                _logger.warning("[Firebase] session %s 同步回傳 None", _android_session_id)
+            else:
+                # 回存 firebase_session_id 到 PostgreSQL
+                try:
+                    from app.core.database import SessionLocal
+                    from app.core.models import Session as SessionModel
+                    _db = SessionLocal()
+                    try:
+                        _s = _db.query(SessionModel).filter(
+                            SessionModel.session_id == _android_session_id
+                        ).first()
+                        if _s and not _s.firebase_session_id:
+                            _s.firebase_session_id = fb_sid
+                            _db.commit()
+                            _logger.info("[Firebase] Android session %s firebase_session_id 已回存: %s",
+                                         _android_session_id, fb_sid)
+                    finally:
+                        _db.close()
+                except Exception as _e2:
+                    _logger.warning("[Firebase] 回存 firebase_session_id 失敗: %s", _e2)
         except Exception as _e:
-            _logger.exception("[Firebase] session %s 同步例外: %s", session.session_id, _e)
+            _logger.exception("[Firebase] session %s 同步例外: %s", _android_session_id, _e)
 
     background_tasks.add_task(_run_firebase_sync_captures)
 

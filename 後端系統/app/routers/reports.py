@@ -1038,19 +1038,41 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
     lo_gamma = _safe_float(avg.low_gamma)
     hi_gamma = _safe_float(avg.high_gamma)
 
-    # ── BrainDNA 算法：優先從 raw_arrays_json 重算精確佔比值 ─────────────────
-    # 若 Session 有保存原始 180 秒陣列，用佔比算法覆寫頻段值（High ≠ Low，數值精確）
+    # ── BrainDNA 算法：優先來源順序：Firebase → raw_arrays_json → DB 平均值 ──
+    # 資料來源優先順序說明：
+    #   1. Firebase：fetch 180 筆特徵 → firebase_features_to_raw_arrays → BrainDNA
+    #   2. PostgreSQL raw_arrays_json：Session 保存的 180 秒陣列 → BrainDNA
+    #   3. DB 平均值（EegCapture 單筆平均）：最後 fallback
     _bdna_bands = None
+    _bdna_source = "db_avg"
     try:
         import json as _json
         from app.services.braindna_algorithms import compute_all as _bdna_compute
         _sess_obj = db.query(M.Session).filter(M.Session.session_id == session_id).first()
-        if _sess_obj and _sess_obj.raw_arrays_json:
+        _is_child = (getattr(_sess_obj, "report_type", None) or "").lower() in ("child", "child_report")
+
+        # 來源 1：Firebase 180 筆特徵（最權威）
+        if _sess_obj and _sess_obj.firebase_session_id:
+            try:
+                import asyncio as _aio
+                from app.services.firebase_sync import fetch_eeg_features, firebase_features_to_raw_arrays
+                _fb_features = _aio.run(fetch_eeg_features(_sess_obj.firebase_session_id))
+                if _fb_features and len(_fb_features) >= 10:
+                    _fb_raw = firebase_features_to_raw_arrays(_fb_features)
+                    _result = _bdna_compute(_fb_raw, is_child=_is_child)
+                    if _result.get("valid") and _result.get("bands"):
+                        _bdna_bands = _result["bands"]
+                        _bdna_source = "firebase_180"
+            except Exception as _fe:
+                pass  # Firebase 失敗則繼續往下 fallback
+
+        # 來源 2：PostgreSQL raw_arrays_json
+        if _bdna_bands is None and _sess_obj and _sess_obj.raw_arrays_json:
             _raw = _json.loads(_sess_obj.raw_arrays_json)
-            _is_child = (getattr(_sess_obj, "report_type", None) or "").lower() in ("child", "child_report")
             _result = _bdna_compute(_raw, is_child=_is_child)
             if _result.get("valid") and _result.get("bands"):
                 _bdna_bands = _result["bands"]
+                _bdna_source = "pg_raw_arrays"
     except Exception:
         pass  # 回退到 DB 平均值
 
@@ -1091,7 +1113,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
             "gamma_high": hi_gamma,
             "gamma_low":  lo_gamma,
         },
-        "_source": "braindna" if _bdna_bands else "db_avg",  # 偵錯用，不影響邏輯
+        "_source": _bdna_source,  # 偵錯用：firebase_180 / pg_raw_arrays / db_avg
     }
     return bw
 

@@ -351,6 +351,9 @@ def _run_lightweight_migrations():
     if "bdna_mode" not in cols:
         pending.append("ALTER TABLE sessions ADD COLUMN bdna_mode VARCHAR(40) NULL")
 
+    if "firebase_session_id" not in cols:
+        pending.append("ALTER TABLE sessions ADD COLUMN firebase_session_id VARCHAR(100) NULL")
+
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
         return

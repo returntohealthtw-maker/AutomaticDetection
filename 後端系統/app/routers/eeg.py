@@ -295,14 +295,35 @@ def save_eeg_stats(
 
         session_start = datetime.fromtimestamp(now_ts, tz=timezone.utc)
 
+        _railway_session_id = sess.session_id
+
         def _run_firebase_sync():
-            asyncio.run(sync_to_firebase(
+            fb_sid = asyncio.run(sync_to_firebase(
                 subject_name   = payload.subject_name,
-                session_id     = sess.session_id,
+                session_id     = _railway_session_id,
                 raw_arrays     = payload.raw_arrays,
                 session_start  = session_start,
-                braindna_result= _bdna_result,  # 同步 BrainDNA 計算結果到 Firebase
+                braindna_result= _bdna_result,
             ))
+            # 回存 firebase_session_id 到 PostgreSQL，供後台及報告讀取使用
+            if fb_sid:
+                try:
+                    from app.core.database import SessionLocal
+                    from app.core.models import Session as SessionModel
+                    _db = SessionLocal()
+                    try:
+                        _s = _db.query(SessionModel).filter(
+                            SessionModel.session_id == _railway_session_id
+                        ).first()
+                        if _s and not _s.firebase_session_id:
+                            _s.firebase_session_id = fb_sid
+                            _db.commit()
+                            logger.info("[Firebase] session %s firebase_session_id 已回存: %s",
+                                        _railway_session_id, fb_sid)
+                    finally:
+                        _db.close()
+                except Exception as _e:
+                    logger.warning("[Firebase] 回存 firebase_session_id 失敗: %s", _e)
 
         background_tasks.add_task(_run_firebase_sync)
 
@@ -403,6 +424,8 @@ def get_session_stats(
         "report_type":  sess.report_type,
         "created_at":   sess.created_at,
         "eeg_stats":    stats,
+        "bdna_mode":    getattr(sess, "bdna_mode", None),
+        "firebase_session_id": getattr(sess, "firebase_session_id", None),
         "report_status": rep.status if rep else None,
         "report_url":    rep.pdf_url if rep else None,
         "email_sent":    rep.email_sent if rep else 0,
@@ -447,7 +470,8 @@ def list_my_sessions(
             "created_at":    s.created_at,
             "status":        s.status,
             "failure_reason":s.failure_reason,
-            "bdna_mode":     getattr(s, "bdna_mode", None),  # 演算來源標記
+            "bdna_mode":           getattr(s, "bdna_mode", None),
+            "firebase_session_id": getattr(s, "firebase_session_id", None),  # Firebase session UUID
             "report_status": (rep.status if rep else None),
             "report_url":    (rep.pdf_url if rep else None),
             "report_variant":(getattr(rep, "variant", None) if rep else None),

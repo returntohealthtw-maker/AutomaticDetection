@@ -180,11 +180,19 @@ def _raw_arrays_to_features(raw_arrays: dict, session_start: datetime) -> list[d
             "timestamp":       ts,
             "windowSec":       1.0,
             # 原始 raw 值（絕對功率，供潛意識音頻生成演算法使用）
+            # 合併頻段（向下相容）
             "deltaPower":      raw_d  or None,
             "thetaPower":      raw_th or None,
             "alphaPower":      (raw_la + raw_ha) or None,
             "betaPower":       (raw_lb + raw_hb) or None,
             "gammaPower":      (raw_lg + raw_hg) or None,
+            # 分頻功率（BrainDNA 佔比演算法必要欄位）
+            "lowAlphaPower":   raw_la or None,
+            "highAlphaPower":  raw_ha or None,
+            "lowBetaPower":    raw_lb or None,
+            "highBetaPower":   raw_hb or None,
+            "lowGammaPower":   raw_lg or None,
+            "highGammaPower":  raw_hg or None,
             # 相對比例（0-100 %）
             "deltaRatio":      ratio(b_d),
             "thetaRatio":      ratio(b_th),
@@ -215,7 +223,7 @@ async def sync_to_firebase(
     raw_arrays: dict,
     session_start: Optional[datetime] = None,
     braindna_result: Optional[dict] = None,
-) -> bool:
+) -> Optional[str]:
     """
     非同步將 180 筆原始腦波資料同步到 Firebase 腦波資料庫。
 
@@ -224,7 +232,7 @@ async def sync_to_firebase(
       2. POST /api/eeg/batch（每批最多 100 筆，分批上傳）→ 存入 Firestore + BigQuery
       3. PATCH /api/sessions/{id} → 標記 completed
 
-    返回 True 表示成功，False 表示失敗（不拋例外，避免影響主流程）。
+    返回 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外，避免影響主流程）。
     """
     headers = _get_auth_headers(force_bearer=True)
     if not headers:
@@ -333,11 +341,11 @@ async def sync_to_firebase(
             if patch_resp.status_code not in (200, 204):
                 logger.warning("[Firebase] PATCH session 狀態非預期: %s", patch_resp.status_code)
 
-            return True
+            return fb_session_id
 
     except Exception as exc:
         logger.exception("[Firebase] 同步例外: %s", exc)
-        return False
+        return None
 
 
 def _captures_to_features(captures: List[Any]) -> list:
@@ -402,12 +410,12 @@ async def sync_captures_to_firebase(
     subject_name: str,
     session_id: int,
     captures: List[Any],
-) -> bool:
+) -> Optional[str]:
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
 
     captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
-    回傳 True 表示成功，False 表示失敗（不拋例外）。
+    回傳 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外）。
     """
     # 強制使用 Bearer Token 認證（X-Service-Key 在某些部署環境下無效）
     headers = _get_auth_headers(force_bearer=True)
@@ -502,11 +510,118 @@ async def sync_captures_to_firebase(
             if patch_resp.status_code not in (200, 204):
                 logger.warning("[Firebase] Android PATCH session 狀態非預期: %s", patch_resp.status_code)
 
-            return True
+            return fb_session_id
 
     except Exception as exc:
         logger.exception("[Firebase] Android captures 同步例外: %s", exc)
-        return False
+        return None
+
+
+# ── 從 Firebase 讀取 180 筆特徵值（用於 BrainDNA 重新計算）──────────────────────
+
+async def fetch_eeg_features(firebase_session_id: str) -> Optional[List[dict]]:
+    """
+    從 Firebase 讀取指定 session 的所有 EEG 特徵值（最多 200 筆）。
+
+    端點：GET /eeg/{sessionId}?limit=200
+    回傳特徵值列表；失敗或無資料時回傳 None。
+    """
+    headers = _get_auth_headers(force_bearer=True)
+    if not headers:
+        logger.warning("[Firebase] 無認證憑證，無法讀取 EEG 特徵值")
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{FIREBASE_API_BASE}/eeg/{firebase_session_id}",
+                headers=headers,
+                params={"limit": 200},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                features = data.get("features") or data.get("data") or []
+                logger.info("[Firebase] 讀取 fb_sid=%s 共 %d 筆特徵值",
+                            firebase_session_id, len(features))
+                return features if features else None
+            else:
+                logger.error("[Firebase] GET /eeg/%s 失敗 %s: %s",
+                             firebase_session_id, resp.status_code, resp.text[:200])
+                return None
+    except Exception as exc:
+        logger.exception("[Firebase] fetch_eeg_features 例外: %s", exc)
+        return None
+
+
+def firebase_features_to_raw_arrays(features: List[dict]) -> dict:
+    """
+    將 Firebase eeg_features 列表轉換為 BrainDNA compute_all() 所需的 raw_arrays 格式。
+
+    優先使用各分頻功率（*Power）做原始值輸入（scale='raw'）；
+    若無功率值，改用比例值（*Ratio，0-100）做輸入（scale='norm100'）。
+
+    回傳格式：
+    {
+        "r_delta":  [float, ...],  # 每秒一個值
+        "r_theta":  [float, ...],
+        "r_lalpha": [float, ...],
+        "r_halpha": [float, ...],
+        "r_lbeta":  [float, ...],
+        "r_hbeta":  [float, ...],
+        "r_lgamma": [float, ...],
+        "r_hgamma": [float, ...],
+    }
+    """
+    # 按時間戳排序，確保順序正確
+    sorted_features = sorted(features, key=lambda f: f.get("timestamp", ""))
+
+    # 判斷是否有分頻功率欄位（Railway 新格式）或只有比例欄位
+    has_sub_power = any(
+        f.get("lowAlphaPower") or f.get("highAlphaPower")
+        for f in sorted_features[:5]
+    )
+
+    r_delta  = []
+    r_theta  = []
+    r_lalpha = []
+    r_halpha = []
+    r_lbeta  = []
+    r_hbeta  = []
+    r_lgamma = []
+    r_hgamma = []
+
+    for f in sorted_features:
+        if has_sub_power:
+            # 使用原始 raw 功率值（供 scale='raw' BrainDNA）
+            r_delta .append(float(f.get("deltaPower",     0) or 0))
+            r_theta .append(float(f.get("thetaPower",     0) or 0))
+            r_lalpha.append(float(f.get("lowAlphaPower",  0) or 0))
+            r_halpha.append(float(f.get("highAlphaPower", 0) or 0))
+            r_lbeta .append(float(f.get("lowBetaPower",   0) or 0))
+            r_hbeta .append(float(f.get("highBetaPower",  0) or 0))
+            r_lgamma.append(float(f.get("lowGammaPower",  0) or 0))
+            r_hgamma.append(float(f.get("highGammaPower", 0) or 0))
+        else:
+            # 使用比例值（供 scale='norm100' BrainDNA）
+            r_delta .append(float(f.get("deltaRatio",     0) or 0))
+            r_theta .append(float(f.get("thetaRatio",     0) or 0))
+            r_lalpha.append(float(f.get("lowAlphaRatio",  0) or 0))
+            r_halpha.append(float(f.get("highAlphaRatio", 0) or 0))
+            r_lbeta .append(float(f.get("lowBetaRatio",   0) or 0))
+            r_hbeta .append(float(f.get("highBetaRatio",  0) or 0))
+            r_lgamma.append(float(f.get("lowGammaRatio",  0) or 0))
+            r_hgamma.append(float(f.get("highGammaRatio", 0) or 0))
+
+    return {
+        "r_delta":  r_delta,
+        "r_theta":  r_theta,
+        "r_lalpha": r_lalpha,
+        "r_halpha": r_halpha,
+        "r_lbeta":  r_lbeta,
+        "r_hbeta":  r_hbeta,
+        "r_lgamma": r_lgamma,
+        "r_hgamma": r_hgamma,
+    }
 
 
 # ── 佇列 API（供 main.py / report_gen.py / ai_report.py 呼叫）─────────────────
