@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.06.27.07"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.06.17.01"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 26
@@ -308,6 +308,14 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN talent_report_kind VARCHAR(32) NULL")
     if not has_column("reports", "error_message"):
         pending.append("ALTER TABLE reports ADD COLUMN error_message TEXT NULL")
+    if not has_column("reports", "line_user_id"):
+        pending.append("ALTER TABLE reports ADD COLUMN line_user_id VARCHAR(100) NULL")
+    if not has_column("reports", "line_sent"):
+        pending.append("ALTER TABLE reports ADD COLUMN line_sent INTEGER DEFAULT 0")
+    # firebase_sync_log 表（若不存在則由 SQLAlchemy create_all 建立，這裡補保護性欄位檢查）
+    if not has_column("firebase_sync_log", "id"):
+        # 整張表不存在，用 create_all 建立（Base.metadata.create_all 已在啟動時呼叫）
+        pass
     # eeg_captures – BrainDNA 算術平均 MBTI 欄位
     if not has_column("eeg_captures", "mbti_la"):
         pending.append("ALTER TABLE eeg_captures ADD COLUMN mbti_la INTEGER NULL")
