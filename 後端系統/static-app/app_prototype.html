@@ -3478,7 +3478,7 @@ async function refreshHomeData() {
       } else {
         listEl.innerHTML = subs.slice(0, 6).map(s => {
           const age = _calcAgeStr(s.birth_date);
-          const created = s.created_at ? s.created_at.replace('T', ' ').slice(5, 16) : '';
+          const created = _isoUTCtoLocalStr(s.created_at, true);
           return `<div class="history-item">
             <div class="hi-top">
               <span class="hi-name">${s.name}</span>
@@ -3613,6 +3613,21 @@ function _formatTs(epochSec) {
   const d = new Date(epochSec * 1000);
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// DB 的 subject.created_at 儲存為 UTC ISO 字串（無時區後綴），加 'Z' 讓瀏覽器按 UTC 解析後顯示本地時間（UTC+8）
+function _isoUTCtoLocalStr(isoStr, compact) {
+  if (!isoStr) return '';
+  try {
+    const s = (isoStr.includes('Z') || isoStr.includes('+')) ? isoStr : isoStr + 'Z';
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return isoStr.replace('T', ' ').slice(0, 16);
+    const pad = n => String(n).padStart(2, '0');
+    if (compact) {
+      return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (e) { return isoStr.replace('T', ' ').slice(0, 16); }
 }
 
 function _historyReportLabel(rt) {
@@ -4039,7 +4054,7 @@ async function renderAdminSubjects() {
 
 function _renderSubjectViewCard(s) {
   const age = _calcAgeStr(s.birth_date);
-  const created = s.created_at ? s.created_at.replace('T', ' ').slice(0, 16) : '';
+  const created = _isoUTCtoLocalStr(s.created_at);
   return `<div class="admin-card">
     <div class="name">${_escapeHtml(s.name)}
       ${age ? `<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;margin-left:6px;">${age} 歲</span>` : ''}
@@ -8809,8 +8824,11 @@ function _renderAllSubjectCard(s) {
   const fmtTime = (t) => {
     if (!t) return null;
     try {
-      // 後端 created_at(Subject)=ISO 字串；latest_session_at(Session)=ms timestamp
-      const d = (typeof t === 'number') ? new Date(t) : new Date(String(t));
+      // Subject.created_at = ISO UTC 字串（無 'Z'）→ 加 'Z' 讓瀏覽器正確換算為本地時間
+      // Session.latest_session_at = ms timestamp（已是 UTC epoch）
+      const d = (typeof t === 'number') ? new Date(t) : new Date(
+        (String(t).includes('Z') || String(t).includes('+')) ? String(t) : String(t) + 'Z'
+      );
       if (isNaN(d.getTime())) return null;
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
