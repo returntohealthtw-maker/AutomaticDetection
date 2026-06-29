@@ -636,6 +636,53 @@ async def debug_test_firebase_sync_session(session_id: int):
     finally:
         db.close()
     return result
+
+
+@app.get("/debug/resync-raw-session/{session_id}")
+async def debug_resync_raw_session(session_id: int):
+    """用 raw_arrays_json 重新同步指定 session 的 179 筆完整腦波到 Firebase"""
+    import traceback, json as _json
+    from datetime import datetime, timezone
+    from app.core.database import SessionLocal
+    from app.core import models
+    from app.services import firebase_sync as _fb
+
+    db = SessionLocal()
+    result = {"session_id": session_id}
+    try:
+        sess = db.query(models.Session).filter(models.Session.session_id == session_id).first()
+        if not sess:
+            return {"error": "session not found"}
+        result["subject_name"] = sess.subject_name
+        result["has_raw_arrays_json"] = bool(sess.raw_arrays_json)
+
+        if not sess.raw_arrays_json:
+            return {"error": "no raw_arrays_json — this session has no per-second data"}
+
+        raw_arrays = _json.loads(sess.raw_arrays_json)
+        # Count samples
+        sample_count = max(len(v) for v in raw_arrays.values() if isinstance(v, list)) if raw_arrays else 0
+        result["sample_count"] = sample_count
+
+        session_start = datetime.fromtimestamp(sess.created_at or 0, tz=timezone.utc)
+        fb_sid = await _fb.sync_to_firebase(
+            subject_name    = sess.subject_name,
+            session_id      = sess.session_id,
+            raw_arrays      = raw_arrays,
+            session_start   = session_start,
+            braindna_result = None,
+        )
+        result["sync_ok"] = fb_sid
+        result["firebase_session_id"] = fb_sid if isinstance(fb_sid, str) else None
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        result["traceback"] = traceback.format_exc()
+    finally:
+        db.close()
+    return result
+
+
+@app.get("/healthz")
 def healthz():
     """Railway Healthcheck 專用，永遠回 200，不依賴 DB"""
     return {"ok": True}
