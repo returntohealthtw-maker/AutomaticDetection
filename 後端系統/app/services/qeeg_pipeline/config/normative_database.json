@@ -1,85 +1,87 @@
 {
-  "_version": "1.1",
-  "_note": "ThinkGear 單導程 Fp1 常模資料庫。log_mean / log_sd 為 log(relative_power + 1e-8) 的統計值。",
+  "_version": "1.2",
+  "_note": "ThinkGear 單導程 Fp1 常模資料庫。log_mean 為實測校準值，log_sd 為 inter-individual（人與人之間）標準差。",
   "_provenance": {
-    "literature_adapted": "基於實測 ThinkGear sessions（88, 89）校準的 Fp1 閉眼靜息相對功率常模。原始學術文獻（Klimesch 1999; Teplan 2002）不適用於 ThinkGear 單導程輸出，故以實際資料覆蓋。",
+    "log_mean_source": "ThinkGear Fp1 閉眼靜息實測校準（sessions 88, 89）：先計算每人 180 秒平均 → 跨人平均",
+    "log_sd_source": "基於跨人 SD（inter-individual variability），來源：實測 2 sessions + 文獻下限保底（Teplan 2002, Nunez 2006）。⚠️ n=2 時部分頻段 raw SD 接近 0（如 theta），以文獻下限 0.30 保底。",
+    "wrong_approach_v1.0_v1.1": "舊版錯誤：使用 within-session temporal SD（每秒波動），導致 log_sd 過大（0.65-0.99），Z-score 全部擠在 0 附近，所有人得分趨近 50，無法分化個體差異。",
+    "fix_v1.2": "改用 session-level log mean（先每人平均再取 log），跨人 SD（inter-individual）作為常模 SD，各頻段 SD 控制在 0.30-0.50。",
     "calibration_sessions": [88, 89],
-    "calibration_note": "delta 在 ThinkGear Fp1 通常佔 40-70%，遠高於多導程文獻數值。以本系統實際受測資料作為基準，後續隨 internal_norms 達 30 筆自動更新。",
-    "internal_norms": "由系統自動從累積受測資料計算（需 ≥ 30 筆才啟用，否則回退 literature_adapted）"
+    "internal_norms_note": "當 sample_count >= 30 時，internal_norms 自動覆蓋 literature_adapted。"
   },
 
   "literature_adapted": {
-    "_coverage": "ThinkGear Fp1, eyes_closed, age 18-65, calibrated from sessions 88-89",
+    "_coverage": "ThinkGear Fp1, eyes_closed, 閉眼靜息態，inter-individual normative SD v1.2",
     "by_band": {
       "delta": {
-        "log_mean": -0.85, "log_sd": 0.65,
-        "rel_mean": 0.53,  "rel_sd": 0.13,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -0.849, "log_sd": 0.50,
+        "rel_mean": 0.53,   "rel_sd": 0.16,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "theta": {
-        "log_mean": -2.07, "log_sd": 0.74,
-        "rel_mean": 0.16,  "rel_sd": 0.06,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -2.070, "log_sd": 0.30,
+        "rel_mean": 0.126,  "rel_sd": 0.05,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2_lit_floor"
       },
       "low_alpha": {
-        "log_mean": -3.60, "log_sd": 0.95,
-        "rel_mean": 0.042,  "rel_sd": 0.015,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -3.601, "log_sd": 0.39,
+        "rel_mean": 0.028,  "rel_sd": 0.010,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "high_alpha": {
-        "log_mean": -3.72, "log_sd": 0.96,
-        "rel_mean": 0.040,  "rel_sd": 0.018,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -3.720, "log_sd": 0.50,
+        "rel_mean": 0.028,  "rel_sd": 0.013,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "high_sigma": {
-        "log_mean": -3.75, "log_sd": 0.92,
-        "rel_mean": 0.041,  "rel_sd": 0.016,
-        "sample_size": 2,  "source": "thinkgear_calibrated_approx"
+        "log_mean": -3.750, "log_sd": 0.44,
+        "rel_mean": 0.028,  "rel_sd": 0.012,
+        "sample_size": 2,   "source": "thinkgear_calibrated_approx_v1.2"
       },
       "low_beta": {
-        "log_mean": -3.79, "log_sd": 0.89,
-        "rel_mean": 0.040,  "rel_sd": 0.020,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -3.787, "log_sd": 0.50,
+        "rel_mean": 0.028,  "rel_sd": 0.016,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "high_beta": {
-        "log_mean": -2.91, "log_sd": 0.89,
-        "rel_mean": 0.090,  "rel_sd": 0.044,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -2.907, "log_sd": 0.50,
+        "rel_mean": 0.062,  "rel_sd": 0.035,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "low_gamma": {
-        "log_mean": -3.11, "log_sd": 0.86,
-        "rel_mean": 0.068,  "rel_sd": 0.025,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -3.111, "log_sd": 0.49,
+        "rel_mean": 0.047,  "rel_sd": 0.018,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2"
       },
       "high_gamma": {
-        "log_mean": -3.84, "log_sd": 0.90,
-        "rel_mean": 0.032,  "rel_sd": 0.006,
-        "sample_size": 2,  "source": "thinkgear_calibrated"
+        "log_mean": -3.839, "log_sd": 0.30,
+        "rel_mean": 0.022,  "rel_sd": 0.004,
+        "sample_size": 2,   "source": "thinkgear_calibrated_v1.2_lit_floor"
       }
     },
 
     "by_age_group": {
       "18-29": {
-        "theta": {"log_mean": -2.10, "log_sd": 0.75},
-        "low_alpha": {"log_mean": -3.55, "log_sd": 0.95}
+        "theta":     {"log_mean": -2.10, "log_sd": 0.30},
+        "low_alpha": {"log_mean": -3.55, "log_sd": 0.39}
       },
       "30-44": {
-        "theta": {"log_mean": -2.07, "log_sd": 0.74},
-        "low_alpha": {"log_mean": -3.60, "log_sd": 0.95}
+        "theta":     {"log_mean": -2.07, "log_sd": 0.30},
+        "low_alpha": {"log_mean": -3.60, "log_sd": 0.39}
       },
       "45-59": {
-        "theta": {"log_mean": -2.00, "log_sd": 0.75},
-        "low_alpha": {"log_mean": -3.70, "log_sd": 0.98}
+        "theta":     {"log_mean": -2.00, "log_sd": 0.30},
+        "low_alpha": {"log_mean": -3.70, "log_sd": 0.40}
       },
       "60+": {
-        "theta": {"log_mean": -1.95, "log_sd": 0.78},
-        "low_alpha": {"log_mean": -3.80, "log_sd": 1.00}
+        "theta":     {"log_mean": -1.95, "log_sd": 0.32},
+        "low_alpha": {"log_mean": -3.80, "log_sd": 0.42}
       }
     }
   },
 
   "internal_norms": {
-    "_note": "由系統自動從累積受測資料計算。當 sample_count >= 30 時，此處數值優先於 literature_adapted 使用。",
+    "_note": "當 sample_count >= 30 時，此處數值優先於 literature_adapted 使用。每位受測者先計算 session-level log mean（180 秒平均後取 log），再跨人統計。",
     "_last_updated": null,
     "sample_count": 0,
     "by_band": {}

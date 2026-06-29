@@ -2877,27 +2877,15 @@
             <div id="r2-bands"></div>
           </div>
 
-          <!-- ── 原始腦波數值除錯面板（開發用，點擊展開）── -->
+          <!-- ── 腦波多層比對面板（管理員/工作人員可見）── -->
           <div id="eeg-debug-panel" style="margin:0 12px 12px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);">
             <div onclick="var b=document.getElementById('eeg-debug-body');b.style.display=b.style.display==='none'?'block':'none';"
                  style="background:rgba(255,255,255,0.07);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:600;">🔬 原始腦波數值（開發驗證）</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:600;">🔬 腦波原始值 + 演算比對（管理員驗證）</span>
               <span style="font-size:10px;color:rgba(255,255,255,0.4);">點擊展開 ▸</span>
             </div>
             <div id="eeg-debug-body" style="display:none;padding:10px 14px;background:rgba(0,0,0,0.3);">
-              <div id="eeg-debug-content" style="font-family:monospace;font-size:11px;color:#aef;line-height:1.8;white-space:pre;"></div>
-            </div>
-          </div>
-
-          <!-- ── 原始腦波數值除錯面板（僅管理員/工作人員可見）── -->
-          <div id="eeg-debug-panel" style="display:none;margin:0 12px 12px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.12);">
-            <div onclick="var b=document.getElementById('eeg-debug-body');b.style.display=b.style.display==='none'?'block':'none';"
-                 style="background:rgba(255,255,255,0.07);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:12px;color:rgba(255,255,255,0.6);font-weight:600;">🔬 原始腦波數值（管理員驗證）</span>
-              <span style="font-size:10px;color:rgba(255,255,255,0.4);">點擊展開 ▸</span>
-            </div>
-            <div id="eeg-debug-body" style="display:none;padding:10px 14px;background:rgba(0,0,0,0.3);">
-              <div id="eeg-debug-content" style="font-family:monospace;font-size:11px;color:#aef;line-height:1.8;white-space:pre;"></div>
+              <div id="eeg-debug-content" style="font-family:monospace;font-size:11px;color:#aef;line-height:1.8;"></div>
             </div>
           </div>
 
@@ -6066,23 +6054,34 @@ function _renderResultsFromEeg() {
   if (isStaff && stats) {
     const b7   = stats.bands_7 || {};
     const ba   = stats.bands_avg || {};
+    const ra   = stats.raw_arrays || {};   // 原始 ThinkGear 每秒陣列
     const qb   = window._lastQeegBandScores || {};
     const qGrade = window._lastQeegSignalGrade || '—';
 
-    // 頻段定義：[鍵名, 中文符號, BrainDNA 對應 key, qEEG key]
+    // 計算原始 ThinkGear 平均值（四捨五入取整）
+    const rawAvg = (arr) => {
+      if (!arr || !arr.length) return null;
+      const s = arr.reduce((a, b) => a + (Number(b) || 0), 0);
+      return Math.round(s / arr.length);
+    };
+    const fmtRaw = (v) => v != null && v > 0
+      ? v.toLocaleString()   // 如 197,165
+      : '—';
+
+    // 頻段定義：[qEEG key, 顯示標籤, BrainDNA b7 key, raw_arrays key]
     const BAND_ROWS = [
-      ['delta',      'δ Delta',      'delta',      'delta'],
-      ['theta',      'θ Theta',      'theta',      'theta'],
-      ['low_alpha',  'α Low Alpha',  'alpha_low',  'low_alpha'],
-      ['high_alpha', 'α High Alpha', 'alpha_high', 'high_alpha'],
-      ['low_beta',   'β Low Beta',   'beta_low',   'low_beta'],
-      ['high_beta',  'β High Beta',  'beta_high',  'high_beta'],
-      ['low_gamma',  'γ Low Gamma',  'gamma_low',  'low_gamma'],
-      ['high_gamma', 'γ High Gamma', 'gamma_high', 'high_gamma'],
+      ['delta',      'δ Delta',      'delta',      'r_delta'],
+      ['theta',      'θ Theta',      'theta',      'r_theta'],
+      ['low_alpha',  'α Low Alpha',  'alpha_low',  'r_lalpha'],
+      ['high_alpha', 'α High Alpha', 'alpha_high', 'r_halpha'],
+      ['low_beta',   'β Low Beta',   'beta_low',   'r_lbeta'],
+      ['high_beta',  'β High Beta',  'beta_high',  'r_hbeta'],
+      ['low_gamma',  'γ Low Gamma',  'gamma_low',  'r_lgamma'],
+      ['high_gamma', 'γ High Gamma', 'gamma_high', 'r_hgamma'],
     ];
 
-    const getB = (baKey, b7Key) =>
-      b7[b7Key] ?? b7[baKey] ?? ba[baKey] ?? ba[b7Key] ?? null;
+    const getB = (b7Key) =>
+      b7[b7Key] ?? b7[b7Key.replace('_', '')] ?? ba[b7Key.replace('alpha_', '').replace('beta_', '').replace('gamma_', '')] ?? null;
 
     const scoreColor = (v) => {
       if (v == null) return '#888';
@@ -6092,38 +6091,48 @@ function _renderResultsFromEeg() {
       return '#f44336';
     };
 
-    const hasQeeg = Object.keys(qb).length > 0;
+    const hasQeeg  = Object.keys(qb).length > 0;
+    const hasRaw   = Object.keys(ra).length > 0;
 
-    // 表格 HTML
+    const gradeCol = {'A':'#4caf50','B':'#aef','C':'#ff9800','D':'#f44336'};
+
     let html = `
-      <div style="font-size:10px;color:#aef;margin-bottom:6px;">
-        樣本數: <b>${stats.sample_count ?? '—'}</b>　
-        注意力: <b>${stats.attention_percentage ?? '—'}</b>　
-        放鬆度: <b>${stats.meditation_percentage ?? '—'}</b>
-        ${hasQeeg ? `　qEEG 訊號品質: <b style="color:${qGrade==='A'?'#4caf50':qGrade==='B'?'#aef':qGrade==='C'?'#ff9800':'#f44336'}">${qGrade}</b>` : ''}
+      <div style="font-size:10px;color:#aef;margin-bottom:8px;line-height:1.8;">
+        <span>樣本數: <b>${stats.sample_count ?? '—'}</b></span>　
+        <span>注意力: <b>${stats.attention_percentage ?? '—'}</b></span>　
+        <span>放鬆度: <b>${stats.meditation_percentage ?? '—'}</b></span>
+        ${hasQeeg ? `　<span>qEEG 訊號品質: <b style="color:${gradeCol[qGrade]||'#aef'}">${qGrade}</b></span>` : ''}
       </div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:6px;">
+        ① 原始均值：ThinkGear 輸出的 180 秒平均功率（絕對值）
+        ② BrainDNA：佔比演算法 0-100 分（最佳 30s 視窗）
+        ${hasQeeg ? '③ qEEG Z-score：標準化常模分數 0-100（50=常模平均）' : ''}
+      </div>
+      <div style="overflow-x:auto;">
       <table style="border-collapse:collapse;width:100%;font-size:11px;">
         <thead>
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.2);">
-            <th style="text-align:left;padding:3px 8px;color:#aaa;font-weight:600;">頻段</th>
-            <th style="text-align:center;padding:3px 8px;color:#aaa;font-weight:600;">BrainDNA</th>
-            ${hasQeeg ? '<th style="text-align:center;padding:3px 8px;color:#7ecfff;font-weight:600;">qEEG Z-score</th>' : ''}
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.25);">
+            <th style="text-align:left;padding:4px 6px;color:#aaa;font-weight:600;min-width:80px;">頻段</th>
+            ${hasRaw ? '<th style="text-align:right;padding:4px 8px;color:#ffcc80;font-weight:600;min-width:80px;">① 原始均值</th>' : ''}
+            <th style="text-align:center;padding:4px 8px;color:#aaa;font-weight:600;min-width:55px;">② BrainDNA</th>
+            ${hasQeeg ? '<th style="text-align:center;padding:4px 8px;color:#7ecfff;font-weight:600;min-width:70px;">③ qEEG</th>' : ''}
           </tr>
         </thead>
         <tbody>
-          ${BAND_ROWS.map(([, label, b7k, qk]) => {
-            const bv = getB(b7k.replace('_', '_'), b7k);
+          ${BAND_ROWS.map(([qk, label, b7k, raKey]) => {
+            const rv = rawAvg(ra[raKey]);
+            const bv = b7[b7k] ?? b7['alpha_' + b7k] ?? ba[qk] ?? null;
             const qv = qb[qk] != null ? qb[qk] : null;
-            const bDisp = bv != null ? bv : '—';
-            const qDisp = qv != null ? qv : '—';
             return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
-              <td style="padding:4px 8px;color:rgba(255,255,255,0.8);">${label}</td>
-              <td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(bv)};">${bDisp}</td>
-              ${hasQeeg ? `<td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(qv)};">${qDisp}</td>` : ''}
+              <td style="padding:4px 6px;color:rgba(255,255,255,0.85);">${label}</td>
+              ${hasRaw ? `<td style="padding:4px 8px;text-align:right;color:#ffcc80;font-family:monospace;">${fmtRaw(rv)}</td>` : ''}
+              <td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(bv)};">${bv ?? '—'}</td>
+              ${hasQeeg ? `<td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(qv)};">${qv ?? '—'}</td>` : ''}
             </tr>`;
           }).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
 
     const dbgEl = document.getElementById('eeg-debug-content');
     if (dbgEl) {
