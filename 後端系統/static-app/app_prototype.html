@@ -3710,34 +3710,39 @@ function _renderHistoryList() {
         return '';
       })();
 
-      const bwBtn = isSuccess
-        ? `<button onclick="_viewHistorySession(${s.session_id})" style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">🧠 查看腦波</button>`
-        : '';
+
+      // 計算此受測者在 _historyCache 中的累計統計
+      const subjSessions = _historyCache.filter(x => x.subject_name === s.subject_name);
+      const subjTotalSessions = subjSessions.length;
+      const subjDoneReports = subjSessions.filter(x => x.report_status === 'completed').length;
+      const genderLabel = s.subject_gender === 'M' ? '男' : s.subject_gender === 'F' ? '女' : (s.subject_gender || '');
 
       html += `
         <div class="history-item" style="margin:0 0 10px;${isSuccess ? '' : 'opacity:0.7;'}">
           <div class="hi-top">
-            <span class="hi-name">${s.subject_name || '—'}${subjAge}</span>
+            <span class="hi-name">${s.subject_name || '—'}${subjAge}${genderLabel ? ' · ' + genderLabel : ''}</span>
             ${statusTag}
           </div>
           ${reportTagsHtml}
           ${extraNote}
           <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures} ${bdnaModeLabel}</div>
           <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
-            ${bwBtn}
+            <button onclick="_viewSubjectDetail(${s.session_id}, ${subjTotalSessions}, ${subjDoneReports})"
+              style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">
+              📋 受測者資料
+            </button>
           </div>
-          <!-- 腦波展開區（預設隱藏）-->
-          <div id="bw-detail-${s.session_id}" style="display:none;margin-top:10px;padding:10px 12px;background:#f0f4f8;border-radius:10px;font-size:12px;"></div>
+          <!-- 受測者資料展開區（預設隱藏）-->
+          <div id="subj-detail-${s.session_id}" style="display:none;margin-top:10px;"></div>
         </div>`;
     });
   });
   c.innerHTML = html;
 }
 
-// 點「🧠 查看腦波」：從後端取該 Session 的腦波統計，展開在卡片下方
-// 同時把 window._lastEegCapture 設為這筆，方便「切換到結果頁」時顯示正確腦波
-async function _viewHistorySession(sessionId) {
-  const detailEl = document.getElementById(`bw-detail-${sessionId}`);
+// 點「📋 受測者資料」：展開顯示受測者基本資料及歷史統計（不顯示腦波數值）
+function _viewSubjectDetail(sessionId, totalSessions, doneReports) {
+  const detailEl = document.getElementById(`subj-detail-${sessionId}`);
   if (!detailEl) return;
 
   // toggle：已顯示就收起
@@ -3746,61 +3751,57 @@ async function _viewHistorySession(sessionId) {
     return;
   }
 
+  // 從 _historyCache 找到對應的 session 資料
+  const sess = _historyCache.find(x => x.session_id === sessionId);
+  if (!sess) { detailEl.style.display = 'block'; detailEl.innerHTML = '<span style="color:#aaa;">無資料</span>'; return; }
+
+  const lbl = _historyReportLabel(sess.report_type);
+  const genderLabel = sess.subject_gender === 'M' ? '男' : sess.subject_gender === 'F' ? '女' : (sess.subject_gender || '—');
+  const capturesStr = sess.total_captures ? `${sess.total_captures} 筆` : '—';
+  const dateStr = _formatTs(sess.created_at);
+
+  // 報告狀態顯示
+  const reportStatusMap = {
+    'completed': '<span style="color:#2e7d32;font-weight:700;">✅ 報告已完成</span>',
+    'processing': '<span style="color:#f57c00;font-weight:700;">⏳ 生成中</span>',
+    'failed':    '<span style="color:#c62828;font-weight:700;">❌ 生成失敗</span>',
+  };
+  const reportStatusHtml = reportStatusMap[sess.report_status] || '<span style="color:#888;">— 尚未生成</span>';
+
+  // 此受測者所有歷史 sessions（依時間排序，新→舊）
+  const subjSessions = _historyCache
+    .filter(x => x.subject_name === sess.subject_name)
+    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
+  const historyRows = subjSessions.map(x => {
+    const xLbl = _historyReportLabel(x.report_type);
+    const xDate = _formatTs(x.created_at);
+    const xStatus = x.report_status === 'completed' ? '✅' : x.status === 0 ? '❌' : '○';
+    const isThis = x.session_id === sessionId ? 'font-weight:700;color:#1a3a6e;' : 'color:#555;';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #e8eef4;${isThis}">
+      <span style="flex:0 0 18px;text-align:center;">${xStatus}</span>
+      <span style="flex:1;font-size:11px;">${xLbl.icon} ${xLbl.name}</span>
+      <span style="flex:0 0 auto;font-size:11px;color:#999;">${xDate}</span>
+    </div>`;
+  }).join('');
+
   detailEl.style.display = 'block';
-  detailEl.innerHTML = '<span style="color:#888;">⏳ 載入腦波資料中…</span>';
-
-  try {
-    const r = await apiFetch(`/eeg/sessions/${sessionId}/stats`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const data = await r.json();
-
-    if (!data.eeg_stats) {
-      detailEl.innerHTML = '<span style="color:#aaa;">⚠️ 此場次無腦波資料</span>';
-      return;
-    }
-
-    const s = data.eeg_stats;
-    const b = s.bands_avg || {};
-    const clamp = v => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
-
-    const metrics = [
-      { name: '專注',     val: clamp(s.attention_percentage) },
-      { name: '放鬆',     val: clamp(s.meditation_percentage) },
-      { name: '直覺(θ)', val: clamp(b.theta) },
-      { name: '氣血(α)', val: clamp(b.alpha) },
-      { name: '邏輯(β)', val: clamp(b.beta) },
-      { name: '觀察(γ)', val: clamp(b.gamma) },
-    ];
-
-    const bars = metrics.map(m => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-        <div style="width:64px;font-size:11px;color:#555;flex-shrink:0;">${m.name}</div>
-        <div style="flex:1;height:8px;background:#dde4ef;border-radius:4px;overflow:hidden;">
-          <div style="width:${m.val}%;height:100%;background:#2D3561;border-radius:4px;"></div>
-        </div>
-        <div style="width:34px;text-align:right;font-size:11px;font-weight:700;color:#1a3a6e;">${m.val}%</div>
-      </div>`).join('');
-
-    const createdStr = data.created_at
-      ? new Date(data.created_at * 1000).toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
-      : '';
-
-    detailEl.innerHTML = `
-      <div style="font-weight:700;color:#1a3a6e;margin-bottom:8px;">
-        🧠 ${data.subject_name || '受測者'}${data.subject_age ? ` · ${data.subject_age}歲` : ''} ${createdStr ? '(' + createdStr + ')' : ''} · ${s.sample_count} 筆
+  detailEl.innerHTML = `
+    <div style="background:#f0f4f8;border-radius:10px;padding:12px 14px;font-size:12px;">
+      <div style="font-weight:700;color:#1a3a6e;font-size:13px;margin-bottom:10px;">👤 受測者基本資料</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:12px;">
+        <div><span style="color:#999;">姓名</span><br><strong>${sess.subject_name || '—'}</strong></div>
+        <div><span style="color:#999;">年齡</span><br><strong>${sess.subject_age ? sess.subject_age + ' 歲' : '—'}</strong></div>
+        <div><span style="color:#999;">性別</span><br><strong>${genderLabel}</strong></div>
+        <div><span style="color:#999;">本次採樣</span><br><strong>${capturesStr}</strong></div>
+        <div><span style="color:#999;">報告類型</span><br><strong>${lbl.icon} ${lbl.name}</strong></div>
+        <div><span style="color:#999;">報告狀態</span><br>${reportStatusHtml}</div>
       </div>
-      ${bars}
-      `;
-
-    // 把這筆 session 的腦波存起來備用
-    window._historyEegCache = window._historyEegCache || {};
-    window._historyEegCache[sessionId] = {
-      stats: s,
-      meta:  { subject_name: data.subject_name, subject_age: data.subject_age, created_at: data.created_at },
-    };
-  } catch (e) {
-    detailEl.innerHTML = `<span style="color:#c00;">❌ 載入失敗：${e.message}</span>`;
-  }
+      <div style="font-weight:700;color:#1a3a6e;font-size:12px;margin-bottom:6px;">
+        📊 歷史紀錄（共 ${totalSessions} 次檢測 · ${doneReports} 份報告完成）
+      </div>
+      <div style="max-height:160px;overflow-y:auto;">${historyRows}</div>
+    </div>`;
 }
 
 // 點「📊 在結果頁顯示」：把歷史 session 的腦波填入結果頁並跳轉
