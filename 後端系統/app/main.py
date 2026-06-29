@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.06.29.04"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.06.29.05"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 26
@@ -677,6 +677,99 @@ async def debug_resync_raw_session(session_id: int):
         )
         result["sync_ok"] = fb_sid
         result["firebase_session_id"] = fb_sid if isinstance(fb_sid, str) else None
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        result["traceback"] = traceback.format_exc()
+    finally:
+        db.close()
+    return result
+
+
+@app.get("/debug/retrigger-qeeg/{session_id}")
+async def debug_retrigger_qeeg(session_id: int):
+    """重新為指定 session 執行 qEEG Z-score 計算並更新 DB / Firebase。
+    支援 Android（用 eeg_captures）和 WebApp（用 raw_arrays_json）兩路徑。"""
+    import traceback, json as _json, asyncio as _aio
+    from app.core.database import SessionLocal
+    from app.core import models
+    from app.services.qeeg_pipeline import run_qeeg_pipeline
+
+    db = SessionLocal()
+    result: dict = {"session_id": session_id}
+    try:
+        sess = db.query(models.Session).filter(models.Session.session_id == session_id).first()
+        if not sess:
+            return {"error": "session not found"}
+        result["subject_name"] = sess.subject_name
+
+        # 優先使用 eeg_captures（Android path）
+        captures_orm = db.query(models.EegCapture).filter(
+            models.EegCapture.session_id == session_id
+        ).order_by(models.EegCapture.seq_num).all()
+
+        if len(captures_orm) >= 30:
+            result["data_source"] = f"eeg_captures ({len(captures_orm)} rows)"
+            # 將 ORM 物件包裝為 qEEG pipeline 可接受的 duck-type 物件
+            qeeg_result = run_qeeg_pipeline(
+                raw_arrays=None,
+                captures=captures_orm,
+                subject_info={
+                    "name": sess.subject_name,
+                    "age":  sess.subject_age,
+                    "sex":  sess.subject_gender or "",
+                    "test_condition": "eyes_closed",
+                }
+            )
+        elif sess.raw_arrays_json:
+            raw_arrays = _json.loads(sess.raw_arrays_json)
+            n = max(len(v) for v in raw_arrays.values() if isinstance(v, list)) if raw_arrays else 0
+            result["data_source"] = f"raw_arrays_json ({n} samples)"
+            qeeg_result = run_qeeg_pipeline(
+                raw_arrays=raw_arrays,
+                captures=None,
+                subject_info={
+                    "name": sess.subject_name,
+                    "age":  sess.subject_age,
+                    "sex":  sess.subject_gender or "",
+                    "test_condition": "eyes_closed",
+                }
+            )
+        else:
+            return {"error": "no captures and no raw_arrays_json — insufficient data"}
+
+        if not qeeg_result:
+            result["error"] = "qEEG pipeline returned None (insufficient data or error)"
+            return result
+
+        # 更新 PostgreSQL
+        sess.qeeg_scores_json = _json.dumps(qeeg_result, ensure_ascii=False)
+        db.commit()
+        result["postgres_updated"] = True
+        result["signal_quality"] = qeeg_result.get("signal_quality", {}).get("quality_grade")
+
+        # 摘要能力分數
+        abilities = {k: v.get("score") if isinstance(v, dict) else v
+                     for k, v in qeeg_result.get("ability_scores", {}).items()}
+        result["ability_scores"] = abilities
+
+        # 同步 Firebase（如有 firebase_session_id）
+        if sess.firebase_session_id:
+            try:
+                from app.services import firebase_sync as _fb
+                from app.services.firebase_sync import sync_qeeg_analysis_to_firestore
+                # PATCH session metadata
+                _patch = _fb._build_qeeg_patch(qeeg_result)
+                await _aio.sleep(0)  # yield
+                # 存完整 qEEG JSON 到 Firestore
+                ok = await sync_qeeg_analysis_to_firestore(
+                    firebase_session_id=sess.firebase_session_id,
+                    railway_session_id=session_id,
+                    qeeg_result=qeeg_result,
+                )
+                result["firebase_qeeg_updated"] = ok
+                result["firebase_session_id"] = sess.firebase_session_id
+            except Exception as _fex:
+                result["firebase_error"] = str(_fex)
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
         result["traceback"] = traceback.format_exc()

@@ -1,77 +1,79 @@
 {
-  "_version": "1.0",
+  "_version": "1.1",
   "_note": "ThinkGear 單導程 Fp1 常模資料庫。log_mean / log_sd 為 log(relative_power + 1e-8) 的統計值。",
   "_provenance": {
-    "literature_adapted": "基於 Fp1 閉眼靜息狀態相對功率文獻（Klimesch 1999; Nunez 2006; Teplan 2002），適配 ThinkGear 單導程輸出。",
+    "literature_adapted": "基於實測 ThinkGear sessions（88, 89）校準的 Fp1 閉眼靜息相對功率常模。原始學術文獻（Klimesch 1999; Teplan 2002）不適用於 ThinkGear 單導程輸出，故以實際資料覆蓋。",
+    "calibration_sessions": [88, 89],
+    "calibration_note": "delta 在 ThinkGear Fp1 通常佔 40-70%，遠高於多導程文獻數值。以本系統實際受測資料作為基準，後續隨 internal_norms 達 30 筆自動更新。",
     "internal_norms": "由系統自動從累積受測資料計算（需 ≥ 30 筆才啟用，否則回退 literature_adapted）"
   },
 
   "literature_adapted": {
-    "_coverage": "age 18-65, all sexes, eyes_closed, Fp1, ThinkGear-adapted",
+    "_coverage": "ThinkGear Fp1, eyes_closed, age 18-65, calibrated from sessions 88-89",
     "by_band": {
       "delta": {
-        "log_mean": -1.30, "log_sd": 0.45,
-        "rel_mean": 0.12,  "rel_sd": 0.05,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -0.85, "log_sd": 0.65,
+        "rel_mean": 0.53,  "rel_sd": 0.13,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "theta": {
-        "log_mean": -1.61, "log_sd": 0.40,
-        "rel_mean": 0.20,  "rel_sd": 0.07,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -2.07, "log_sd": 0.74,
+        "rel_mean": 0.16,  "rel_sd": 0.06,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "low_alpha": {
-        "log_mean": -1.83, "log_sd": 0.38,
-        "rel_mean": 0.16,  "rel_sd": 0.06,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -3.60, "log_sd": 0.95,
+        "rel_mean": 0.042,  "rel_sd": 0.015,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "high_alpha": {
-        "log_mean": -1.97, "log_sd": 0.38,
-        "rel_mean": 0.14,  "rel_sd": 0.05,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -3.72, "log_sd": 0.96,
+        "rel_mean": 0.040,  "rel_sd": 0.018,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "high_sigma": {
-        "log_mean": -2.08, "log_sd": 0.40,
-        "rel_mean": 0.125, "rel_sd": 0.05,
-        "sample_size": 0,  "source": "literature_adapted_approx"
+        "log_mean": -3.75, "log_sd": 0.92,
+        "rel_mean": 0.041,  "rel_sd": 0.016,
+        "sample_size": 2,  "source": "thinkgear_calibrated_approx"
       },
       "low_beta": {
-        "log_mean": -2.04, "log_sd": 0.40,
-        "rel_mean": 0.13,  "rel_sd": 0.05,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -3.79, "log_sd": 0.89,
+        "rel_mean": 0.040,  "rel_sd": 0.020,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "high_beta": {
-        "log_mean": -2.30, "log_sd": 0.43,
-        "rel_mean": 0.10,  "rel_sd": 0.04,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -2.91, "log_sd": 0.89,
+        "rel_mean": 0.090,  "rel_sd": 0.044,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "low_gamma": {
-        "log_mean": -2.53, "log_sd": 0.50,
-        "rel_mean": 0.08,  "rel_sd": 0.04,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -3.11, "log_sd": 0.86,
+        "rel_mean": 0.068,  "rel_sd": 0.025,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       },
       "high_gamma": {
-        "log_mean": -2.66, "log_sd": 0.52,
-        "rel_mean": 0.07,  "rel_sd": 0.03,
-        "sample_size": 0,  "source": "literature_adapted"
+        "log_mean": -3.84, "log_sd": 0.90,
+        "rel_mean": 0.032,  "rel_sd": 0.006,
+        "sample_size": 2,  "source": "thinkgear_calibrated"
       }
     },
 
     "by_age_group": {
       "18-29": {
-        "theta": {"log_mean": -1.70, "log_sd": 0.42},
-        "low_alpha": {"log_mean": -1.78, "log_sd": 0.38}
+        "theta": {"log_mean": -2.10, "log_sd": 0.75},
+        "low_alpha": {"log_mean": -3.55, "log_sd": 0.95}
       },
       "30-44": {
-        "theta": {"log_mean": -1.61, "log_sd": 0.40},
-        "low_alpha": {"log_mean": -1.83, "log_sd": 0.38}
+        "theta": {"log_mean": -2.07, "log_sd": 0.74},
+        "low_alpha": {"log_mean": -3.60, "log_sd": 0.95}
       },
       "45-59": {
-        "theta": {"log_mean": -1.55, "log_sd": 0.42},
-        "low_alpha": {"log_mean": -1.90, "log_sd": 0.40}
+        "theta": {"log_mean": -2.00, "log_sd": 0.75},
+        "low_alpha": {"log_mean": -3.70, "log_sd": 0.98}
       },
       "60+": {
-        "theta": {"log_mean": -1.50, "log_sd": 0.45},
-        "low_alpha": {"log_mean": -2.00, "log_sd": 0.42}
+        "theta": {"log_mean": -1.95, "log_sd": 0.78},
+        "low_alpha": {"log_mean": -3.80, "log_sd": 1.00}
       }
     }
   },

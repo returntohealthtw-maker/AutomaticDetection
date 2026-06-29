@@ -129,10 +129,27 @@ def assess_signal_quality(good_signal_arr: list, n_samples: int) -> dict:
     if not n_samples or n_samples == 0:
         return {"quality_grade": "D", "usable_epoch_ratio": 0.0,
                 "total_epochs": 0, "usable_epochs": 0,
-                "artifact_ratio": 1.0, "quality_warning": "無採集資料"}
+                "artifact_ratio": 1.0, "quality_warning": "無採集資料",
+                "device": "ThinkGear", "channel": "Fp1"}
 
     good_arr = good_signal_arr or []
-    usable = sum(1 for s in good_arr if (s or 0) < 50)
+
+    # WebApp 路徑不提供 good_signal（空陣列），預設 B 級而非 D 級
+    if not good_arr:
+        return {
+            "total_epochs":       n_samples,
+            "usable_epochs":      n_samples,
+            "usable_epoch_ratio": 1.0,
+            "artifact_ratio":     0.0,
+            "bad_channels":       [],
+            "quality_grade":      "B",
+            "quality_warning":    "訊號品質資料不可用（WebApp 路徑），預設 B 級",
+            "device":             "ThinkGear",
+            "channel":            "Fp1",
+        }
+
+    # ThinkGear: good_signal=0 為完美訊號，200 為無訊號；以 <50 為可用
+    usable = sum(1 for s in good_arr if s < 50)
     total = n_samples
     ratio = usable / total if total > 0 else 0.0
     artifact_ratio = round(1.0 - ratio, 3)
