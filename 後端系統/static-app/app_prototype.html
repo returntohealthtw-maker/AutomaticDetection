@@ -5754,7 +5754,12 @@ function _persistEegStats(stats) {
       if (r && r.ok) {
         const d = await r.json();
         window._lastEegSessionId = d.session_id;
-        console.log('[EEG] 已寫入 DB session_id=', d.session_id);
+        window._lastFirebaseSyncOk = d.firebase_sync_ok || false;
+        window._lastFirebaseSessionId = d.firebase_session_id || null;
+        const fbStatus = d.firebase_sync_ok
+          ? `Firebase ✓ (${d.captures_saved || 0} 筆)`
+          : 'Firebase 同步失敗（資料已存 PostgreSQL）';
+        console.log(`[EEG] 已寫入 DB session_id=${d.session_id}, ${fbStatus}`);
         return d.session_id;
       } else {
         console.warn('[EEG] save-stats 失敗', r && r.status);

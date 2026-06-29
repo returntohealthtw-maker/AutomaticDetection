@@ -1,8 +1,8 @@
 """
 腦波檢測：採集完成後寫入 DB
 - 一次採集 = 1 個 Session (sessions table)
-- 統計值寫入 1 筆 EegCapture（seq_num=0），不存原始 sample
-- 原始 180 筆陣列（raw_arrays）非同步同步到 Firebase 腦波資料庫
+- 統計值寫入 1 筆 EegCapture（seq_num=0，平均統計），有 raw_arrays 時同步展開為逐秒 N 筆
+- 原始 180 筆陣列（raw_arrays）同步雙寫到 PostgreSQL（逐秒 EegCapture）及 Firebase
 """
 from typing import Optional
 import asyncio
@@ -12,10 +12,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+import logging
+
 from app.core import models as M
 from app.core.database import get_db
 from app.routers.auth import require_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/eeg", tags=["腦波檢測"])
 
 
@@ -66,6 +69,9 @@ class EegStatsOut(BaseModel):
     session_id: int
     capture_id: int
     msg: str = ""
+    firebase_sync_ok: bool = False
+    firebase_session_id: Optional[str] = None
+    captures_saved: int = 1
 
 
 # ─── 端點 ─────────────────────────────────────────────────────────────────────
@@ -229,14 +235,6 @@ def save_eeg_stats(
     )
     db.add(cap)
 
-    # ── 逐秒原始陣列持久化到 Session.raw_arrays_json（永久保存，不再遺失）────────
-    if payload.raw_arrays:
-        import json as _json
-        try:
-            sess.raw_arrays_json = _json.dumps(payload.raw_arrays, ensure_ascii=False)
-        except Exception:
-            pass  # 序列化失敗不影響主流程
-
     # ── BrainDNA 計算結果寫入 Session（與 Firebase 欄位格式完全一致）────────────
     if _bdna_result and _bdna_result.get("valid"):
         try:
@@ -286,52 +284,98 @@ def save_eeg_stats(
         except Exception:
             pass
 
+    # ── 展開 raw_arrays 為逐秒 EegCapture 並存入 PostgreSQL ────────────────────
+    _per_sec_saved = 1  # 至少包含 seq_num=0 的平均統計筆
+    if payload.raw_arrays:
+        import json as _json
+        try:
+            sess.raw_arrays_json = _json.dumps(payload.raw_arrays, ensure_ascii=False)
+        except Exception:
+            pass
+
+        try:
+            _ra = payload.raw_arrays
+            _r_attn   = _ra.get("r_attn")   or _ra.get("attn")   or []
+            _r_medi   = _ra.get("r_medi")   or _ra.get("medi")   or []
+            _r_delta  = _ra.get("r_delta")  or []
+            _r_theta  = _ra.get("r_theta")  or []
+            _r_lalpha = _ra.get("r_lalpha") or []
+            _r_halpha = _ra.get("r_halpha") or []
+            _r_lbeta  = _ra.get("r_lbeta")  or []
+            _r_hbeta  = _ra.get("r_hbeta")  or []
+            _r_lgamma = _ra.get("r_lgamma") or []
+            _r_hgamma = _ra.get("r_hgamma") or []
+            _n = max(len(_r_delta), len(_r_theta), len(_r_lalpha))
+            if _n > 1:
+                def _gv(arr, i):
+                    try: return int(arr[i] or 0)
+                    except IndexError: return 0
+                per_sec_caps = [
+                    M.EegCapture(
+                        session_id  = sess.session_id,
+                        seq_num     = idx + 1,  # 逐秒從 1 開始，0 留給平均統計
+                        is_baseline = 0,
+                        captured_at = now_ts - (_n - idx),
+                        good_signal = 0,
+                        attention   = _gv(_r_attn,   idx),
+                        meditation  = _gv(_r_medi,   idx),
+                        delta       = _gv(_r_delta,  idx),
+                        theta       = _gv(_r_theta,  idx),
+                        low_alpha   = _gv(_r_lalpha, idx),
+                        high_alpha  = _gv(_r_halpha, idx),
+                        low_beta    = _gv(_r_lbeta,  idx),
+                        high_beta   = _gv(_r_hbeta,  idx),
+                        low_gamma   = _gv(_r_lgamma, idx),
+                        high_gamma  = _gv(_r_hgamma, idx),
+                        feedback    = 0,
+                    )
+                    for idx in range(_n)
+                ]
+                db.bulk_save_objects(per_sec_caps)
+                _per_sec_saved = 1 + _n
+                logger.info("[EEG] 逐秒 EegCapture 已寫入 %d 筆 (session=%d)", _n, sess.session_id)
+        except Exception as _ex:
+            logger.warning("[EEG] 展開 raw_arrays 逐秒資料失敗: %s", _ex)
+
     db.commit()
 
-    # ── 非同步同步到 Firebase 腦波資料庫（不阻塞主流程）────────────────────────
+    # ── 同步雙寫 Firebase（與 PostgreSQL 同一請求內完成）───────────────────────
+    _fb_sync_ok = False
+    _fb_session_id = None
     if payload.raw_arrays:
         from app.services.firebase_sync import sync_to_firebase
         from datetime import datetime, timezone
-
         session_start = datetime.fromtimestamp(now_ts, tz=timezone.utc)
-
-        _railway_session_id = sess.session_id
-
-        def _run_firebase_sync():
+        try:
             fb_sid = asyncio.run(sync_to_firebase(
-                subject_name   = payload.subject_name,
-                session_id     = _railway_session_id,
-                raw_arrays     = payload.raw_arrays,
-                session_start  = session_start,
-                braindna_result= _bdna_result,
+                subject_name    = payload.subject_name,
+                session_id      = sess.session_id,
+                raw_arrays      = payload.raw_arrays,
+                session_start   = session_start,
+                braindna_result = _bdna_result,
             ))
-            # 回存 firebase_session_id 到 PostgreSQL，供後台及報告讀取使用
-            if fb_sid:
-                try:
-                    from app.core.database import SessionLocal
-                    from app.core.models import Session as SessionModel
-                    _db = SessionLocal()
-                    try:
-                        _s = _db.query(SessionModel).filter(
-                            SessionModel.session_id == _railway_session_id
-                        ).first()
-                        if _s and not _s.firebase_session_id:
-                            _s.firebase_session_id = fb_sid
-                            _db.commit()
-                            logger.info("[Firebase] session %s firebase_session_id 已回存: %s",
-                                        _railway_session_id, fb_sid)
-                    finally:
-                        _db.close()
-                except Exception as _e:
-                    logger.warning("[Firebase] 回存 firebase_session_id 失敗: %s", _e)
-
-        background_tasks.add_task(_run_firebase_sync)
+            if fb_sid and fb_sid is not False:
+                _fb_sync_ok = True
+                _fb_session_id = str(fb_sid)
+                # 回存 firebase_session_id 到 PostgreSQL
+                if not sess.firebase_session_id:
+                    sess.firebase_session_id = _fb_session_id
+                    db.add(sess)
+                    db.commit()
+                logger.info("[Firebase] 同步成功 session=%d fb_sid=%s", sess.session_id, fb_sid)
+            else:
+                logger.warning("[Firebase] sync_to_firebase 回傳失敗 session=%d", sess.session_id)
+        except Exception as _fb_ex:
+            logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
 
     return EegStatsOut(
-        ok         = True,
-        session_id = sess.session_id,
-        capture_id = cap.capture_id,
-        msg        = f"已記錄 {payload.subject_name} 的腦波統計 ({payload.sample_count} 筆)"
+        ok                  = True,
+        session_id          = sess.session_id,
+        capture_id          = cap.capture_id,
+        msg                 = f"已記錄 {payload.subject_name} 的腦波統計 ({payload.sample_count} 筆，逐秒={_per_sec_saved-1})",
+        firebase_sync_ok    = _fb_sync_ok,
+        firebase_session_id = _fb_session_id,
+        captures_saved      = _per_sec_saved,
     )
 
 

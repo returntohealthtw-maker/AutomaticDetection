@@ -66,7 +66,9 @@ class SessionResponse(BaseModel):
     report_id:   int
     message:     str
     captures_saved: int
-    client_view_url: Optional[str] = None  # 客戶掃描 QR 開啟的五段摘要頁
+    client_view_url: Optional[str] = None
+    firebase_sync_ok: bool = False
+    firebase_session_id: Optional[str] = None
 
 
 # ─── API 端點 ────────────────────────────────────────────────────────────────
@@ -204,44 +206,31 @@ def upload_session(
     db.commit()
     db.refresh(report)
 
-    # 4. 非同步同步 180 筆擷取記錄到 Firebase 腦波資料庫
-    _android_session_id = session.session_id
-
-    def _run_firebase_sync_captures():
-        import logging as _log
-        _logger = _log.getLogger(__name__)
-        try:
-            from app.services.firebase_sync import sync_captures_to_firebase
-            fb_sid = asyncio.run(sync_captures_to_firebase(
-                subject_name = req.subject_name,
-                session_id   = _android_session_id,
-                captures     = req.captures,
-            ))
-            if not fb_sid:
-                _logger.warning("[Firebase] session %s 同步回傳 None", _android_session_id)
-            else:
-                # 回存 firebase_session_id 到 PostgreSQL
-                try:
-                    from app.core.database import SessionLocal
-                    from app.core.models import Session as SessionModel
-                    _db = SessionLocal()
-                    try:
-                        _s = _db.query(SessionModel).filter(
-                            SessionModel.session_id == _android_session_id
-                        ).first()
-                        if _s and not _s.firebase_session_id:
-                            _s.firebase_session_id = fb_sid
-                            _db.commit()
-                            _logger.info("[Firebase] Android session %s firebase_session_id 已回存: %s",
-                                         _android_session_id, fb_sid)
-                    finally:
-                        _db.close()
-                except Exception as _e2:
-                    _logger.warning("[Firebase] 回存 firebase_session_id 失敗: %s", _e2)
-        except Exception as _e:
-            _logger.exception("[Firebase] session %s 同步例外: %s", _android_session_id, _e)
-
-    background_tasks.add_task(_run_firebase_sync_captures)
+    # 4. 同步雙寫 Firebase（與 PostgreSQL 同一請求內完成）
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+    _fb_sync_ok = False
+    _fb_session_id = None
+    try:
+        from app.services.firebase_sync import sync_captures_to_firebase
+        fb_sid = asyncio.run(sync_captures_to_firebase(
+            subject_name = req.subject_name,
+            session_id   = session.session_id,
+            captures     = req.captures,
+        ))
+        if fb_sid and fb_sid is not False:
+            _fb_sync_ok = True
+            _fb_session_id = str(fb_sid)
+            if not session.firebase_session_id:
+                session.firebase_session_id = _fb_session_id
+                db.add(session)
+                db.commit()
+            _logger.info("[Firebase] Android session %s 同步成功 fb_sid=%s",
+                         session.session_id, fb_sid)
+        else:
+            _logger.warning("[Firebase] Android session %s 同步回傳失敗", session.session_id)
+    except Exception as _e:
+        _logger.exception("[Firebase] Android session %s 同步例外: %s", session.session_id, _e)
 
     # 5. 廣播到監控儀表板（即時顯示）
     background_tasks.add_task(broadcast, "new_session", {
@@ -268,11 +257,13 @@ def upload_session(
     client_url = f"{base}/api/v1/public/client/{qr_token}" if base else None
 
     return SessionResponse(
-        session_id       = session.session_id,
-        report_id        = report.report_id,
-        message          = "數據已接收，報告生成中",
-        captures_saved   = len(req.captures),
-        client_view_url  = client_url,
+        session_id          = session.session_id,
+        report_id           = report.report_id,
+        message             = "數據已接收，報告生成中",
+        captures_saved      = len(req.captures),
+        client_view_url     = client_url,
+        firebase_sync_ok    = _fb_sync_ok,
+        firebase_session_id = _fb_session_id,
     )
 
 
