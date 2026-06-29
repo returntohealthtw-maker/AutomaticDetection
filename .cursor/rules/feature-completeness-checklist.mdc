@@ -1,0 +1,93 @@
+---
+description: 每次實作新功能前，必須追蹤完整資料流，確認每個環節都已落地，不得遺漏任何一層。
+alwaysApply: true
+---
+
+# 功能完整性強制清單（丟三落四禁止規則）
+
+## 根本原因（已犯的錯）
+
+實作 qEEG Z-score 演算法時：
+- ✅ 寫好了 Python 演算法模組
+- ✅ 在 sessions.py 呼叫了 pipeline
+- ❌ **忘記確認資料庫有對應欄位（`qeeg_scores_json` column）**
+- ❌ **忘記確認 API response model 回傳給前端**
+- ❌ **忘記確認前端 JS 接收並顯示**
+
+結果：演算法跑了但資料從未存入，前端也看不到，使用者不問就永遠不知道。
+
+---
+
+## 強制流程：實作任何功能前，必須畫出完整資料流
+
+```
+資料來源 → 演算法處理 → 寫入 DB → API 回傳 → 前端顯示
+   ↑            ↑            ↑          ↑          ↑
+確認存在    確認邏輯    確認欄位存在  確認欄位    確認渲染
+```
+
+### 每個環節必須逐一確認
+
+#### 1. 資料來源確認
+- [ ] 輸入資料在哪個資料表/欄位？
+- [ ] 資料是 raw 值還是已處理值？筆數是否足夠？
+- [ ] 用 `SELECT COUNT(*), AVG(field) FROM table WHERE ...` 驗證資料存在
+
+#### 2. 演算法/處理邏輯確認
+- [ ] 完整讀取相關函式後才實作（不得邊讀邊寫）
+- [ ] 列出輸入→輸出的每個步驟
+
+#### 3. **資料庫欄位確認（最常遺漏）**
+- [ ] **新增欄位必須寫進 migration**（`_run_lightweight_migrations` 或 Alembic）
+- [ ] **欄位名稱是否與程式碼一致？**
+- [ ] **欄位類型是否能存入計算結果？**（例：JSON → `Text` 或 `JSONB`）
+- [ ] 確認方式：`SELECT column_name FROM information_schema.columns WHERE table_name=?`
+
+#### 4. API response 欄位確認
+- [ ] response model（Pydantic）是否新增了對應欄位？
+- [ ] endpoint 是否實際回傳了該欄位？
+- [ ] 打 `/openapi.json` 或直接 curl 確認欄位出現在回應中
+
+#### 5. 前端接收與顯示確認
+- [ ] JS 是否從 response 中讀取並存入變數？
+- [ ] UI 是否有對應的顯示元素？
+- [ ] 是否實際在瀏覽器中看到資料？
+
+---
+
+## 宣告清單（實作結束前必須逐項核對）
+
+每次功能實作完畢，必須在對話中貼出以下清單：
+
+```
+功能：[功能名稱]
+
+資料流核對：
+✅/❌ 資料來源：[table.column]，驗證指令：[SQL/API call]
+✅/❌ 演算法邏輯：完整讀取後實作
+✅/❌ DB 欄位：[table.column] 已存在，migration 已寫入
+✅/❌ API response：[endpoint] 已回傳 [field_name]
+✅/❌ 前端顯示：[element_id] 已渲染
+
+未完成項目：
+❌ [項目]：原因是 [X]，待下次處理
+```
+
+---
+
+## 違規後果
+
+若發現自己說「已完成」但沒有貼出上述清單：
+1. 立刻承認「我沒有完整追蹤資料流」
+2. 逐一補做每個環節的確認
+3. 不得以「大部分都做好了」替代完整驗證
+
+## 常見遺漏模式（過去的血淚教訓）
+
+| 遺漏類型 | 具體案例 | 預防方式 |
+|---------|---------|---------|
+| 忘記 DB migration | qEEG 欄位未寫入 migration | 實作後立刻查 `information_schema.columns` |
+| 忘記更新 API response model | Pydantic model 沒加新欄位 | 打 `/openapi.json` 確認回應結構 |
+| 忘記前端顯示 | qEEG band scores 存了但前端沒顯示 | 開瀏覽器 DevTools 確認 response 和 DOM |
+| 只改後端不改前端 | Python 修了，JS 沒同步 | 任何邏輯改動必須同步前後端 |
+| 只改前端不改後端 | JS 顯示了，但 API 根本沒回傳 | 先確認 API 回傳再改前端 |

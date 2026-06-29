@@ -1,0 +1,134 @@
+---
+description: 實作任何統計演算法前，每個參數的來源、類型、適用範圍必須明確聲明，並做合理性驗證，禁止猜測或混淆不同類型的統計量。
+alwaysApply: true
+---
+
+# 統計參數來源聲明與驗證規則（超低級統計錯誤禁止規則）
+
+## 根本原因（已犯的錯）
+
+實作 qEEG 常模資料庫時：
+- ❌ **把「每人 180 秒的時間內波動（within-session temporal SD）」誤用為「人與人之間的個體差異（inter-individual SD）」**
+- 結果：`log_sd` 數值 0.65–0.99（時間波動）>> 應有的 0.30–0.50（個體差異）
+- 後果：所有人的 Z-score 都擠在 0 附近，sigmoid 後全落在 50，人與人無法分化
+- 若非使用者從經驗觀察「為什麼大家分數都很接近」，**這個錯誤可能永遠無法被發現**，所有報告都在使用錯誤的常模
+
+---
+
+## 核心禁令：每個統計參數，必須聲明其「來源」和「類型」
+
+### 任何 mean / SD / 閾值 / 常模值，使用前必須回答以下問題：
+
+```
+1. 這個 SD 是「誰」的變異？
+   □ within-person temporal：同一人在時間序列內的波動（≠ 常模 SD）
+   □ between-person individual：不同人之間的差異（= 常模 SD）
+   □ within-session noise：測量噪聲、感測器雜訊
+   □ population distribution：族群分佈（學術文獻常模）
+
+2. 這個均值是從哪個層次計算的？
+   □ per-second raw value → 同一人的秒均值（時間平均）
+   □ session-level mean → 先每人取均值，再跨人（= 常模 mean）
+   □ population mean → 大樣本跨人均值（= 學術常模 mean）
+
+3. 這個值是否與使用目的匹配？
+   □ 用於 Z-score 常模化 → 必須用 between-person（個體差異）SD
+   □ 用於個人內時序分析 → 可用 within-session SD
+```
+
+### 混淆類型 = 嚴重錯誤
+
+| 目的 | 正確 | 錯誤（致命）|
+|------|------|------|
+| Z-score 常模 | between-person inter-individual SD | within-session temporal SD |
+| 個人趨勢分析 | within-session SD | between-person SD |
+| 族群比較 | population mean ± SD | 單人均值 ± 時間波動 |
+
+---
+
+## 強制流程：實作統計演算法前的三步驟
+
+### 步驟 1：宣告每個參數的來源
+
+```python
+# ✅ 正確的聲明方式：
+# log_mean: session-level log mean（先取每人 180 秒均值，再取 log，跨人平均）
+# log_sd: inter-individual SD（跨不同人的差異，不是同一人的時間波動）
+# 來源：empirical ThinkGear calibration sessions 88, 89
+
+# ❌ 錯誤的做法（這次犯過的錯）：
+# log_sd = std(log(per_second_values)) 
+# 這是 within-session temporal SD，不是 inter-individual SD！
+```
+
+### 步驟 2：合理性檢驗（必做）
+
+計算出統計參數後，必須回答：
+
+```
+Q1: 如果把這個參數套用到兩個不同的人，他們的分數差距是否合理？
+    → 若兩個人的 Z-score 差距 < 0.5，SD 可能太大（個體差異被淹沒）
+
+Q2: 分數分佈是否合理？
+    → 若 90% 的輸出分數落在 45–55，代表常模 SD 太大，無法分化
+
+Q3: 實際計算結果是否符合直覺？
+    → 若一個高度焦慮的人和一個冥想師得到完全相同的 beta 分數，一定有問題
+
+Q4: 與文獻值對比
+    → inter-individual log SD for EEG relative power ≈ 0.30–0.50（Teplan 2002, Nunez 2006）
+    → 若計算值 >> 0.50，考慮是否混入了 within-session noise
+```
+
+### 步驟 3：用真實資料驗證分化效果
+
+```python
+# 必做：拿至少 2 個已知不同特質的 session，確認分數有明顯差距
+# 例：高 beta 活躍者 vs 高 delta 放鬆者，各頻段分數應有至少 20-30 分差距
+# 若差距 < 10 分，立即懷疑常模參數有問題
+```
+
+---
+
+## 學術文獻常模值參考（ThinkGear 單導程 Fp1）
+
+| 頻段 | inter-individual log SD | 參考 |
+|------|------|------|
+| delta | 0.35–0.50 | 高個體差異 |
+| theta | 0.28–0.40 | 中個體差異 |
+| alpha | 0.35–0.55 | 高個體差異（alpha 顯著） |
+| beta | 0.30–0.45 | 中個體差異 |
+| gamma | 0.35–0.50 | 高噪聲，但差異也大 |
+
+若計算值超過這個範圍，**必須先確認是哪種 SD 被計算了**。
+
+---
+
+## 其他禁止的統計操作
+
+| 錯誤操作 | 後果 | 正確做法 |
+|---------|------|---------|
+| 用 n=2 樣本的 SD 直接當常模 | 高度不穩定，特定頻段 SD 可能接近 0 或虛高 | 結合文獻下限保底 (min 0.30) |
+| 把 raw per-second data 直接求 SD | 包含時間波動，不代表個體差異 | 先每人取 session-level mean，再跨人求 SD |
+| 對 0 值或極小值直接 log | log(0) = -∞，污染整個計算 | 加 epsilon = 1e-8 保護 |
+| 假設所有頻段用同一個常模 SD | 各頻段個體差異不同 | 每個頻段獨立設定 SD |
+
+---
+
+## 合理性測試必做指令
+
+每次建立或更新常模資料庫後，必須執行：
+
+```python
+# 必做：用至少 2 個特質不同的 session 計算 Z-score
+# 預期：兩人的 Z-score 至少有 3 個頻段差異 > 1.0
+# 若差異 < 0.5，表示 SD 過大，需要重新確認來源
+
+for sid in known_sessions:
+    for band in BANDS:
+        z = (session_log_mean[band] - norm_mean[band]) / norm_sd[band]
+        score = sigmoid(0.9 * z) * 100
+        print(f"session {sid} {band}: z={z:.2f} score={score:.0f}")
+
+# 如果所有人的分數都在 45-55，停下來，重新確認 norm_sd 的來源
+```
