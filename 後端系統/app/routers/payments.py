@@ -1083,7 +1083,11 @@ def admin_paid_not_detected(
     if has_retest_cols:
         retest_q = db.query(M.Session).filter(M.Session.needs_retest.is_(True))
         if not is_admin:
-            retest_q = retest_q.filter(M.Session.consultant_id == user.consultant_id)
+            # Session 沒有 consultant_id 欄位；改用 subject_id.in_ 限制到顧問自己的受測者
+            if subj_ids:
+                retest_q = retest_q.filter(M.Session.subject_id.in_(subj_ids))
+            else:
+                retest_q = retest_q.filter(False)
 
         for sess_r in retest_q.all():
             if sess_r.subject_id and sess_r.subject_id in seen_subject_ids:
