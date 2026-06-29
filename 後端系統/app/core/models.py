@@ -72,8 +72,9 @@ class Session(Base):
     # 'fallback_bdna_invalid_*' = BrainDNA valid=False，使用前端值
     bdna_mode     = Column(String(40), nullable=True)
     # Firebase 同步後取得的 session UUID（供後續從 Firebase 讀取 180 筆特徵用）
-    # 格式：UUID string，例如 "550e8400-e29b-41d4-a716-446655440000"
     firebase_session_id = Column(String(100), nullable=True)
+    # qEEG Z-score 演算結果 JSON（七大能力 + 複合指標 + flags）
+    qeeg_scores_json = Column(Text, nullable=True)
 
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
     report      = relationship("Report", back_populates="session", uselist=False)

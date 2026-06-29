@@ -1,0 +1,25 @@
+{
+  "_note": "ThinkGear 單導程（Fp1 前額葉）頻段定義。high_sigma 為 ThinkGear 未直接輸出的頻段，以 high_alpha 與 low_beta 加權近似。",
+  "bands": {
+    "delta":      [1,   4],
+    "theta":      [4,   8],
+    "low_alpha":  [8,  10],
+    "high_alpha": [10, 12],
+    "high_sigma": [12, 15],
+    "low_beta":   [13, 20],
+    "high_beta":  [20, 30],
+    "low_gamma":  [30, 40],
+    "high_gamma": [40, 45]
+  },
+  "high_sigma_approx": {
+    "method": "weighted_average",
+    "weights": {"high_alpha": 0.5, "low_beta": 0.5},
+    "note": "ThinkGear 無獨立 high_sigma 輸出，以 high_alpha 與 low_beta 加權平均近似"
+  },
+  "all_keys": ["delta", "theta", "low_alpha", "high_alpha", "low_beta", "high_beta", "low_gamma", "high_gamma"],
+  "sampling_rate_hz": 1,
+  "collection_duration_sec": 180,
+  "device": "ThinkGear",
+  "single_channel": "Fp1",
+  "multi_channel_reserved": ["Fp1", "Fp2", "F3", "F4", "Fz", "C3", "C4", "Cz", "P3", "P4", "O1", "O2"]
+}

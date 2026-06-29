@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.06.29.02"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.06.29.03"  # 每次改 HTML/JS 都更新這個
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 26
@@ -353,6 +353,9 @@ def _run_lightweight_migrations():
 
     if not has_column("sessions", "firebase_session_id"):
         pending.append("ALTER TABLE sessions ADD COLUMN firebase_session_id VARCHAR(100) NULL")
+
+    if not has_column("sessions", "qeeg_scores_json"):
+        pending.append("ALTER TABLE sessions ADD COLUMN qeeg_scores_json TEXT NULL")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")

@@ -1,0 +1,54 @@
+{
+  "_version": "1.0",
+  "_note": "依指標類型分三種解讀規則。所有分數均基於 Z-score → sigmoid(k=0.9) 轉換，50 = 常模平均。",
+
+  "ability_type": {
+    "_desc": "能力型指標：直覺、能量、放鬆、專注、邏輯、覺察、共情",
+    "bands": [
+      {"min": 0,  "max": 29,  "label": "明顯偏低",    "en": "very_low"},
+      {"min": 30, "max": 44,  "label": "偏低",        "en": "low"},
+      {"min": 45, "max": 60,  "label": "常模附近",    "en": "average"},
+      {"min": 61, "max": 74,  "label": "偏高",        "en": "high"},
+      {"min": 75, "max": 100, "label": "高度活化",    "en": "very_high"}
+    ]
+  },
+
+  "risk_type": {
+    "_desc": "風險型指標：SLI（壓力負荷）、EDC（情緒延遲）",
+    "bands": [
+      {"min": 0,  "max": 29,  "label": "低風險",      "en": "low_risk"},
+      {"min": 30, "max": 44,  "label": "輕度風險",    "en": "mild_risk"},
+      {"min": 45, "max": 60,  "label": "中度風險",    "en": "moderate_risk"},
+      {"min": 61, "max": 74,  "label": "偏高風險",    "en": "elevated_risk"},
+      {"min": 75, "max": 100, "label": "高風險",      "en": "high_risk"}
+    ]
+  },
+
+  "balance_type": {
+    "_desc": "平衡型指標：REB（理性情緒平衡）、EBI（能量平衡）、CCR（認知控制）",
+    "bands": [
+      {"min": 0,  "max": 29,  "label": "明顯偏不足端", "en": "strongly_deficit"},
+      {"min": 30, "max": 44,  "label": "輕度偏不足",  "en": "slightly_deficit"},
+      {"min": 45, "max": 60,  "label": "平衡",        "en": "balanced"},
+      {"min": 61, "max": 74,  "label": "輕度偏過度",  "en": "slightly_excess"},
+      {"min": 75, "max": 100, "label": "明顯偏過度端", "en": "strongly_excess"}
+    ]
+  },
+
+  "score_types": {
+    "intuition":           "ability_type",
+    "energy":              "ability_type",
+    "relaxation":          "ability_type",
+    "focus":               "ability_type",
+    "logic":               "ability_type",
+    "awareness":           "ability_type",
+    "empathy":             "ability_type",
+    "ccr":                 "balance_type",
+    "ebi":                 "balance_type",
+    "reb":                 "balance_type",
+    "rrr":                 "ability_type",
+    "sli":                 "risk_type",
+    "edc":                 "risk_type",
+    "isi":                 "ability_type"
+  }
+}

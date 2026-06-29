@@ -245,7 +245,35 @@ def upload_session(
         "status":          "success" if req.is_success else "failed",
     })
 
-    # 6. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
+    # 6. qEEG Z-score 演算（Android 路徑，直接用 captures）
+    if req.is_success and len(req.captures) >= 30:
+        try:
+            import json as _json
+            from app.services.qeeg_pipeline import run_qeeg_pipeline
+            _qeeg_result = run_qeeg_pipeline(
+                raw_arrays   = None,
+                captures     = req.captures,
+                subject_info = {
+                    "name": req.subject_name,
+                    "age":  req.subject_age,
+                    "sex":  req.subject_gender or "",
+                    "test_condition": "eyes_closed",
+                }
+            )
+            if _qeeg_result:
+                _s2 = db.query(models.Session).filter(
+                    models.Session.session_id == session.session_id
+                ).first()
+                if _s2:
+                    _s2.qeeg_scores_json = _json.dumps(_qeeg_result, ensure_ascii=False)
+                    db.commit()
+                _logger.info("[qEEG] Android session=%d 計算完成，flags=%s",
+                             session.session_id,
+                             [f["flag"] for f in _qeeg_result.get("report_flags", [])])
+        except Exception as _qex:
+            _logger.warning("[qEEG] Android session=%d 演算例外: %s", session.session_id, _qex)
+
+    # 7. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
     if req.is_success and len(req.captures) >= 150:
         background_tasks.add_task(
             generate_report_async,

@@ -368,6 +368,35 @@ def save_eeg_stats(
         except Exception as _fb_ex:
             logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
 
+    # ── qEEG Z-score 演算（並行計算，存入 qeeg_scores_json）──────────────────
+    if payload.raw_arrays:
+        try:
+            import json as _json2
+            from app.services.qeeg_pipeline import run_qeeg_pipeline
+            _qeeg_result = run_qeeg_pipeline(
+                raw_arrays   = payload.raw_arrays,
+                captures     = None,
+                subject_info = {
+                    "name": payload.subject_name,
+                    "age":  payload.subject_age,
+                    "sex":  payload.subject_gender or "",
+                    "test_condition": "eyes_closed",
+                }
+            )
+            if _qeeg_result:
+                try:
+                    _s = db.query(M.Session).filter(M.Session.session_id == sess.session_id).first()
+                    if _s:
+                        _s.qeeg_scores_json = _json2.dumps(_qeeg_result, ensure_ascii=False)
+                        db.commit()
+                    logger.info("[qEEG] session=%d 計算完成，flags=%s",
+                                sess.session_id,
+                                [f["flag"] for f in _qeeg_result.get("report_flags", [])])
+                except Exception as _dbex:
+                    logger.warning("[qEEG] 寫入 DB 失敗: %s", _dbex)
+        except Exception as _qex:
+            logger.warning("[qEEG] 演算例外 session=%d: %s", sess.session_id, _qex)
+
     return EegStatsOut(
         ok                  = True,
         session_id          = sess.session_id,

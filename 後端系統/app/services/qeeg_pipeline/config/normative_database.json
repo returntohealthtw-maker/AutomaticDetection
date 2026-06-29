@@ -1,0 +1,87 @@
+{
+  "_version": "1.0",
+  "_note": "ThinkGear 單導程 Fp1 常模資料庫。log_mean / log_sd 為 log(relative_power + 1e-8) 的統計值。",
+  "_provenance": {
+    "literature_adapted": "基於 Fp1 閉眼靜息狀態相對功率文獻（Klimesch 1999; Nunez 2006; Teplan 2002），適配 ThinkGear 單導程輸出。",
+    "internal_norms": "由系統自動從累積受測資料計算（需 ≥ 30 筆才啟用，否則回退 literature_adapted）"
+  },
+
+  "literature_adapted": {
+    "_coverage": "age 18-65, all sexes, eyes_closed, Fp1, ThinkGear-adapted",
+    "by_band": {
+      "delta": {
+        "log_mean": -1.30, "log_sd": 0.45,
+        "rel_mean": 0.12,  "rel_sd": 0.05,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "theta": {
+        "log_mean": -1.61, "log_sd": 0.40,
+        "rel_mean": 0.20,  "rel_sd": 0.07,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "low_alpha": {
+        "log_mean": -1.83, "log_sd": 0.38,
+        "rel_mean": 0.16,  "rel_sd": 0.06,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "high_alpha": {
+        "log_mean": -1.97, "log_sd": 0.38,
+        "rel_mean": 0.14,  "rel_sd": 0.05,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "high_sigma": {
+        "log_mean": -2.08, "log_sd": 0.40,
+        "rel_mean": 0.125, "rel_sd": 0.05,
+        "sample_size": 0,  "source": "literature_adapted_approx"
+      },
+      "low_beta": {
+        "log_mean": -2.04, "log_sd": 0.40,
+        "rel_mean": 0.13,  "rel_sd": 0.05,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "high_beta": {
+        "log_mean": -2.30, "log_sd": 0.43,
+        "rel_mean": 0.10,  "rel_sd": 0.04,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "low_gamma": {
+        "log_mean": -2.53, "log_sd": 0.50,
+        "rel_mean": 0.08,  "rel_sd": 0.04,
+        "sample_size": 0,  "source": "literature_adapted"
+      },
+      "high_gamma": {
+        "log_mean": -2.66, "log_sd": 0.52,
+        "rel_mean": 0.07,  "rel_sd": 0.03,
+        "sample_size": 0,  "source": "literature_adapted"
+      }
+    },
+
+    "by_age_group": {
+      "18-29": {
+        "theta": {"log_mean": -1.70, "log_sd": 0.42},
+        "low_alpha": {"log_mean": -1.78, "log_sd": 0.38}
+      },
+      "30-44": {
+        "theta": {"log_mean": -1.61, "log_sd": 0.40},
+        "low_alpha": {"log_mean": -1.83, "log_sd": 0.38}
+      },
+      "45-59": {
+        "theta": {"log_mean": -1.55, "log_sd": 0.42},
+        "low_alpha": {"log_mean": -1.90, "log_sd": 0.40}
+      },
+      "60+": {
+        "theta": {"log_mean": -1.50, "log_sd": 0.45},
+        "low_alpha": {"log_mean": -2.00, "log_sd": 0.42}
+      }
+    }
+  },
+
+  "internal_norms": {
+    "_note": "由系統自動從累積受測資料計算。當 sample_count >= 30 時，此處數值優先於 literature_adapted 使用。",
+    "_last_updated": null,
+    "sample_count": 0,
+    "by_band": {}
+  },
+
+  "min_samples_for_internal": 30
+}
