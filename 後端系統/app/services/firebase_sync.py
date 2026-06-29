@@ -545,6 +545,81 @@ async def sync_captures_to_firebase(
         return None
 
 
+# ── qEEG 完整分析結果存入 Firestore qeeg_analysis collection ──────────────────
+
+FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/gen-lang-client-0435688289/databases/(default)/documents"
+
+
+def _to_firestore_value(v: Any) -> dict:
+    """Python 值 → Firestore REST API 型別值"""
+    if v is None:
+        return {"nullValue": None}
+    if isinstance(v, bool):
+        return {"booleanValue": v}
+    if isinstance(v, int):
+        return {"integerValue": str(v)}
+    if isinstance(v, float):
+        return {"doubleValue": v}
+    if isinstance(v, str):
+        return {"stringValue": v}
+    if isinstance(v, list):
+        return {"arrayValue": {"values": [_to_firestore_value(i) for i in v]}}
+    if isinstance(v, dict):
+        return {"mapValue": {"fields": {k: _to_firestore_value(vv) for k, vv in v.items()}}}
+    return {"stringValue": str(v)}
+
+
+def _dict_to_firestore_fields(d: dict) -> dict:
+    return {k: _to_firestore_value(v) for k, v in d.items()}
+
+
+async def sync_qeeg_analysis_to_firestore(
+    firebase_session_id: str,
+    qeeg_result: dict,
+    railway_session_id: int,
+) -> bool:
+    """
+    將完整 qEEG 分析結果存入 Firestore qeeg_analysis collection。
+    文件 ID 使用 Firebase session ID，方便跨 collection 關聯查詢。
+
+    Firestore path: qeeg_analysis/{firebase_session_id}
+    """
+    if not firebase_session_id or not qeeg_result:
+        return False
+
+    headers = _get_auth_headers(force_bearer=True)
+    if not headers:
+        logger.warning("[qEEG Firestore] 無認證憑證，跳過 qeeg_analysis 存入")
+        return False
+
+    # 在文件中加入 session 關聯 ID
+    doc_data = dict(qeeg_result)
+    doc_data["firebaseSessionId"]  = firebase_session_id
+    doc_data["railwaySessionId"]   = railway_session_id
+    doc_data["savedAt"]            = datetime.now(timezone.utc).isoformat()
+
+    firestore_body = {"fields": _dict_to_firestore_fields(doc_data)}
+    url = f"{FIRESTORE_BASE}/qeeg_analysis/{firebase_session_id}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.patch(
+                url,
+                headers={**headers, "Content-Type": "application/json"},
+                json=firestore_body,
+            )
+            if resp.status_code in (200, 201):
+                logger.info("[qEEG Firestore] qeeg_analysis/%s 寫入成功", firebase_session_id)
+                return True
+            else:
+                logger.warning("[qEEG Firestore] 寫入失敗 %s: %s",
+                               resp.status_code, resp.text[:200])
+                return False
+    except Exception as exc:
+        logger.exception("[qEEG Firestore] 寫入例外: %s", exc)
+        return False
+
+
 # ── 從 Firebase 讀取 180 筆特徵值（用於 BrainDNA 重新計算）──────────────────────
 
 async def fetch_eeg_features(firebase_session_id: str) -> Optional[List[dict]]:

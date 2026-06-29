@@ -393,6 +393,18 @@ def save_eeg_stats(
                     db.add(sess)
                     db.commit()
                 logger.info("[Firebase] 同步成功 session=%d fb_sid=%s", sess.session_id, fb_sid)
+                # 完整 qEEG JSON → Firestore qeeg_analysis collection
+                if _qeeg_result:
+                    try:
+                        from app.services.firebase_sync import sync_qeeg_analysis_to_firestore
+                        asyncio.run(sync_qeeg_analysis_to_firestore(
+                            firebase_session_id = _fb_session_id,
+                            qeeg_result         = _qeeg_result,
+                            railway_session_id  = sess.session_id,
+                        ))
+                    except Exception as _qfs_ex:
+                        logger.warning("[qEEG Firestore] session=%d 寫入例外: %s",
+                                       sess.session_id, _qfs_ex)
             else:
                 logger.warning("[Firebase] sync_to_firebase 回傳失敗 session=%d", sess.session_id)
         except Exception as _fb_ex:

@@ -258,6 +258,18 @@ def upload_session(
                 db.commit()
             _logger.info("[Firebase] Android session %s 同步成功 fb_sid=%s",
                          session.session_id, fb_sid)
+            # 完整 qEEG JSON → Firestore qeeg_analysis collection
+            if _qeeg_result:
+                try:
+                    from app.services.firebase_sync import sync_qeeg_analysis_to_firestore
+                    asyncio.run(sync_qeeg_analysis_to_firestore(
+                        firebase_session_id = _fb_session_id,
+                        qeeg_result         = _qeeg_result,
+                        railway_session_id  = session.session_id,
+                    ))
+                except Exception as _qfs_ex:
+                    _logger.warning("[qEEG Firestore] Android session=%d 寫入例外: %s",
+                                    session.session_id, _qfs_ex)
         else:
             _logger.warning("[Firebase] Android session %s 同步回傳失敗", session.session_id)
     except Exception as _e:
