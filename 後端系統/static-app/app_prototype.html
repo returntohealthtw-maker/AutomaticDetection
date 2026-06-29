@@ -5741,6 +5741,8 @@ function _persistEegStats(stats) {
         window._lastEegSessionId = d.session_id;
         window._lastFirebaseSyncOk = d.firebase_sync_ok || false;
         window._lastFirebaseSessionId = d.firebase_session_id || null;
+        window._lastQeegBandScores = d.qeeg_band_scores || null;
+        window._lastQeegSignalGrade = d.qeeg_signal_grade || null;
         const fbStatus = d.firebase_sync_ok
           ? `Firebase ✓ (${d.captures_saved || 0} 筆)`
           : 'Firebase 同步失敗（資料已存 PostgreSQL）';
@@ -6062,23 +6064,72 @@ function _renderResultsFromEeg() {
   const panel = document.getElementById('eeg-debug-panel');
   if (panel) panel.style.display = isStaff ? '' : 'none';
   if (isStaff && stats) {
-    const b7 = stats.bands_7 || {};
-    const ba = stats.bands_avg || {};
-    const lines = [
-      `樣本數:  ${stats.sample_count ?? '—'}`,
-      `注意力:  ${stats.attention_percentage ?? '—'}  放鬆度: ${stats.meditation_percentage ?? '—'}`,
-      `─── BrainDNA 佔比算法 ───────`,
-      `δ  delta:      ${b7.delta      ?? ba.delta      ?? '—'}`,
-      `θ  theta:      ${b7.theta      ?? ba.theta      ?? '—'}`,
-      `α  low_alpha:  ${b7.alpha_low  ?? b7.low_alpha  ?? ba.low_alpha  ?? '—'}`,
-      `α  high_alpha: ${b7.alpha_high ?? b7.high_alpha ?? ba.high_alpha ?? '—'}`,
-      `β  low_beta:   ${b7.beta_low   ?? b7.low_beta   ?? ba.low_beta   ?? '—'}`,
-      `β  high_beta:  ${b7.beta_high  ?? b7.high_beta  ?? ba.high_beta  ?? '—'}`,
-      `γ  low_gamma:  ${b7.gamma_low  ?? b7.low_gamma  ?? ba.low_gamma  ?? '—'}`,
-      `γ  high_gamma: ${b7.gamma_high ?? b7.high_gamma ?? ba.high_gamma ?? '—'}`,
+    const b7   = stats.bands_7 || {};
+    const ba   = stats.bands_avg || {};
+    const qb   = window._lastQeegBandScores || {};
+    const qGrade = window._lastQeegSignalGrade || '—';
+
+    // 頻段定義：[鍵名, 中文符號, BrainDNA 對應 key, qEEG key]
+    const BAND_ROWS = [
+      ['delta',      'δ Delta',      'delta',      'delta'],
+      ['theta',      'θ Theta',      'theta',      'theta'],
+      ['low_alpha',  'α Low Alpha',  'alpha_low',  'low_alpha'],
+      ['high_alpha', 'α High Alpha', 'alpha_high', 'high_alpha'],
+      ['low_beta',   'β Low Beta',   'beta_low',   'low_beta'],
+      ['high_beta',  'β High Beta',  'beta_high',  'high_beta'],
+      ['low_gamma',  'γ Low Gamma',  'gamma_low',  'low_gamma'],
+      ['high_gamma', 'γ High Gamma', 'gamma_high', 'high_gamma'],
     ];
+
+    const getB = (baKey, b7Key) =>
+      b7[b7Key] ?? b7[baKey] ?? ba[baKey] ?? ba[b7Key] ?? null;
+
+    const scoreColor = (v) => {
+      if (v == null) return '#888';
+      if (v >= 70)  return '#4caf50';
+      if (v >= 50)  return '#aef';
+      if (v >= 35)  return '#ff9800';
+      return '#f44336';
+    };
+
+    const hasQeeg = Object.keys(qb).length > 0;
+
+    // 表格 HTML
+    let html = `
+      <div style="font-size:10px;color:#aef;margin-bottom:6px;">
+        樣本數: <b>${stats.sample_count ?? '—'}</b>　
+        注意力: <b>${stats.attention_percentage ?? '—'}</b>　
+        放鬆度: <b>${stats.meditation_percentage ?? '—'}</b>
+        ${hasQeeg ? `　qEEG 訊號品質: <b style="color:${qGrade==='A'?'#4caf50':qGrade==='B'?'#aef':qGrade==='C'?'#ff9800':'#f44336'}">${qGrade}</b>` : ''}
+      </div>
+      <table style="border-collapse:collapse;width:100%;font-size:11px;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.2);">
+            <th style="text-align:left;padding:3px 8px;color:#aaa;font-weight:600;">頻段</th>
+            <th style="text-align:center;padding:3px 8px;color:#aaa;font-weight:600;">BrainDNA</th>
+            ${hasQeeg ? '<th style="text-align:center;padding:3px 8px;color:#7ecfff;font-weight:600;">qEEG Z-score</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${BAND_ROWS.map(([, label, b7k, qk]) => {
+            const bv = getB(b7k.replace('_', '_'), b7k);
+            const qv = qb[qk] != null ? qb[qk] : null;
+            const bDisp = bv != null ? bv : '—';
+            const qDisp = qv != null ? qv : '—';
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:4px 8px;color:rgba(255,255,255,0.8);">${label}</td>
+              <td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(bv)};">${bDisp}</td>
+              ${hasQeeg ? `<td style="text-align:center;padding:4px 8px;font-weight:700;color:${scoreColor(qv)};">${qDisp}</td>` : ''}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+
     const dbgEl = document.getElementById('eeg-debug-content');
-    if (dbgEl) dbgEl.textContent = lines.join('\n');
+    if (dbgEl) {
+      dbgEl.style.whiteSpace = 'normal';
+      dbgEl.innerHTML = html;
+    }
   }
 }
 

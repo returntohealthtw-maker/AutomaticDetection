@@ -72,6 +72,10 @@ class EegStatsOut(BaseModel):
     firebase_sync_ok: bool = False
     firebase_session_id: Optional[str] = None
     captures_saved: int = 1
+    # qEEG 頻段 Z-score → 0-100 分數（8 頻段；pipeline 失敗時為空 dict）
+    qeeg_band_scores: Optional[dict] = None
+    # qEEG 訊號品質等級（A/B/C/D）
+    qeeg_signal_grade: Optional[str] = None
 
 
 # ─── 端點 ─────────────────────────────────────────────────────────────────────
@@ -410,6 +414,19 @@ def save_eeg_stats(
         except Exception as _fb_ex:
             logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
 
+    # 從 qEEG 結果擷取各頻段 0-100 分數回傳給前端顯示
+    _qeeg_band_out = None
+    _qeeg_grade_out = None
+    if _qeeg_result:
+        bf = _qeeg_result.get("band_features", {}).get("Fp1", {})
+        if bf:
+            _qeeg_band_out = {
+                band: round(info.get("score_0_100", 0), 1)
+                for band, info in bf.items()
+                if isinstance(info, dict)
+            }
+        _qeeg_grade_out = _qeeg_result.get("signal_quality", {}).get("quality_grade")
+
     return EegStatsOut(
         ok                  = True,
         session_id          = sess.session_id,
@@ -418,6 +435,8 @@ def save_eeg_stats(
         firebase_sync_ok    = _fb_sync_ok,
         firebase_session_id = _fb_session_id,
         captures_saved      = _per_sec_saved,
+        qeeg_band_scores    = _qeeg_band_out,
+        qeeg_signal_grade   = _qeeg_grade_out,
     )
 
 
