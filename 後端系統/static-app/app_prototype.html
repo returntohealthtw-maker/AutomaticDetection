@@ -1572,7 +1572,7 @@
               <span style="font-size:22px;">🔁</span>
               <div style="flex:1;">
                 <div style="font-size:16px;font-weight:700;">付款重測</div>
-                <div style="font-size:11px;opacity:0.85;margin-top:2px;">為已付款但尚未完成檢測的客戶補做腦波採集</div>
+                <div style="font-size:11px;opacity:0.85;margin-top:2px;">已付款且腦波採集有問題的客戶（全為 0、無資料等）</div>
               </div>
               <button onclick="closePaidRedetectModal()" style="background:rgba(255,255,255,0.2);color:white;border:none;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;flex-shrink:0;">×</button>
             </div>
@@ -1585,21 +1585,6 @@
             <!-- 清單 -->
             <div id="redetect-list" style="flex:1;overflow-y:auto;padding:8px 16px 16px;">
               <div style="text-align:center;padding:24px;color:#999;">🔄 載入中…</div>
-            </div>
-            <!-- 手動輸入備用 -->
-            <div style="padding:10px 16px 16px;border-top:1px solid #eee;flex-shrink:0;background:#fafafa;">
-              <div style="font-size:11px;color:#888;margin-bottom:6px;">找不到客戶？手動輸入姓名直接進行重測：</div>
-              <div style="display:flex;gap:8px;">
-                <input id="redetect-manual-name" type="text" placeholder="輸入客戶姓名"
-                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:10px;font-size:13px;">
-                <select id="redetect-manual-type" style="padding:9px 8px;border:1px solid #ddd;border-radius:10px;font-size:12px;color:#333;">
-                  <option value="life_script">成人腦波</option>
-                  <option value="child">兒童腦波</option>
-                  <option value="marital">夫妻關係</option>
-                  <option value="parent_child">親子關係</option>
-                </select>
-                <button onclick="_startRedetectManual()" style="background:#e65100;color:white;border:none;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">開始 →</button>
-              </div>
             </div>
           </div>
         </div>
@@ -11633,7 +11618,7 @@ function _filterRedetectList() {
     : _redetectCache;
 
   if (!rows.length) {
-    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:#999;">✅ 沒有待重測的客戶</div>';
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:#999;">✅ 沒有待重測的客戶<br><span style="font-size:11px;color:#bbb;margin-top:6px;display:block;">僅顯示已付款且腦波採集有問題者</span></div>';
     return;
   }
 
@@ -11699,13 +11684,6 @@ function _startRedetectFromOrder(idx) {
     o.subject_name, o.subject_email, o.report_type, variant,
     o.subject_age, o.subject_gender, o.subject_id
   );
-}
-
-function _startRedetectManual() {
-  const name = (document.getElementById('redetect-manual-name')?.value || '').trim();
-  if (!name) { alert('請輸入客戶姓名'); return; }
-  const type = document.getElementById('redetect-manual-type')?.value || 'life_script';
-  _launchRedetect(name, '', type, 'full', null, '', null);
 }
 
 function _launchRedetect(subjectName, subjectEmail, reportType, variant, subjectAge, subjectGender, subjectId) {
