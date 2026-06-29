@@ -348,10 +348,10 @@ def _run_lightweight_migrations():
     if not has_column("sessions", "overall_score"):
         pending.append("ALTER TABLE sessions ADD COLUMN overall_score INTEGER NULL")
 
-    if "bdna_mode" not in cols:
+    if not has_column("sessions", "bdna_mode"):
         pending.append("ALTER TABLE sessions ADD COLUMN bdna_mode VARCHAR(40) NULL")
 
-    if "firebase_session_id" not in cols:
+    if not has_column("sessions", "firebase_session_id"):
         pending.append("ALTER TABLE sessions ADD COLUMN firebase_session_id VARCHAR(100) NULL")
 
     if not pending:

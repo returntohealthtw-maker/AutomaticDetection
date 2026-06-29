@@ -583,10 +583,13 @@ def list_reports(
     session_ids_for_img = [rep.session_id for rep, _ in rows if rep.session_id is not None]
     img_quality_by_sid: dict[int, str] = {}
     if session_ids_for_img:
-        evts = db.query(M.ReportGenerationEvent).filter(
-            M.ReportGenerationEvent.session_id.in_(session_ids_for_img),
-            M.ReportGenerationEvent.phase == "chapter_done",
-        ).all()
+        try:
+            evts = db.query(M.ReportGenerationEvent).filter(
+                M.ReportGenerationEvent.session_id.in_(session_ids_for_img),
+                M.ReportGenerationEvent.phase == "chapter_done",
+            ).all()
+        except Exception:
+            evts = []
         for evt in evts:
             sid_evt = evt.session_id
             if sid_evt is None:
