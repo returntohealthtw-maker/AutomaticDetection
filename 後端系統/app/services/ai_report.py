@@ -79,14 +79,14 @@ def _demo_brainwave_data() -> Dict[str, Any]:
         "mind_energy": 43,
         "mind_stress": 51,
         "bands": [
-            {"name": "Delta 深度休息",   "value": 28},
-            {"name": "Theta 直覺能力",   "value": 66},
-            {"name": "High Alpha 氣血飽滿", "value": 56},
-            {"name": "Low Alpha 內在安定",  "value": 49},
-            {"name": "High Beta 高度專注",  "value": 95},
-            {"name": "Low Beta 邏輯分析",   "value": 100},
-            {"name": "Mid Gamma 觀察環境",  "value": 50},
-            {"name": "Low Gamma 慈悲柔軟",  "value": 50},
+            {"name": "Delta 深層修復",      "value": 28},
+            {"name": "Theta 創意直覺",      "value": 66},
+            {"name": "High Alpha 身心協調",  "value": 56},
+            {"name": "Low Alpha 情緒穩定",   "value": 49},
+            {"name": "High Beta 腦波活躍度", "value": 95},
+            {"name": "Low Beta 穩定專注",    "value": 100},
+            {"name": "Mid Gamma 感知整合",   "value": 50},
+            {"name": "Low Gamma 社會覺察",   "value": 50},
         ],
     }
 

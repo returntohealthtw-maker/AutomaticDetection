@@ -172,8 +172,8 @@ def generate_report_summary(
     # 優勢
     ability_map = {
         "intuition": "直覺洞察力", "energy": "能量續航",
-        "relaxation": "內在安定", "focus": "高度專注",
-        "logic": "邏輯分析", "awareness": "外界覺察", "empathy": "共情柔軟"
+        "relaxation": "情緒穩定", "focus": "腦波活躍度",
+        "logic": "穩定專注", "awareness": "感知整合", "empathy": "社群感知"
     }
     top_names = "、".join(ability_map.get(k, k) for k, _ in top_abilities)
     lines.append(f"{name_str}腦波顯示主要優勢為：{top_names}。")

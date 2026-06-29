@@ -417,13 +417,13 @@ async def _generate_pdf(session, indices: dict, mbti: dict, avg) -> str:
     story.append(Paragraph("腦波頻帶分析", h2_style))
     band_data = [
         ["頻帶", "平均功率", "說明"],
-        ["θ Theta（直覺）", f"{avg.theta:.0f}", "直覺力、潛意識連結"],
-        ["α↑ High Alpha（氣血）", f"{avg.high_alpha:.0f}", "生命活力、氣血能量"],
-        ["α↓ Low Alpha（安定）", f"{avg.low_alpha:.0f}", "內在安定感、靜心"],
-        ["β↓ Low Beta（邏輯）", f"{avg.low_beta:.0f}", "邏輯分析、理性思考"],
-        ["β↑ High Beta（執行）", f"{avg.high_beta:.0f}", "執行力、專注警覺"],
-        ["γ↓ Low Gamma（慈悲）", f"{avg.low_gamma:.0f}", "慈悲心、情感連結"],
-        ["γ↑ High Gamma（觀察）", f"{avg.high_gamma:.0f}", "環境觀察力、感知細節"],
+        ["θ Theta（創意直覺）",     f"{avg.theta:.0f}",      "潛意識整合、創意感知"],
+        ["α↑ High Alpha（身心協調）", f"{avg.high_alpha:.0f}", "自律神經平衡、清醒放鬆"],
+        ["α↓ Low Alpha（情緒穩定）",  f"{avg.low_alpha:.0f}",  "情緒基底穩定度、壓力復原力"],
+        ["β↓ Low Beta（穩定專注）",   f"{avg.low_beta:.0f}",   "持續注意力、理性思考"],
+        ["β↑ High Beta（腦波活躍度）", f"{avg.high_beta:.0f}", "大腦喚起水準，需結合放鬆度解讀"],
+        ["γ↓ Low Gamma（社會覺察）",  f"{avg.low_gamma:.0f}",  "社會認知處理、人際訊息整合"],
+        ["γ↑ High Gamma（感知整合）", f"{avg.high_gamma:.0f}", "多感官整合、意識清醒度"],
     ]
     band_table = Table(band_data, colWidths=[5*cm, 3*cm, 8*cm])
     band_table.setStyle(TableStyle([

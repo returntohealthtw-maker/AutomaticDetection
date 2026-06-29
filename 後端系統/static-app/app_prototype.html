@@ -6886,10 +6886,10 @@ function _etComputeAll(acc, isChild) {
     EI:  { label:'情緒穩定',  cat:'emotional',  pct: pct(_etSafeDiv(a, b+d), true) },
     EQ:  { label:'情緒商數',  cat:'emotional',  pct: pct(_etSafeDiv(a+t, b), true) },
     // 以下比例型指標統一修正：sigmoid(x×8÷total)，以 1/8 總量為 50% 中點，解決舊版永遠偏低問題
-    INN: { label:'內在安定',  cat:'emotional',  pct: pct(_etSafeDiv(la*8, total), true) },
-    VIT: { label:'生命活力',  cat:'emotional',  pct: pct(_etSafeDiv(ha*8, total), true) },
-    INS: { label:'直覺感受',  cat:'emotional',  pct: pct(_etSafeDiv(t*8,  total), true) },
-    EMO: { label:'慈悲連結',  cat:'emotional',  pct: pct(_etSafeDiv(lg*8, total), true) },
+    INN: { label:'情緒穩定',  cat:'emotional',  pct: pct(_etSafeDiv(la*8, total), true) },
+    VIT: { label:'身心協調',  cat:'emotional',  pct: pct(_etSafeDiv(ha*8, total), true) },
+    INS: { label:'創意直覺',  cat:'emotional',  pct: pct(_etSafeDiv(t*8,  total), true) },
+    EMO: { label:'社群感知',  cat:'emotional',  pct: pct(_etSafeDiv(lg*8, total), true) },
     // 人際
     SOC: { label:'社交敏感',  cat:'social',     pct: pct(_etSafeDiv(g, a+b), true) },
     // EMP 含兩頻段，乘 4（=8÷2）使雙頻段平均時仍落 50%
@@ -7656,7 +7656,7 @@ function _renderBrainAnalysisInto(prefix) {
   const bands = [
     { name:'注意力',   val:Math.round(bnd.att), color:'#ff9800' },
     { name:'放鬆度',   val:Math.round(bnd.med), color:'#00bcd4' },
-    { name:'深度休息', val:Math.round(bnd.d),   color:'#607d8b' },
+    { name:'深層修復', val:Math.round(bnd.d),   color:'#607d8b' },
     { name:'直覺創意', val:Math.round(bnd.t),   color:'#9c27b0' },
     { name:'放鬆專注', val:Math.round(bnd.a),   color:'#4caf50' },
     { name:'思考執行', val:Math.round(bnd.b),   color:'#ff5722' },
@@ -9027,18 +9027,18 @@ function _renderAllSubjectCard(s) {
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
         ${cell('專注', bw.attention_percentage, '#1976d2')}
         ${cell('放鬆', bw.meditation_percentage, '#7e57c2')}
-        ${cell('Theta', theta, '#26a69a', '直覺能力')}
+        ${cell('Theta', theta, '#26a69a', '創意直覺')}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
-        ${cell('High α', hiAlpha, '#43a047', '氣血飽滿')}
-        ${cell('Low α',  loAlpha, '#66bb6a', '內在安定')}
-        ${cell('High β', hiBeta,  '#e65100', '高度專注')}
-        ${cell('Low β',  loBeta,  '#fb8c00', '邏輯分析')}
+        ${cell('High α', hiAlpha, '#43a047', '身心協調')}
+        ${cell('Low α',  loAlpha, '#66bb6a', '情緒穩定')}
+        ${cell('High β', hiBeta,  '#e65100', '腦波活躍度')}
+        ${cell('Low β',  loBeta,  '#fb8c00', '穩定專注')}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
-        ${cell('High γ', hiGamma, '#c62828', '觀察環境')}
-        ${cell('Low γ',  loGamma, '#e53935', '慈悲柔軟')}
-        ${cell('Delta',  ba.delta, '#546e7a', '深度休息')}
+        ${cell('High γ', hiGamma, '#c62828', '感知整合')}
+        ${cell('Low γ',  loGamma, '#e53935', '社會覺察')}
+        ${cell('Delta',  ba.delta, '#546e7a', '深層修復')}
       </div>`;
   }
 

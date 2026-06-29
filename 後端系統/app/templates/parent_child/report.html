@@ -944,15 +944,15 @@ document.getElementById('pdf-guide-overlay').addEventListener('click', function(
       {% set metrics = d.metrics %}
       <div class="bar-section">
         {% set metric_waves = {
-          '直覺能力': 'θ',
-          '氣血飽滿': 'Hα',
-          '內在安定': 'Lα',
-          '高度專注': 'Hβ',
-          '邏輯分析': 'Lβ',
-          '觀察環境': 'Hγ',
-          '慈悲柔軟': 'Lγ'
+          '創意直覺': 'θ',
+          '身心協調': 'Hα',
+          '情緒穩定': 'Lα',
+          '腦波活躍度': 'Hβ',
+          '穩定專注': 'Lβ',
+          '感知整合': 'Hγ',
+          '社會覺察': 'Lγ'
         } %}
-        {% for key in ['直覺能力','氣血飽滿','內在安定','高度專注','邏輯分析','觀察環境','慈悲柔軟'] %}
+        {% for key in ['創意直覺','身心協調','情緒穩定','腦波活躍度','穩定專注','感知整合','社會覺察'] %}
         {% set val = metrics.get(key, 0) if metrics else 0 %}
         <div class="bar-row">
           <div class="bar-key" title="{{ metric_waves[key] }}波">{{ key }}</div>
@@ -977,13 +977,13 @@ document.getElementById('pdf-guide-overlay').addEventListener('click', function(
   <div class="wave-legend">
     <div class="legend-title">腦波頻段對照說明</div>
     <div class="legend-grid">
-      <div class="legend-item"><span class="wave-tag theta">θ波</span><span>直覺能力 · 4–8 Hz · 潛意識感知、創意直覺</span></div>
-      <div class="legend-item"><span class="wave-tag h-alpha">Hα波</span><span>氣血飽滿 · 10–12 Hz · 生命能量、自我修復力</span></div>
-      <div class="legend-item"><span class="wave-tag l-alpha">Lα波</span><span>內在安定 · 8–10 Hz · 情緒基底、心理韌性</span></div>
-      <div class="legend-item"><span class="wave-tag h-beta">Hβ波</span><span>高度專注 · 18–30 Hz · 前額葉執行、意志力</span></div>
-      <div class="legend-item"><span class="wave-tag l-beta">Lβ波</span><span>邏輯分析 · 12–18 Hz · 理性思維、語言組織</span></div>
-      <div class="legend-item"><span class="wave-tag h-gamma">Hγ波</span><span>觀察環境 · 36–44 Hz · 環境感知、社交雷達</span></div>
-      <div class="legend-item"><span class="wave-tag l-gamma">Lγ波</span><span>慈悲柔軟 · 30–36 Hz · 同理共鳴、情感連結</span></div>
+      <div class="legend-item"><span class="wave-tag theta">θ波</span><span>創意直覺 · 4–8 Hz · 潛意識整合、直覺感知、創意湧現</span></div>
+      <div class="legend-item"><span class="wave-tag h-alpha">Hα波</span><span>身心協調 · 10–12 Hz · 自律神經平衡、清醒放鬆協調</span></div>
+      <div class="legend-item"><span class="wave-tag l-alpha">Lα波</span><span>情緒穩定 · 8–10 Hz · 情緒基底穩定度、壓力復原力</span></div>
+      <div class="legend-item"><span class="wave-tag h-beta">Hβ波</span><span>腦波活躍度 · 18–30 Hz · 大腦喚起水準，需結合放鬆度解讀</span></div>
+      <div class="legend-item"><span class="wave-tag l-beta">Lβ波</span><span>穩定專注 · 12–18 Hz · 持續注意力（SMR節律）、理性思考</span></div>
+      <div class="legend-item"><span class="wave-tag h-gamma">Hγ波</span><span>感知整合 · 36–44 Hz · 多感官訊息整合、意識清醒度</span></div>
+      <div class="legend-item"><span class="wave-tag l-gamma">Lγ波</span><span>社會覺察 · 30–36 Hz · 社會認知處理、人際訊息整合</span></div>
     </div>
   </div>
 </div>
