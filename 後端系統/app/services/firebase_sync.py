@@ -217,12 +217,34 @@ def _raw_arrays_to_features(raw_arrays: dict, session_start: datetime) -> list[d
     return features
 
 
+def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
+    """qEEG 結果 → Firebase PATCH 欄位（打平為輕量摘要，避免 Firestore document 過大）"""
+    if not qeeg_result:
+        return {}
+    out: dict = {}
+    ab = qeeg_result.get("ability_scores", {})
+    if ab:
+        out["qeegAbilities"] = {k: v.get("score") for k, v in ab.items()}
+    ci = qeeg_result.get("composite_indices", {})
+    if ci:
+        out["qeegComposites"] = {k: v.get("score") for k, v in ci.items()}
+    flags = qeeg_result.get("report_flags", [])
+    if flags:
+        out["qeegFlags"] = [f["flag"] for f in flags]
+    sq = qeeg_result.get("signal_quality", {})
+    if sq:
+        out["qeegSignalGrade"] = sq.get("quality_grade")
+    out["qeegVersion"] = qeeg_result.get("calculation_version", "")
+    return {k: v for k, v in out.items() if v is not None}
+
+
 async def sync_to_firebase(
     subject_name: str,
     session_id: int,
     raw_arrays: dict,
     session_start: Optional[datetime] = None,
     braindna_result: Optional[dict] = None,
+    qeeg_result: Optional[dict] = None,
 ) -> Optional[str]:
     """
     非同步將 180 筆原始腦波資料同步到 Firebase 腦波資料庫。
@@ -321,7 +343,7 @@ async def sync_to_firebase(
                 "endedAt":     datetime.now(timezone.utc).isoformat(),
                 "durationSec": len(features),
             }
-            # BrainDNA 聚合結果（與 PostgreSQL Session 欄位格式完全一致）
+            # BrainDNA 聚合結果
             if braindna_result and braindna_result.get("valid"):
                 patch_body.update({
                     "mindStress":   braindna_result.get("stress"),
@@ -332,7 +354,9 @@ async def sync_to_firebase(
                     "mbti":         braindna_result.get("mbti"),
                     "bagua":        braindna_result.get("bagua"),
                 })
-                patch_body = {k: v for k, v in patch_body.items() if v is not None}
+            # qEEG Z-score 摘要（七大能力 + 複合指標 + flags）
+            patch_body.update(_build_qeeg_patch(qeeg_result))
+            patch_body = {k: v for k, v in patch_body.items() if v is not None}
             patch_resp = await client.patch(
                 f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
                 headers=headers,
@@ -410,6 +434,7 @@ async def sync_captures_to_firebase(
     subject_name: str,
     session_id: int,
     captures: List[Any],
+    qeeg_result: Optional[dict] = None,
 ) -> Optional[str]:
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
@@ -497,15 +522,18 @@ async def sync_captures_to_firebase(
             logger.info("[Firebase] Android 已上傳 %d 筆 EEG → fb_sid=%s",
                         total_uploaded, fb_session_id)
 
-            # 3. 標記 Session completed
+            # 3. 標記 Session completed + qEEG 摘要
+            android_patch = {
+                "status":      "completed",
+                "endedAt":     datetime.now(timezone.utc).isoformat(),
+                "durationSec": len(features),
+            }
+            android_patch.update(_build_qeeg_patch(qeeg_result))
+            android_patch = {k: v for k, v in android_patch.items() if v is not None}
             patch_resp = await client.patch(
                 f"{FIREBASE_API_BASE}/sessions/{fb_session_id}",
                 headers=headers,
-                json={
-                    "status":   "completed",
-                    "endedAt":  datetime.now(timezone.utc).isoformat(),
-                    "durationSec": len(features),
-                },
+                json=android_patch,
             )
             if patch_resp.status_code not in (200, 204):
                 logger.warning("[Firebase] Android PATCH session 狀態非預期: %s", patch_resp.status_code)

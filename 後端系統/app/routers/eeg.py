@@ -339,36 +339,8 @@ def save_eeg_stats(
 
     db.commit()
 
-    # ── 同步雙寫 Firebase（與 PostgreSQL 同一請求內完成）───────────────────────
-    _fb_sync_ok = False
-    _fb_session_id = None
-    if payload.raw_arrays:
-        from app.services.firebase_sync import sync_to_firebase
-        from datetime import datetime, timezone
-        session_start = datetime.fromtimestamp(now_ts, tz=timezone.utc)
-        try:
-            fb_sid = asyncio.run(sync_to_firebase(
-                subject_name    = payload.subject_name,
-                session_id      = sess.session_id,
-                raw_arrays      = payload.raw_arrays,
-                session_start   = session_start,
-                braindna_result = _bdna_result,
-            ))
-            if fb_sid and fb_sid is not False:
-                _fb_sync_ok = True
-                _fb_session_id = str(fb_sid)
-                # 回存 firebase_session_id 到 PostgreSQL
-                if not sess.firebase_session_id:
-                    sess.firebase_session_id = _fb_session_id
-                    db.add(sess)
-                    db.commit()
-                logger.info("[Firebase] 同步成功 session=%d fb_sid=%s", sess.session_id, fb_sid)
-            else:
-                logger.warning("[Firebase] sync_to_firebase 回傳失敗 session=%d", sess.session_id)
-        except Exception as _fb_ex:
-            logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
-
-    # ── qEEG Z-score 演算（並行計算，存入 qeeg_scores_json）──────────────────
+    # ── qEEG Z-score 演算（在 Firebase sync 前完成，結果一起寫入 Firebase）──────
+    _qeeg_result = None
     if payload.raw_arrays:
         try:
             import json as _json2
@@ -396,6 +368,35 @@ def save_eeg_stats(
                     logger.warning("[qEEG] 寫入 DB 失敗: %s", _dbex)
         except Exception as _qex:
             logger.warning("[qEEG] 演算例外 session=%d: %s", sess.session_id, _qex)
+
+    # ── 同步雙寫 Firebase（攜帶 qEEG 摘要）────────────────────────────────────
+    _fb_sync_ok = False
+    _fb_session_id = None
+    if payload.raw_arrays:
+        from app.services.firebase_sync import sync_to_firebase
+        from datetime import datetime, timezone
+        session_start = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+        try:
+            fb_sid = asyncio.run(sync_to_firebase(
+                subject_name    = payload.subject_name,
+                session_id      = sess.session_id,
+                raw_arrays      = payload.raw_arrays,
+                session_start   = session_start,
+                braindna_result = _bdna_result,
+                qeeg_result     = _qeeg_result,
+            ))
+            if fb_sid and fb_sid is not False:
+                _fb_sync_ok = True
+                _fb_session_id = str(fb_sid)
+                if not sess.firebase_session_id:
+                    sess.firebase_session_id = _fb_session_id
+                    db.add(sess)
+                    db.commit()
+                logger.info("[Firebase] 同步成功 session=%d fb_sid=%s", sess.session_id, fb_sid)
+            else:
+                logger.warning("[Firebase] sync_to_firebase 回傳失敗 session=%d", sess.session_id)
+        except Exception as _fb_ex:
+            logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
 
     return EegStatsOut(
         ok                  = True,

@@ -206,46 +206,11 @@ def upload_session(
     db.commit()
     db.refresh(report)
 
-    # 4. 同步雙寫 Firebase（與 PostgreSQL 同一請求內完成）
     import logging as _log
     _logger = _log.getLogger(__name__)
-    _fb_sync_ok = False
-    _fb_session_id = None
-    try:
-        from app.services.firebase_sync import sync_captures_to_firebase
-        fb_sid = asyncio.run(sync_captures_to_firebase(
-            subject_name = req.subject_name,
-            session_id   = session.session_id,
-            captures     = req.captures,
-        ))
-        if fb_sid and fb_sid is not False:
-            _fb_sync_ok = True
-            _fb_session_id = str(fb_sid)
-            if not session.firebase_session_id:
-                session.firebase_session_id = _fb_session_id
-                db.add(session)
-                db.commit()
-            _logger.info("[Firebase] Android session %s 同步成功 fb_sid=%s",
-                         session.session_id, fb_sid)
-        else:
-            _logger.warning("[Firebase] Android session %s 同步回傳失敗", session.session_id)
-    except Exception as _e:
-        _logger.exception("[Firebase] Android session %s 同步例外: %s", session.session_id, _e)
 
-    # 5. 廣播到監控儀表板（即時顯示）
-    background_tasks.add_task(broadcast, "new_session", {
-        "session_id":      session.session_id,
-        "report_id":       report.report_id,
-        "consultant_name": req.consultant_name,
-        "subject_name":    req.subject_name,
-        "subject_age":     req.subject_age,
-        "report_type":     req.report_type,
-        "captures":        len(req.captures),
-        "is_success":      req.is_success,
-        "status":          "success" if req.is_success else "failed",
-    })
-
-    # 6. qEEG Z-score 演算（Android 路徑，直接用 captures）
+    # 4. qEEG Z-score 演算（在 Firebase sync 前完成，結果一起寫入 Firebase）
+    _qeeg_result = None
     if req.is_success and len(req.captures) >= 30:
         try:
             import json as _json
@@ -272,6 +237,44 @@ def upload_session(
                              [f["flag"] for f in _qeeg_result.get("report_flags", [])])
         except Exception as _qex:
             _logger.warning("[qEEG] Android session=%d 演算例外: %s", session.session_id, _qex)
+
+    # 5. 同步雙寫 Firebase（攜帶 qEEG 摘要）
+    _fb_sync_ok = False
+    _fb_session_id = None
+    try:
+        from app.services.firebase_sync import sync_captures_to_firebase
+        fb_sid = asyncio.run(sync_captures_to_firebase(
+            subject_name = req.subject_name,
+            session_id   = session.session_id,
+            captures     = req.captures,
+            qeeg_result  = _qeeg_result,
+        ))
+        if fb_sid and fb_sid is not False:
+            _fb_sync_ok = True
+            _fb_session_id = str(fb_sid)
+            if not session.firebase_session_id:
+                session.firebase_session_id = _fb_session_id
+                db.add(session)
+                db.commit()
+            _logger.info("[Firebase] Android session %s 同步成功 fb_sid=%s",
+                         session.session_id, fb_sid)
+        else:
+            _logger.warning("[Firebase] Android session %s 同步回傳失敗", session.session_id)
+    except Exception as _e:
+        _logger.exception("[Firebase] Android session %s 同步例外: %s", session.session_id, _e)
+
+    # 6. 廣播到監控儀表板（即時顯示）
+    background_tasks.add_task(broadcast, "new_session", {
+        "session_id":      session.session_id,
+        "report_id":       report.report_id,
+        "consultant_name": req.consultant_name,
+        "subject_name":    req.subject_name,
+        "subject_age":     req.subject_age,
+        "report_type":     req.report_type,
+        "captures":        len(req.captures),
+        "is_success":      req.is_success,
+        "status":          "success" if req.is_success else "failed",
+    })
 
     # 7. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
     if req.is_success and len(req.captures) >= 150:
