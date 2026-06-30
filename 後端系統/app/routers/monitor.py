@@ -424,7 +424,7 @@ from pydantic import BaseModel as _PydBaseModel
 class MarkRetestIn(_PydBaseModel):
     reason: str = ""
 
-@router.post("/sessions/{session_id}/mark-retest")
+@router.post("/api/v1/monitor/sessions/{session_id}/mark-retest")
 def mark_session_needs_retest(
     session_id: int,
     body: MarkRetestIn,
@@ -442,7 +442,7 @@ def mark_session_needs_retest(
     return {"ok": True, "session_id": session_id, "message": "已標記需重測，將出現在付款重測名單"}
 
 
-@router.delete("/sessions/{session_id}/mark-retest")
+@router.delete("/api/v1/monitor/sessions/{session_id}/mark-retest")
 def unmark_session_needs_retest(
     session_id: int,
     authorization: Optional[str] = Header(None),
