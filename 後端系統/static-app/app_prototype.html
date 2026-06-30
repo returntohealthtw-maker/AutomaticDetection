@@ -4873,25 +4873,8 @@ async function startFullReportGeneration(opts) {
     return;
   }
 
-  // 🚨 第二道：受測者姓名驗證（同樣不能是預設值，否則會變成孤兒報告）
   const subjectName = (opts.subjectName || _currentSubjectName || '').trim();
-  if (!subjectName || subjectName === '受測者' || subjectName === '陳小明' || subjectName === '測試模式') {
-    const proceedAsTest = confirm(
-      '⚠️ 受測者姓名缺失或為預設值！\n\n' +
-      '若繼續，這份報告會以「🧪 管理員測試報告」方式記錄，\n' +
-      '不會關聯到任何受測者資料，無法回查腦波資料。\n\n' +
-      '建議先到「開始新檢測 → 受測者資料」頁面填入真實姓名後再來。\n\n' +
-      '確定要以「測試報告」方式繼續嗎？'
-    );
-    if (!proceedAsTest) {
-      console.warn('[startFullReportGeneration] 已取消：受測者姓名缺失');
-      return;
-    }
-  }
-  // 自動為測試報告加上時間戳記，方便 admin 後續識別
-  const finalSubjectName = (subjectName && subjectName !== '受測者' && subjectName !== '陳小明' && subjectName !== '測試模式')
-    ? subjectName
-    : '🧪 管理員測試-' + new Date().toLocaleString('zh-TW', { hour12:false }).replace(/[\/:\s]/g, '').slice(0,12);
+  const finalSubjectName = subjectName || _currentSubjectName || '受測者';
 
   try {
     const resp = await fetch(`${API_BASE}/report-gen/start`, {
@@ -11773,7 +11756,7 @@ function _startRedetectFromOrder(idx) {
 
 function _launchRedetect(subjectName, subjectEmail, reportType, variant, subjectAge, subjectGender, subjectId) {
   // 填入全域變數，與正常付款後的流程完全一致
-  _currentSubjectName   = subjectName || '受測者';
+  _currentSubjectName   = subjectName || '';
   _currentSubjectEmail  = subjectEmail || '';
   _currentSubjectAge    = (subjectAge != null && subjectAge !== '') ? parseInt(subjectAge, 10) : null;
   _currentSubjectGender = subjectGender || '';
