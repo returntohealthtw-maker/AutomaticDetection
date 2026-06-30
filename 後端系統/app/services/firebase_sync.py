@@ -235,6 +235,17 @@ def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
     if sq:
         out["qeegSignalGrade"] = sq.get("quality_grade")
     out["qeegVersion"] = qeeg_result.get("calculation_version", "")
+    # ── 8 個頻段的 qEEG Z-score 0-100 分數（使用者昨天要求存入 Firebase 的欄位）──
+    bf = qeeg_result.get("band_features", {}).get("Fp1", {})
+    if bf:
+        band_scores = {}
+        for band in ["delta", "theta", "low_alpha", "high_alpha",
+                     "low_beta", "high_beta", "low_gamma", "high_gamma"]:
+            entry = bf.get(band)
+            if entry and entry.get("score_0_100") is not None:
+                band_scores[band] = round(entry["score_0_100"])
+        if band_scores:
+            out["qeegBandScores"] = band_scores
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -435,6 +446,7 @@ async def sync_captures_to_firebase(
     session_id: int,
     captures: List[Any],
     qeeg_result: Optional[dict] = None,
+    braindna_result: Optional[dict] = None,
 ) -> Optional[str]:
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
@@ -522,12 +534,23 @@ async def sync_captures_to_firebase(
             logger.info("[Firebase] Android 已上傳 %d 筆 EEG → fb_sid=%s",
                         total_uploaded, fb_session_id)
 
-            # 3. 標記 Session completed + qEEG 摘要
+            # 3. 標記 Session completed + BrainDNA + qEEG 摘要
             android_patch = {
                 "status":      "completed",
                 "endedAt":     datetime.now(timezone.utc).isoformat(),
                 "durationSec": len(features),
             }
+            # BrainDNA 結果（Android 路徑）
+            if braindna_result and braindna_result.get("valid"):
+                android_patch.update({
+                    "mindStress":   braindna_result.get("stress"),
+                    "mindBalance":  braindna_result.get("balance"),
+                    "mindEnergy":   braindna_result.get("energy"),
+                    "mindColor":    braindna_result.get("mind_color"),
+                    "overallScore": braindna_result.get("overall_score"),
+                    "mbti":         braindna_result.get("mbti"),
+                    "bagua":        braindna_result.get("bagua"),
+                })
             android_patch.update(_build_qeeg_patch(qeeg_result))
             android_patch = {k: v for k, v in android_patch.items() if v is not None}
             patch_resp = await client.patch(

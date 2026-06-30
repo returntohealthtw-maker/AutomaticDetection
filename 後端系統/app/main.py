@@ -8,7 +8,14 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.06.30.02"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.06.30.03"  # 每次改 HTML/JS 都更新這個
+
+# ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
+# "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
+# "qeeg"     = 使用 qEEG Z-score 演算法（七大能力雷達圖）
+# "both"     = 兩者並存（報告同時顯示）
+import os as _os
+REPORT_ALGO_MODE: str = _os.getenv("REPORT_ALGO_MODE", "braindna")
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
 APK_LATEST_VERSION_CODE = 26
@@ -356,6 +363,14 @@ def _run_lightweight_migrations():
 
     if not has_column("sessions", "qeeg_scores_json"):
         pending.append("ALTER TABLE sessions ADD COLUMN qeeg_scores_json TEXT NULL")
+
+    # qEEG 8 個頻段 0-100 分數（打平格式，方便直接查詢；使用者昨天要求存入的欄位）
+    if not has_column("sessions", "qeeg_band_scores_json"):
+        pending.append("ALTER TABLE sessions ADD COLUMN qeeg_band_scores_json TEXT NULL")
+
+    # 演算法模式（braindna / qeeg / both）
+    if not has_column("sessions", "algo_mode"):
+        pending.append("ALTER TABLE sessions ADD COLUMN algo_mode VARCHAR(20) DEFAULT 'braindna'")
 
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
@@ -861,6 +876,35 @@ def app_version(request: Request):
         "apk_download_url":    apk_url if apk_exists else "",
         "release_notes":       APK_RELEASE_NOTES,
     }
+
+@app.get("/api/v1/admin/settings/algo_mode")
+def get_algo_mode(current_user=Depends(get_current_user)):
+    """取得目前演算法模式設定（管理員專用）"""
+    from app.main import REPORT_ALGO_MODE
+    return {
+        "algo_mode": REPORT_ALGO_MODE,
+        "description": {
+            "braindna": "BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）",
+            "qeeg":     "qEEG Z-score 演算法（七大能力雷達圖）",
+            "both":     "兩者並存（報告同時顯示）",
+        },
+        "current": REPORT_ALGO_MODE,
+    }
+
+
+@app.put("/api/v1/admin/settings/algo_mode")
+def set_algo_mode(mode: str, current_user=Depends(get_current_user)):
+    """切換演算法模式（管理員專用，重啟後恢復環境變數預設值）
+    mode 可為 braindna / qeeg / both
+    """
+    import app.main as _main_module
+    valid_modes = ("braindna", "qeeg", "both")
+    if mode not in valid_modes:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"mode 必須為 {valid_modes}")
+    _main_module.REPORT_ALGO_MODE = mode
+    return {"ok": True, "algo_mode": mode, "note": "重啟後將恢復環境變數 REPORT_ALGO_MODE 設定"}
+
 
 @app.get("/download/apk/qr")
 def download_apk_qr(request: Request):

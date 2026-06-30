@@ -274,6 +274,17 @@ def upload_session(
                 ).first()
                 if _s2:
                     _s2.qeeg_scores_json = _json.dumps(_qeeg_result, ensure_ascii=False)
+                    # 同時存 8 個頻段 0-100 分數（獨立欄位，方便直接查詢）
+                    _bf = _qeeg_result.get("band_features", {}).get("Fp1", {})
+                    if _bf:
+                        _band_scores = {
+                            b: round(_bf[b]["score_0_100"])
+                            for b in ["delta", "theta", "low_alpha", "high_alpha",
+                                      "low_beta", "high_beta", "low_gamma", "high_gamma"]
+                            if b in _bf and _bf[b].get("score_0_100") is not None
+                        }
+                        if hasattr(_s2, "qeeg_band_scores_json"):
+                            _s2.qeeg_band_scores_json = _json.dumps(_band_scores, ensure_ascii=False)
                     db.commit()
                 _logger.info("[qEEG] Android session=%d 計算完成，flags=%s",
                              session.session_id,
@@ -287,10 +298,11 @@ def upload_session(
     try:
         from app.services.firebase_sync import sync_captures_to_firebase
         fb_sid = asyncio.run(sync_captures_to_firebase(
-            subject_name = req.subject_name,
-            session_id   = session.session_id,
-            captures     = req.captures,
-            qeeg_result  = _qeeg_result,
+            subject_name    = req.subject_name,
+            session_id      = session.session_id,
+            captures        = req.captures,
+            qeeg_result     = _qeeg_result,
+            braindna_result = _bdna_result,
         ))
         if fb_sid and fb_sid is not False:
             _fb_sync_ok = True

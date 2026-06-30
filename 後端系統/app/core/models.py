@@ -75,6 +75,14 @@ class Session(Base):
     firebase_session_id = Column(String(100), nullable=True)
     # qEEG Z-score 演算結果 JSON（七大能力 + 複合指標 + flags）
     qeeg_scores_json = Column(Text, nullable=True)
+    # qEEG 8 個頻段 0-100 分數（打平格式，方便直接查詢）
+    # 範例：{"delta":45,"theta":62,"low_alpha":58,"high_alpha":51,"low_beta":67,"high_beta":72,"low_gamma":48,"high_gamma":39}
+    qeeg_band_scores_json = Column(Text, nullable=True)
+    # 演算法模式選擇：決定後台及報告使用哪個演算法
+    # "braindna" = 使用 BrainDNA 佔比演算法（預設）
+    # "qeeg"     = 使用 qEEG Z-score 演算法
+    # "both"     = 兩者並存，報告同時顯示
+    algo_mode = Column(String(20), nullable=True, default="braindna")
 
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
     report      = relationship("Report", back_populates="session", uselist=False)
