@@ -209,7 +209,50 @@ def upload_session(
     import logging as _log
     _logger = _log.getLogger(__name__)
 
-    # 4. qEEG Z-score 演算（在 Firebase sync 前完成，結果一起寫入 Firebase）
+    # 4. BrainDNA 演算（從 180 筆 captures 轉換為 raw_arrays 格式，在後端計算）
+    #    這是使用者指定的「商用演算法」：APP 送 180 筆原始資料，Railway 計算最終值
+    _bdna_result = None
+    if req.is_success and len(req.captures) >= 30:
+        try:
+            from app.services.braindna_algorithms import compute_all as _bdna_compute
+            _is_child = (req.report_type or "").lower() in ("child", "child_report") \
+                        or (req.report_type or "").lower().startswith("child_")
+            # 將 180 筆 captures 轉換為 raw_arrays 格式（與 WebApp save-stats 路徑一致）
+            _raw_arrays = {
+                "r_delta":  [c.delta      for c in req.captures],
+                "r_theta":  [c.theta      for c in req.captures],
+                "r_lalpha": [c.low_alpha  for c in req.captures],
+                "r_halpha": [c.high_alpha for c in req.captures],
+                "r_lbeta":  [c.low_beta   for c in req.captures],
+                "r_hbeta":  [c.high_beta  for c in req.captures],
+                "r_lgamma": [c.low_gamma  for c in req.captures],
+                "r_hgamma": [c.high_gamma for c in req.captures],
+                "attn":     [c.attention  for c in req.captures],
+                "medi":     [c.meditation for c in req.captures],
+            }
+            _bdna_result = _bdna_compute(_raw_arrays, is_child=_is_child)
+            if _bdna_result.get("valid"):
+                _s2 = db.query(models.Session).filter(
+                    models.Session.session_id == session.session_id
+                ).first()
+                if _s2:
+                    _s2.mind_stress   = _bdna_result.get("stress")
+                    _s2.mind_balance  = _bdna_result.get("balance")
+                    _s2.mind_energy   = _bdna_result.get("energy")
+                    _s2.mind_color    = _bdna_result.get("mind_color")
+                    _s2.mbti          = _bdna_result.get("mbti")
+                    _s2.bagua         = _bdna_result.get("bagua")
+                    _s2.overall_score = _bdna_result.get("overall_score")
+                    _s2.bdna_mode     = f"bdna_{_bdna_result.get('input_scale','raw')}"
+                    db.commit()
+                _logger.info("[BrainDNA] Android session=%d 計算完成 scale=%s bands=%s",
+                             session.session_id,
+                             _bdna_result.get("input_scale"),
+                             _bdna_result.get("bands"))
+        except Exception as _bdna_ex:
+            _logger.warning("[BrainDNA] Android session=%d 演算例外: %s", session.session_id, _bdna_ex)
+
+    # 5. qEEG Z-score 演算（在 Firebase sync 前完成，結果一起寫入 Firebase）
     _qeeg_result = None
     if req.is_success and len(req.captures) >= 30:
         try:
@@ -238,7 +281,7 @@ def upload_session(
         except Exception as _qex:
             _logger.warning("[qEEG] Android session=%d 演算例外: %s", session.session_id, _qex)
 
-    # 5. 同步雙寫 Firebase（攜帶 qEEG 摘要）
+    # 6. 同步雙寫 Firebase（攜帶 qEEG 摘要）
     _fb_sync_ok = False
     _fb_session_id = None
     try:
@@ -275,7 +318,7 @@ def upload_session(
     except Exception as _e:
         _logger.exception("[Firebase] Android session %s 同步例外: %s", session.session_id, _e)
 
-    # 6. 廣播到監控儀表板（即時顯示）
+    # 7. 廣播到監控儀表板（即時顯示）
     background_tasks.add_task(broadcast, "new_session", {
         "session_id":      session.session_id,
         "report_id":       report.report_id,
@@ -288,7 +331,7 @@ def upload_session(
         "status":          "success" if req.is_success else "failed",
     })
 
-    # 7. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
+    # 8. 背景執行：計算演算法 + 生成 PDF + 傳送 LINE
     if req.is_success and len(req.captures) >= 150:
         background_tasks.add_task(
             generate_report_async,
