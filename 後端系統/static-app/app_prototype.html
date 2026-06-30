@@ -3210,13 +3210,14 @@
         let pretty;
         try { pretty = JSON.stringify(JSON.parse(info), null, 2); }
         catch(e) { pretty = info; }
-        alert('🔧 BLE 診斷資訊\n（請截圖回傳給技術人員）\n\n' + pretty);
+        showToast('BLE 診斷完成，詳見 console log', 'ok', 4000);
+        console.log('[BLE診斷]', pretty);
         return info;
       }
-      alert('⚠️ AndroidBridge 未注入\n（在瀏覽器測試模式中或 WebView 異常）');
+      showToast('⚠️ AndroidBridge 未注入（瀏覽器測試模式）', 'warn');
       return null;
     } catch(e) {
-      alert('診斷失敗: ' + e.message);
+      showToast('診斷失敗: ' + e.message, 'error');
       return null;
     }
   };
@@ -4106,7 +4107,7 @@ async function adminSubjectSave(id) {
     medications:     get('meds'),
   };
   if (!payload.name || !payload.email.includes('@') || !payload.phone || !payload.birth_date) {
-    alert('姓名 / Email / 手機 / 出生日期皆為必填');
+    showToast('姓名 / Email / 手機 / 出生日期皆為必填', 'warn');
     return;
   }
   try {
@@ -4116,31 +4117,31 @@ async function adminSubjectSave(id) {
     });
     if (!r.ok) {
       const txt = await r.text();
-      alert(`儲存失敗（${r.status}）：${txt}`);
+      showToast(`儲存失敗（${r.status}）：${txt}`, 'error', 4000);
       return;
     }
     _adminSubjectEditingId = null;
     _adminSubjects = [];      // 強制重抓
     await renderAdminSubjects();
   } catch (e) {
-    alert(`儲存失敗：${e.message}`);
+    showToast(`儲存失敗：${e.message}`, 'error');
   }
 }
 
 async function adminSubjectDelete(id) {
   const s = _adminSubjects.find(x => x.subject_id === id);
-  if (!confirm(`確定要刪除「${s ? s.name : '#'+id}」嗎？此動作無法復原。`)) return;
+  if (!(await _appConfirm(`確定要刪除「${s ? s.name : '#'+id}」嗎？此動作無法復原。`, { danger: true }))) return;
   try {
     const r = await apiFetch(`/subjects/${id}`, { method: 'DELETE' });
     if (!r.ok) {
       const txt = await r.text();
-      alert(`刪除失敗（${r.status}）：${txt}`);
+      showToast(`刪除失敗（${r.status}）：${txt}`, 'error', 4000);
       return;
     }
     _adminSubjects = _adminSubjects.filter(x => x.subject_id !== id);
     await renderAdminSubjects();
   } catch (e) {
-    alert(`刪除失敗：${e.message}`);
+    showToast(`刪除失敗：${e.message}`, 'error');
   }
 }
 
@@ -4148,10 +4149,10 @@ async function submitSubject() {
   const v = _getSubjectFormValues();
 
   // 基本驗證
-  if (!v.name)            { alert('請輸入姓名'); return; }
-  if (!v.email || !v.email.includes('@')) { alert('請輸入有效的 Email'); return; }
-  if (!v.phone)           { alert('請輸入手機'); return; }
-  if (!v.birth_date)      { alert('請選擇出生日期'); return; }
+  if (!v.name)            { showToast('請輸入姓名', 'warn'); return; }
+  if (!v.email || !v.email.includes('@')) { showToast('請輸入有效的 Email', 'warn'); return; }
+  if (!v.phone)           { showToast('請輸入手機', 'warn'); return; }
+  if (!v.birth_date)      { showToast('請選擇出生日期', 'warn'); return; }
 
   // 全域變數（供後續畫面使用）
   _currentSubjectName   = v.name;
@@ -4173,11 +4174,11 @@ async function submitSubject() {
     } else {
       const err = await r.text();
       console.warn('[受測者] 儲存失敗', r.status, err);
-      alert('儲存到伺服器失敗，仍可繼續流程，但本筆不會出現在「已有受測者」清單');
+      showToast('儲存到伺服器失敗，仍可繼續流程，但本筆不會出現在「已有受測者」清單', 'warn', 4000);
     }
   } catch (e) {
     console.warn('[受測者] 後端離線，僅繼續流程', e);
-    alert('伺服器連線失敗，仍可繼續流程，但本筆不會儲存');
+    showToast('伺服器連線失敗，仍可繼續流程，但本筆不會儲存', 'warn', 4000);
   }
 
   goto('screen-reports');
@@ -4337,8 +4338,8 @@ function nextMBTI() {
   }
 }
 
-function skipMBTI() {
-  if (!confirm('確定跳過問卷？\n系統將以腦波量測結果直接判讀 MBTI（準確度略低於完整作答）。')) return;
+async function skipMBTI() {
+  if (!(await _appConfirm('確定跳過問卷？\n系統將以腦波量測結果直接判讀 MBTI（準確度略低於完整作答）。'))) return;
   goto('screen-connect');
 }
 
@@ -4625,7 +4626,7 @@ async function loginConsultant() {
   const passRaw  = (document.getElementById('login-pass-input')?.value || '').trim();
   const phone = _toHalfWidth(phoneRaw).replace(/[\s-]/g, '');
   const pass  = _toHalfWidth(passRaw);
-  if (!phone || !pass) { alert('請輸入手機與密碼'); return; }
+  if (!phone || !pass) { showToast('請輸入手機與密碼', 'warn'); return; }
 
   if (phone !== phoneRaw || pass !== passRaw) {
     console.warn('[login] 偵測到全形字元，已自動轉成半形再送出。建議下次輸入時關閉中文輸入法。');
@@ -4639,12 +4640,12 @@ async function loginConsultant() {
       body: JSON.stringify({ phone, password: pass }),
     });
   } catch (e) {
-    alert('伺服器連線失敗：' + e.message);
+    showToast('伺服器連線失敗：' + e.message, 'error');
     return;
   }
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: '帳號或密碼錯誤' }));
-    alert(err.detail || '登入失敗');
+    showToast(err.detail || '登入失敗', 'error');
     return;
   }
   const data = await resp.json();
@@ -4662,8 +4663,8 @@ async function loginConsultant() {
   }
 }
 
-function logoutConsultant() {
-  if (!confirm('確定要登出嗎？')) return;
+async function logoutConsultant() {
+  if (!(await _appConfirm('確定要登出嗎？'))) return;
   _clearAuth();
   goto('screen-login');
 }
@@ -4788,7 +4789,7 @@ function _validateBrainwaveCapture(bw) {
 function _showRedetectModal(reason) {
   const ov = document.getElementById('redetect-overlay');
   if (!ov) {
-    alert('⚠️ 無法生成報告：' + reason + '\n\n請返回首頁重新檢測。');
+    showToast('⚠️ 無法生成報告：' + reason, 'error', 5000);
     return;
   }
   const r = document.getElementById('redetect-reason');
@@ -6303,11 +6304,11 @@ function _eegHealthReconnect() {
   try {
     if (typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.reconnectBrainwave === 'function') {
       AndroidBridge.reconnectBrainwave();
-      alert('已嘗試重新配對腦波儀。請等待 3-5 秒後再檢查連線狀態。');
+      showToast('已嘗試重新配對腦波儀。請等待 3-5 秒後再檢查連線狀態。', 'ok', 4000);
     } else {
-      alert('此功能僅在 APP 內可用（瀏覽器無法操作藍牙）。');
+      showToast('此功能僅在 APP 內可用（瀏覽器無法操作藍牙）。', 'warn');
     }
-  } catch(e) { alert('重新配對失敗：' + e.message); }
+  } catch(e) { showToast('重新配對失敗：' + e.message, 'error'); }
   setTimeout(_refreshEegHealthPreCheck, 1500);
 }
 
@@ -8215,15 +8216,15 @@ function submitContactRequest() {
   const note    = (document.getElementById('contact-note').value || '').trim();
 
   if (!name || !phone || !email) {
-    alert('請填寫姓名、手機與 Email');
+    showToast('請填寫姓名、手機與 Email', 'warn');
     return;
   }
   if (!orgType) {
-    alert('請選擇所屬單位 / 身份');
+    showToast('請選擇所屬單位 / 身份', 'warn');
     return;
   }
   if (orgType === '其他' && !orgOth) {
-    alert('請說明您的身份');
+    showToast('請說明您的身份', 'warn');
     return;
   }
 
@@ -8276,7 +8277,7 @@ async function adminLogin() {
   const pRaw = (document.getElementById('admin-pass').value || '').trim();
   const u = _toHalfWidth(uRaw).replace(/[\s-]/g, '');
   const p = _toHalfWidth(pRaw);
-  if (!u || !p) { alert('請輸入手機與密碼'); return; }
+  if (!u || !p) { showToast('請輸入手機與密碼', 'warn'); return; }
 
   if (u !== uRaw || p !== pRaw) {
     console.warn('[adminLogin] 偵測到全形字元，已自動轉成半形再送出。建議下次輸入時關閉中文輸入法。');
@@ -8291,16 +8292,16 @@ async function adminLogin() {
       body: JSON.stringify({ phone: u, password: p }),
     });
   } catch (e) {
-    alert('伺服器連線失敗：' + e.message); return;
+    showToast('伺服器連線失敗：' + e.message, 'error'); return;
   }
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: '帳號或密碼錯誤' }));
-    alert(err.detail || '登入失敗');
+    showToast(err.detail || '登入失敗', 'error');
     return;
   }
   const data = await resp.json();
   if (data.role !== 'admin') {
-    alert('此帳號非管理員，無法進入後台');
+    showToast('此帳號非管理員，無法進入後台', 'error');
     return;
   }
   _saveAuth(data);
@@ -8577,7 +8578,7 @@ function _filterAdminConsultants() {
 
 // ─── 停用 / 啟用顧問帳號 ──────────────────────────────────────────────────────
 async function toggleConsultantActive(cid, name) {
-  if (!confirm(`要切換「${name}」的啟用狀態嗎？\n（停用後該帳號將無法登入，但資料保留可隨時再啟用）`)) return;
+  if (!(await _appConfirm(`要切換「${name}」的啟用狀態嗎？\n（停用後該帳號將無法登入，但資料保留可隨時再啟用）`))) return;
   try {
     const r = await apiFetch(`/auth/consultants/${cid}/toggle-active`, { method: 'PATCH' });
     const data = await r.json().catch(() => null);
@@ -8596,7 +8597,7 @@ async function toggleConsultantActive(cid, name) {
 // ─── 永久刪除顧問帳號 ────────────────────────────────────────────────────────
 async function deleteConsultant(cid, name, phone) {
   // 第一道：基本確認
-  if (!confirm(`⚠️ 確定要「永久刪除」這個顧問帳號嗎？\n\n  姓名：${name}\n  手機：${phone}\n  ID：#${cid}\n\n相關資料處理：\n  • 該顧問建立的受測者紀錄 → 變成「無歸屬」（資料保留）\n  • 對應的申請紀錄 → consultant_id 清空（紀錄保留）\n  • 顧問本身的列 → 永久刪除\n\n此操作無法復原！`)) return;
+  if (!(await _appConfirm(`⚠️ 確定要「永久刪除」這個顧問帳號嗎？\n\n姓名：${name}\n手機：${phone}\nID：#${cid}\n\n• 該顧問的受測者紀錄 → 無歸屬（資料保留）\n• 對應申請紀錄 → consultant_id 清空\n• 顧問本身 → 永久刪除\n\n此操作無法復原！`, { danger: true, okLabel: '確定刪除' }))) return;
   // 第二道：要求輸入手機號做最終確認
   const typed = prompt(`為避免誤刪，請輸入此帳號的手機號碼「${phone}」確認刪除：`);
   if (typed === null) return;
@@ -9100,24 +9101,23 @@ async function _toggleMarkRetestSubject(sessionId, btn) {
 }
 
 async function _deleteAllSubject(subjectId, name) {
-  if (!subjectId) { alert('缺少受測者 ID，無法刪除'); return; }
+  if (!subjectId) { showToast('缺少受測者 ID，無法刪除', 'error'); return; }
   const confirmMsg = `確定要刪除受測者「${name}」嗎？\n\n⚠️ 這將一併刪除該受測者的所有相關資料（檢測紀錄、報告等），此操作不可復原。`;
-  if (!confirm(confirmMsg)) return;
+  if (!(await _appConfirm(confirmMsg, { danger: true, okLabel: '確定刪除' }))) return;
   try {
     const r = await apiFetch(`/subjects/${subjectId}`, { method: 'DELETE' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert(`❌ 刪除失敗：${err.detail || err.error || `HTTP ${r.status}`}`);
+      showToast(`❌ 刪除失敗：${err.detail || err.error || `HTTP ${r.status}`}`, 'error');
       return;
     }
-    // 從快取移除並重新渲染
     _allSubjectsCache = _allSubjectsCache.filter(s => s.subject_id !== subjectId);
     const countEl = document.getElementById('all-subjects-count');
     if (countEl) countEl.textContent = `共 ${_allSubjectsCache.length} 筆`;
     _filterAllSubjects();
     showToast(`✅ 已刪除受測者「${name}」`);
   } catch (e) {
-    alert(`❌ 刪除失敗：${e.message}`);
+    showToast(`❌ 刪除失敗：${e.message}`, 'error');
   }
 }
 
@@ -9314,7 +9314,7 @@ async function _toggleMarkRetest(sessionId, btn) {
     }
     btn.disabled = false;
   } catch (e) {
-    alert('操作失敗：' + e.message);
+    showToast('操作失敗：' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = isMarked ? '✅ 已標重測' : '🔁 標記重測';
   }
@@ -9325,7 +9325,7 @@ async function _regenerateSessionReport(sessionId, subjectName) {
   const defaultEmail = sess?.notify_email || '';
   const email = prompt(`重新生成 ${subjectName || `Session #${sessionId}`} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, defaultEmail);
   if (email === null) return;
-  if (!confirm(`確定對 Session #${sessionId} 重新生成？\n\n受測者：${subjectName || '?'}\nEmail：${email || '(無)'}\n\n⏳ 完成後會進入「待核准」，需 admin 預覽 PDF 後手動點「📨 預覽後寄信」才會寄出。`)) return;
+  if (!(await _appConfirm(`確定對 Session #${sessionId} 重新生成？\n\n受測者：${subjectName || '?'}\nEmail：${email || '(無)'}\n\n完成後進入「待核准」，需 admin 預覽 PDF 後手動寄信。`))) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
@@ -9334,32 +9334,32 @@ async function _regenerateSessionReport(sessionId, subjectName) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      alert(`❌ 重新生成失敗：${data.detail || data.error || r.status}`);
+      showToast(`❌ 重新生成失敗：${data.detail || data.error || r.status}`, 'error', 4000);
       return;
     }
-    alert(`✅ 已重新觸發 Session #${sessionId}\nReport #${data.report_id}\n\n${data.note || ''}`);
+    showToast(`✅ 已觸發 Session #${sessionId} → Report #${data.report_id}`, 'ok', 4000);
     renderAdminMissing();
   } catch (e) {
-    alert(`❌ 例外：${e.message}`);
+    showToast(`❌ 例外：${e.message}`, 'error');
   }
 }
 
 async function _deleteSessionReport(sessionId, reportId, subjectName) {
   const hasPdf = _missingCache.find(s => s.session_id === sessionId)?.has_pdf;
   const gcsNote = hasPdf ? '\n\n⚠️ GCS 上的 PDF 檔案也會一併刪除。' : '';
-  if (!confirm(`確定要刪除「${subjectName || `Session #${sessionId}`}」的報告？${gcsNote}\n\n刪除後可重新生成。Session 腦波數據不受影響。`)) return;
+  if (!(await _appConfirm(`確定要刪除「${subjectName || `Session #${sessionId}`}」的報告？${gcsNote}\n\n刪除後可重新生成。Session 腦波數據不受影響。`, { danger: true, okLabel: '確定刪除' }))) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/delete-report`, { method: 'DELETE' });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      alert(`❌ 刪除失敗：${data.detail || data.error || r.status}`);
+      showToast(`❌ 刪除失敗：${data.detail || data.error || r.status}`, 'error');
       return;
     }
     const gcsOk = data.deleted?.gcs?.ok !== false;
     showToast(`✅ 報告已刪除${gcsOk ? '（含 GCS PDF）' : '（GCS 刪除失敗，但 DB 已清除）'}`, gcsOk ? 'ok' : 'warn');
     renderAdminMissing();
   } catch (e) {
-    alert(`❌ 例外：${e.message}`);
+    showToast(`❌ 例外：${e.message}`, 'error');
   }
 }
 
@@ -9373,7 +9373,7 @@ async function _runHeadlessDiag() {
   try {
     const r = await apiFetch('/report-gen/headless-diag');
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`診斷失敗：${data.detail || r.status}`); return; }
+    if (!r.ok) { showToast(`診斷失敗：${data.detail || r.status}`, 'error'); return; }
     const d = data.diag || {};
     const lines = [
       `Playwright 已安裝：${d.playwright_installed ? '✅' : '❌'}`,
@@ -9383,9 +9383,9 @@ async function _runHeadlessDiag() {
       `最大並發：${d.max_concurrent}`,
       `Timeout：${d.timeout_sec}s`,
     ];
-    alert('🔬 Headless Chromium 診斷結果\n\n' + lines.join('\n'));
+    showToast('🔬 ' + lines.join(' | '), 'ok', 6000);
   } catch(e) {
-    alert(`診斷例外：${e.message}`);
+    showToast(`診斷例外：${e.message}`, 'error');
   } finally {
     btn.disabled = false; btn.textContent = '🔬 Chromium診斷';
   }
@@ -9412,11 +9412,11 @@ async function _pollActiveJobs() {
 }
 
 function _showActiveJobsDetail() {
-  if (!_activeJobsCache.length) { alert('目前沒有活躍的 headless 任務。'); return; }
+  if (!_activeJobsCache.length) { showToast('目前沒有活躍的 headless 任務。', 'ok'); return; }
   const lines = _activeJobsCache.map(j =>
-    `[${j.status}] ${j.subject_name || j.job_id} — ${j.elapsed_min} 分鐘\n${j.error ? '錯誤：' + j.error : '正常'}`
-  ).join('\n\n');
-  alert('目前 headless 任務：\n\n' + lines);
+    `[${j.status}] ${j.subject_name || j.job_id} — ${j.elapsed_min} 分鐘`
+  ).join(' | ');
+  showToast('活躍任務：' + lines, 'ok', 5000);
 }
 
 function _startActiveJobsPolling() {
@@ -9432,15 +9432,15 @@ function _stopActiveJobsPolling() {
 
 // ─── 重置卡住的報告 ──────────────────────────────────────────────────────
 async function _resetStuckReports() {
-  if (!confirm('⚠️ 重置卡住的報告\n\n這會把所有狀態為「生成中 / 待處理」的報告重設為「失敗」，\n讓你可以在「檢測↔報告」頁面重新點「🔄 重新生成」。\n\n確定執行？')) return;
+  if (!(await _appConfirm('⚠️ 重置卡住的報告\n\n這會把所有狀態為「生成中 / 待處理」的報告重設為「失敗」，讓你可以重新點「🔄 重新生成」。\n\n確定執行？', { okLabel: '確定重置' }))) return;
   try {
     const r = await apiFetch('/reports/reset-stuck', { method: 'POST' });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`❌ 重置失敗：${data.detail || r.status}`); return; }
-    alert(`✅ 已重置 ${data.count} 筆卡住的報告。\n\n${data.note || ''}\n\n請至「報告管理 → 檢測↔報告」找到失敗的報告，點「🔄 重新生成」。`);
-    renderAdminMissing();   // 重新載入清單
+    if (!r.ok) { showToast(`❌ 重置失敗：${data.detail || r.status}`, 'error'); return; }
+    showToast(`✅ 已重置 ${data.count} 筆卡住的報告。請至「檢測↔報告」重新生成。`, 'ok', 5000);
+    renderAdminMissing();
   } catch (e) {
-    alert(`❌ 例外：${e.message}`);
+    showToast(`❌ 例外：${e.message}`, 'error');
   }
 }
 
@@ -9473,7 +9473,7 @@ async function _submitBatchRegenerate() {
     notify_email: (el.value || '').trim() || null,
   }));
   if (!items.length) {
-    alert('未選任何受測者');
+    showToast('未選任何受測者', 'warn');
     return;
   }
   const btn = document.getElementById('batch-regen-submit');
@@ -9489,7 +9489,7 @@ async function _submitBatchRegenerate() {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       statusEl.textContent = '';
-      alert(`❌ 批次重生失敗：${data.detail || data.error || r.status}`);
+      showToast(`❌ 批次重生失敗：${data.detail || data.error || r.status}`, 'error');
       btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.textContent = '🔄 立即重新生成';
       return;
     }
@@ -9498,13 +9498,13 @@ async function _submitBatchRegenerate() {
     if (failed.length) {
       msg += `\n\n❌ 失敗：${failed.length} 筆\n` + failed.map(f => `- Session #${f.session_id} (${f.subject_name || '?'})：${f.error}`).slice(0, 10).join('\n');
     }
-    alert(msg);
+    showToast(msg.replace(/\n/g, ' '), 'ok', 5000);
     _missingSelected.clear();
     _closeBatchRegenerateModal();
     renderAdminMissing();
   } catch (e) {
     statusEl.textContent = '';
-    alert(`❌ 例外：${e.message}`);
+    showToast(`❌ 例外：${e.message}`, 'error');
     btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.textContent = '🔄 立即重新生成';
   }
 }
@@ -9608,13 +9608,13 @@ async function _deleteGcsFile(objectName, reportId) {
   const fname = objectName.split('/').pop();
   const hasDbRecord = reportId > 0;
   const dbNote = hasDbRecord ? `\n\n⚠️ 此檔案已入庫（Report #${reportId}），同時也會刪除資料庫中的報告記錄。` : '\n\n（此為歷史孤兒檔，無資料庫記錄）';
-  if (!confirm(`確定要刪除此 GCS 檔案？\n\n${fname}${dbNote}\n\n此操作不可復原。`)) return;
+  if (!(await _appConfirm(`確定要刪除此 GCS 檔案？\n\n${fname}${dbNote}\n\n此操作不可復原。`, { danger: true, okLabel: '確定刪除' }))) return;
   try {
     const qs = `object_name=${encodeURIComponent(objectName)}${hasDbRecord ? `&report_id=${reportId}` : '&also_db=false'}`;
     const r = await apiFetch(`/reports/gcs-file?${qs}`, { method: 'DELETE' });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      alert(`❌ 刪除失敗：${data.detail || data.error || r.status}`);
+      showToast(`❌ 刪除失敗：${data.detail || data.error || r.status}`, 'error');
       return;
     }
     const ok = data.ok;
@@ -9630,7 +9630,7 @@ async function _deleteGcsFile(objectName, reportId) {
     }
     _filterGcsList();
   } catch (e) {
-    alert(`❌ 例外：${e.message}`);
+    showToast(`❌ 例外：${e.message}`, 'error');
   }
 }
 
@@ -9663,13 +9663,13 @@ async function _importGcsToDb(objectName) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      alert(`❌ 補錄失敗：${data.detail || data.error || r.status}`);
+      showToast(`❌ 補錄失敗：${data.detail || data.error || r.status}`, 'error');
       return;
     }
-    alert(`✅ 已補錄為 Report #${data.report_id}\n\n${data.note || ''}\n\n建議切到「💾 資料庫紀錄」即可看見。`);
-    renderAdminGcsList(); // 重整 GCS 列表（會把該筆顯示為「✅ 已入庫」）
+    showToast(`✅ 已補錄為 Report #${data.report_id}，請切到「💾 資料庫紀錄」查看`, 'ok', 4000);
+    renderAdminGcsList();
   } catch (e) {
-    alert(`❌ 補錄例外：${e.message}`);
+    showToast(`❌ 補錄例外：${e.message}`, 'error');
   }
 }
 
@@ -9979,10 +9979,10 @@ async function _regenOrphanReport(reportId, subjectName, subjectEmail) {
   );
   if (!sessionInput) return;
   const sessionId = parseInt(sessionInput, 10);
-  if (!sessionId || isNaN(sessionId)) { alert('Session ID 格式錯誤，請輸入數字。'); return; }
+  if (!sessionId || isNaN(sessionId)) { showToast('Session ID 格式錯誤，請輸入數字。', 'warn'); return; }
   const emailInput = prompt(`請輸入收件 Email（留空 = 之後再補）：`, subjectEmail || '');
   if (emailInput === null) return;
-  if (!confirm(`確定將 Report #${reportId} 連結到 Session #${sessionId} 並重新生成？\n受測者：${nameLabel}\nEmail：${emailInput || '(無)'}`)) return;
+  if (!(await _appConfirm(`確定將 Report #${reportId} 連結到 Session #${sessionId} 並重新生成？\n受測者：${nameLabel}\nEmail：${emailInput || '(無)'}`))) return;
   try {
     const r1 = await apiFetch(`/reports/${reportId}/link-session`, {
       method: 'POST',
@@ -9990,63 +9990,64 @@ async function _regenOrphanReport(reportId, subjectName, subjectEmail) {
     });
     if (!r1.ok) {
       const d = await r1.json().catch(() => ({}));
-      alert(`連結失敗：${d.detail || d.error || r1.status}`); return;
+      showToast(`連結失敗：${d.detail || d.error || r1.status}`, 'error'); return;
     }
     const r2 = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
       body: JSON.stringify({ notify_email: emailInput || undefined }),
     });
     const data = await r2.json().catch(() => ({}));
-    if (!r2.ok) { alert(`重新生成失敗：${data.detail || data.error || r2.status}`); return; }
-    alert(`✅ 已連結 Session #${sessionId} 並送出重新生成指令！\n\n預計 20~30 分鐘後完成。`);
+    if (!r2.ok) { showToast(`重新生成失敗：${data.detail || data.error || r2.status}`, 'error'); return; }
+    showToast(`✅ 已連結 Session #${sessionId} 並送出重新生成指令！`, 'ok', 4000);
     renderAdminReports();
-  } catch (e) { alert(`例外：${e.message}`); }
+  } catch (e) { showToast(`例外：${e.message}`, 'error'); }
 }
 
 async function _regenFromDbRecords(sessionId, email, subjectName) {
   const nameLabel = subjectName ? `「${subjectName}」` : `Session #${sessionId}`;
   const emailInput = prompt(`重新生成 ${nameLabel} 的報告\n\n請輸入收件 Email（留空 = 之後再補）：`, email || '');
   if (emailInput === null) return; // 使用者取消
-  if (!confirm(`確定重新生成 ${nameLabel} 的報告？\nSession #${sessionId} · Email：${emailInput || '(無)'}\n\n⚠️ 舊的報告紀錄將被覆蓋\n⏳ 完成後進入「待核准」狀態，需 admin 預覽 PDF 後手動寄信。`)) return;
+  if (!(await _appConfirm(`確定重新生成 ${nameLabel} 的報告？\nSession #${sessionId} · Email：${emailInput || '(無)'}\n\n舊的報告紀錄將被覆蓋，完成後進入「待核准」狀態。`))) return;
   try {
     const r = await apiFetch(`/reports/sessions/${sessionId}/regenerate`, {
       method: 'POST',
       body: JSON.stringify({ notify_email: emailInput || undefined }),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`重新生成失敗：${data.detail || data.error || r.status}`); return; }
-    alert(`✅ 已送出重新生成指令！\n\n預計 20~30 分鐘後完成，完成後狀態變為「待核准寄信」。`);
+    if (!r.ok) { showToast(`重新生成失敗：${data.detail || data.error || r.status}`, 'error'); return; }
+    showToast(`✅ 已送出重新生成指令！完成後狀態變為「待核准寄信」。`, 'ok', 4000);
     renderAdminReports();
   } catch (e) {
-    alert(`例外：${e.message}`);
+    showToast(`例外：${e.message}`, 'error');
   }
 }
 
 // 刪除單筆測試報告
 async function _deleteTestReport(reportId) {
-  if (!confirm(`確定刪除測試報告 #${reportId}？\n（此報告的姓名為「受測者」等預設值，無法關聯到任何真實受測者）`)) return;
+  if (!(await _appConfirm(`確定刪除測試報告 #${reportId}？`, { danger: true, okLabel: '確定刪除' }))) return;
   try {
     const r = await apiFetch(`/reports/${reportId}/delete-test`, { method: 'DELETE' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert(`刪除失敗：${err.detail || r.status}`);
+      showToast(`刪除失敗：${err.detail || r.status}`, 'error');
       return;
     }
     renderAdminReports();
   } catch (e) {
-    alert(`刪除例外：${e.message}`);
+    showToast(`刪除例外：${e.message}`, 'error');
   }
 }
 
 async function _adminDeleteReport(reportId, subjectName) {
   // 第一步：確認是否刪除
-  if (!confirm(`確定刪除「${subjectName}」的報告 #${reportId}？\n\n⚠️ 此動作不可復原。`)) return;
+  if (!(await _appConfirm(`確定刪除「${subjectName}」的報告 #${reportId}？\n\n⚠️ 此動作不可復原。`, { danger: true, okLabel: '確定刪除' }))) return;
 
   // 第二步：是否同時刪除 GCS PDF
-  const delGcs = confirm(
+  const delGcs = await _appConfirm(
     `是否同時刪除 GCS 雲端上的 PDF 檔案？\n\n` +
     `確定 → DB 紀錄 + GCS PDF 全部刪除\n` +
-    `取消 → 只刪 DB 紀錄（PDF 仍保留在雲端，可日後補錄）`
+    `取消 → 只刪 DB 紀錄（PDF 仍保留在雲端）`,
+    { okLabel: '連同 GCS 刪除', cancelLabel: '只刪 DB' }
   );
 
   try {
@@ -10071,7 +10072,7 @@ async function _linkReportToSession(reportId, subjectName) {
   );
   if (!input) return;
   const sessId = parseInt(input.trim(), 10);
-  if (!sessId || sessId <= 0) return alert('請輸入有效的 Session ID（正整數）');
+  if (!sessId || sessId <= 0) { showToast('請輸入有效的 Session ID（正整數）', 'warn'); return; }
 
   try {
     const r = await apiFetch(`/reports/${reportId}/link-session`, {
@@ -10105,7 +10106,7 @@ function _uploadReplacementPdf(reportId, subjectName) {
     if (!file) return;
 
     const sizeMB = (file.size / 1048576).toFixed(1);
-    if (!confirm(`上傳「${file.name}」(${sizeMB} MB) 取代\n報告 #${reportId}（${subjectName || '未知'}）的 PDF？\n\n⚠️ 原有 GCS 檔案不會被刪除，DB 的 pdf_url 將更新為新上傳的檔案。`)) return;
+    if (!(await _appConfirm(`上傳「${file.name}」(${sizeMB} MB) 取代報告 #${reportId}（${subjectName || '未知'}）的 PDF？\n\n原有 GCS 檔案不會被刪除，DB 的 pdf_url 將更新為新檔案。`, { okLabel: '確定上傳' }))) return;
 
     // 顯示進行中提示
     const toast = document.createElement('div');
@@ -10145,32 +10146,20 @@ function _uploadReplacementPdf(reportId, subjectName) {
 
 // 🔗 一鍵修復孤兒報告：呼叫 /reports/admin/relink-orphan-reports
 async function _relinkOrphanReports() {
-  if (!confirm('系統將嘗試把舊的「孤兒報告」（姓名缺失）依顧問+姓名+時間自動關聯回受測者主檔。\n\n這個動作只 UPDATE 不刪除，安全可重複執行。\n\n確定要繼續？')) return;
+  if (!(await _appConfirm('系統將嘗試把舊的「孤兒報告」依顧問+姓名+時間自動關聯回受測者主檔。\n\n這個動作只 UPDATE 不刪除，安全可重複執行。\n\n確定要繼續？', { okLabel: '開始修復' }))) return;
 
   try {
     const r = await apiFetch('/reports/admin/relink-orphan-reports', { method: 'POST' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert(`❌ 修復失敗：${err.detail || r.status}`);
+      showToast(`❌ 修復失敗：${err.detail || r.status}`, 'error');
       return;
     }
     const data = await r.json();
-    const lines = [
-      `✅ 修復完成`,
-      ``,
-      `掃描總數：${data.scanned} 筆`,
-      `🔗 成功關聯：${data.linked} 筆`,
-      `⚠️ 仍是孤兒（無法自動匹配）：${data.still_orphan} 筆`,
-      ``,
-      `💡 仍是孤兒的報告通常是：`,
-      `  · 顧問姓名 + 受測者姓名 完全沒登錄過受測者主檔`,
-      `  · 同名同姓且同顧問有多個受測者（無法判斷）`,
-      `  → 可手動到「受測者資訊」分頁建檔後再執行一次，或直接刪除。`,
-    ];
-    alert(lines.join('\n'));
+    showToast(`✅ 修復完成：掃描 ${data.scanned} 筆，成功關聯 ${data.linked} 筆，仍孤兒 ${data.still_orphan} 筆`, 'ok', 5000);
     renderAdminReports();
   } catch (e) {
-    alert(`修復例外：${e.message}`);
+    showToast(`修復例外：${e.message}`, 'error');
   }
 }
 
@@ -10180,12 +10169,12 @@ async function _showPaidNotDetected() {
     const r = await apiFetch('/payments/admin/paid-not-detected');
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert(`❌ 載入失敗：${err.detail || r.status}`);
+      showToast(`❌ 載入失敗：${err.detail || r.status}`, 'error');
       return;
     }
     const data = await r.json();
     if (!data.count) {
-      alert('🎉 目前沒有「已付款但未完成檢測」的訂單。\n\n所有付款都已對應到完整的檢測+報告流程。');
+      showToast('🎉 目前沒有「已付款但未完成檢測」的訂單', 'ok', 4000);
       return;
     }
 
@@ -10232,7 +10221,7 @@ async function _showPaidNotDetected() {
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
   } catch (e) {
-    alert(`載入例外：${e.message}`);
+    showToast(`載入例外：${e.message}`, 'error');
   }
 }
 
@@ -10243,21 +10232,20 @@ async function _cleanupAllTestReports() {
   const tests = (_adminReportsCache || []).filter(r => r.is_test);
 
   if (!tests.length) {
-    alert('✅ 目前沒有需要清理的系統測試報告（姓名為「受測者」等預設值）。\n\n若需刪除特定報告，請在報告卡片上逐筆操作。');
+    showToast('✅ 目前沒有需要清理的系統測試報告', 'ok');
     return;
   }
 
   // 顯示將被刪除的名單讓管理員確認
   const listPreview = tests.slice(0, 10).map(r =>
-    `  · ${r.subject_name || '(無名稱)'}  #${r.report_id}  ${r.report_kind_zh || r.report_kind || '?'}`
+    `· ${r.subject_name || '(無名稱)'} #${r.report_id}`
   ).join('\n');
-  const moreNote = tests.length > 10 ? `\n  … 以及其他 ${tests.length - 10} 筆` : '';
+  const moreNote = tests.length > 10 ? `\n… 以及其他 ${tests.length - 10} 筆` : '';
 
-  if (!confirm(
-    `即將刪除 ${tests.length} 筆系統測試報告：\n\n${listPreview}${moreNote}\n\n` +
-    `⚠️ 只刪除姓名為「受測者 / 陳小明 / 測試模式」等預設值的孤兒報告。\n` +
-    `真實姓名的報告完全不受影響。\n\n確定繼續？`
-  )) return;
+  if (!(await _appConfirm(
+    `即將刪除 ${tests.length} 筆系統測試報告：\n\n${listPreview}${moreNote}\n\n只刪除姓名為預設值的孤兒報告，真實姓名不受影響。確定繼續？`,
+    { danger: true, okLabel: `確定刪除 ${tests.length} 筆` }
+  ))) return;
 
   let success = 0, fail = 0;
   for (const r of tests) {
@@ -10272,29 +10260,28 @@ async function _cleanupAllTestReports() {
       }
     } catch(e) { fail++; }
   }
-  alert(`清理完成 ✅\n成功刪除：${success} 筆測試報告\n失敗：${fail} 筆`);
+  showToast(`✅ 清理完成：成功刪除 ${success} 筆，失敗 ${fail} 筆`, 'ok', 5000);
   renderAdminReports();
 }
 
 async function _adminSendReportEmail(reportId) {
   const cached = _adminReportsCache.find(r => r.report_id === reportId);
   if (!cached) {
-    alert('找不到此報告');
+    showToast('找不到此報告', 'error');
     return;
   }
-  // 每次都讓管理員確認／修改收件 email（預設帶入已存的信箱）
   const inputEmail = prompt(
     `寄送報告 #${reportId}（${cached.subject_name || '未知'}）\n\n請確認或修改收件 Email：`,
     cached.subject_email || ''
   );
-  if (inputEmail === null) return;          // 按取消
+  if (inputEmail === null) return;
   if (!inputEmail.trim() || !inputEmail.includes('@')) {
-    alert('請輸入有效的 Email 地址');
+    showToast('請輸入有效的 Email 地址', 'warn');
     return;
   }
-  cached.subject_email = inputEmail.trim(); // 更新快取供後續使用
-  const confirmMsg = `確定寄送報告給 ${cached.subject_email}？\n\n受測者：${cached.subject_name || '(未知)'}\n類型：${cached.report_kind_zh || cached.report_kind || '?'}\n\n⚠️ 點確定前請先開啟 PDF 預覽確認內容正確。`;
-  if (!confirm(confirmMsg)) return;
+  cached.subject_email = inputEmail.trim();
+  const confirmMsg = `確定寄送報告給 ${cached.subject_email}？\n\n受測者：${cached.subject_name || '(未知)'}\n類型：${cached.report_kind_zh || cached.report_kind || '?'}\n\n請先開啟 PDF 預覽確認內容正確後再寄出。`;
+  if (!(await _appConfirm(confirmMsg, { okLabel: '確定寄出' }))) return;
 
   try {
     const r = await apiFetch(`/reports/${reportId}/send-email`, {
@@ -10304,15 +10291,14 @@ async function _adminSendReportEmail(reportId) {
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert(`❌ 寄信失敗：${err.detail || err.error || r.status}`);
+      showToast(`❌ 寄信失敗：${err.detail || err.error || r.status}`, 'error', 4000);
       return;
     }
     const data = await r.json();
-    alert(`✅ 已寄送至 ${data.sent_to}（method=${data.method || '?'}）`);
-    // 重新載入列表
+    showToast(`✅ 已寄送至 ${data.sent_to}`, 'ok', 4000);
     renderAdminReports();
   } catch (e) {
-    alert(`❌ 寄信例外：${e.message}`);
+    showToast(`❌ 寄信例外：${e.message}`, 'error');
   }
 }
 
@@ -10510,7 +10496,7 @@ async function purgeOrphanRequests() {
 ⚠️ 申請紀錄會整筆刪除（不可復原），但顧問本體完全不受影響。
 
 確定要繼續嗎？`;
-  if (!confirm(msg)) return;
+  if (!(await _appConfirm(msg, { danger: true, okLabel: '確定清理' }))) return;
   try {
     const r = await apiFetch('/contact-requests/_purge-orphans', { method: 'POST' });
     const data = await r.json().catch(() => null);
@@ -10534,7 +10520,7 @@ async function purgeOrphanRequests() {
 
 // ─── 單筆刪除孤兒申請 ────────────────────────────────────────────────────────
 async function deleteOrphanRequest(reqId, name) {
-  if (!confirm(`要刪除「${name}」(#${reqId}) 這筆孤兒申請嗎？\n（對應的顧問帳號已被刪除，這只是殘留的申請紀錄）`)) return;
+  if (!(await _appConfirm(`要刪除「${name}」(#${reqId}) 這筆孤兒申請嗎？\n（對應的顧問帳號已被刪除，這只是殘留的申請紀錄）`, { danger: true, okLabel: '確定刪除' }))) return;
   try {
     // 借用 _purge-orphans 邏輯：先確認它仍是孤兒，再 purge
     const r = await apiFetch('/contact-requests/_purge-orphans', { method: 'POST' });
@@ -10603,33 +10589,33 @@ async function adminAction(id, status) {
     } else {
       msg += `\n預設密碼將寄送至申請人 Email`;
     }
-    if (!backendOk) msg += `\n\n⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）`;
-    alert(msg);
+    if (!backendOk) msg += '\n⚠️ 後端連線失敗，本次僅本機更新';
+    showToast(msg, 'ok', 6000);
   } else if (!backendOk) {
-    alert('⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）');
+    showToast('⚠️ 後端連線失敗，本次僅本機更新（重新整理可能會還原）', 'warn', 4000);
   }
 
   await renderAdminList();
 }
 
 async function resendWelcomeEmail(id) {
-  if (!confirm('重新寄送歡迎信給此申請人？')) return;
+  if (!(await _appConfirm('重新寄送歡迎信給此申請人？', { okLabel: '確定寄送' }))) return;
   try {
     const resp = await apiFetch(`/contact-requests/${id}/resend-welcome-email`, { method: 'POST' });
     const data = await resp.json().catch(() => null);
     if (!resp.ok) {
-      alert(`❌ 寄送失敗：${(data && data.detail) || `HTTP ${resp.status}`}`);
+      showToast(`❌ 寄送失敗：${(data && data.detail) || `HTTP ${resp.status}`}`, 'error', 4000);
       return;
     }
     const es = data && data.email_status;
     const to = data && data.request && data.request.email;
     if (es && es.ok) {
-      alert(`✅ 已重新寄送至 ${to}`);
+      showToast(`✅ 已重新寄送至 ${to}`, 'ok', 4000);
     } else {
-      alert(`⚠️ 寄信仍失敗：${(es && es.error) || '未知錯誤'}\n\n（請至 Railway 設定 GMAIL_USER / GMAIL_APP_PASSWORD，或檢查申請人 Email 是否正確）`);
+      showToast(`⚠️ 寄信仍失敗：${(es && es.error) || '未知錯誤'}（請檢查 GMAIL 設定）`, 'warn', 5000);
     }
   } catch (e) {
-    alert(`❌ 連線失敗：${e.message}`);
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
   }
   await renderAdminList();
 }
@@ -10726,7 +10712,7 @@ function _loadShareRules() {
 }
 
 async function resetShareRules() {
-  if (!confirm('確定要回復預設分潤規則嗎？')) return;
+  if (!(await _appConfirm('確定要回復預設分潤規則嗎？', { danger: true, okLabel: '確定重設' }))) return;
   _cachedRules = _defaultShareRules();
   await _persistRules(_cachedRules);
   renderShareRulesEditor();
@@ -10767,7 +10753,7 @@ async function saveShareRules() {
   });
   _cachedRules = rules;
   await _persistRules(rules);
-  alert('✅ 分潤規則已儲存並同步至伺服器');
+  showToast('✅ 分潤規則已儲存並同步至伺服器', 'ok');
   renderEarningsOverview();
 }
 
@@ -11098,6 +11084,37 @@ function showToast(message, type = 'ok', durationMs = 3500) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// In-app confirm / alert（取代原生 browser confirm/alert，避免顯示伺服器網址）
+// ────────────────────────────────────────────────────────────────────────
+function _appConfirm(msg, { okLabel = '確定', cancelLabel = '取消', danger = false } = {}) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:24px 20px 20px;max-width:320px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.35);font-family:inherit';
+    const msgDiv = document.createElement('div');
+    msgDiv.style.cssText = 'font-size:14px;color:#333;line-height:1.65;margin-bottom:20px;white-space:pre-wrap;word-break:break-word';
+    msgDiv.textContent = msg;
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.style.cssText = 'padding:10px 18px;border:1px solid #ddd;border-radius:10px;background:#f5f5f5;font-size:14px;cursor:pointer;color:#555';
+    const okBtn = document.createElement('button');
+    okBtn.textContent = okLabel;
+    okBtn.style.cssText = `padding:10px 18px;border:none;border-radius:10px;background:${danger ? '#e53935' : '#ff6b35'};color:#fff;font-size:14px;font-weight:600;cursor:pointer`;
+    btns.append(cancelBtn, okBtn);
+    box.append(msgDiv, btns);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const done = ok => { overlay.remove(); resolve(ok); };
+    okBtn.onclick     = () => done(true);
+    cancelBtn.onclick = () => done(false);
+    overlay.onclick   = e => { if (e.target === overlay) done(false); };
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 管理員重設顧問密碼 Modal
 // ────────────────────────────────────────────────────────────────────────
 let _arpTargetCid  = null;
@@ -11206,9 +11223,9 @@ function openChangePasswordModal({ force = false, hint = '' } = {}) {
   setTimeout(() => document.getElementById('cp-old')?.focus(), 50);
 }
 
-function closeChangePasswordModal() {
+async function closeChangePasswordModal() {
   if (_cpForceMode) {
-    if (!confirm('您目前仍使用初始密碼，建議立刻修改。\n確定要稍後再改嗎？')) return;
+    if (!(await _appConfirm('您目前仍使用初始密碼，建議立刻修改。\n確定要稍後再改嗎？', { okLabel: '稍後再改' }))) return;
     showToast('提醒：您仍使用初始密碼，請儘快至「設定 → 修改密碼」變更', 'warn', 5000);
   }
   const m = document.getElementById('change-pwd-modal');
@@ -11774,18 +11791,19 @@ function _launchRedetect(subjectName, subjectEmail, reportType, variant, subject
     marital:'夫妻關係報告', parent_child:'親子關係報告',
   };
   const kindZh = REPORT_ZH[reportType] || reportType;
-  const confirmed = confirm(
+  _appConfirm(
     `📋 付款重測確認\n\n` +
     `客戶：${_currentSubjectName}\n` +
     `報告：${kindZh}（${variant}）\n\n` +
     `確認後將直接進入腦波採集畫面，\n` +
     `採集完成後系統自動存入資料庫並生成報告。\n\n` +
-    `請確認腦波儀已開機並配戴在客戶頭上後點「確定」。`
-  );
-  if (!confirmed) return;
-
-  // 直接跳入連線畫面（與付款成功後相同路徑）
-  goto('screen-connect');
+    `請確認腦波儀已開機並配戴在客戶頭上後點「確定」。`,
+    { okLabel: '開始採集' }
+  ).then(ok => {
+    if (!ok) return;
+    // 直接跳入連線畫面（與付款成功後相同路徑）
+    goto('screen-connect');
+  });
 }
 </script>
 </body>
