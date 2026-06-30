@@ -154,6 +154,40 @@ CHILD_PROP_RANGE: Dict[str, tuple] = {
 }
 
 
+BDNA_GOOD_SIGNAL_THRESHOLD = 50  # 與 qEEG pipeline 一致：ThinkGear good_signal < 50 = 乾淨秒
+
+
+def _filter_bad_signal_epochs(raw_arrays: Dict[str, List]) -> Dict[str, List]:
+    """
+    根據 r_good_signal（ThinkGear 訊號品質）過濾壞秒。
+
+    過濾規則（與 qEEG pipeline 一致）：
+      good_signal < 50  → 乾淨秒，保留
+      good_signal >= 50 → 壞秒（電極接觸不良 / 肌電干擾），排除
+
+    若無 r_good_signal 資料（空陣列或全 0），原樣回傳（不過濾）。
+    注意：Android raw 路徑已有 delta < 30,000 過濾；
+          此函式主要補 WebApp bandTo100 路徑的過濾邏輯。
+    """
+    gs = raw_arrays.get("r_good_signal") or []
+    if not gs or not any(v > 0 for v in gs):
+        return raw_arrays  # 無 good_signal 資料，不過濾
+
+    all_keys = list(RAW_KEYS) + ["attn", "medi", "r_good_signal"]
+    n = len(gs)
+
+    keep_idx = [i for i in range(n) if i < len(gs) and int(gs[i]) < BDNA_GOOD_SIGNAL_THRESHOLD]
+    if not keep_idx:
+        return raw_arrays  # 全都是壞秒，保守起見回傳原始資料
+
+    filtered: Dict[str, List] = {}
+    for k in all_keys:
+        arr = raw_arrays.get(k) or []
+        filtered[k] = [arr[i] for i in keep_idx if i < len(arr)]
+
+    return filtered
+
+
 def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None) -> Dict[str, List]:
     """
     從 raw_arrays 中選出 lowGamma 佔比最佳的 30 秒視窗，
@@ -573,6 +607,9 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
     自動偵測輸入尺度（raw vs norm100），確保 bandTo100 輸入也能正確運算。
     回傳字典包含 'input_scale' 欄位，標記使用的演算模式。
     """
+    # ── 0. 訊號品質過濾（WebApp bandTo100 路徑補充；Android raw 路徑稍後由 delta 門檻過濾）
+    raw_arrays = _filter_bad_signal_epochs(raw_arrays)
+
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return {"valid": False, "input_scale": "unknown"}
