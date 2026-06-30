@@ -68,14 +68,32 @@ def _raw_arrays_to_per_sec(raw_arrays: dict) -> Dict[str, list]:
     return {k: [float(v) for v in arr if v is not None] for k, arr in mapping.items()}
 
 
+GOOD_SIGNAL_THRESHOLD = 50  # ThinkGear: 0=完美, 200=無訊號；< 50 視為乾淨秒
+
+
 def _captures_to_per_sec(captures: list) -> tuple[Dict[str, list], list]:
     """
     Android EegCapture 物件列表 → per_sec_band_values + good_signal 陣列
+
+    過濾規則（與 BrainDNA 路徑一致）：
+      good_signal < 50 → 乾淨秒，進入計算
+      good_signal ≥ 50 → 壞秒（電極接觸不良 / 肌電雜訊），排除
+    若所有秒均為壞秒（無 good_signal 資料），則全部保留（WebApp 路徑無 good_signal）。
     """
     per_sec: Dict[str, list] = {k: [] for k in ALL_BAND_KEYS}
-    good_signal: list = []
+    good_signal_all: list = []
 
-    for cap in sorted(captures, key=lambda c: getattr(c, "seq_num", 0)):
+    sorted_caps = sorted(captures, key=lambda c: getattr(c, "seq_num", 0))
+
+    # 先收集全部 good_signal，判斷是否有有效過濾依據
+    gs_vals = [int(getattr(cap, "good_signal", 0) or 0) for cap in sorted_caps]
+    has_gs_data = any(v > 0 for v in gs_vals)  # 全 0 表示沒有提供訊號品質資料
+
+    for i, cap in enumerate(sorted_caps):
+        gs = gs_vals[i]
+        # 有訊號品質資料時過濾壞秒；無資料時全部保留
+        if has_gs_data and gs >= GOOD_SIGNAL_THRESHOLD:
+            continue
         per_sec["delta"].append(float(getattr(cap, "delta", 0) or 0))
         per_sec["theta"].append(float(getattr(cap, "theta", 0) or 0))
         per_sec["low_alpha"].append(float(getattr(cap, "low_alpha", 0) or 0))
@@ -84,9 +102,9 @@ def _captures_to_per_sec(captures: list) -> tuple[Dict[str, list], list]:
         per_sec["high_beta"].append(float(getattr(cap, "high_beta", 0) or 0))
         per_sec["low_gamma"].append(float(getattr(cap, "low_gamma", 0) or 0))
         per_sec["high_gamma"].append(float(getattr(cap, "high_gamma", 0) or 0))
-        good_signal.append(int(getattr(cap, "good_signal", 0) or 0))
+        good_signal_all.append(gs)
 
-    return per_sec, good_signal
+    return per_sec, good_signal_all
 
 
 # ──────────────────────────────────────────────────────────────
@@ -119,8 +137,24 @@ def run_qeeg_pipeline(
     good_signal: list = []
 
     if raw_arrays:
-        per_sec = _raw_arrays_to_per_sec(raw_arrays)
-        good_signal = raw_arrays.get("r_good_signal") or raw_arrays.get("good_signal") or []
+        per_sec_raw = _raw_arrays_to_per_sec(raw_arrays)
+        gs_arr = raw_arrays.get("r_good_signal") or raw_arrays.get("good_signal") or []
+        # WebApp 路徑：若有 good_signal 資料，同樣過濾壞秒
+        if gs_arr and any(v > 0 for v in gs_arr):
+            n_raw = max(len(v) for v in per_sec_raw.values())
+            per_sec = {k: [] for k in ALL_BAND_KEYS}
+            good_signal = []
+            for i in range(n_raw):
+                gs = int(gs_arr[i]) if i < len(gs_arr) else 0
+                if gs >= GOOD_SIGNAL_THRESHOLD:
+                    continue
+                for k in ALL_BAND_KEYS:
+                    arr = per_sec_raw.get(k, [])
+                    per_sec[k].append(arr[i] if i < len(arr) else 0.0)
+                good_signal.append(gs)
+        else:
+            per_sec = per_sec_raw
+            good_signal = []
     elif captures:
         per_sec, good_signal = _captures_to_per_sec(captures)
 
@@ -131,8 +165,12 @@ def run_qeeg_pipeline(
 
     # ── 2. 訊號品質評估 ─────────────────────────────────────────
     signal_quality = assess_signal_quality(good_signal, n_samples)
+    # 記錄過濾後實際進入計算的秒數（用於報告顯示）
+    signal_quality["clean_epochs"] = n_samples
     if signal_quality["quality_grade"] == "D":
         logger.warning("[qEEG] 訊號品質為 D，返回空分析")
+    logger.info("[qEEG] 訊號品質 grade=%s，乾淨秒數=%d",
+                signal_quality["quality_grade"], n_samples)
 
     # ── 3. 相對功率 + log 轉換 ───────────────────────────────────
     relative_power_per_sec = to_relative_power(per_sec)
