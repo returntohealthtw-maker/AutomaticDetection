@@ -9084,11 +9084,36 @@ function _renderAllSubjectCard(s) {
         <div style="font-size:12px;font-weight:700;color:#1a3a6e;margin-bottom:6px;">🧠 腦波數據</div>
         ${bwHtml}
       </div>
+      ${s.latest_session_id ? `
+      <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #e0e6f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:#666;">Session #${s.latest_session_id} 操作：</span>
+        <button
+          data-marked="${s.latest_needs_retest ? '1' : '0'}"
+          onclick="_toggleMarkRetestSubject(${s.latest_session_id}, this)"
+          style="background:${s.latest_needs_retest ? '#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7' : '#fff3e0;color:#e65100;border:1px solid #ffcc80'};font-size:11px;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer;"
+          title="${s.latest_needs_retest ? '取消重測標記' : '標記此 session 需重測，讓客戶出現在付款重測名單'}">
+          ${s.latest_needs_retest ? '✅ 已標重測' : '🔁 標記重測'}
+        </button>
+        <span style="font-size:10px;color:#999;">標記後客戶將出現在「付款重測」名單</span>
+      </div>` : ''}
       <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #e0e6f0;">
         <div style="font-size:12px;font-weight:700;color:#1a3a6e;margin-bottom:6px;">📄 報告預覽 / 下載</div>
         ${reportsHtml}
       </div>
     </div>`;
+}
+
+// 受測者資訊分頁專用的標記重測（操作後同步更新快取，避免重新整理才生效）
+async function _toggleMarkRetestSubject(sessionId, btn) {
+  await _toggleMarkRetest(sessionId, btn);
+  // 同步更新 _allSubjectsCache 中的 latest_needs_retest 狀態
+  const nowMarked = btn.dataset.marked === '1';
+  _allSubjectsCache = _allSubjectsCache.map(s => {
+    if (s.latest_session_id === sessionId) {
+      return { ...s, latest_needs_retest: nowMarked };
+    }
+    return s;
+  });
 }
 
 async function _deleteAllSubject(subjectId, name) {
