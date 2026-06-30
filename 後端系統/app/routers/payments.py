@@ -1093,6 +1093,31 @@ def admin_paid_not_detected(
             if sess_r.subject_id and sess_r.subject_id in seen_subject_ids:
                 continue
 
+            # ── 自動確認：若受測者在此 session 之後已有新的有效腦波資料，
+            #   代表重測已完成 → 自動清除標記，不再列入名單，也不允許再次重測
+            #   （若要再次重測，管理員須手動再按「標記重測」）
+            if sess_r.subject_id:
+                newer_sessions = [
+                    s for s in sess_by_subj.get(sess_r.subject_id, [])
+                    if s.session_id > sess_r.session_id
+                ]
+                if not newer_sessions:
+                    # sess_by_subj 可能只包含最近幾筆，補查 DB
+                    newer_sessions = db.query(M.Session).filter(
+                        M.Session.subject_id == sess_r.subject_id,
+                        M.Session.session_id > sess_r.session_id,
+                    ).all()
+                has_newer_valid = any(
+                    _session_has_valid_eeg(ns, eeg_count_by_sess, zero_quality_sess)
+                    for ns in newer_sessions
+                )
+                if has_newer_valid:
+                    # 重測已完成，自動清除標記，此 session 退出名單
+                    sess_r.needs_retest  = False
+                    sess_r.retest_reason = None
+                    db.commit()
+                    continue
+
             subj_name = sess_r.subject_name or "(未知)"
             pay_r = pay_by_subj_name.get(subj_name)
             if not pay_r:
