@@ -5686,6 +5686,35 @@ function _persistEegStats(stats) {
     window._lastEegPersistPromise = Promise.resolve(null);
     return window._lastEegPersistPromise;
   }
+  // ── Android WebView 路徑：ApiUploader 已上傳 180 筆原始資料，Railway 計算一切 ──
+  // 跳過 /eeg/save-stats（避免建立重複 session + 避免 bandTo100 一筆值入庫）
+  // 等待 CLS_DB → ApiUploader → WebAppActivity → JSBridge.onUploadResult 回呼
+  const _inAndroidWebView = !!(window.JSBridge && typeof Android !== 'undefined' ||
+                               window.JSBridge && window.JSBridge.startStreamingEeg);
+  if (_inAndroidWebView) {
+    console.log('[EEG] Android WebView 模式：跳過 /eeg/save-stats，等待 ApiUploader 回呼...');
+    window._lastEegPersistPromise = new Promise((resolve) => {
+      const _timeout = setTimeout(() => {
+        console.warn('[EEG] ApiUploader 回呼逾時（60s），session_id 未取得');
+        resolve(null);
+      }, 60000);  // 最多等 60 秒
+      // ApiUploader 完成後 WebAppActivity 呼叫此函式
+      window.JSBridge.onUploadResult = function(sessionId, reportId, errMsg) {
+        clearTimeout(_timeout);
+        if (sessionId && sessionId > 0) {
+          window._lastEegSessionId = sessionId;
+          console.log('[EEG] ApiUploader 完成 session_id=' + sessionId + ' report_id=' + reportId);
+          resolve(sessionId);
+        } else {
+          console.warn('[EEG] ApiUploader 失敗:', errMsg);
+          resolve(null);
+        }
+      };
+    });
+    return window._lastEegPersistPromise;
+  }
+
+  // ── 瀏覽器 / 非 Android WebView 路徑：使用 /eeg/save-stats ─────────────────
   window._lastEegPersistPromise = (async () => {
     try {
       const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
