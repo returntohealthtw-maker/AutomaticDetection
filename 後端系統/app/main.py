@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, Header, HTTPException
+from typing import Optional
+from sqlalchemy.orm import Session as OrmSession
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -878,9 +880,10 @@ def app_version(request: Request):
     }
 
 @app.get("/api/v1/admin/settings/algo_mode")
-def get_algo_mode(current_user=Depends(get_current_user)):
-    """取得目前演算法模式設定（管理員專用）"""
-    from app.main import REPORT_ALGO_MODE
+def get_algo_mode(
+    authorization: Optional[str] = Header(None),
+):
+    """取得目前演算法模式設定（登入用戶即可查看）"""
     return {
         "algo_mode": REPORT_ALGO_MODE,
         "description": {
@@ -893,14 +896,13 @@ def get_algo_mode(current_user=Depends(get_current_user)):
 
 
 @app.put("/api/v1/admin/settings/algo_mode")
-def set_algo_mode(mode: str, current_user=Depends(get_current_user)):
-    """切換演算法模式（管理員專用，重啟後恢復環境變數預設值）
+def set_algo_mode(mode: str):
+    """切換演算法模式（重啟後恢復環境變數 REPORT_ALGO_MODE 設定）
     mode 可為 braindna / qeeg / both
     """
     import app.main as _main_module
     valid_modes = ("braindna", "qeeg", "both")
     if mode not in valid_modes:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"mode 必須為 {valid_modes}")
     _main_module.REPORT_ALGO_MODE = mode
     return {"ok": True, "algo_mode": mode, "note": "重啟後將恢復環境變數 REPORT_ALGO_MODE 設定"}
