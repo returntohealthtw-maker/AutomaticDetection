@@ -20,8 +20,8 @@ import os as _os
 REPORT_ALGO_MODE: str = _os.getenv("REPORT_ALGO_MODE", "braindna")
 
 # Android APK 版本（要跟 app/build.gradle versionCode 對應；發新 APK 才 bump）
-APK_LATEST_VERSION_CODE = 26
-APK_LATEST_VERSION_NAME = "1.2.5"
+APK_LATEST_VERSION_CODE = 27
+APK_LATEST_VERSION_NAME = "1.2.6"
 APK_DOWNLOAD_PATH       = "/static-app/apk/BrainReport-LUKE.apk"
 APK_RELEASE_NOTES = (
     "v1.1.9 更新內容：\n"

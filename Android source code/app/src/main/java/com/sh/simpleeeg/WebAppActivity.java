@@ -126,6 +126,24 @@ public class WebAppActivity extends Activity {
         setContentView(root);
         setupWebView();
 
+        // 接收 ApiUploader 完成事件 → 通知 WebView（跳過 /eeg/save-stats，改用 ApiUploader session_id）
+        CLS_DB.setUploadResultListener(new CLS_DB.UploadResultListener() {
+            @Override
+            public void onUploadSuccess(int remoteSid, int reportId) {
+                String js = "window.JSBridge && window.JSBridge.onUploadResult("
+                        + remoteSid + "," + reportId + ", null)";
+                webView.post(() -> webView.evaluateJavascript(js, null));
+                android.util.Log.i("WebAppActivity", "onUploadSuccess → JS session_id=" + remoteSid);
+            }
+            @Override
+            public void onUploadFailure(String error) {
+                String safeErr = error.replace("'", "").replace("\n", " ");
+                String js = "window.JSBridge && window.JSBridge.onUploadResult(0, 0, '" + safeErr + "')";
+                webView.post(() -> webView.evaluateJavascript(js, null));
+                android.util.Log.w("WebAppActivity", "onUploadFailure → JS error=" + safeErr);
+            }
+        });
+
         // 每次啟動 App 都清掉 WebView 快取，確保拿到最新前端版本
         // （加盟商不用重灌 APK，就能拿到最新的網頁邏輯／報告版型）
         try {

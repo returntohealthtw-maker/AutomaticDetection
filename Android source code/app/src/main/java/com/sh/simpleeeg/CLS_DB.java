@@ -25,6 +25,16 @@ public class CLS_DB {
 
     private static final String TAG = "CLS_DB";
 
+    // ─── 上傳結果回呼（供 WebAppActivity 接收 session_id，通知 WebView 跳過 /eeg/save-stats）──
+    public interface UploadResultListener {
+        void onUploadSuccess(int remoteSid, int reportId);
+        void onUploadFailure(String error);
+    }
+    private static volatile UploadResultListener sUploadResultListener;
+    public static void setUploadResultListener(UploadResultListener l) {
+        sUploadResultListener = l;
+    }
+
     // ─── 單例 ────────────────────────────────────────────────────────────────
     private static volatile CLS_DB INSTANCE;
 
@@ -189,9 +199,18 @@ public class CLS_DB {
                 ApiUploader.upload(session, caps, new ApiUploader.UploadCallback() {
                     @Override public void onSuccess(int remoteSid, int reportId) {
                         Log.i(TAG, "Backend upload OK: remote session=" + remoteSid + " report=" + reportId);
+                        // 通知 WebAppActivity，讓 WebView 拿到 session_id（跳過 /eeg/save-stats）
+                        UploadResultListener l = sUploadResultListener;
+                        if (l != null) {
+                            mainHandler.post(() -> l.onUploadSuccess(remoteSid, reportId));
+                        }
                     }
                     @Override public void onFailure(String error) {
                         Log.e(TAG, "Backend upload FAILED: " + error);
+                        UploadResultListener l = sUploadResultListener;
+                        if (l != null) {
+                            mainHandler.post(() -> l.onUploadFailure(error));
+                        }
                     }
                 });
             }
