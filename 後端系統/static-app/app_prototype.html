@@ -4884,6 +4884,7 @@ async function startFullReportGeneration(opts) {
         chapters_to_generate: chaptersToGen,
         brainwave_data:       opts.brainwaveData|| null,
         session_id:           window._lastEegSessionId || null,  // 讓外部 React App callback /reports/record 時帶上
+        qeeg_ability_scores:  window._lastQeegAbilityScores || null,  // QEEG 七大能力（族群常模校正）
       }),
     });
     if (!resp.ok) {
@@ -5736,6 +5737,7 @@ function _persistEegStats(stats) {
         window._lastFirebaseSessionId = d.firebase_session_id || null;
         window._lastQeegBandScores = d.qeeg_band_scores || null;
         window._lastQeegSignalGrade = d.qeeg_signal_grade || null;
+        window._lastQeegAbilityScores = d.qeeg_ability_scores || null;
         const fbStatus = d.firebase_sync_ok
           ? `Firebase ✓ (${d.captures_saved || 0} 筆)`
           : 'Firebase 同步失敗（資料已存 PostgreSQL）';

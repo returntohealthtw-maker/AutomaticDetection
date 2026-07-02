@@ -187,8 +187,19 @@ def start_headless_job(
     lo_gamma_opt = _first(_opt(b7, "gamma_low"),  _opt(ba, "low_gamma"),  _opt(ba, "gamma_low"))
     hi_gamma_opt = _first(_opt(b7, "gamma_high"), _opt(ba, "high_gamma"), _opt(ba, "gamma_high"))
 
-    attn_val  = _val_or_50(attn_opt)
-    medi_val  = _val_or_50(medi_opt)
+    # ── QEEG 七大能力分數（當可用時取代 eSense attention/meditation）──────────
+    _qeeg_ab = (brainwave_data or {}).get("qeeg_abilities") or {}
+    _qfocus      = _qeeg_ab.get("focus")       # QEEG 專注能力（0-100 sigmoid）
+    _qrelax      = _qeeg_ab.get("relaxation")  # QEEG 放鬆能力
+    _qintuition  = _qeeg_ab.get("intuition")
+    _qenergy     = _qeeg_ab.get("energy")
+    _qlogic      = _qeeg_ab.get("logic")
+    _qawareness  = _qeeg_ab.get("awareness")
+    _qempathy    = _qeeg_ab.get("empathy")
+
+    # focus / relaxation：優先使用 QEEG 分數（族群常模校正）；無 QEEG 時 fallback 到 eSense
+    attn_val  = _val_or_50(_qfocus   if _qfocus   is not None else attn_opt)
+    medi_val  = _val_or_50(_qrelax   if _qrelax   is not None else medi_opt)
     delta_val = _val_or_50(delta_opt)
     theta_val = _val_or_50(theta_opt)
     alpha_val = _val_or_50(alpha_opt)
@@ -273,6 +284,8 @@ def start_headless_job(
         "mbti_bagua_name":   (brainwave_data or {}).get("mbti_bagua_name"),
         "mbti_secondaries":  (brainwave_data or {}).get("mbti_secondaries"),
         "mbti_profiles":     (brainwave_data or {}).get("mbti_profiles"),
+        # ── QEEG 七大能力（族群常模校正，0-100 分）──
+        "qeeg_abilities":    _qeeg_ab if _qeeg_ab else None,
     }
     # 去除 None，避免 JSON 體積過大
     bw_payload = {k: v for k, v in bw_payload.items() if v is not None}
@@ -321,6 +334,17 @@ def start_headless_job(
         "alpha":                 alpha_val,
         "beta":                  beta_val,
         "gamma":                 gamma_val,
+
+        # ── QEEG 七大能力（個別 URL param，供 React 讀取）──
+        **({
+            "qeeg_focus":      _qfocus,
+            "qeeg_relaxation": _qrelax,
+            "qeeg_intuition":  _qintuition,
+            "qeeg_energy":     _qenergy,
+            "qeeg_logic":      _qlogic,
+            "qeeg_awareness":  _qawareness,
+            "qeeg_empathy":    _qempathy,
+        } if _qeeg_ab else {}),
 
         # ── 結構化 payload（最強保障：URL key 漂移時這個還在）──
         "brainwave_data":  bw_b64,

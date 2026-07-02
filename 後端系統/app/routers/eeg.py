@@ -76,6 +76,8 @@ class EegStatsOut(BaseModel):
     qeeg_band_scores: Optional[dict] = None
     # qEEG 訊號品質等級（A/B/C/D）
     qeeg_signal_grade: Optional[str] = None
+    # qEEG 七大能力分數（族群常模校正，直接用於報告）
+    qeeg_ability_scores: Optional[dict] = None
 
 
 # ─── 端點 ─────────────────────────────────────────────────────────────────────
@@ -414,9 +416,10 @@ def save_eeg_stats(
         except Exception as _fb_ex:
             logger.error("[Firebase] 同步例外 session=%d: %s", sess.session_id, _fb_ex)
 
-    # 從 qEEG 結果擷取各頻段 0-100 分數回傳給前端顯示
-    _qeeg_band_out = None
-    _qeeg_grade_out = None
+    # 從 qEEG 結果擷取各頻段 0-100 分數及七大能力分數回傳給前端
+    _qeeg_band_out     = None
+    _qeeg_grade_out    = None
+    _qeeg_ability_out  = None
     if _qeeg_result:
         bf = _qeeg_result.get("band_features", {}).get("Fp1", {})
         if bf:
@@ -426,17 +429,23 @@ def save_eeg_stats(
                 if isinstance(info, dict)
             }
         _qeeg_grade_out = _qeeg_result.get("signal_quality", {}).get("quality_grade")
+        ab = _qeeg_result.get("ability_scores") or {}
+        if ab:
+            _qeeg_ability_out = {
+                k: round(v["score"]) for k, v in ab.items() if isinstance(v, dict) and "score" in v
+            }
 
     return EegStatsOut(
-        ok                  = True,
-        session_id          = sess.session_id,
-        capture_id          = cap.capture_id,
-        msg                 = f"已記錄 {payload.subject_name} 的腦波統計 ({payload.sample_count} 筆，逐秒={_per_sec_saved-1})",
-        firebase_sync_ok    = _fb_sync_ok,
-        firebase_session_id = _fb_session_id,
-        captures_saved      = _per_sec_saved,
-        qeeg_band_scores    = _qeeg_band_out,
-        qeeg_signal_grade   = _qeeg_grade_out,
+        ok                   = True,
+        session_id           = sess.session_id,
+        capture_id           = cap.capture_id,
+        msg                  = f"已記錄 {payload.subject_name} 的腦波統計 ({payload.sample_count} 筆，逐秒={_per_sec_saved-1})",
+        firebase_sync_ok     = _fb_sync_ok,
+        firebase_session_id  = _fb_session_id,
+        captures_saved       = _per_sec_saved,
+        qeeg_band_scores     = _qeeg_band_out,
+        qeeg_signal_grade    = _qeeg_grade_out,
+        qeeg_ability_scores  = _qeeg_ability_out,
     )
 
 

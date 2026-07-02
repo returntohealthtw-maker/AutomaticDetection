@@ -99,6 +99,22 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
             "low_gamma":  lo_ga, "high_gamma": hi_ga,
         },
     }
+
+    # ── 若 Session 有 QEEG 計算結果，一併帶入 ──────────────────────────
+    if sess:
+        import json as _json
+        qeeg_raw = getattr(sess, "qeeg_scores_json", None)
+        if qeeg_raw:
+            try:
+                qeeg = _json.loads(qeeg_raw) if isinstance(qeeg_raw, str) else qeeg_raw
+                ab = qeeg.get("ability_scores") or {}
+                if ab:
+                    bw["qeeg_abilities"] = {
+                        k: round(ab[k]["score"]) for k in ab if isinstance(ab.get(k), dict)
+                    }
+            except Exception:
+                pass
+
     return bw
 
 
@@ -138,6 +154,7 @@ class StartRequest(BaseModel):
     use_external:         Optional[bool] = None       # None = 自動判斷（外部設了就用），True/False = 強制
     session_id:           Optional[int] = None        # 從 /eeg/save-stats 拿到的 session_id，外部完成後可 callback
     extra:                Optional[Dict[str, Any]] = None  # 關係報告用：wife_session_id / members 等多人資料
+    qeeg_ability_scores:  Optional[Dict[str, Any]] = None  # QEEG 七大能力（前端即時傳入；後端若 DB 有值也可補充）
 
 
 class ChaptersQuery(BaseModel):
@@ -344,6 +361,10 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                             req.session_id, bw.get("attention_percentage"))
         except Exception as e:
             logger.warning("[report-gen/start] DB 補充 brainwave_data 失敗: %s", e)
+
+    # ── 合併 QEEG 七大能力：前端傳入優先，否則用 _bw_from_session 從 DB 讀的 ──
+    if bw and req.qeeg_ability_scores and not bw.get("qeeg_abilities"):
+        bw = {**bw, "qeeg_abilities": req.qeeg_ability_scores}
 
     # ─────────────────────────────────────────────────────────────────────
     # 🚨 硬擋：拒絕無效的報告生成請求（避免再產生「全部數據都是 50」的假報告）

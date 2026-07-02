@@ -424,8 +424,10 @@ def _call_vite_prefill(
         return fallback if v is None else v
     ba = (brainwave_data or {}).get("bands_avg") or {}
     b7 = (brainwave_data or {}).get("bands_7")   or {}  # 真實 High/Low 子頻帶
-    attn  = _g(brainwave_data or {}, "attention_percentage")
-    medi  = _g(brainwave_data or {}, "meditation_percentage")
+    _qab = (brainwave_data or {}).get("qeeg_abilities") or {}
+    # focus/relaxation：優先 QEEG 常模校正分數，否則 eSense
+    attn  = _qab.get("focus")      or _g(brainwave_data or {}, "attention_percentage")
+    medi  = _qab.get("relaxation") or _g(brainwave_data or {}, "meditation_percentage")
     delta = _g(ba, "delta"); theta = _g(ba, "theta")
     alpha = _g(ba, "alpha"); beta  = _g(ba, "beta"); gamma = _g(ba, "gamma")
 
@@ -473,6 +475,16 @@ def _call_vite_prefill(
     }
     if chapters_to_generate:
         params["chapters"] = ",".join(str(c) for c in chapters_to_generate)
+    if _qab:
+        params.update({k: v for k, v in {
+            "qeeg_focus":      _qab.get("focus"),
+            "qeeg_relaxation": _qab.get("relaxation"),
+            "qeeg_intuition":  _qab.get("intuition"),
+            "qeeg_energy":     _qab.get("energy"),
+            "qeeg_logic":      _qab.get("logic"),
+            "qeeg_awareness":  _qab.get("awareness"),
+            "qeeg_empathy":    _qab.get("empathy"),
+        }.items() if v is not None})
     qs = urlencode(params)
     redirect_url = f"{base}/?{qs}"
     return {
