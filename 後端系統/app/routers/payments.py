@@ -1121,6 +1121,13 @@ def admin_paid_not_detected(
             subj_name = sess_r.subject_name or "(未知)"
             pay_r = pay_by_subj_name.get(subj_name)
             if not pay_r:
+                # 管理員標記重測時，付款的 consultant_id 可能為 null（未帶入顧問）
+                # 補查：只要姓名符合且已付款，顧問就應能看到並執行重測
+                pay_r = db.query(M.Payment).filter(
+                    M.Payment.subject_name == subj_name,
+                    M.Payment.status == "paid",
+                ).order_by(M.Payment.created_at.desc()).first()
+            if not pay_r:
                 continue
 
             rt = sess_r.report_type or ""
