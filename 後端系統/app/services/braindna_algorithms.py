@@ -27,14 +27,16 @@ from typing import Dict, List, Optional
 # MindValueTop：各頻段原始值上限截斷（直接複製自 BrainDNA）
 # ─────────────────────────────────────────────────────────────────────────────
 CAP = {
-    "r_delta":  98000,
-    "r_theta":  98000,
-    "r_lalpha": 50000,
-    "r_halpha": 50000,
-    "r_lbeta":  50000,
-    "r_hbeta":  50000,
-    "r_lgamma": 10000,
-    "r_hgamma": 10000,
+    # 依據實測裝置原始值校正（成人均值：delta~506K, theta~104K, lgamma~11K, hgamma~8K）
+    # 原始值比 BrainDNA 設計假設（delta~50K）高 5~10 倍，需同比放大 CAP
+    "r_delta":  500_000,
+    "r_theta":  200_000,
+    "r_lalpha":  50_000,
+    "r_halpha":  50_000,
+    "r_lbeta":   50_000,
+    "r_hbeta":   50_000,
+    "r_lgamma":  25_000,
+    "r_hgamma":  20_000,
 }
 
 RAW_KEYS = ["r_delta", "r_theta", "r_lalpha", "r_halpha",
@@ -62,16 +64,17 @@ def _proportion_range(value: float, level1: float, level2: float) -> float:
     return (value - level1) / (level2 - level1) * 0.5 + 0.5
 
 
-# proportionRange 各頻段標準範圍（來自 BrainDNA brainwave.py calcXxx 方法）
+# proportionRange 各頻段標準範圍（依新 CAP 重新校正，符合實際裝置輸出）
+# 原理：用實測族群均值除以未截斷總和，得出「健康中位數佔比」作為 level2 附近參考
 _PROP_RANGE = {
-    "r_delta":  (0.60, 0.80),
-    "r_theta":  (0.15, 0.30),
-    "r_lalpha": (0.10, 0.20),
-    "r_halpha": (0.10, 0.20),
-    "r_lbeta":  (0.05, 0.10),
-    "r_hbeta":  (0.05, 0.10),
-    "r_lgamma": (0.03, 0.06),
-    "r_hgamma": (0.03, 0.06),
+    "r_delta":  (0.40, 0.70),    # 實測截斷後佔比 ~55%（原設計 60~80% 裝置不符）
+    "r_theta":  (0.10, 0.22),    # 實測 ~15%
+    "r_lalpha": (0.020, 0.055),  # 實測 ~3.5%
+    "r_halpha": (0.015, 0.045),  # 實測 ~3.0%
+    "r_lbeta":  (0.015, 0.040),  # 實測 ~2.5%
+    "r_hbeta":  (0.012, 0.035),  # 實測 ~2.2%
+    "r_lgamma": (0.010, 0.025),  # 實測 ~1.7%（lgamma CAP 放大後）
+    "r_hgamma": (0.008, 0.020),  # 實測 ~1.4%
 }
 
 
@@ -188,7 +191,8 @@ def _filter_bad_signal_epochs(raw_arrays: Dict[str, List]) -> Dict[str, List]:
     return filtered
 
 
-def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None) -> Dict[str, List]:
+def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None,
+                        pr_table: Optional[Dict] = None) -> Dict[str, List]:
     """
     從 raw_arrays 中選出 lowGamma 佔比最佳的 30 秒視窗，
     回傳該視窗的 raw_arrays（結構相同，長度約 30）。
@@ -204,10 +208,9 @@ def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None)
         return raw_arrays  # 資料不足，用全部
 
     active_cap = cap if cap is not None else CAP
+    active_pr = pr_table if pr_table is not None else _PROP_RANGE
     lgamma_cap = active_cap.get("r_lgamma", CAP["r_lgamma"])
-    # 兒童使用較寬的 lgamma proportionRange（0.015~0.040），成人用標準（0.03~0.06）
-    pr_l1 = 0.015 if lgamma_cap > CAP["r_lgamma"] else 0.03
-    pr_l2 = 0.040 if lgamma_cap > CAP["r_lgamma"] else 0.06
+    pr_l1, pr_l2 = active_pr.get("r_lgamma", _PROP_RANGE["r_lgamma"])
 
     # BrainDNA evaluationReport.py 第 36 行：`if len(tmpArr) > 0: mindArray.append(tmpArr)`
     # 最後不足 30 秒的部分視窗也納入
@@ -285,7 +288,9 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
     # 若輸入已是 best window（由 compute_all 傳入），直接使用；
     # 若直接呼叫此函式（n >= 30），自動選 best window。
     if n >= WINDOW_SIZE * 2:
-        raw_arrays = _select_best_window(raw_arrays, cap=active_cap)
+        raw_arrays = _select_best_window(
+            raw_arrays, cap=active_cap,
+            pr_table=CHILD_PROP_RANGE if is_child else _PROP_RANGE)
         n = len(raw_arrays.get("r_lalpha") or [])
 
     prop_sum = {k: 0.0 for k in RAW_KEYS}
@@ -623,7 +628,9 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
     else:
         # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
         active_cap = CHILD_CAP if is_child else CAP
-    best_win = _select_best_window(raw_arrays, cap=active_cap)
+    best_win = _select_best_window(
+        raw_arrays, cap=active_cap,
+        pr_table=CHILD_PROP_RANGE if is_child else _PROP_RANGE)
 
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]

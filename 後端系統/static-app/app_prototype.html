@@ -6744,8 +6744,9 @@ function _etSigmoid(raw) { return 1 / (1 + Math.exp(-3 * (raw - 1))); }
 
 // ─── BrainDNA proportionRange 共用計算（_summarizeEegAccum 和 _etComputeAll 共用）──
 // 完全對應後端 braindna_algorithms.py 的邏輯（含 best-30s window 選取）
-const _BDNA_CAP  = { r_delta:98000, r_theta:98000, r_lalpha:50000, r_halpha:50000,
-                     r_lbeta:50000, r_hbeta:50000, r_lgamma:10000, r_hgamma:10000 };
+// 依據實測裝置原始值校正（成人均值：delta~506K, theta~104K, lgamma~11K, hgamma~8K）
+const _BDNA_CAP  = { r_delta:500000, r_theta:200000, r_lalpha:50000, r_halpha:50000,
+                     r_lbeta:50000, r_hbeta:50000, r_lgamma:25000, r_hgamma:20000 };
 const _BDNA_KEYS = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
 // 兒童專用 CAP 值（report_type='child' 時使用）
 // 依據 Springer Nature 2025（450名健康兒童）：delta 應佔 ~44%、theta ~25%
@@ -6763,10 +6764,11 @@ const _BDNA_PR_CHILD = {
   r_lbeta:[0.010,0.040], r_hbeta:[0.020,0.070],
   r_lgamma:[0.015,0.040], r_hgamma:[0.010,0.030],
 };
-const _BDNA_PR   = { r_delta:[0.60,0.80], r_theta:[0.15,0.30],
-                     r_lalpha:[0.10,0.20], r_halpha:[0.10,0.20],
-                     r_lbeta:[0.05,0.10],  r_hbeta:[0.05,0.10],
-                     r_lgamma:[0.03,0.06], r_hgamma:[0.03,0.06] };
+// proportionRange 閾值（依新 CAP 重新校正，符合實際裝置輸出）
+const _BDNA_PR   = { r_delta:[0.40,0.70], r_theta:[0.10,0.22],
+                     r_lalpha:[0.020,0.055], r_halpha:[0.015,0.045],
+                     r_lbeta:[0.015,0.040],  r_hbeta:[0.012,0.035],
+                     r_lgamma:[0.010,0.025], r_hgamma:[0.008,0.020] };
 function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
 
 // Best-30s window selection（對應 BrainDNA MindValueAlgorithm.calcBand）
@@ -6776,9 +6778,10 @@ function _bdnaSelectBestWindow(acc, isChild) {
   const WIN = 30;
   if (n < WIN) return acc;
   // 兒童使用較高的 lgamma CAP 和對應的 proportionRange 閾值
-  const lgCap = isChild ? _BDNA_CAP_CHILD['r_lgamma'] : _BDNA_CAP['r_lgamma'];
-  const prL1  = isChild ? 0.015 : 0.03;
-  const prL2  = isChild ? 0.040 : 0.06;
+  const capTable = isChild ? _BDNA_CAP_CHILD : _BDNA_CAP;
+  const prTable  = isChild ? _BDNA_PR_CHILD  : _BDNA_PR;
+  const lgCap = capTable['r_lgamma'];
+  const [prL1, prL2] = prTable['r_lgamma'];
   const numW = Math.ceil(n / WIN);
   let bestIdx = 0, bestScore = -1;
   for (let w = 0; w < numW; w++) {
