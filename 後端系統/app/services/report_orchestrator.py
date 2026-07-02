@@ -425,9 +425,10 @@ def _call_vite_prefill(
     ba = (brainwave_data or {}).get("bands_avg") or {}
     b7 = (brainwave_data or {}).get("bands_7")   or {}  # 真實 High/Low 子頻帶
     _qab = (brainwave_data or {}).get("qeeg_abilities") or {}
-    # focus/relaxation：優先 QEEG 常模校正分數，否則 eSense
-    attn  = _qab.get("focus")      or _g(brainwave_data or {}, "attention_percentage")
-    medi  = _qab.get("relaxation") or _g(brainwave_data or {}, "meditation_percentage")
+    _is_child_rpt = (report_type or "").lower().startswith("child")
+    # focus/relaxation：成人優先 QEEG 常模校正；兒童維持 eSense（QEEG 以成人常模，不適用兒童）
+    attn  = (None if _is_child_rpt else _qab.get("focus"))      or _g(brainwave_data or {}, "attention_percentage")
+    medi  = (None if _is_child_rpt else _qab.get("relaxation")) or _g(brainwave_data or {}, "meditation_percentage")
     delta = _g(ba, "delta"); theta = _g(ba, "theta")
     alpha = _g(ba, "alpha"); beta  = _g(ba, "beta"); gamma = _g(ba, "gamma")
 
@@ -475,7 +476,7 @@ def _call_vite_prefill(
     }
     if chapters_to_generate:
         params["chapters"] = ",".join(str(c) for c in chapters_to_generate)
-    if _qab:
+    if _qab and not _is_child_rpt:
         params.update({k: v for k, v in {
             "qeeg_focus":      _qab.get("focus"),
             "qeeg_relaxation": _qab.get("relaxation"),
