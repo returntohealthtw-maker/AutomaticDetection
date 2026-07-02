@@ -6767,8 +6767,8 @@ const _BDNA_PR_CHILD = {
 // proportionRange 閾值（依新 CAP 重新校正，符合實際裝置輸出）
 const _BDNA_PR   = { r_delta:[0.40,0.70], r_theta:[0.10,0.22],
                      r_lalpha:[0.020,0.055], r_halpha:[0.015,0.045],
-                     r_lbeta:[0.015,0.040],  r_hbeta:[0.012,0.035],
-                     r_lgamma:[0.010,0.025], r_hgamma:[0.008,0.020] };
+                     r_lbeta:[0.015,0.045],  r_hbeta:[0.025,0.070],
+                     r_lgamma:[0.020,0.050], r_hgamma:[0.012,0.032] };
 function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
 
 // Best-30s window selection（對應 BrainDNA MindValueAlgorithm.calcBand）
