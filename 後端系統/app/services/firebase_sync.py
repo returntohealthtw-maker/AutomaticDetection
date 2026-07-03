@@ -267,7 +267,9 @@ async def sync_to_firebase(
 
     返回 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外，避免影響主流程）。
     """
-    headers = _get_auth_headers(force_bearer=True)
+    # 優先使用 X-Service-Key（admin 權限，支援寫入 BrainDNA/QEEG 欄位）
+    # 未設定時 fallback Bearer Token
+    headers = _get_auth_headers(force_bearer=False)
     if not headers:
         logger.warning("[Firebase] 無可用認證憑證，跳過同步（設定 FIREBASE_SERVICE_KEY 或 FIREBASE_SYNC_EMAIL/PASSWORD）")
         return False
@@ -454,8 +456,8 @@ async def sync_captures_to_firebase(
     captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
     回傳 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外）。
     """
-    # 強制使用 Bearer Token 認證（X-Service-Key 在某些部署環境下無效）
-    headers = _get_auth_headers(force_bearer=True)
+    # 優先使用 X-Service-Key（admin 權限）；未設定時 fallback Bearer Token
+    headers = _get_auth_headers(force_bearer=False)
     if not headers:
         logger.warning("[Firebase] 無可用認證憑證，跳過 Android captures 同步")
         return False
@@ -610,7 +612,7 @@ async def sync_qeeg_analysis_to_firestore(
     if not firebase_session_id or not qeeg_result:
         return False
 
-    headers = _get_auth_headers(force_bearer=True)
+    headers = _get_auth_headers(force_bearer=False)
     if not headers:
         logger.warning("[qEEG Firestore] 無認證憑證，跳過 qeeg_analysis 存入")
         return False
@@ -652,7 +654,7 @@ async def fetch_eeg_features(firebase_session_id: str) -> Optional[List[dict]]:
     端點：GET /eeg/{sessionId}?limit=200
     回傳特徵值列表；失敗或無資料時回傳 None。
     """
-    headers = _get_auth_headers(force_bearer=True)
+    headers = _get_auth_headers(force_bearer=False)
     if not headers:
         logger.warning("[Firebase] 無認證憑證，無法讀取 EEG 特徵值")
         return None
