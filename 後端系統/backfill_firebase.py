@@ -60,6 +60,9 @@ def _build_patch(row: dict) -> dict:
     """從 PostgreSQL row 組出 Firebase PATCH body"""
     patch: dict = {}
 
+    # mindColor: PostgreSQL 存整數(0-3)，Firebase 要求字串
+    _COLOR_MAP = {0: "orange", 1: "green", 2: "blue", 3: "yellow"}
+
     # ── BrainDNA ────────────────────────────────────────────────────────────
     if row.get("mind_stress") is not None:
         patch["mindStress"]   = row["mind_stress"]
@@ -68,7 +71,7 @@ def _build_patch(row: dict) -> dict:
     if row.get("mind_energy") is not None:
         patch["mindEnergy"]   = row["mind_energy"]
     if row.get("mind_color") is not None:
-        patch["mindColor"]    = row["mind_color"]
+        patch["mindColor"]    = _COLOR_MAP.get(row["mind_color"], str(row["mind_color"]))
     if row.get("overall_score") is not None:
         patch["overallScore"] = row["overall_score"]
     if row.get("mbti"):

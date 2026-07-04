@@ -217,6 +217,17 @@ def _raw_arrays_to_features(raw_arrays: dict, session_start: datetime) -> list[d
     return features
 
 
+_MIND_COLOR_MAP = {0: "orange", 1: "green", 2: "blue", 3: "yellow"}
+
+def _color_to_str(v) -> Optional[str]:
+    """mindColor 整數(0-3) → Firebase 要求的字串；已是字串直接回傳"""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return v
+    return _MIND_COLOR_MAP.get(int(v), str(v))
+
+
 def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
     """qEEG 結果 → Firebase PATCH 欄位（打平為輕量摘要，避免 Firestore document 過大）"""
     if not qeeg_result:
@@ -362,7 +373,7 @@ async def sync_to_firebase(
                     "mindStress":   braindna_result.get("stress"),
                     "mindBalance":  braindna_result.get("balance"),
                     "mindEnergy":   braindna_result.get("energy"),
-                    "mindColor":    braindna_result.get("color"),
+                    "mindColor":    _color_to_str(braindna_result.get("color")),
                     "overallScore": braindna_result.get("overall_score"),
                     "mbti":         braindna_result.get("mbti"),
                     "bagua":        braindna_result.get("bagua"),
@@ -548,7 +559,7 @@ async def sync_captures_to_firebase(
                     "mindStress":   braindna_result.get("stress"),
                     "mindBalance":  braindna_result.get("balance"),
                     "mindEnergy":   braindna_result.get("energy"),
-                    "mindColor":    braindna_result.get("mind_color"),
+                    "mindColor":    _color_to_str(braindna_result.get("mind_color")),
                     "overallScore": braindna_result.get("overall_score"),
                     "mbti":         braindna_result.get("mbti"),
                     "bagua":        braindna_result.get("bagua"),
