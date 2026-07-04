@@ -154,10 +154,15 @@ def patch_firebase(fb_sid: str, patch_body: dict, dry_run: bool) -> bool:
         return True
     headers = _get_headers()
     if not headers:
+        print(f"  [ERROR] 無法取得認證 headers")
         return False
     try:
         resp = httpx.patch(url, headers=headers, json=patch_body, timeout=20)
-        return resp.status_code in (200, 204)
+        if resp.status_code not in (200, 204):
+            print(f"  [ERROR] HTTP {resp.status_code}  URL={url}")
+            print(f"  [ERROR] 回應: {resp.text[:300]}")
+            return False
+        return True
     except Exception as e:
         print(f"  [ERROR] PATCH 例外: {e}")
         return False
@@ -177,6 +182,23 @@ def main():
     print("=" * 60)
     print(f"PostgreSQL → Firebase 補譜  (dry_run={args.dry_run})")
     print("=" * 60)
+
+    # 印出認證狀態方便除錯
+    if FIREBASE_SERVICE_KEY:
+        print(f"[AUTH] 使用 X-Service-Key: {FIREBASE_SERVICE_KEY[:8]}...{FIREBASE_SERVICE_KEY[-4:]}")
+    else:
+        print(f"[AUTH] 使用 Bearer Token (email={FIREBASE_SYNC_EMAIL})")
+
+    # 快速測試認證：呼叫一個輕量 API
+    try:
+        h = _get_headers()
+        test_resp = httpx.get(f"{FIREBASE_API_BASE}/sessions?limit=1", headers=h, timeout=10)
+        print(f"[AUTH TEST] GET /sessions → HTTP {test_resp.status_code}")
+        if test_resp.status_code not in (200, 201):
+            print(f"[AUTH TEST] 回應: {test_resp.text[:200]}")
+    except Exception as e:
+        print(f"[AUTH TEST] 例外: {e}")
+    print()
 
     sessions = fetch_sessions(limit=args.limit, only_id=args.session)
     print(f"找到 {len(sessions)} 筆需要補的 sessions（有 firebase_session_id 且有 BrainDNA/QEEG 結果）\n")
