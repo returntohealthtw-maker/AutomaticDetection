@@ -93,11 +93,12 @@ def _build_patch(row: dict) -> dict:
                 patch["qeegComposites"] = {k: round(v["score"]) for k, v in ci.items() if isinstance(v, dict)}
             flags = qeeg.get("report_flags", [])
             if flags:
-                patch["qeegFlags"] = [f["flag"] for f in flags]
+                # Firebase 要求 object 不接受 array，轉成 {flag_name: true}
+                patch["qeegFlags"] = {f["flag"]: True for f in flags if isinstance(f, dict) and f.get("flag")}
             sq = qeeg.get("signal_quality", {})
             if sq.get("quality_grade"):
                 patch["qeegSignalGrade"] = sq["quality_grade"]
-            patch["qeegVersion"] = qeeg.get("calculation_version", "")
+            # qeegVersion: Firebase PATCH 不接受，省略
             # 8-band 分數
             bf = qeeg.get("band_features", {}).get("Fp1", {})
             if bf:

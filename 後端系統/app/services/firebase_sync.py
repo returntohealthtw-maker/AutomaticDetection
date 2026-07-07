@@ -241,11 +241,12 @@ def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
         out["qeegComposites"] = {k: v.get("score") for k, v in ci.items()}
     flags = qeeg_result.get("report_flags", [])
     if flags:
-        out["qeegFlags"] = [f["flag"] for f in flags]
+        # Firebase PATCH 要求 object，不接受 array
+        out["qeegFlags"] = {f["flag"]: True for f in flags if isinstance(f, dict) and f.get("flag")}
     sq = qeeg_result.get("signal_quality", {})
     if sq:
         out["qeegSignalGrade"] = sq.get("quality_grade")
-    out["qeegVersion"] = qeeg_result.get("calculation_version", "")
+    # qeegVersion: Firebase PATCH 不接受，省略
     # ── 8 個頻段的 qEEG Z-score 0-100 分數（使用者昨天要求存入 Firebase 的欄位）──
     bf = qeeg_result.get("band_features", {}).get("Fp1", {})
     if bf:
