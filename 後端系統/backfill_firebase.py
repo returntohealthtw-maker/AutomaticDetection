@@ -78,8 +78,7 @@ def _build_patch(row: dict) -> dict:
         patch["mbti"]         = row["mbti"]
     if row.get("bagua"):
         patch["bagua"]        = row["bagua"]
-    if row.get("bdna_mode"):
-        patch["bdnaMode"]     = row["bdna_mode"]
+    # bdnaMode: Firebase PATCH 端點不接受，省略
 
     # ── QEEG ────────────────────────────────────────────────────────────────
     qeeg_raw = row.get("qeeg_scores_json")
