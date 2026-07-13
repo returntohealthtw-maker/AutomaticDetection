@@ -82,21 +82,64 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     lo_be = avg_nz("low_beta");   hi_be = avg_nz("high_beta")
     lo_ga = avg_nz("low_gamma");  hi_ga = avg_nz("high_gamma")
 
+    # ── 偵測是否為原始 ThinkGear 值（> 100），若是則轉換為 proportionRange 分數 ──
+    # headless_renderer 期望 0-100 的分數值；原始值（如 delta=162000）會被 min(100,...) 截斷成 100
+    _raw_delta = avg_nz("delta") or 0
+    _is_raw_input = _raw_delta > 100
+
+    def _to_score(raw_val, rk):
+        """把原始 ThinkGear 均值換算為 0-100 分數（proportionRange 近似）"""
+        if raw_val is None or raw_val <= 0:
+            return None
+        from app.services.braindna_algorithms import CAP, _PROP_RANGE, _clamp, _proportion_range
+        _total = sum([
+            min(avg_nz("delta")     or 0, CAP["r_delta"]),
+            min(avg_nz("theta")     or 0, CAP["r_theta"]),
+            min(avg_nz("low_alpha") or 0, CAP["r_lalpha"]),
+            min(avg_nz("high_alpha")or 0, CAP["r_halpha"]),
+            min(avg_nz("low_beta")  or 0, CAP["r_lbeta"]),
+            min(avg_nz("high_beta") or 0, CAP["r_hbeta"]),
+            min(avg_nz("low_gamma") or 0, CAP["r_lgamma"]),
+            min(avg_nz("high_gamma")or 0, CAP["r_hgamma"]),
+        ])
+        if _total <= 0:
+            return 50
+        prop = _clamp(raw_val, CAP[rk]) / _total
+        l1, l2 = _PROP_RANGE[rk]
+        return round(_proportion_range(prop, l1, l2) * 100)
+
+    if _is_raw_input:
+        d_score  = _to_score(_raw_delta,          "r_delta")
+        th_score = _to_score(avg_nz("theta"),     "r_theta")
+        la_score = _to_score(lo_al,               "r_lalpha")
+        ha_score = _to_score(hi_al,               "r_halpha")
+        lb_score = _to_score(lo_be,               "r_lbeta")
+        hb_score = _to_score(hi_be,               "r_hbeta")
+        lg_score = _to_score(lo_ga,               "r_lgamma")
+        hg_score = _to_score(hi_ga,               "r_hgamma")
+        a_score  = round((la_score + ha_score) / 2) if la_score and ha_score else (la_score or ha_score)
+        b_score  = round((lb_score + hb_score) / 2) if lb_score and hb_score else (lb_score or hb_score)
+        g_score  = round((lg_score + hg_score) / 2) if lg_score and hg_score else (lg_score or hg_score)
+    else:
+        # bandTo100 格式：值本身就是 0-100，直接使用
+        d_score  = _raw_delta;           th_score = avg_nz("theta")
+        la_score = lo_al;                ha_score = hi_al
+        lb_score = lo_be;                hb_score = hi_be
+        lg_score = lo_ga;                hg_score = hi_ga
+        a_score  = pair_avg("low_alpha", "high_alpha")
+        b_score  = pair_avg("low_beta",  "high_beta")
+        g_score  = pair_avg("low_gamma", "high_gamma")
+
     bw = {
         "attention_percentage":  avg_nz("attention"),
         "meditation_percentage": avg_nz("meditation"),
         "sample_count":          int(sample_count),
         "bands_avg": {
-            # 5-band 合併（向下相容）
-            "delta": avg_nz("delta"),
-            "theta": avg_nz("theta"),
-            "alpha": pair_avg("low_alpha", "high_alpha"),
-            "beta":  pair_avg("low_beta",  "high_beta"),
-            "gamma": pair_avg("low_gamma", "high_gamma"),
-            # 8-band 真實子頻帶（優先帶出，避免 headless_renderer 用 ×0.9/×1.1 估算）
-            "low_alpha":  lo_al, "high_alpha": hi_al,
-            "low_beta":   lo_be, "high_beta":  hi_be,
-            "low_gamma":  lo_ga, "high_gamma": hi_ga,
+            "delta": d_score, "theta": th_score,
+            "alpha": a_score, "beta":  b_score, "gamma": g_score,
+            "low_alpha":  la_score, "high_alpha": ha_score,
+            "low_beta":   lb_score, "high_beta":  hb_score,
+            "low_gamma":  lg_score, "high_gamma": hg_score,
         },
     }
 
