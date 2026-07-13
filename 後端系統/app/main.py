@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.07.13.01"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.07.13.02"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -839,6 +839,27 @@ def prototype_app():
         "X-App-Version": APP_HTML_VERSION,
     }
     return FileResponse(proto_path, media_type="text/html", headers=headers)
+
+
+@app.get("/api/v1/config/braindna-params")
+def braindna_params():
+    """
+    回傳目前後端使用的 BrainDNA 演算法參數（PROP_RANGE / CAP）。
+    前端啟動時自動 fetch 此端點，確保前後端永遠同步，無需手動維護。
+    無需驗證（參數是公開的演算法設定）。
+    """
+    from app.services.braindna_algorithms import (
+        _PROP_RANGE, CAP, CHILD_CAP, CHILD_PROP_RANGE
+    )
+    def _fmt_pr(d):
+        return {k: list(v) for k, v in d.items()}
+    return {
+        "prop_range":       _fmt_pr(_PROP_RANGE),
+        "cap":              CAP,
+        "child_prop_range": _fmt_pr(CHILD_PROP_RANGE),
+        "child_cap":        CHILD_CAP,
+        "version":          APP_HTML_VERSION,
+    }
 
 
 @app.get("/api/v1/app/version")
