@@ -418,6 +418,113 @@ def compute_mbti(avg: BandAverages) -> dict:
     }
 
 
+def compute_mbti_v6(avg: BandAverages) -> dict:
+    """
+    MBTI v6.0 直接競爭演算法（取代八卦中間層，直接從腦波計算4軸）
+
+    文獻根據：
+    - E/I：Matthews & Gilliland (1999) — α↑最可靠內向指標；γ↑/Focus外向激活
+    - N/S：Rao & Singhania (2013) — θ與DMN直覺相關；β↓精確當下感知
+    - T/F：Miller & Cohen (2001) — β邏輯；Gallese (2001) — γ↓共情鏡像神經
+    - J/P：Miller & Cohen (2001) — β↑/Focus前額葉執行閉合；θ/放鬆靈活探索
+
+    輸入：BandAverages（attention=focus，meditation=relaxation，其餘同名）
+    輸出：{mbti_type, ei_score, ns_score, tf_score, jp_score,
+           eiDiff, nsDiff, tfDiff, jpDiff, secondaries}
+    """
+    theta      = float(avg.theta)
+    highAlpha  = float(avg.high_alpha)
+    lowAlpha   = float(avg.low_alpha)
+    lowBeta    = float(avg.low_beta)
+    highBeta   = float(avg.high_beta)
+    highGamma  = float(avg.high_gamma)
+    lowGamma   = float(avg.low_gamma)
+    focus      = float(avg.attention)     # attention → focus
+    relaxation = float(avg.meditation)    # meditation → relaxation
+
+    # STEP 1: 4-axis direct competition
+    E_score = focus * 0.35 + highGamma * 0.35 + highBeta * 0.30
+    I_score = highAlpha * 0.40 + relaxation * 0.30 + lowAlpha * 0.30
+    eiDiff  = E_score - I_score
+
+    N_score = theta * 0.60 + highAlpha * 0.40
+    S_score = lowBeta * 0.55 + highGamma * 0.45
+    nsDiff  = N_score - S_score   # N if > +8 (全球 S≈73% 修正)
+
+    T_score = lowBeta * 0.50 + highBeta * 0.50
+    F_score = lowGamma * 0.55 + highAlpha * 0.45
+    tfDiff  = T_score - F_score
+
+    J_score = highBeta * 0.45 + focus * 0.55
+    P_score = theta * 0.50 + relaxation * 0.50
+    jpDiff  = J_score - P_score
+
+    # STEP 2: Determine type letters
+    ei = 'E' if eiDiff > 0 else 'I'
+    ns = 'N' if nsDiff > 8 else 'S'
+    tf = 'T' if tfDiff > 0 else 'F'
+    jp = 'J' if jpDiff > 0 else 'P'
+    mbti_type = ei + ns + tf + jp
+
+    # STEP 3: 4-axis scores (0-99, 50=boundary)
+    def clamp(v: float) -> int:
+        return max(5, min(99, round(v)))
+
+    ei_score = clamp(50 + eiDiff * 0.6)
+    ns_score = clamp(50 + (nsDiff - 8) * 0.6)
+    tf_score = clamp(50 + tfDiff * 0.6)
+    jp_score = clamp(50 + jpDiff * 0.6)
+
+    # STEP 4: Secondary personalities (max 2, based on axis boundary distance)
+    def clamp78(v: float) -> int:
+        return max(10, min(78, round(v)))
+
+    axis_borders = [
+        {'axis': 'EI', 'diff': abs(eiDiff),     'pos': 0, 'flip': 'I' if ei == 'E' else 'E'},
+        {'axis': 'NS', 'diff': abs(nsDiff - 8),  'pos': 1, 'flip': 'S' if ns == 'N' else 'N'},
+        {'axis': 'TF', 'diff': abs(tfDiff),      'pos': 2, 'flip': 'F' if tf == 'T' else 'T'},
+        {'axis': 'JP', 'diff': abs(jpDiff),      'pos': 3, 'flip': 'P' if jp == 'J' else 'J'},
+    ]
+    axis_borders.sort(key=lambda x: x['diff'])
+
+    secondaries = []
+    for border in axis_borders[:2]:
+        strength = clamp78(78 - border['diff'] * 1.8)
+        if strength < 20:
+            break
+        sec_chars = list(mbti_type)
+        sec_chars[border['pos']] = border['flip']
+        secondaries.append({
+            'mbti':     ''.join(sec_chars),
+            'strength': strength,
+            'axis':     border['axis'],
+            'reason':   f"{border['axis']}軸邊界（腦波差距 {border['diff']:.1f}）",
+        })
+
+    return {
+        'mbti_type':   mbti_type,
+        'type':        mbti_type,
+        'ei_score':    ei_score,
+        'ns_score':    ns_score,
+        'tf_score':    tf_score,
+        'jp_score':    jp_score,
+        'ei_label':    ei,
+        'ns_label':    ns,
+        'tf_label':    tf,
+        'jp_label':    jp,
+        'eiDiff':      round(eiDiff, 2),
+        'nsDiff':      round(nsDiff, 2),
+        'tfDiff':      round(tfDiff, 2),
+        'jpDiff':      round(jpDiff, 2),
+        'confidence':  round(
+            (abs(ei_score - 50) + abs(ns_score - 50) +
+             abs(tf_score - 50) + abs(jp_score - 50)) / 2, 1
+        ),
+        'secondaries': secondaries,
+        'secondary':   secondaries[0]['mbti'] if secondaries else None,
+    }
+
+
 def _bagua_mbti_from_pct(la_pct: float, th_pct: float) -> dict:
     """
     Bagua MBTI directly from 0-1 percentiles (skips log-normalization).
@@ -1028,95 +1135,33 @@ def build_mbti_payload(avg: BandAverages, captures: list = None,
     """
     產出報告 App / headless 共用的 MBTI 欄位。
 
-    優先使用原始 BrainDNA「群組評分演算法」(MindColor + Bagua + Group Scoring)：
-    ─ 每筆 capture 用 (卦位, 心靈色彩, beta/theta) → 一種 MBTI
-    ─ 同組 4 型累積（主型+2、其他+1），必然產生 ≥4 種不同強弱的性格
-
-    若 captures 不足則退回矛盾距離四層演算法或單一平均值。
-    raw_arrays 可傳入原始 8-band 180 秒資料，啟用 30 秒視窗矛盾距離分層。
+    v6.0：使用直接競爭演算法，不再依賴八卦中間層。
+    主性格、4軸分數、次性格全部由 compute_mbti_v6() 計算。
     """
-    # ── 優先：原始 BrainDNA 群組評分 ──────────────────────────────────────────
-    group_profiles = compute_mbti_group_scoring(captures) if captures else None
-
-    if group_profiles and len(group_profiles) >= 2:
-        # 群組評分成功：用第一名作為 primary
-        profiles  = group_profiles
-        mbti_type = profiles[0]["type"]
-        # archetype 仍取 lowAlpha+theta 的原始卦位，確保 ei/ns/tf/jp 分數正確
-        layers    = compute_mbti_layers_from_captures(captures, raw_arrays) if captures else None
-        primary   = (layers or {}).get("archetype") or compute_mbti(avg)
-    else:
-        # ── 退回：矛盾距離四層演算法 ────────────────────────────────────────────
-        layers    = compute_mbti_layers_from_captures(captures, raw_arrays) if captures else None
-        primary   = (layers or {}).get("archetype") or compute_mbti(avg)
-        mbti_type = primary.get("type") or primary.get("mbti_type")
-        profiles  = (aggregate_mbti_profiles(layers) if layers
-                     else [{"type": mbti_type, "pct": 100, "layers": ["archetype"]}])
-
-    secondaries = []
-    if len(profiles) > 1:
-        _LAYER_ZH = {
-            "archetype": "天生本質",
-            "social":    "社交能量",
-            "peer":      "理性執行",
-            "family":    "情感共鳴",
-            "群組評分":  "腦波共振群組",
+    v6 = compute_mbti_v6(avg)
+    mbti_type  = v6['mbti_type']
+    secondaries = [
+        {
+            "mbti":     s['mbti'],
+            "strength": s['strength'],
+            "reason":   s.get('reason', f"{s.get('axis','')}軸邊界特質"),
         }
-
-        # Threshold: only show secondary types with ≥15% to avoid forcing
-        # 4 types for every user. Stable users naturally show 1-2 types.
-        _SECONDARY_THRESHOLD = 15
-
-        for p in profiles:
-            if p["type"] == mbti_type:
-                continue
-            if p["pct"] < _SECONDARY_THRESHOLD:  # skip low-score companions
-                continue
-            if len(secondaries) >= 3:
-                break
-            raw_layers = p.get("layers") or []
-            is_group_scoring = "群組評分" in raw_layers
-            if is_group_scoring:
-                reason = "腦波共振群組特質"
-            else:
-                reason = "、".join(_LAYER_ZH.get(l, l) for l in raw_layers) or "邊界影響"
-            secondaries.append({
-                "mbti": p["type"],
-                "strength": p["pct"],
-                "reason": reason,
-            })
-    elif primary.get("secondary"):
-        secondaries.append({
-            "mbti": primary["secondary"],
-            "strength": max(5, 100 - int(primary.get("confidence", 70) or 70)),
-            "reason": "卦位邊界",
-        })
-
-    # Guaranteed fallback: should not be needed with group scoring, but kept as safety net.
-    if not secondaries and mbti_type:
-        _THETA_FLIP = {
-            "INTJ":"INTP","INTP":"INTJ","ENTJ":"ENTP","ENTP":"ENTJ",
-            "INFJ":"INFP","INFP":"INFJ","ENFJ":"ENFP","ENFP":"ENFJ",
-            "ISTJ":"ISFJ","ISFJ":"ISTJ","ESTJ":"ESFJ","ESFJ":"ESTJ",
-            "ISTP":"ISFP","ISFP":"ISTP","ESTP":"ESFP","ESFP":"ESTP",
-        }
-        alt = _THETA_FLIP.get(mbti_type)
-        if alt:
-            secondaries.append({
-                "mbti": alt,
-                "strength": 15,
-                "reason": "腦波邊界特質",
-            })
+        for s in v6.get('secondaries', [])
+    ]
 
     return {
         "mbti_primary":      mbti_type,
-        "mbti_ei":           primary.get("ei_score"),
-        "mbti_ns":           primary.get("ns_score"),
-        "mbti_tf":           primary.get("tf_score"),
-        "mbti_jp":           primary.get("jp_score"),
-        "mbti_bagua":        primary.get("bagua", ""),
-        "mbti_bagua_name":   primary.get("bagua_name", ""),
+        "mbti_ei":           v6['ei_score'],
+        "mbti_ns":           v6['ns_score'],
+        "mbti_tf":           v6['tf_score'],
+        "mbti_jp":           v6['jp_score'],
+        "mbti_ei_diff":      v6['eiDiff'],
+        "mbti_ns_diff":      v6['nsDiff'],
+        "mbti_tf_diff":      v6['tfDiff'],
+        "mbti_jp_diff":      v6['jpDiff'],
+        "mbti_bagua":        "",
+        "mbti_bagua_name":   "",
         "mbti_secondaries":  secondaries,
-        "mbti_profiles":     profiles,
-        "mbti_layers":       layers,
+        "mbti_profiles":     [{"type": mbti_type, "pct": 100, "layers": ["v6"]}],
+        "mbti_layers":       None,
     }
