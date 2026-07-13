@@ -78,57 +78,67 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
     sample_count = (sess.total_captures if (sess and sess.total_captures) else n) or n
 
-    lo_al = avg_nz("low_alpha");  hi_al = avg_nz("high_alpha")
-    lo_be = avg_nz("low_beta");   hi_be = avg_nz("high_beta")
-    lo_ga = avg_nz("low_gamma");  hi_ga = avg_nz("high_gamma")
+    # ── 與後台 monitor.py 完全相同的逐秒計算（BrainDNA 標準算法）──────────────
+    # 1. 過濾低品質秒（原始模式：delta < MIN_DELTA_QUALITY）
+    # 2. 每秒分別算佔比（分母用未截斷值，分子用截斷值）
+    # 3. 佔比平均後套用 proportionRange → 0-100 分數
+    from app.services.braindna_algorithms import (
+        CAP, _PROP_RANGE, _clamp, _proportion_range,
+        MIN_DELTA_QUALITY, RAW_KEYS,
+    )
+    _ATTR = {
+        "r_delta":  "delta",     "r_theta":  "theta",
+        "r_lalpha": "low_alpha", "r_halpha": "high_alpha",
+        "r_lbeta":  "low_beta",  "r_hbeta":  "high_beta",
+        "r_lgamma": "low_gamma", "r_hgamma": "high_gamma",
+    }
 
-    # ── 偵測是否為原始 ThinkGear 值（> 100），若是則轉換為 proportionRange 分數 ──
-    # headless_renderer 期望 0-100 的分數值；原始值（如 delta=162000）會被 min(100,...) 截斷成 100
-    _raw_delta = avg_nz("delta") or 0
-    _is_raw_input = _raw_delta > 100
+    def _gv(cap, attr):
+        return float(getattr(cap, attr, None) or 0)
 
-    def _to_score(raw_val, rk):
-        """把原始 ThinkGear 均值換算為 0-100 分數（proportionRange 近似）"""
-        if raw_val is None or raw_val <= 0:
-            return None
-        from app.services.braindna_algorithms import CAP, _PROP_RANGE, _clamp, _proportion_range
-        _total = sum([
-            min(avg_nz("delta")     or 0, CAP["r_delta"]),
-            min(avg_nz("theta")     or 0, CAP["r_theta"]),
-            min(avg_nz("low_alpha") or 0, CAP["r_lalpha"]),
-            min(avg_nz("high_alpha")or 0, CAP["r_halpha"]),
-            min(avg_nz("low_beta")  or 0, CAP["r_lbeta"]),
-            min(avg_nz("high_beta") or 0, CAP["r_hbeta"]),
-            min(avg_nz("low_gamma") or 0, CAP["r_lgamma"]),
-            min(avg_nz("high_gamma")or 0, CAP["r_hgamma"]),
-        ])
-        if _total <= 0:
-            return 50
-        prop = _clamp(raw_val, CAP[rk]) / _total
-        l1, l2 = _PROP_RANGE[rk]
-        return round(_proportion_range(prop, l1, l2) * 100)
+    # 偵測輸入模式（raw ThinkGear vs bandTo100）
+    _delta_max = max((_gv(c, "delta") for c in caps), default=0)
+    _is_raw = _delta_max > 1000
 
-    if _is_raw_input:
-        d_score  = _to_score(_raw_delta,          "r_delta")
-        th_score = _to_score(avg_nz("theta"),     "r_theta")
-        la_score = _to_score(lo_al,               "r_lalpha")
-        ha_score = _to_score(hi_al,               "r_halpha")
-        lb_score = _to_score(lo_be,               "r_lbeta")
-        hb_score = _to_score(hi_be,               "r_hbeta")
-        lg_score = _to_score(lo_ga,               "r_lgamma")
-        hg_score = _to_score(hi_ga,               "r_hgamma")
-        a_score  = round((la_score + ha_score) / 2) if la_score and ha_score else (la_score or ha_score)
-        b_score  = round((lb_score + hb_score) / 2) if lb_score and hb_score else (lb_score or hb_score)
-        g_score  = round((lg_score + hg_score) / 2) if lg_score and hg_score else (lg_score or hg_score)
+    if _is_raw:
+        # 排除低品質秒（delta 過低代表電極接觸不良）
+        good = [c for c in caps if _gv(c, "delta") >= MIN_DELTA_QUALITY]
+        if len(good) < 15:
+            good = caps  # 資料不足時 fallback
+
+        prop_sum = {k: 0.0 for k in RAW_KEYS}
+        valid_n  = 0
+        for c in good:
+            uncapped_total = sum(_gv(c, _ATTR[k]) for k in RAW_KEYS)
+            if uncapped_total == 0:
+                continue
+            for k in RAW_KEYS:
+                prop_sum[k] += _clamp(_gv(c, _ATTR[k]), CAP[k]) / uncapped_total
+            valid_n += 1
+
+        if valid_n > 0:
+            sc = {k: round(_proportion_range(prop_sum[k] / valid_n, *_PROP_RANGE[k]) * 100)
+                  for k in RAW_KEYS}
+        else:
+            sc = {k: 50 for k in RAW_KEYS}
+
+        d_score  = sc["r_delta"];  th_score = sc["r_theta"]
+        la_score = sc["r_lalpha"]; ha_score = sc["r_halpha"]
+        lb_score = sc["r_lbeta"];  hb_score = sc["r_hbeta"]
+        lg_score = sc["r_lgamma"]; hg_score = sc["r_hgamma"]
     else:
-        # bandTo100 格式：值本身就是 0-100，直接使用
-        d_score  = _raw_delta;           th_score = avg_nz("theta")
-        la_score = lo_al;                ha_score = hi_al
-        lb_score = lo_be;                hb_score = hi_be
-        lg_score = lo_ga;                hg_score = hi_ga
-        a_score  = pair_avg("low_alpha", "high_alpha")
-        b_score  = pair_avg("low_beta",  "high_beta")
-        g_score  = pair_avg("low_gamma", "high_gamma")
+        # bandTo100 格式（0-100），直接使用均值
+        lo_al = avg_nz("low_alpha");  hi_al = avg_nz("high_alpha")
+        lo_be = avg_nz("low_beta");   hi_be = avg_nz("high_beta")
+        lo_ga = avg_nz("low_gamma");  hi_ga = avg_nz("high_gamma")
+        d_score  = avg_nz("delta");    th_score = avg_nz("theta")
+        la_score = lo_al;              ha_score = hi_al
+        lb_score = lo_be;              hb_score = hi_be
+        lg_score = lo_ga;              hg_score = hi_ga
+
+    a_score = round((la_score + ha_score) / 2) if (la_score and ha_score) else (la_score or ha_score or 50)
+    b_score = round((lb_score + hb_score) / 2) if (lb_score and hb_score) else (lb_score or hb_score or 50)
+    g_score = round((lg_score + hg_score) / 2) if (lg_score and hg_score) else (lg_score or hg_score or 50)
 
     bw = {
         "attention_percentage":  avg_nz("attention"),
