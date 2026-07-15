@@ -910,21 +910,21 @@ def admin_paid_not_detected(
             if (sum_att or 0) == 0 and (sum_med or 0) == 0:
                 zero_quality_sess.add(sid)
 
-    # 最新 payment by subject_name（fallback）
+    # 最新 payment by subject_name
+    # 顧問版：只要受測者屬於該顧問（subject 表已過濾），不限 payment.consultant_id，
+    # 避免付款由 admin 建立卻沒帶 consultant_id 時顧問看不到自己客戶的問題。
     pay_by_subj_name: dict[str, M.Payment] = {}
-    if not is_admin:
-        for p in db.query(M.Payment).filter(
-            M.Payment.consultant_id == user.consultant_id,
-            M.Payment.status == "paid",
-        ).order_by(M.Payment.created_at.desc()).all():
-            if p.subject_name and p.subject_name not in pay_by_subj_name:
-                pay_by_subj_name[p.subject_name] = p
-    else:
-        for p in db.query(M.Payment).filter(
-            M.Payment.status == "paid",
-        ).order_by(M.Payment.created_at.desc()).all():
-            if p.subject_name and p.subject_name not in pay_by_subj_name:
-                pay_by_subj_name[p.subject_name] = p
+    cons_subject_names: set[str] = {s.name for s in all_subjects if s.name} if not is_admin else set()
+    for p in db.query(M.Payment).filter(
+        M.Payment.status == "paid",
+    ).order_by(M.Payment.created_at.desc()).all():
+        if not p.subject_name:
+            continue
+        if p.subject_name in pay_by_subj_name:
+            continue
+        # admin 看全部；顧問只看屬於自己帳號的付款或自己受測者名下的付款
+        if is_admin or p.consultant_id == user.consultant_id or p.subject_name in cons_subject_names:
+            pay_by_subj_name[p.subject_name] = p
 
     out = []
     seen_subject_ids: set[int] = set()
