@@ -931,35 +931,37 @@ def admin_paid_not_detected(
 
     for subj in all_subjects:
         sessions = sess_by_subj.get(subj.subject_id, [])
-        # 必須已嘗試過檢測（有 session）；僅付款未開始的不列入
-        if not sessions:
-            continue
-
-        has_valid_eeg = any(
-            _session_has_valid_eeg(s, eeg_count_by_sess, zero_quality_sess)
-            for s in sessions
-        )
-        if has_valid_eeg:
-            continue   # 已有有效腦波資料，不需重測
 
         # ── 沒有付款紀錄 → 不列入付款重測名單 ──────────────────────────
         pay = pay_by_subj_name.get(subj.name)
         if not pay:
             continue
 
+        # 已有有效腦波資料 → 不需重測
+        if sessions:
+            has_valid_eeg = any(
+                _session_has_valid_eeg(s, eeg_count_by_sess, zero_quality_sess)
+                for s in sessions
+            )
+            if has_valid_eeg:
+                continue
+
         seen_subject_ids.add(subj.subject_id)
 
-        # 計算未完成原因（此處 sessions 必非空）
+        # 計算未完成原因
         reason = []
-        zero_sessions = [s for s in sessions if s.session_id in zero_quality_sess]
-        if zero_sessions:
-            reason.append(f"有 {len(zero_sessions)} 次腦波數值全為 0（電極接觸不良，請重新調整後重測）")
+        if not sessions:
+            reason.append("已付款但尚未開始檢測，請協助安排")
         else:
-            no_cap = [s for s in sessions if eeg_count_by_sess.get(s.session_id, 0) == 0 and not s.raw_arrays_json]
-            if no_cap:
-                reason.append(f"有 {len(no_cap)} 次檢測完成但無腦波採集資料")
+            zero_sessions = [s for s in sessions if s.session_id in zero_quality_sess]
+            if zero_sessions:
+                reason.append(f"有 {len(zero_sessions)} 次腦波數值全為 0（電極接觸不良，請重新調整後重測）")
             else:
-                reason.append(f"有 {len(sessions)} 次 session，腦波資料不足或無效")
+                no_cap = [s for s in sessions if eeg_count_by_sess.get(s.session_id, 0) == 0 and not s.raw_arrays_json]
+                if no_cap:
+                    reason.append(f"有 {len(no_cap)} 次檢測完成但無腦波採集資料")
+                else:
+                    reason.append(f"有 {len(sessions)} 次 session，腦波資料不足或無效")
 
         # 從付款記錄取得報告類型（pay 已在上方確認非 None）
         report_type = ""
