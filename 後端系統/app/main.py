@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.07.13.02"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.07.16.01"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -1223,4 +1223,148 @@ def health():
         "env_diag": env_diag,
         "reports_cols": reports_cols,
         "sessions_cols": sessions_cols,
+    }
+
+
+# ── Firebase 缺少 session_id 補同步端點 ──────────────────────────────────────
+@app.post("/api/v1/admin/sync-sessions-to-firebase")
+def admin_sync_missing_sessions_to_firebase(
+    dry_run: bool = False,
+    limit: int = 0,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    把缺少 firebase_session_id 的 Railway sessions 建立到 Firebase，
+    再把 firebase_session_id 回寫到 PostgreSQL。
+    完成後 backfill_payments 就能成功同步付款。
+    """
+    import threading as _th
+    import time as _time
+    import httpx as _httpx
+    import sqlalchemy as _sa
+
+    _FB_API   = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api"
+    _FB_KEY   = os.getenv("FIREBASE_SERVICE_KEY", "86pjyXNhJ1PFDEBiIMukV2WxK4QvYZ97qemHLrbG3wngdUfA")
+    _FB_HDR   = {"X-Service-Key": _FB_KEY, "Content-Type": "application/json"}
+    _COLOR_MAP = {0: "orange", 1: "green", 2: "blue", 3: "yellow"}
+
+    q = """
+        SELECT session_id, subject_name, subject_gender, subject_birthday,
+               subject_age, consultant_name, report_type, status,
+               start_time, end_time,
+               mind_stress, mind_balance, mind_energy, mind_color,
+               overall_score, mbti, bagua, qeeg_scores_json
+        FROM sessions
+        WHERE (firebase_session_id IS NULL OR firebase_session_id = '')
+          AND status IN ('completed', 'failed')
+        ORDER BY session_id
+    """
+    if limit:
+        q += f" LIMIT {limit}"
+
+    rows = []
+    with engine.connect() as conn:
+        rows = [dict(r._mapping) for r in conn.execute(_sa.text(q)).fetchall()]
+
+    if not rows:
+        return {"message": "沒有需要同步的 sessions", "count": 0}
+
+    if dry_run:
+        return {
+            "message": f"[DRY] 找到 {len(rows)} 筆需要同步",
+            "sessions": [{"session_id": r["session_id"], "subject_name": r["subject_name"]} for r in rows]
+        }
+
+    results = {"ok": [], "fail": []}
+
+    def _do_sync():
+        _client = _httpx.Client(timeout=20.0)
+        ok = fail = 0
+        for row in rows:
+            sid = row["session_id"]
+            name = row["subject_name"] or "未知"
+            try:
+                # 建立 Firebase session
+                payload = {
+                    "subjectName":    name,
+                    "consultantName": row.get("consultant_name") or "",
+                    "reportType":     row.get("report_type") or "life_script",
+                    "deviceType":     "android",
+                    "sessionSource":  "railway_migration",
+                }
+                if row.get("subject_gender"):
+                    payload["subjectGender"] = row["subject_gender"]
+                if row.get("subject_birthday"):
+                    bd = row["subject_birthday"]
+                    payload["subjectBirthday"] = bd.isoformat() if hasattr(bd, "isoformat") else str(bd)
+                if row.get("subject_age"):
+                    payload["subjectAge"] = row["subject_age"]
+                if row.get("start_time"):
+                    st = row["start_time"]
+                    payload["createdAt"] = st.isoformat() if hasattr(st, "isoformat") else str(st)
+
+                resp = _client.post(f"{_FB_API}/sessions", headers=_FB_HDR, json=payload)
+                if resp.status_code not in (200, 201):
+                    logger.warning("[sync_sessions] session %s POST 失敗 %s: %s", sid, resp.status_code, resp.text[:100])
+                    results["fail"].append({"session_id": sid, "name": name, "error": resp.text[:80]})
+                    fail += 1
+                    continue
+
+                fb_id = (resp.json().get("sessionId") or resp.json().get("id") or "")
+                if not fb_id:
+                    results["fail"].append({"session_id": sid, "name": name, "error": "no sessionId in response"})
+                    fail += 1
+                    continue
+
+                # 回寫 firebase_session_id 到 PostgreSQL
+                with engine.begin() as conn:
+                    conn.execute(_sa.text(
+                        "UPDATE sessions SET firebase_session_id=:fb WHERE session_id=:sid"
+                    ), {"fb": fb_id, "sid": sid})
+
+                # PATCH BrainDNA 結果
+                patch: dict = {}
+                for field, col in [("mindStress","mind_stress"),("mindBalance","mind_balance"),
+                                   ("mindEnergy","mind_energy"),("overallScore","overall_score"),
+                                   ("mbti","mbti"),("bagua","bagua")]:
+                    if row.get(col) is not None and row[col] != "":
+                        patch[field] = row[col]
+                if row.get("mind_color") is not None:
+                    patch["mindColor"] = _COLOR_MAP.get(row["mind_color"], str(row["mind_color"]))
+                import json as _json
+                qeeg_raw = row.get("qeeg_scores_json")
+                if qeeg_raw:
+                    try:
+                        qeeg = _json.loads(qeeg_raw) if isinstance(qeeg_raw, str) else qeeg_raw
+                        ab = qeeg.get("ability_scores", {})
+                        if ab:
+                            patch["qeegAbilities"] = {k: round(v["score"]) for k, v in ab.items() if isinstance(v, dict)}
+                        flags = qeeg.get("report_flags", [])
+                        if flags:
+                            patch["qeegFlags"] = {f["flag"]: True for f in flags if isinstance(f, dict) and "flag" in f}
+                    except Exception:
+                        pass
+                if patch:
+                    patch["analysisStatus"] = "completed"
+                    _client.patch(f"{_FB_API}/sessions/{fb_id}", headers=_FB_HDR, json=patch)
+
+                results["ok"].append({"session_id": sid, "name": name, "firebase_session_id": fb_id})
+                ok += 1
+                logger.info("[sync_sessions] session %s %s → fb_sid=%s OK", sid, name, fb_id[:8])
+                _time.sleep(0.3)
+            except Exception as e:
+                logger.exception("[sync_sessions] session %s 例外: %s", sid, e)
+                results["fail"].append({"session_id": sid, "name": name, "error": str(e)[:80]})
+                fail += 1
+
+        logger.info("[sync_sessions] 完成 OK=%s FAIL=%s", ok, fail)
+        _client.close()
+
+    # 在 background thread 執行（避免 HTTP timeout）
+    _th.Thread(target=_do_sync, daemon=True).start()
+
+    return {
+        "message": f"開始同步 {len(rows)} 筆 sessions 到 Firebase（背景執行）",
+        "total": len(rows),
+        "check_log": "稍後查看 Railway logs 確認進度",
     }
