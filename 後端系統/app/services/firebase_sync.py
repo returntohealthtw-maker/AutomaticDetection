@@ -773,6 +773,124 @@ def firebase_features_to_raw_arrays(features: List[dict]) -> dict:
     }
 
 
+# ── 付款記錄同步到 Firebase Firestore payments collection ─────────────────────
+
+_REPORT_TYPE_MAP = {
+    "life_script":  "adult_vip",
+    "adult":        "adult_vip",
+    "child":        "child_vip",
+    "child_report": "child_vip",
+    "marital":      "marital",
+    "parent_child": "parent_child",
+}
+
+def sync_payment_to_firebase(payment_row) -> bool:
+    """
+    將付款記錄同步到 Firebase Firestore payments/{payment_id} 文件。
+    同步失敗只記錄 warning，不影響主流程。
+    payment_row：ORM Payment 物件或包含相同欄位的 dict。
+    """
+    if not is_configured():
+        return False
+    try:
+        def _get(obj, attr, default=None):
+            return getattr(obj, attr, None) if not isinstance(obj, dict) else obj.get(attr, default)
+
+        payment_id   = _get(payment_row, "payment_id")
+        if not payment_id:
+            return False
+
+        import time as _time
+        doc = {
+            "railwayPaymentId":  payment_id,
+            "orderId":           _get(payment_row, "order_id") or "",
+            "consultantId":      _get(payment_row, "consultant_id"),
+            "consultantName":    _get(payment_row, "consultant_name") or "",
+            "subjectName":       _get(payment_row, "subject_name") or "",
+            "subjectEmail":      _get(payment_row, "subject_email") or "",
+            "reportType":        _get(payment_row, "report_type") or "",
+            "amount":            int(_get(payment_row, "amount") or 0),
+            "status":            _get(payment_row, "status") or "paid",
+            "provider":          _get(payment_row, "provider") or "",
+            "paymentMethod":     _get(payment_row, "payment_method") or "",
+            "paidAt":            _get(payment_row, "paid_at"),
+            "createdAt":         _get(payment_row, "created_at"),
+            "syncedAt":          int(_time.time()),
+        }
+        doc = {k: v for k, v in doc.items() if v is not None and v != ""}
+
+        import httpx as _hx
+        headers = _get_auth_headers(force_bearer=True)  # Firestore 需要 Bearer Token
+        if not headers:
+            logger.warning("[Firebase] sync_payment_to_firebase: 無認證憑證")
+            return False
+
+        project = "gen-lang-client-0435688289"
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{project}"
+            f"/databases/(default)/documents/payments/{payment_id}"
+        )
+        firestore_body = {"fields": _dict_to_firestore_fields(doc)}
+        resp = _hx.patch(url, headers=headers, json=firestore_body, timeout=15.0)
+        if resp.status_code in (200, 201):
+            logger.info("[Firebase] payment %s 已同步到 Firestore", payment_id)
+            return True
+        else:
+            logger.warning("[Firebase] sync_payment_to_firebase %s 失敗 %s: %s",
+                           payment_id, resp.status_code, resp.text[:200])
+            return False
+    except Exception as exc:
+        logger.warning("[Firebase] sync_payment_to_firebase 例外: %s", exc)
+        return False
+
+
+def sync_report_pdf_to_firebase(
+    firebase_session_id: str,
+    report_type: str,
+    pdf_url: str,
+    railway_session_id: int = 0,
+) -> bool:
+    """
+    將報告 PDF 連結同步到 Firebase reports collection。
+    使用 POST /reports/store CF 端點（需要 X-Service-Key）。
+    同步失敗只記錄 warning，不影響主流程。
+    """
+    if not firebase_session_id or not pdf_url:
+        return False
+    if not is_configured():
+        return False
+    try:
+        import httpx as _hx
+        from datetime import datetime, timezone as _tz
+        headers = _get_auth_headers(force_bearer=False)
+        if not headers:
+            return False
+
+        fb_report_type = _REPORT_TYPE_MAP.get(report_type, "adult_vip")
+        payload = {
+            "sessionId":   firebase_session_id,
+            "reportType":  fb_report_type,
+            "pdfUrl":      pdf_url,
+            "generatedAt": datetime.now(_tz.utc).isoformat(),
+        }
+        resp = _hx.post(
+            f"{FIREBASE_API_BASE}/reports/store",
+            headers=headers,
+            json=payload,
+            timeout=15.0,
+        )
+        if resp.status_code in (200, 201):
+            logger.info("[Firebase] report pdf synced fb_sid=%s", firebase_session_id)
+            return True
+        else:
+            logger.warning("[Firebase] sync_report_pdf_to_firebase fb_sid=%s 失敗 %s: %s",
+                           firebase_session_id, resp.status_code, resp.text[:200])
+            return False
+    except Exception as exc:
+        logger.warning("[Firebase] sync_report_pdf_to_firebase 例外: %s", exc)
+        return False
+
+
 # ── 佇列 API（供 main.py / report_gen.py / ai_report.py 呼叫）─────────────────
 
 def is_configured() -> bool:

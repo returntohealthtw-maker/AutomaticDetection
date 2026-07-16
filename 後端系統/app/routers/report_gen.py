@@ -670,6 +670,20 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                         from app.services import firebase_sync as _fb
                         if _fb.is_configured():
                             _fb.enqueue(session_id=req.session_id)
+                            # 報告 PDF 連結同步到 Firebase reports collection
+                            if pdf_url:
+                                sess_obj = db.query(M.Session).filter(
+                                    M.Session.session_id == req.session_id
+                                ).first()
+                                fb_sid = getattr(sess_obj, "firebase_session_id", None) if sess_obj else None
+                                if fb_sid:
+                                    import threading as _th
+                                    def _sync_pdf(fsid, rt, purl):
+                                        try:
+                                            _fb.sync_report_pdf_to_firebase(fsid, rt, purl)
+                                        except Exception as _e:
+                                            logger.debug("Firebase PDF 同步失敗（可忽略）: %s", _e)
+                                    _th.Thread(target=_sync_pdf, args=(fb_sid, req.report_type, pdf_url), daemon=True).start()
                     except Exception as _fb_err:
                         logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
 

@@ -92,6 +92,31 @@ def _db_update_payment(
             if invoice_no is not None:        row.invoice_no        = invoice_no
             if notes is not None:             row.notes             = notes
             db.commit()
+            # 付款確認後同步到 Firebase（非阻斷，失敗只記錄 warning）
+            if status == "paid":
+                import threading as _th
+                _row_snapshot = {
+                    "payment_id":   row.payment_id,
+                    "order_id":     row.order_id,
+                    "consultant_id":row.consultant_id,
+                    "consultant_name": row.consultant_name,
+                    "subject_name": row.subject_name,
+                    "subject_email":row.subject_email,
+                    "report_type":  row.report_type,
+                    "amount":       row.amount,
+                    "status":       row.status,
+                    "provider":     row.provider,
+                    "payment_method": row.payment_method,
+                    "paid_at":      row.paid_at,
+                    "created_at":   row.created_at,
+                }
+                def _bg_sync(data):
+                    try:
+                        from app.services.firebase_sync import sync_payment_to_firebase
+                        sync_payment_to_firebase(data)
+                    except Exception as _e:
+                        logger.warning("[payments] Firebase 同步例外: %s", _e)
+                _th.Thread(target=_bg_sync, args=(_row_snapshot,), daemon=True).start()
     except Exception as e:
         logger.warning("[payments] DB 更新失敗 (%s)：%s", order_id, e)
 
