@@ -113,7 +113,21 @@ def _db_update_payment(
                 def _bg_sync(data):
                     try:
                         from app.services.firebase_sync import sync_payment_to_firebase
-                        sync_payment_to_firebase(data)
+                        from app.core.database import SessionLocal as _SL
+                        from app.core.models import Session as _Sess
+                        # 找受測者最新 session 的 firebase_session_id
+                        fb_sid = ""
+                        try:
+                            with _SL() as _db:
+                                _latest = (_db.query(_Sess)
+                                           .filter(_Sess.subject_name == data.get("subject_name"),
+                                                   _Sess.firebase_session_id != None)
+                                           .order_by(_Sess.session_id.desc()).first())
+                                if _latest:
+                                    fb_sid = _latest.firebase_session_id or ""
+                        except Exception:
+                            pass
+                        sync_payment_to_firebase(data, firebase_session_id=fb_sid)
                     except Exception as _e:
                         logger.warning("[payments] Firebase 同步例外: %s", _e)
                 _th.Thread(target=_bg_sync, args=(_row_snapshot,), daemon=True).start()

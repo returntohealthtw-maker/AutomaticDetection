@@ -784,11 +784,17 @@ _REPORT_TYPE_MAP = {
     "parent_child": "parent_child",
 }
 
-def sync_payment_to_firebase(payment_row) -> bool:
+def sync_payment_to_firebase(payment_row, firebase_session_id: str = "") -> bool:
     """
-    將付款記錄同步到 Firebase Firestore payments/{payment_id} 文件。
-    同步失敗只記錄 warning，不影響主流程。
+    將付款資訊同步到 Firebase。
+    策略：
+      1. 若提供 firebase_session_id → PATCH /sessions/{fb_sid}，把 paymentInfo 存進 session 文件
+         （使用 CF API + Service Key，權限充足）
+      2. 若無 firebase_session_id → 嘗試直接寫 Firestore payments collection
+         （需 Firebase security rules 允許；生產環境可能因規則限制而失敗）
+
     payment_row：ORM Payment 物件或包含相同欄位的 dict。
+    firebase_session_id：關聯的 Firebase session ID（可選，有則優先用）。
     """
     if not is_configured():
         return False
@@ -796,31 +802,53 @@ def sync_payment_to_firebase(payment_row) -> bool:
         def _get(obj, attr, default=None):
             return getattr(obj, attr, None) if not isinstance(obj, dict) else obj.get(attr, default)
 
-        payment_id   = _get(payment_row, "payment_id")
+        payment_id = _get(payment_row, "payment_id")
         if not payment_id:
             return False
 
         import time as _time
-        doc = {
-            "railwayPaymentId":  payment_id,
-            "orderId":           _get(payment_row, "order_id") or "",
-            "consultantId":      _get(payment_row, "consultant_id"),
-            "consultantName":    _get(payment_row, "consultant_name") or "",
-            "subjectName":       _get(payment_row, "subject_name") or "",
-            "subjectEmail":      _get(payment_row, "subject_email") or "",
-            "reportType":        _get(payment_row, "report_type") or "",
-            "amount":            int(_get(payment_row, "amount") or 0),
-            "status":            _get(payment_row, "status") or "paid",
-            "provider":          _get(payment_row, "provider") or "",
-            "paymentMethod":     _get(payment_row, "payment_method") or "",
-            "paidAt":            _get(payment_row, "paid_at"),
-            "createdAt":         _get(payment_row, "created_at"),
-            "syncedAt":          int(_time.time()),
-        }
-        doc = {k: v for k, v in doc.items() if v is not None and v != ""}
-
         import httpx as _hx
-        headers = _get_auth_headers(force_bearer=True)  # Firestore 需要 Bearer Token
+
+        payment_info = {
+            "railwayPaymentId": payment_id,
+            "orderId":          _get(payment_row, "order_id") or "",
+            "consultantId":     _get(payment_row, "consultant_id"),
+            "consultantName":   _get(payment_row, "consultant_name") or "",
+            "subjectName":      _get(payment_row, "subject_name") or "",
+            "subjectEmail":     _get(payment_row, "subject_email") or "",
+            "reportType":       _get(payment_row, "report_type") or "",
+            "amount":           int(_get(payment_row, "amount") or 0),
+            "status":           _get(payment_row, "status") or "paid",
+            "provider":         _get(payment_row, "provider") or "",
+            "paymentMethod":    _get(payment_row, "payment_method") or "",
+            "paidAt":           _get(payment_row, "paid_at"),
+            "createdAt":        _get(payment_row, "created_at"),
+            "syncedAt":         int(_time.time()),
+        }
+        payment_info = {k: v for k, v in payment_info.items() if v is not None and v != ""}
+
+        # ── 策略 1：有 firebase_session_id → PATCH session 加入 paymentInfo ────
+        if firebase_session_id:
+            headers = _get_auth_headers(force_bearer=False)
+            if not headers:
+                return False
+            resp = _hx.patch(
+                f"{FIREBASE_API_BASE}/sessions/{firebase_session_id}",
+                headers=headers,
+                json={"paymentInfo": payment_info},
+                timeout=15.0,
+            )
+            if resp.status_code in (200, 201, 204):
+                logger.info("[Firebase] payment %s → session %s paymentInfo 已寫入",
+                            payment_id, firebase_session_id)
+                return True
+            else:
+                logger.warning("[Firebase] PATCH session paymentInfo 失敗 %s: %s",
+                               resp.status_code, resp.text[:200])
+                return False
+
+        # ── 策略 2：無 session → 直接寫 Firestore payments collection ────────
+        headers = _get_auth_headers(force_bearer=True)
         if not headers:
             logger.warning("[Firebase] sync_payment_to_firebase: 無認證憑證")
             return False
@@ -830,10 +858,10 @@ def sync_payment_to_firebase(payment_row) -> bool:
             f"https://firestore.googleapis.com/v1/projects/{project}"
             f"/databases/(default)/documents/payments/{payment_id}"
         )
-        firestore_body = {"fields": _dict_to_firestore_fields(doc)}
+        firestore_body = {"fields": _dict_to_firestore_fields(payment_info)}
         resp = _hx.patch(url, headers=headers, json=firestore_body, timeout=15.0)
         if resp.status_code in (200, 201):
-            logger.info("[Firebase] payment %s 已同步到 Firestore", payment_id)
+            logger.info("[Firebase] payment %s 已寫入 Firestore payments", payment_id)
             return True
         else:
             logger.warning("[Firebase] sync_payment_to_firebase %s 失敗 %s: %s",
