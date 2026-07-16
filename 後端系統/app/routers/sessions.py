@@ -303,6 +303,8 @@ def upload_session(
             captures        = req.captures,
             qeeg_result     = _qeeg_result,
             braindna_result = _bdna_result,
+            subject_age     = getattr(req, "subject_age", None),
+            subject_gender  = getattr(req, "subject_gender", None),
         ))
         if fb_sid and fb_sid is not False:
             _fb_sync_ok = True

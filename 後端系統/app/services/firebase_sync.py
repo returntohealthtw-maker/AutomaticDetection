@@ -261,6 +261,58 @@ def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
     return {k: v for k, v in out.items() if v is not None}
 
 
+async def _ensure_firebase_subject(
+    client: httpx.AsyncClient,
+    headers: dict,
+    subject_name: str,
+    subject_age: Optional[int] = None,
+    subject_gender: Optional[str] = None,
+) -> Optional[str]:
+    """
+    確保 Firebase 有此受測者的 subject 記錄，回傳 subjectId。
+    先嘗試從現有清單找同名受測者；找不到則新建。
+    失敗時回傳 None（不影響主流程）。
+    """
+    if not subject_name:
+        return None
+    try:
+        # 1. 搜尋現有受測者（同名）
+        list_resp = await client.get(f"{FIREBASE_API_BASE}/users/subjects", headers=headers, timeout=10)
+        if list_resp.status_code == 200:
+            subjects = list_resp.json().get("subjects", [])
+            for s in subjects:
+                if s.get("name","") == subject_name:
+                    sid = s.get("subjectId") or s.get("id","")
+                    if sid:
+                        logger.debug("[Firebase] subject '%s' 已存在 → %s", subject_name, sid)
+                        return sid
+
+        # 2. 不存在，建立新受測者
+        payload: dict = {"name": subject_name, "relationship": "個案"}
+        if subject_age and subject_age > 0:
+            birth_year = datetime.now(timezone.utc).year - int(subject_age)
+            payload["birthDate"] = f"{birth_year}-01-01"
+        if subject_gender in ("男", "M", "male"):
+            payload["gender"] = "male"
+        elif subject_gender in ("女", "F", "female"):
+            payload["gender"] = "female"
+
+        create_resp = await client.post(
+            f"{FIREBASE_API_BASE}/users/subjects", headers=headers, json=payload, timeout=10
+        )
+        if create_resp.status_code in (200, 201):
+            new_sid = create_resp.json().get("subjectId") or create_resp.json().get("id","")
+            logger.info("[Firebase] 新建 subject '%s' → %s", subject_name, new_sid)
+            return new_sid or None
+        else:
+            logger.warning("[Firebase] 建立 subject '%s' 失敗: %s %s",
+                           subject_name, create_resp.status_code, create_resp.text[:100])
+            return None
+    except Exception as e:
+        logger.warning("[Firebase] _ensure_firebase_subject 例外: %s", e)
+        return None
+
+
 async def sync_to_firebase(
     subject_name: str,
     session_id: int,
@@ -268,11 +320,14 @@ async def sync_to_firebase(
     session_start: Optional[datetime] = None,
     braindna_result: Optional[dict] = None,
     qeeg_result: Optional[dict] = None,
+    subject_age: Optional[int] = None,
+    subject_gender: Optional[str] = None,
 ) -> Optional[str]:
     """
     非同步將 180 筆原始腦波資料同步到 Firebase 腦波資料庫。
 
     流程：
+      0. POST /users/subjects → 確保受測者記錄存在，取得 subjectId
       1. POST /api/sessions → 取得 firebase_session_id
       2. POST /api/eeg/batch（每批最多 100 筆，分批上傳）→ 存入 Firestore + BigQuery
       3. PATCH /api/sessions/{id} → 標記 completed
@@ -306,6 +361,13 @@ async def sync_to_firebase(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # ── 0. 確保受測者 subject 記錄存在 ──────────────────────────────
+            fb_subject_id = await _ensure_firebase_subject(
+                client, headers, subject_name, subject_age, subject_gender
+            )
+            if fb_subject_id:
+                _sess_payload["subjectId"] = fb_subject_id
+
             # ── 1. 建立 Firebase Session ─────────────────────────────────────
             sess_resp = await client.post(
                 f"{FIREBASE_API_BASE}/sessions",
@@ -461,6 +523,8 @@ async def sync_captures_to_firebase(
     captures: List[Any],
     qeeg_result: Optional[dict] = None,
     braindna_result: Optional[dict] = None,
+    subject_age: Optional[int] = None,
+    subject_gender: Optional[str] = None,
 ) -> Optional[str]:
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
@@ -492,6 +556,13 @@ async def sync_captures_to_firebase(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # 0. 確保受測者 subject 記錄存在
+            fb_subject_id = await _ensure_firebase_subject(
+                client, headers, subject_name, subject_age, subject_gender
+            )
+            if fb_subject_id:
+                _sess_payload["subjectId"] = fb_subject_id
+
             # 1. 建立 Firebase Session
             sess_resp = await client.post(
                 f"{FIREBASE_API_BASE}/sessions",

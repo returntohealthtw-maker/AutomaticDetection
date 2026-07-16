@@ -390,6 +390,8 @@ def save_eeg_stats(
                 session_start   = session_start,
                 braindna_result = _bdna_result,
                 qeeg_result     = _qeeg_result,
+                subject_age     = getattr(payload, "subject_age", None) or getattr(sess, "subject_age", None),
+                subject_gender  = getattr(payload, "subject_gender", None) or getattr(sess, "subject_gender", None),
             ))
             if fb_sid and fb_sid is not False:
                 _fb_sync_ok = True
@@ -529,6 +531,27 @@ def get_session_stats(
 
     rep = db.query(M.Report).filter(M.Report.session_id == session_id).first()
 
+    # BrainDNA 計算結果（從 DB 取出，前端可直接渲染 MBTI / 壓力 / 平衡 / 活力）
+    _mbti     = getattr(sess, "mbti", None)
+    _bagua    = getattr(sess, "bagua", None)
+    _stress   = getattr(sess, "mind_stress", None)
+    _balance  = getattr(sess, "mind_balance", None)
+    _energy   = getattr(sess, "mind_energy", None)
+    _color    = getattr(sess, "mind_color", None)
+    _overall  = getattr(sess, "overall_score", None)
+    braindna_result = None
+    if _mbti or _stress is not None:
+        braindna_result = {
+            "valid":        True,
+            "mbti":         _mbti,
+            "bagua":        _bagua,
+            "stress":       _stress,
+            "balance":      _balance,
+            "energy":       _energy,
+            "mind_color":   _color,
+            "overall_score": _overall,
+        }
+
     return {
         "ok":          True,
         "session_id":  session_id,
@@ -543,6 +566,7 @@ def get_session_stats(
         "report_status": rep.status if rep else None,
         "report_url":    rep.pdf_url if rep else None,
         "email_sent":    rep.email_sent if rep else 0,
+        "braindna_result": braindna_result,   # ← MBTI / 壓力 / 平衡 / 活力（從 DB 取出）
     }
 
 
@@ -585,10 +609,17 @@ def list_my_sessions(
             "status":        s.status,
             "failure_reason":s.failure_reason,
             "bdna_mode":           getattr(s, "bdna_mode", None),
-            "firebase_session_id": getattr(s, "firebase_session_id", None),  # Firebase session UUID
+            "firebase_session_id": getattr(s, "firebase_session_id", None),
             "report_status": (rep.status if rep else None),
             "report_url":    (rep.pdf_url if rep else None),
             "report_variant":(getattr(rep, "variant", None) if rep else None),
+            # BrainDNA 計算結果（供歷史紀錄頁及管理頁顯示 MBTI）
+            "mbti":          getattr(s, "mbti", None),
+            "bagua":         getattr(s, "bagua", None),
+            "mind_stress":   getattr(s, "mind_stress", None),
+            "mind_balance":  getattr(s, "mind_balance", None),
+            "mind_energy":   getattr(s, "mind_energy", None),
+            "overall_score": getattr(s, "overall_score", None),
         })
     return {"ok": True, "count": len(out), "sessions": out}
 
