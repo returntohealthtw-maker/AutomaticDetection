@@ -1263,8 +1263,11 @@ def admin_sync_missing_sessions_to_firebase(
         q += f" LIMIT {limit}"
 
     rows = []
-    with engine.connect() as conn:
-        rows = [dict(r._mapping) for r in conn.execute(_sa.text(q)).fetchall()]
+    try:
+        with engine.connect() as conn:
+            rows = [dict(r._mapping) for r in conn.execute(_sa.text(q)).fetchall()]
+    except Exception as _e:
+        return {"error": str(_e)[:500], "step": "db_query"}
 
     if not rows:
         return {"message": "沒有需要同步的 sessions", "count": 0}
