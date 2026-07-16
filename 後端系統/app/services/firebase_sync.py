@@ -827,25 +827,37 @@ def sync_payment_to_firebase(payment_row, firebase_session_id: str = "") -> bool
         }
         payment_info = {k: v for k, v in payment_info.items() if v is not None and v != ""}
 
-        # ── 策略 1：有 firebase_session_id → PATCH session 加入 paymentInfo ────
+        # ── 策略 1：有 firebase_session_id → PATCH session metadata 寫入付款資訊 ────
+        # CF API PATCH /sessions 不接受自定義欄位，但 metadata 欄位在 service key 環境下可用
         if firebase_session_id:
             headers = _get_auth_headers(force_bearer=False)
             if not headers:
                 return False
-            resp = _hx.patch(
-                f"{FIREBASE_API_BASE}/sessions/{firebase_session_id}",
-                headers=headers,
-                json={"paymentInfo": payment_info},
-                timeout=15.0,
-            )
-            if resp.status_code in (200, 201, 204):
-                logger.info("[Firebase] payment %s → session %s paymentInfo 已寫入",
-                            payment_id, firebase_session_id)
-                return True
-            else:
-                logger.warning("[Firebase] PATCH session paymentInfo 失敗 %s: %s",
+            # 先嘗試 metadata（service key 環境），再嘗試 subjects 子欄位
+            for patch_body in [
+                {"metadata": {"paymentInfo": payment_info}},
+                {"metadata": payment_info},
+            ]:
+                resp = _hx.patch(
+                    f"{FIREBASE_API_BASE}/sessions/{firebase_session_id}",
+                    headers=headers,
+                    json=patch_body,
+                    timeout=15.0,
+                )
+                if resp.status_code in (200, 201, 204):
+                    logger.info("[Firebase] payment %s → session %s metadata 已寫入",
+                                payment_id, firebase_session_id)
+                    return True
+                if resp.status_code == 400:
+                    # 驗證失敗換下一個格式
+                    logger.debug("[Firebase] PATCH metadata 格式不符，嘗試下一格式: %s", resp.text[:100])
+                    continue
+                # 其他錯誤（403/500 等）不重試
+                logger.warning("[Firebase] PATCH session metadata 失敗 %s: %s",
                                resp.status_code, resp.text[:200])
                 return False
+            logger.warning("[Firebase] PATCH session 所有格式均失敗，payment %s", payment_id)
+            return False
 
         # ── 策略 2：無 session → 直接寫 Firestore payments collection ────────
         headers = _get_auth_headers(force_bearer=True)
