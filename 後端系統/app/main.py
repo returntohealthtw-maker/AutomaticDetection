@@ -1256,7 +1256,7 @@ def admin_sync_missing_sessions_to_firebase(
                overall_score, mbti, bagua, qeeg_scores_json
         FROM sessions
         WHERE (firebase_session_id IS NULL OR firebase_session_id = '')
-          AND status IN ('completed', 'failed')
+          AND status = 1
         ORDER BY session_id
     """
     if limit:
