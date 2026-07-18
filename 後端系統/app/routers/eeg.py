@@ -552,6 +552,22 @@ def get_session_stats(
             "overall_score": _overall,
         }
 
+    # ── qEEG 七大能力分數（若有）──────────────────────────────────────────
+    _qeeg_abilities = None
+    try:
+        import json as _qjson
+        _qraw = getattr(sess, "qeeg_scores_json", None)
+        if _qraw:
+            _qdata = _qjson.loads(_qraw) if isinstance(_qraw, str) else _qraw
+            _ab = _qdata.get("ability_scores") or {}
+            if _ab:
+                _qeeg_abilities = {
+                    k: round(_ab[k]["score"])
+                    for k in _ab if isinstance(_ab.get(k), dict)
+                }
+    except Exception:
+        pass
+
     return {
         "ok":          True,
         "session_id":  session_id,
@@ -567,6 +583,7 @@ def get_session_stats(
         "report_url":    rep.pdf_url if rep else None,
         "email_sent":    rep.email_sent if rep else 0,
         "braindna_result": braindna_result,   # ← MBTI / 壓力 / 平衡 / 活力（從 DB 取出）
+        "qeeg_abilities": _qeeg_abilities,    # ← qEEG 七大能力分數（族群常模校正，0-100）
     }
 
 

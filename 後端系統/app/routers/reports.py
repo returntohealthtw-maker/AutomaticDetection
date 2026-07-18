@@ -1093,6 +1093,23 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         _bdna_theta = float(_bdna_bands.get("theta", _bdna_theta))
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── 讀取 qEEG 七大能力分數（存在 Session.qeeg_scores_json）──────────────
+    _qeeg_abilities = None
+    try:
+        import json as _qjson
+        _sess_qeeg = db.query(M.Session).filter(M.Session.session_id == session_id).first()
+        _qraw = getattr(_sess_qeeg, "qeeg_scores_json", None)
+        if _qraw:
+            _qdata = _qjson.loads(_qraw) if isinstance(_qraw, str) else _qraw
+            _ab = _qdata.get("ability_scores") or {}
+            if _ab:
+                _qeeg_abilities = {
+                    k: round(_ab[k]["score"])
+                    for k in _ab if isinstance(_ab.get(k), dict)
+                }
+    except Exception:
+        pass
+
     bw = {
         "attention_percentage":  _safe_int(avg.attention),
         "meditation_percentage": _safe_int(avg.meditation),
@@ -1118,6 +1135,9 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         },
         "_source": _bdna_source,  # 偵錯用：firebase_180 / pg_raw_arrays / db_avg
     }
+    # 只在有 qEEG 分數時才附加（避免 null 汙染）
+    if _qeeg_abilities:
+        bw["qeeg_abilities"] = _qeeg_abilities
     return bw
 
 

@@ -3675,6 +3675,10 @@ function _renderHistoryList() {
         if (m.startsWith('fallback')) return '<span title="BrainDNA 失敗，使用前端平均值（精度最低）" style="font-size:10px;background:#f8d7da;color:#721c24;border-radius:4px;padding:1px 5px;">🔴 Fallback</span>';
         return '';
       })();
+      // MBTI 標籤（從 API 取得的 DB 值）
+      const mbtiLabel = s.mbti
+        ? `<span style="font-size:11px;font-weight:700;background:#e8eaf6;color:#1a237e;border-radius:6px;padding:2px 8px;margin-left:4px;">🧠 ${s.mbti}</span>`
+        : '';
 
 
       // 計算此受測者在 _historyCache 中的累計統計
@@ -3691,7 +3695,7 @@ function _renderHistoryList() {
           </div>
           ${reportTagsHtml}
           ${extraNote}
-          <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures} ${bdnaModeLabel}</div>
+          <div style="font-size:11px;color:#bbb;margin-top:6px;">${dateStr}${captures} ${bdnaModeLabel}${mbtiLabel}</div>
           <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
             <button onclick="_viewSubjectDetail(${s.session_id}, ${subjTotalSessions}, ${subjDoneReports})"
               style="background:#e8f0fe;color:#1a3a6e;border:none;font-size:12px;padding:5px 10px;border-radius:8px;font-weight:600;cursor:pointer;">
@@ -6052,6 +6056,16 @@ function _renderResultsFromEeg() {
   // 用即時分析渲染（與「腦波儀測試」結果頁同款，但 ID 前綴為 r2-）
   if (_eegLiveAccum && _eegLiveAccum.attn && _eegLiveAccum.attn.length) {
     _renderBrainAnalysisInto('r2-');
+  } else if (stats && stats.braindna_result && stats.braindna_result.mbti) {
+    // 歷史 session 載入：從 DB braindna_result 顯示 MBTI（無法重算 client-side）
+    const _bdna = stats.braindna_result;
+    const _mbtiEl = document.getElementById('r2-mbti-type');
+    if (_mbtiEl) _mbtiEl.textContent = _bdna.mbti || '—';
+    // 填入壓力/平衡/活力（若結果頁有這些元素）
+    const _setTxt = (id, v) => { const e = document.getElementById(id); if (e && v != null) e.textContent = v; };
+    _setTxt('r2-stress-val', _bdna.stress != null ? _bdna.stress + '%' : null);
+    _setTxt('r2-balance-val', _bdna.balance != null ? _bdna.balance + '%' : null);
+    _setTxt('r2-energy-val', _bdna.energy != null ? _bdna.energy + '%' : null);
   }
   // 除錯面板：只有管理員/工作人員可見
   const u = _currentUser || {};
@@ -6103,11 +6117,15 @@ function _renderResultsFromEeg() {
 
     const gradeCol = {'A':'#4caf50','B':'#aef','C':'#ff9800','D':'#f44336'};
 
+    // 優先使用 qEEG 能力分數顯示（與報告一致）
+    const qAbil = stats.qeeg_abilities || {};
+    const dispFocus  = (qAbil.focus      != null) ? `${qAbil.focus} <span style="font-size:8px;opacity:0.7;">(qEEG)</span>` : `${stats.attention_percentage ?? '—'} <span style="font-size:8px;opacity:0.7;">(eSense)</span>`;
+    const dispRelax  = (qAbil.relaxation != null) ? `${qAbil.relaxation} <span style="font-size:8px;opacity:0.7;">(qEEG)</span>` : `${stats.meditation_percentage ?? '—'} <span style="font-size:8px;opacity:0.7;">(eSense)</span>`;
     let html = `
       <div style="font-size:10px;color:#aef;margin-bottom:8px;line-height:1.8;">
         <span>樣本數: <b>${stats.sample_count ?? '—'}</b></span>　
-        <span>注意力: <b>${stats.attention_percentage ?? '—'}</b></span>　
-        <span>放鬆度: <b>${stats.meditation_percentage ?? '—'}</b></span>
+        <span>專注力: <b>${dispFocus}</b></span>　
+        <span>放鬆度: <b>${dispRelax}</b></span>
         ${hasQeeg ? `　<span>qEEG 訊號品質: <b style="color:${gradeCol[qGrade]||'#aef'}">${qGrade}</b></span>` : ''}
       </div>
       <div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:6px;">
@@ -9074,14 +9092,20 @@ function _renderAllSubjectCard(s) {
            頻帶數值可能是電磁雜訊，不代表真實腦波。請重新測量並確保電極緊貼前額。
          </div>`
       : '';
+    // 優先用 qEEG 能力分數（與報告一致）；無 qEEG 時 fallback 到 eSense 原始值
+    const qab = bw.qeeg_abilities || {};
+    const focusVal  = (qab.focus      != null) ? qab.focus      : bw.attention_percentage;
+    const relaxVal  = (qab.relaxation != null) ? qab.relaxation : bw.meditation_percentage;
+    const focusSub  = (qab.focus      != null) ? 'qEEG校正' : 'eSense';
+    const relaxSub  = (qab.relaxation != null) ? 'qEEG校正' : 'eSense';
     bwHtml = `
       <div style="font-size:11px;color:#666;margin-bottom:6px;">最新檢測 (Session #${s.latest_session_id})
         <span style="font-size:10px;color:#999;margin-left:6px;">樣本數 ${bw.sample_count||'—'}</span>
       </div>
       ${contactWarn}
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
-        ${cell('專注', bw.attention_percentage, '#1976d2')}
-        ${cell('放鬆', bw.meditation_percentage, '#7e57c2')}
+        ${cell('專注', focusVal, '#1976d2', focusSub)}
+        ${cell('放鬆', relaxVal, '#7e57c2', relaxSub)}
         ${cell('Theta', theta, '#26a69a', '創意直覺')}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
@@ -10032,7 +10056,7 @@ async function _toggleRelationBrainwave(btn, reportId, members) {
       html += `<div style="background:#fafafa;border:1px solid #e0e0e0;border-radius:8px;padding:8px 10px;margin-bottom:6px;">
         <div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:4px;">
           ${esc(m.n)} <span style="font-size:10px;color:#999;font-weight:400;">#${m.s}｜${st.sample_count||'?'} 秒</span>
-          <span style="font-size:10px;color:#555;margin-left:6px;">專注 ${st.attention_percentage??'?'} · 放鬆 ${st.meditation_percentage??'?'}</span>
+          <span style="font-size:10px;color:#555;margin-left:6px;">專注 ${st.qeeg_abilities?.focus ?? st.attention_percentage ?? '?'} · 放鬆 ${st.qeeg_abilities?.relaxation ?? st.meditation_percentage ?? '?'}</span>
         </div>
         ${bandHtml}
       </div>`;
