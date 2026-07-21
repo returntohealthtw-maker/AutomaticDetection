@@ -457,3 +457,27 @@ def unmark_session_needs_retest(
     sess.retest_reason = None
     db.commit()
     return {"ok": True, "session_id": session_id, "message": "已取消重測標記"}
+
+
+class RestorePdfIn(_PydBaseModel):
+    pdf_url: str
+
+@router.post("/api/v1/monitor/sessions/{session_id}/restore-pdf-url")
+def restore_report_pdf_url(
+    session_id: int,
+    body: RestorePdfIn,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """[Admin] 將指定 session 的報告 pdf_url 還原（用於 headless job 中斷後從 GCS 找回舊 URL）"""
+    from app.core.auth import get_current_user
+    user = get_current_user(authorization, db)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要 admin 權限")
+    report = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="找不到此 session 的報告記錄")
+    report.pdf_url = body.pdf_url
+    report.status  = "completed"
+    db.commit()
+    return {"ok": True, "session_id": session_id, "pdf_url": body.pdf_url}
