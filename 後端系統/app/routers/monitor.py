@@ -467,13 +467,10 @@ def restore_report_pdf_url(
     session_id: int,
     body: RestorePdfIn,
     authorization: Optional[str] = Header(None),
-    db: DbSession = Depends(get_db),
+    db: DBSession = Depends(get_db),
 ):
     """[Admin] 將指定 session 的報告 pdf_url 還原（用於 headless job 中斷後從 GCS 找回舊 URL）"""
-    from app.core.auth import get_current_user
-    user = get_current_user(authorization, db)
-    if not user or user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要 admin 權限")
+    require_admin(authorization, db)
     report = db.query(M.Report).filter(M.Report.session_id == session_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="找不到此 session 的報告記錄")
