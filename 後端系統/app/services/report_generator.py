@@ -252,6 +252,21 @@ async def generate_report_async(report_id: int, session_id: int):
                 }
                 bw.update(build_mbti_payload(avg, detection_captures, _raw_arrays_for_mbti))
 
+                # ── 補充 qEEG 七大能力分數（若 session 有計算結果）──
+                try:
+                    _qraw = getattr(session_obj, "qeeg_scores_json", None)
+                    if _qraw:
+                        import json as _qjson
+                        _qparsed = _qjson.loads(_qraw) if isinstance(_qraw, str) else _qraw
+                        _ab = _qparsed.get("ability_scores") or {}
+                        if _ab:
+                            bw["qeeg_abilities"] = {
+                                k: round(_ab[k]["score"])
+                                for k in _ab if isinstance(_ab.get(k), dict)
+                            }
+                except Exception as _qex:
+                    pass  # qEEG 讀取失敗不影響報告生成
+
                 # 取 api_base
                 import os as _os
                 api_base = settings.PUBLIC_BASE_URL or ""
