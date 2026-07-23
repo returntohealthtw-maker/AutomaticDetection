@@ -2259,32 +2259,43 @@
         </div>
       </div>
 
-      <!-- ===== SCREEN: 獲利明細 ===== -->
+      <!-- ===== SCREEN: 受測者名單 ===== -->
       <div class="screen" id="screen-earnings">
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
         <div class="top-bar">
           <button class="back-btn" onclick="goto('screen-home')">‹</button>
-          <h2>付款紀錄</h2>
+          <h2>受測者名單</h2>
         </div>
         <div style="flex:1;overflow-y:auto;padding-bottom:16px;">
-          <!-- 總覽 -->
+          <!-- 統計總覽 -->
           <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px 16px;color:white;">
             <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">本月已付款總額</div>
             <div id="earnings-total" style="font-size:36px;font-weight:800;color:#4CAF50;">—</div>
-            <div style="display:flex;gap:16px;margin-top:12px;">
-              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
-                <div style="font-size:11px;opacity:0.7;">本月件數</div>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;flex:1;text-align:center;">
+                <div style="font-size:11px;opacity:0.7;">累計受測者</div>
+                <div id="earnings-subject-count" style="font-size:20px;font-weight:700;">—</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;flex:1;text-align:center;">
+                <div style="font-size:11px;opacity:0.7;">本月付款件數</div>
                 <div id="earnings-month-count" style="font-size:20px;font-weight:700;">—</div>
               </div>
-              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
-                <div style="font-size:11px;opacity:0.7;">累計筆數</div>
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;flex:1;text-align:center;">
+                <div style="font-size:11px;opacity:0.7;">累計付款筆數</div>
                 <div id="earnings-total-count" style="font-size:20px;font-weight:700;">—</div>
               </div>
             </div>
           </div>
-          <!-- 明細列表 -->
-          <div id="earnings-list" style="padding:16px;">
-            <div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入中…</div>
+          <!-- 受測者清單 -->
+          <div style="padding:14px 16px 0;">
+            <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:8px;">🧠 受測者基本資料</div>
+            <div id="earnings-subjects-list">
+              <div style="text-align:center;padding:20px;color:#bbb;font-size:13px;">載入中…</div>
+            </div>
+          </div>
+          <!-- 付款紀錄 -->
+          <div id="earnings-list" style="padding:14px 16px 16px;">
+            <div style="text-align:center;padding:20px;color:#bbb;font-size:13px;">載入中…</div>
           </div>
         </div>
         <div class="nav-overlay">
@@ -3463,51 +3474,103 @@ async function refreshHomeData() {
   }
 }
 
-// ─── 付款紀錄（查看細節）：動態載入 payments/my ──────────────────────────
+// ─── 受測者名單 + 付款紀錄（查看細節）──────────────────────────────────────
 async function refreshEarningsData() {
-  const listEl  = document.getElementById('earnings-list');
-  const totalEl = document.getElementById('earnings-total');
-  const mCntEl  = document.getElementById('earnings-month-count');
-  const tCntEl  = document.getElementById('earnings-total-count');
+  const listEl    = document.getElementById('earnings-list');
+  const subjEl    = document.getElementById('earnings-subjects-list');
+  const totalEl   = document.getElementById('earnings-total');
+  const mCntEl    = document.getElementById('earnings-month-count');
+  const tCntEl    = document.getElementById('earnings-total-count');
+  const subjCntEl = document.getElementById('earnings-subject-count');
   if (!listEl) return;
 
-  listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入中…</div>';
+  const loadingHtml = '<div style="text-align:center;padding:20px;color:#bbb;font-size:13px;">載入中…</div>';
+  listEl.innerHTML = loadingHtml;
+  if (subjEl) subjEl.innerHTML = loadingHtml;
 
   const user = _currentUser || _getAuth();
   if (!user || !user.token) {
-    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">請先登入</div>';
+    const msg = '<div style="text-align:center;padding:30px;color:#bbb;">請先登入</div>';
+    listEl.innerHTML = msg;
+    if (subjEl) subjEl.innerHTML = msg;
     return;
   }
 
-  let payments = [];
+  // ── 同時拉 受測者清單 + 付款紀錄 ──
+  let subjects = [], payments = [];
   try {
-    const r = await apiFetch('/payments/my?limit=100');
-    if (r.ok) payments = (await r.json()).payments || [];
+    const [rs, rp] = await Promise.all([
+      apiFetch('/subjects'),
+      apiFetch('/payments/my?limit=100'),
+    ]);
+    if (rs.ok) subjects = (await rs.json()) || [];
+    if (rp.ok) payments = ((await rp.json()).payments) || [];
   } catch (e) {
-    listEl.innerHTML = `<div style="text-align:center;padding:30px;color:#c62828;font-size:13px;">載入失敗：${e.message}</div>`;
+    const errHtml = `<div style="text-align:center;padding:20px;color:#c62828;font-size:13px;">載入失敗：${e.message}</div>`;
+    listEl.innerHTML = errHtml;
+    if (subjEl) subjEl.innerHTML = errHtml;
     return;
   }
 
   // ── 統計 ──
-  const paidList = payments.filter(p => p.status === 'paid');
-  const nowMs = Date.now();
+  const paidList   = payments.filter(p => p.status === 'paid');
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-  const monthPaid = paidList.filter(p => (p.paid_at || 0) * 1000 >= monthStart.getTime());
+  const monthPaid  = paidList.filter(p => (p.paid_at || 0) * 1000 >= monthStart.getTime());
   const monthTotal = monthPaid.reduce((s, p) => s + (p.amount || 0), 0);
 
-  if (totalEl) totalEl.textContent = `NT$${monthTotal.toLocaleString()}`;
-  if (mCntEl)  mCntEl.textContent  = `${monthPaid.length} 件`;
-  if (tCntEl)  tCntEl.textContent  = `${paidList.length} 筆`;
+  if (totalEl)   totalEl.textContent   = `NT$${monthTotal.toLocaleString()}`;
+  if (mCntEl)    mCntEl.textContent    = `${monthPaid.length} 件`;
+  if (tCntEl)    tCntEl.textContent    = `${paidList.length} 筆`;
+  if (subjCntEl) subjCntEl.textContent = `${subjects.length} 位`;
 
-  // ── 無資料 ──
-  if (payments.length === 0) {
-    listEl.innerHTML = `
-      <div style="text-align:center;padding:50px 16px;color:#bbb;">
-        <div style="font-size:48px;margin-bottom:10px;">💳</div>
-        <div style="font-size:14px;font-weight:600;color:#666;">尚無付款紀錄</div>
-        <div style="font-size:12px;margin-top:6px;line-height:1.6;">完成首筆腦波檢測付款後，<br>紀錄會自動顯示在這裡</div>
-      </div>`;
-    return;
+  // ── 受測者清單渲染 ──
+  if (subjEl) {
+    if (subjects.length === 0) {
+      subjEl.innerHTML = `
+        <div style="text-align:center;padding:30px 16px;color:#bbb;">
+          <div style="font-size:36px;margin-bottom:8px;">🧠</div>
+          <div style="font-size:13px;color:#999;">尚無受測者資料</div>
+        </div>`;
+    } else {
+      const calcAge = (birthDate) => {
+        if (!birthDate) return null;
+        const b = new Date(birthDate), now = new Date();
+        let age = now.getFullYear() - b.getFullYear();
+        if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
+        return age;
+      };
+      const genderIcon = (g) => g === 'M' || g === '男' ? '♂' : g === 'F' || g === '女' ? '♀' : '';
+      const fmtDate = (iso) => {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+      };
+
+      // 依建檔時間新→舊排序
+      const sorted = [...subjects].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      let sHtml = '';
+      sorted.forEach(s => {
+        const age = calcAge(s.birth_date);
+        const gender = genderIcon(s.gender);
+        const createdStr = fmtDate(s.created_at);
+        const occ = s.occupation ? `<span style="font-size:11px;color:#888;">💼 ${s.occupation}</span>` : '';
+        sHtml += `
+          <div style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#2D3561,#4a90d9);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;font-weight:700;flex-shrink:0;">
+              ${(s.name||'?')[0]}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:#1a1a2e;">
+                ${s.name || '—'}
+                ${age != null ? `<span style="font-size:12px;color:#888;font-weight:400;margin-left:4px;">${age}歲${gender}</span>` : (gender ? `<span style="font-size:12px;color:#888;margin-left:4px;">${gender}</span>` : '')}
+              </div>
+              ${occ}
+              <div style="font-size:11px;color:#bbb;margin-top:2px;">建檔 ${createdStr}</div>
+            </div>
+          </div>`;
+      });
+      subjEl.innerHTML = sHtml;
+    }
   }
 
   // ── 報告類型標籤 ──
@@ -3537,8 +3600,12 @@ async function refreshEarningsData() {
     return `<span style="background:${t.bg};color:${t.color};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;">${t.label}</span>`;
   };
 
-  // ── 渲染 ──
-  let html = `<div style="font-size:14px;font-weight:600;color:#333;margin-bottom:12px;">每筆付款紀錄</div>`;
+  // ── 付款紀錄渲染 ──
+  if (payments.length === 0) {
+    listEl.innerHTML = '';
+    return;
+  }
+  let html = `<div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:8px;">💳 付款紀錄</div>`;
   payments.forEach(p => {
     const dateStr = _formatTs(p.created_at);
     const paidStr = p.paid_at ? _formatTs(p.paid_at) : null;
