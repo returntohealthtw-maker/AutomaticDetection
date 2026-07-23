@@ -3550,26 +3550,24 @@ async function refreshEarningsData() {
         return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
       };
 
-      // 依建檔時間新→舊排序
+      // 依建檔時間新→舊排序；存全域陣列供 modal 用 index 取值
       const sorted = [...subjects].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      window._earningsSubjects = sorted;
       let sHtml = '';
-      sorted.forEach(s => {
+      sorted.forEach((s, idx) => {
         const age = calcAge(s.birth_date);
         const gender = genderIcon(s.gender);
         const createdStr = fmtDate(s.created_at);
         const occ = s.occupation ? `<span style="font-size:11px;color:#888;">💼 ${s.occupation}</span>` : '';
         const subjSessions = sessions.filter(x => x.subject_name === s.name);
-        const lastSess = subjSessions[0];
         const sessCount = subjSessions.length;
         const hasReport = subjSessions.some(x => x.report_status === 'completed' && x.report_url);
         const sessInfo = sessCount > 0
           ? `<span style="font-size:11px;color:#1565c0;background:#e3f2fd;padding:1px 7px;border-radius:8px;">${sessCount} 次檢測${hasReport ? ' · 有報告' : ''}</span>`
           : `<span style="font-size:11px;color:#aaa;">尚未做腦波</span>`;
-        const safeId = JSON.stringify(s.subject_id);
-        const safeName = JSON.stringify(s.name || '');
         sHtml += `
-          <div onclick="_showSubjectDetail(${safeId}, ${safeName})"
-               style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;active:opacity:0.7;">
+          <div onclick="_showSubjectDetail(${idx})"
+               style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;">
             <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#2D3561,#4a90d9);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;font-weight:700;flex-shrink:0;">
               ${(s.name||'?')[0]}
             </div>
@@ -3650,7 +3648,10 @@ async function refreshEarningsData() {
 }
 
 // ─── 受測者詳細 Modal（從受測者名單點進去）────────────────────────────────
-function _showSubjectDetail(subjectId, subjectName) {
+function _showSubjectDetail(idx) {
+  const s = (window._earningsSubjects || [])[idx];
+  if (!s) return;
+  const subjectName = s.name || '—';
   const sessions = (window._earningsSessions || []).filter(x => x.subject_name === subjectName);
   const REPORT_ZH = {
     adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
