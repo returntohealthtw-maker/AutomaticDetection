@@ -3496,21 +3496,25 @@ async function refreshEarningsData() {
     return;
   }
 
-  // ── 同時拉 受測者清單 + 付款紀錄 ──
-  let subjects = [], payments = [];
+  // ── 同時拉 受測者清單 + 付款紀錄 + 檢測場次 ──
+  let subjects = [], payments = [], sessions = [];
   try {
-    const [rs, rp] = await Promise.all([
+    const [rs, rp, re] = await Promise.all([
       apiFetch('/subjects'),
       apiFetch('/payments/my?limit=100'),
+      apiFetch('/eeg/sessions?limit=300'),
     ]);
     if (rs.ok) subjects = (await rs.json()) || [];
     if (rp.ok) payments = ((await rp.json()).payments) || [];
+    if (re.ok) sessions = ((await re.json()).sessions) || [];
   } catch (e) {
     const errHtml = `<div style="text-align:center;padding:20px;color:#c62828;font-size:13px;">載入失敗：${e.message}</div>`;
     listEl.innerHTML = errHtml;
     if (subjEl) subjEl.innerHTML = errHtml;
     return;
   }
+  // 快取供 modal 使用
+  window._earningsSessions = sessions;
 
   // ── 統計 ──
   const paidList   = payments.filter(p => p.status === 'paid');
@@ -3554,8 +3558,18 @@ async function refreshEarningsData() {
         const gender = genderIcon(s.gender);
         const createdStr = fmtDate(s.created_at);
         const occ = s.occupation ? `<span style="font-size:11px;color:#888;">💼 ${s.occupation}</span>` : '';
+        const subjSessions = sessions.filter(x => x.subject_name === s.name);
+        const lastSess = subjSessions[0];
+        const sessCount = subjSessions.length;
+        const hasReport = subjSessions.some(x => x.report_status === 'completed' && x.report_url);
+        const sessInfo = sessCount > 0
+          ? `<span style="font-size:11px;color:#1565c0;background:#e3f2fd;padding:1px 7px;border-radius:8px;">${sessCount} 次檢測${hasReport ? ' · 有報告' : ''}</span>`
+          : `<span style="font-size:11px;color:#aaa;">尚未做腦波</span>`;
+        const safeId = JSON.stringify(s.subject_id);
+        const safeName = JSON.stringify(s.name || '');
         sHtml += `
-          <div style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+          <div onclick="_showSubjectDetail(${safeId}, ${safeName})"
+               style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;active:opacity:0.7;">
             <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#2D3561,#4a90d9);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;font-weight:700;flex-shrink:0;">
               ${(s.name||'?')[0]}
             </div>
@@ -3565,8 +3579,10 @@ async function refreshEarningsData() {
                 ${age != null ? `<span style="font-size:12px;color:#888;font-weight:400;margin-left:4px;">${age}歲${gender}</span>` : (gender ? `<span style="font-size:12px;color:#888;margin-left:4px;">${gender}</span>` : '')}
               </div>
               ${occ}
+              <div style="margin-top:4px;">${sessInfo}</div>
               <div style="font-size:11px;color:#bbb;margin-top:2px;">建檔 ${createdStr}</div>
             </div>
+            <div style="color:#ccc;font-size:18px;">›</div>
           </div>`;
       });
       subjEl.innerHTML = sHtml;
@@ -3631,6 +3647,81 @@ async function refreshEarningsData() {
       </div>`;
   });
   listEl.innerHTML = html;
+}
+
+// ─── 受測者詳細 Modal（從受測者名單點進去）────────────────────────────────
+function _showSubjectDetail(subjectId, subjectName) {
+  const sessions = (window._earningsSessions || []).filter(x => x.subject_name === subjectName);
+  const REPORT_ZH = {
+    adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
+    marital:'婚姻關係', parent_child:'親子關係',
+    life_trial:'人生劇本·體驗', life_full:'人生劇本·完整', life_vip:'人生劇本·VIP',
+    child_trial:'兒童天賦·體驗', child_full:'兒童天賦·完整', child_vip:'兒童天賦·VIP',
+  };
+  const fmtTs = (ts) => {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000);
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  let sessHtml = '';
+  if (sessions.length === 0) {
+    sessHtml = `<div style="text-align:center;padding:24px;color:#aaa;font-size:13px;">尚未有腦波檢測紀錄</div>`;
+  } else {
+    sessions.forEach(s => {
+      const dateStr  = fmtTs(s.created_at);
+      const rtLabel  = REPORT_ZH[s.report_type] || s.report_type || '—';
+      const hasRpt   = s.report_status === 'completed' && s.report_url;
+      const statusDot = hasRpt ? '🟢' : s.report_status === 'generating' ? '🟡' : s.report_status === 'failed' ? '🔴' : '⚪';
+      const mbtiChip = s.mbti ? `<span style="background:#ede7f6;color:#4527a0;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;">${s.mbti}</span>` : '';
+      const scoreChip = s.overall_score != null ? `<span style="background:#e8f5e9;color:#2e7d32;padding:1px 8px;border-radius:8px;font-size:11px;">綜合 ${s.overall_score}</span>` : '';
+      const rptBtn = hasRpt
+        ? `<a href="${s.report_url}" target="_blank"
+               style="display:inline-block;margin-top:8px;padding:6px 14px;background:#2D3561;color:white;border-radius:8px;font-size:12px;text-decoration:none;">
+             📄 查看報告
+           </a>`
+        : '';
+      sessHtml += `
+        <div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:13px;font-weight:600;color:#1a1a2e;">${statusDot} ${rtLabel}</div>
+            <div style="font-size:11px;color:#aaa;">${dateStr}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">${mbtiChip}${scoreChip}</div>
+          ${rptBtn}
+        </div>`;
+    });
+  }
+
+  // 建立 modal overlay
+  const existing = document.getElementById('_subject-detail-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = '_subject-detail-modal';
+  modal.setAttribute('data-dynamic-overlay', '1');
+  modal.style.cssText = `
+    position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);
+    display:flex;align-items:flex-end;justify-content:center;
+  `;
+  modal.innerHTML = `
+    <div style="background:white;border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;">
+      <div style="padding:16px 18px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#1a1a2e;">${subjectName}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px;">${sessions.length} 次腦波檢測紀錄</div>
+        </div>
+        <button onclick="document.getElementById('_subject-detail-modal').remove()"
+                style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:16px;flex:1;">
+        ${sessHtml}
+      </div>
+    </div>
+  `;
+  // 點背景關閉
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 // ─── 歷史紀錄：動態載入該帳號的檢測場次 ─────────────────────────────────
