@@ -3406,6 +3406,7 @@ function gotoIndex(idx) {
   if (id === 'screen-connect'  && typeof _populateConnectScreen === 'function') _populateConnectScreen();
   if (id === 'screen-detect'   && typeof _startEegLiveCapture   === 'function') _startEegLiveCapture();
   if (id === 'screen-reports'  && typeof _applyRolePricing      === 'function') _applyRolePricing();
+  if (id === 'screen-earnings' && typeof refreshEarningsData    === 'function') refreshEarningsData();
 }
 
 // ─── 首頁 / 設定頁：依登入者動態顯示 ────────────────────────────────────────
