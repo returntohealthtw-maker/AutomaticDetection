@@ -96,45 +96,31 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     def _gv(cap, attr):
         return float(getattr(cap, attr, None) or 0)
 
-    # 偵測輸入模式（raw ThinkGear vs bandTo100）
-    _delta_max = max((_gv(c, "delta") for c in caps), default=0)
-    _is_raw = _delta_max > 1000
+    # 排除低品質秒（delta 過低代表電極接觸不良，僅適用原始 ThinkGear 值）
+    good = [c for c in caps if _gv(c, "delta") >= MIN_DELTA_QUALITY]
+    if len(good) < 15:
+        good = caps  # 資料不足時不過濾
 
-    if _is_raw:
-        # 排除低品質秒（delta 過低代表電極接觸不良）
-        good = [c for c in caps if _gv(c, "delta") >= MIN_DELTA_QUALITY]
-        if len(good) < 15:
-            good = caps  # 資料不足時 fallback
+    prop_sum = {k: 0.0 for k in RAW_KEYS}
+    valid_n  = 0
+    for c in good:
+        uncapped_total = sum(_gv(c, _ATTR[k]) for k in RAW_KEYS)
+        if uncapped_total == 0:
+            continue
+        for k in RAW_KEYS:
+            prop_sum[k] += _clamp(_gv(c, _ATTR[k]), CAP[k]) / uncapped_total
+        valid_n += 1
 
-        prop_sum = {k: 0.0 for k in RAW_KEYS}
-        valid_n  = 0
-        for c in good:
-            uncapped_total = sum(_gv(c, _ATTR[k]) for k in RAW_KEYS)
-            if uncapped_total == 0:
-                continue
-            for k in RAW_KEYS:
-                prop_sum[k] += _clamp(_gv(c, _ATTR[k]), CAP[k]) / uncapped_total
-            valid_n += 1
-
-        if valid_n > 0:
-            sc = {k: round(_proportion_range(prop_sum[k] / valid_n, *_PROP_RANGE[k]) * 100)
-                  for k in RAW_KEYS}
-        else:
-            sc = {k: 50 for k in RAW_KEYS}
-
-        d_score  = sc["r_delta"];  th_score = sc["r_theta"]
-        la_score = sc["r_lalpha"]; ha_score = sc["r_halpha"]
-        lb_score = sc["r_lbeta"];  hb_score = sc["r_hbeta"]
-        lg_score = sc["r_lgamma"]; hg_score = sc["r_hgamma"]
+    if valid_n > 0:
+        sc = {k: round(_proportion_range(prop_sum[k] / valid_n, *_PROP_RANGE[k]) * 100)
+              for k in RAW_KEYS}
     else:
-        # bandTo100 格式（0-100），直接使用均值
-        lo_al = avg_nz("low_alpha");  hi_al = avg_nz("high_alpha")
-        lo_be = avg_nz("low_beta");   hi_be = avg_nz("high_beta")
-        lo_ga = avg_nz("low_gamma");  hi_ga = avg_nz("high_gamma")
-        d_score  = avg_nz("delta");    th_score = avg_nz("theta")
-        la_score = lo_al;              ha_score = hi_al
-        lb_score = lo_be;              hb_score = hi_be
-        lg_score = lo_ga;              hg_score = hi_ga
+        sc = {k: 50 for k in RAW_KEYS}
+
+    d_score  = sc["r_delta"];  th_score = sc["r_theta"]
+    la_score = sc["r_lalpha"]; ha_score = sc["r_halpha"]
+    lb_score = sc["r_lbeta"];  hb_score = sc["r_hbeta"]
+    lg_score = sc["r_lgamma"]; hg_score = sc["r_hgamma"]
 
     a_score = round((la_score + ha_score) / 2) if (la_score and ha_score) else (la_score or ha_score or 50)
     b_score = round((lb_score + hb_score) / 2) if (lb_score and hb_score) else (lb_score or hb_score or 50)

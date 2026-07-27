@@ -102,21 +102,13 @@ WINDOW_SIZE = 90   # 改為 90 秒視窗（原 30 秒）：更穩定，減少短
 # 信號品質下限（供 calc_band_proportions 及 MBTI 計算共用）
 # delta < 30K = 電極接觸不良（族群均值 ~198K，30K ≈ 15%）
 # 這類秒數的 beta/gamma 比例因分母過小而虛高，應排除
-# ⚠ 此值僅適用於原始 ThinkGear 值；對 bandTo100(0~100) 輸入會全部過濾
-#   → 自動偵測模式：見 _detect_input_scale()
 MIN_DELTA_QUALITY: int = 30_000
 
 
 def _detect_input_scale(raw_arrays: Dict[str, List]) -> str:
     """
-    自動偵測 raw_arrays 的數值尺度：
-    - 'raw'     : 原始 ThinkGear 值（任一頻段 > 1,000，通常 delta 可達 10,000~500,000）
-    - 'norm100' : bandTo100 正規化值（全部頻段 ≤ 1,000）
-    - 'unknown' : 資料不足無法判斷
-
-    判斷規則：取所有 8 個頻段的最大值（不只看 r_delta，避免 5-band 裝置 r_delta=0 誤判）
-      any_band > 1000  → raw（原始 ThinkGear 輸出）
-      all_bands ≤ 1000 → norm100（bandTo100、BLE 或 5-band 裝置輸出）
+    偵測 raw_arrays 是否為原始 ThinkGear 值（任一頻段 > 1,000 即判定為 raw）。
+    不再支援 bandTo100（norm100）格式——所有輸入必須是原始值。
     """
     overall_max = 0.0
     for k in RAW_KEYS:
@@ -129,7 +121,7 @@ def _detect_input_scale(raw_arrays: Dict[str, List]) -> str:
         return "unknown"
     if overall_max > 1000:
         return "raw"
-    return "norm100"
+    return "not_raw"  # bandTo100 / 舊格式，不再支援
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 兒童專用 CAP 值與 proportionRange 閾值（report_type='child' 時使用）
@@ -342,26 +334,18 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
     步驟零：先選 best 30-second window（lowGamma 佔比最高）
     若資料不足（< 10 秒）回傳 None。
 
-    自動偵測輸入尺度：
-    - 'raw'     原始 ThinkGear 值 → 使用 MIN_DELTA_QUALITY=30,000 品質過濾
-    - 'norm100' bandTo100 值      → 品質門檻降至 0（不過濾）, CAP 縮放至 100
+    僅接受原始 ThinkGear 值，套用 MIN_DELTA_QUALITY=30,000 品質過濾。
     """
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return None
 
-    # 自動偵測輸入尺度（若呼叫端已傳入 _scale 則直接使用，避免重複運算）
+    # 偵測輸入尺度（若呼叫端已傳入 _scale 則直接使用）
     scale = _scale or _detect_input_scale(raw_arrays)
 
-    if scale == "norm100":
-        # bandTo100 輸入：CAP 縮放為 100，不套用 delta 品質門檻
-        # 比例計算邏輯與 raw 完全相同，只是數值尺度不同
-        active_cap = {k: 100 for k in CAP}
-        min_delta_q = 0.0  # 不過濾（bandTo100 delta 最大只有 100）
-    else:
-        # 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平
-        active_cap = CHILD_CAP if is_child else CAP
-        min_delta_q = float(MIN_DELTA_QUALITY)
+    # 兒童使用較高的 CAP 值，讓 delta/theta 比例回到文獻水平
+    active_cap = CHILD_CAP if is_child else CAP
+    min_delta_q = float(MIN_DELTA_QUALITY)
 
     # 選取對應年齡的 proportionRange 閾值表
     prop_range_table = _get_child_prop_range(child_age) if is_child else _PROP_RANGE
@@ -688,25 +672,30 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False,
       balance    → MindBalanceAlgorithm(maxArray)   ← best 30s attention/medi
       energy     → MindEnergyAlgorithm(maxArray)    ← best 30s attention/medi
 
-    自動偵測輸入尺度（raw vs norm100），確保 bandTo100 輸入也能正確運算。
-    回傳字典包含 'input_scale' 欄位，標記使用的演算模式。
+    回傳字典包含 'input_scale' 欄位，標記演算模式（'raw' 或拒絕原因）。
+    僅接受原始 ThinkGear 值，不再支援 bandTo100 格式。
     """
-    # ── 0. 訊號品質過濾（WebApp bandTo100 路徑補充；Android raw 路徑稍後由 delta 門檻過濾）
+    # ── 0. 訊號品質過濾（bad signal epoch 過濾，Android raw 路徑稍後由 delta 門檻再過濾）
     raw_arrays = _filter_bad_signal_epochs(raw_arrays)
 
     n = len(raw_arrays.get("r_lalpha") or [])
     if n < 10:
         return {"valid": False, "input_scale": "unknown"}
 
-    # 自動偵測輸入尺度（一次偵測，傳給所有子函式）
+    # 偵測輸入尺度（raw / not_raw / unknown）
     scale = _detect_input_scale(raw_arrays)
 
-    if scale == "norm100":
-        # bandTo100 輸入：CAP 縮放為 100
-        active_cap = {k: 100 for k in CAP}
-    else:
-        # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
-        active_cap = CHILD_CAP if is_child else CAP
+    if scale != "raw":
+        import logging as _log
+        _log.getLogger("braindna").warning(
+            f"[BrainDNA] 拒絕非原始格式輸入（input_scale={scale}）。"
+            "APP 必須傳送原始 ThinkGear 值，不再支援 bandTo100。"
+        )
+        return {"valid": False, "input_scale": scale,
+                "reason": "不支援 bandTo100（非原始 ThinkGear 值）"}
+
+    # best 30-second window（兒童使用 CHILD_CAP 讓選取基準一致）
+    active_cap = CHILD_CAP if is_child else CAP
 
     # 依年齡選取對應的 proportionRange 閾值表
     _pr_table = _get_child_prop_range(child_age) if is_child else _PROP_RANGE
@@ -730,7 +719,7 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False,
 
     return {
         "valid":         True,
-        "input_scale":   scale,    # 'raw' 或 'norm100'，供 eeg.py 記錄 bdna_mode
+        "input_scale":   scale,    # 'raw'，供 eeg.py 記錄 bdna_mode
         "bands":         bands,
         "stress":        stress,
         "balance":       balance,
