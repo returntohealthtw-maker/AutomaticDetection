@@ -3671,7 +3671,6 @@ function _showSubjectDetail(idx) {
   if (!s) return;
   const subjectName = s.name || '—';
   const sessions = (window._earningsSessions || []).filter(x => x.subject_name === subjectName);
-  const isAdmin = (_currentUser || {}).role === 'admin';
 
   const REPORT_ZH = {
     adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
@@ -3733,14 +3732,9 @@ function _showSubjectDetail(idx) {
           </div>`
         : '';
 
-      // 顧問只能看到報告完成狀態，不能點開報告 PDF；管理員才有連結
+      // 報告完成狀態（只顯示文字，任何角色都不顯示 PDF 連結）
       const rptStatus = hasRpt
-        ? (isAdmin
-            ? `<a href="${sess.report_url}" target="_blank"
-                   style="display:inline-block;margin-top:8px;padding:6px 14px;background:#2D3561;color:white;border-radius:8px;font-size:12px;text-decoration:none;">
-                 📄 查看報告
-               </a>`
-            : `<div style="margin-top:8px;font-size:11px;color:#2e7d32;font-weight:600;">✅ 報告已完成</div>`)
+        ? `<div style="margin-top:8px;font-size:11px;color:#2e7d32;font-weight:600;">✅ 報告已完成</div>`
         : (sess.report_status === 'generating'
             ? `<div style="margin-top:8px;font-size:11px;color:#f57c00;font-weight:600;">⏳ 報告生成中</div>`
             : '');
