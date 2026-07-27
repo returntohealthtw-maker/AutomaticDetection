@@ -130,7 +130,8 @@ def save_eeg_stats(
             from app.services.braindna_algorithms import compute_all as _bdna_compute
             _is_child = (getattr(payload, "report_type", None) or "").lower() in ("child", "child_report") \
                         or (getattr(payload, "report_type", None) or "").lower().startswith("child_")
-            _bdna_result = _bdna_compute(payload.raw_arrays, is_child=_is_child)
+            _child_age = getattr(payload, "subject_age", None) if _is_child else None
+            _bdna_result = _bdna_compute(payload.raw_arrays, is_child=_is_child, child_age=_child_age)
             _input_scale = _bdna_result.get("input_scale", "unknown")
             _bdna_log.info(f"[BrainDNA] 執行完成：valid={_bdna_result.get('valid')}, input_scale={_input_scale}, bands={_bdna_result.get('bands')}")
 
@@ -746,3 +747,130 @@ def admin_firebase_diag(
             result["firebase_api_error"] = f"{type(e).__name__}: {str(e)[:200]}"
 
     return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Firebase-Only 上傳端點：只寫 Firebase，完全不碰本地 PostgreSQL / SQLite
+# ──────────────────────────────────────────────────────────────────────────────
+
+class FirebaseSaveIn(BaseModel):
+    """接受與 save-stats 相同欄位，但只同步到 Firebase。"""
+    subject_name:           str
+    subject_birthday:       str = ""
+    subject_gender:         str = ""
+    subject_age:            Optional[int] = None
+    report_type:            str = "adult"
+    sample_count:           int = 0
+    attention_percentage:   int = 0
+    meditation_percentage:  int = 0
+    bands_avg:              Optional[dict] = None
+    raw_arrays:             Optional[dict] = None
+
+
+@router.post("/firebase-save")
+def firebase_save(
+    payload: FirebaseSaveIn,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Firebase-Only 上傳：擷取完成後直接寫入 Firebase eeg_features，
+    **不寫本地 PostgreSQL / SQLite**。
+    適合只需要 Firebase 存儲的場景（如：前端直接採集後上傳）。
+
+    流程：
+      1. 驗證用戶（同 save-stats）
+      2. 執行 BrainDNA + qEEG 分析（計算分數）
+      3. 呼叫 firebase_sync → 建立 Firebase Session → 上傳 180 筆 features → PATCH 分析結果
+      4. 回傳 firebase_session_id + 完整分析結果
+    """
+    # ── 身份驗證 ────────────────────────────────────────────────────────────────
+    user = require_user(authorization, db)
+
+    # ── 基本品質門檻 ─────────────────────────────────────────────────────────────
+    att = int(payload.attention_percentage or 0)
+    med = int(payload.meditation_percentage or 0)
+    if att == 0 and med == 0 and not payload.raw_arrays:
+        raise HTTPException(status_code=422, detail="腦波數值全為零且無原始陣列，拒絕上傳")
+    if att <= 5 and med <= 5:
+        raise HTTPException(
+            status_code=422,
+            detail=f"腦波品質不足（專注={att}、放鬆={med}），請重新配戴後重測"
+        )
+
+    # ── BrainDNA 分析 ────────────────────────────────────────────────────────────
+    _bdna_result = None
+    _is_child = (payload.report_type or "").lower().startswith("child")
+    _child_age = getattr(payload, "subject_age", None) if _is_child else None
+    if payload.raw_arrays:
+        try:
+            from app.services.braindna_algorithms import compute_all as _bdna_compute
+            _bdna_result = _bdna_compute(payload.raw_arrays, is_child=_is_child, child_age=_child_age)
+            logger.info("[firebase-save] BrainDNA valid=%s input_scale=%s",
+                        _bdna_result.get("valid"), _bdna_result.get("input_scale"))
+        except Exception as ex:
+            logger.warning("[firebase-save] BrainDNA 例外: %s", ex)
+
+    # ── qEEG 分析 ─────────────────────────────────────────────────────────────────
+    _qeeg_result = None
+    if payload.raw_arrays:
+        try:
+            from app.services.qeeg_pipeline import run_qeeg_pipeline
+            _qeeg_result = run_qeeg_pipeline(payload.raw_arrays)
+            logger.info("[firebase-save] qEEG abilities=%s",
+                        list((_qeeg_result or {}).get("ability_scores", {}).keys()))
+        except Exception as _qex:
+            logger.warning("[firebase-save] qEEG 例外: %s", _qex)
+
+    # ── Firebase 同步（核心：只存 Firebase）────────────────────────────────────────
+    from datetime import datetime, timezone
+    fb_sid = None
+    try:
+        from app.services.firebase_sync import sync_to_firebase
+        fb_sid = asyncio.run(sync_to_firebase(
+            subject_name    = payload.subject_name,
+            session_id      = 0,          # 0 = 無 DB session（Firebase-only 模式）
+            raw_arrays      = payload.raw_arrays or {},
+            session_start   = datetime.now(timezone.utc),
+            braindna_result = _bdna_result,
+            qeeg_result     = _qeeg_result,
+            subject_age     = payload.subject_age,
+            subject_gender  = payload.subject_gender,
+        ))
+        if fb_sid and fb_sid is not False:
+            logger.info("[firebase-save] Firebase 同步成功 fb_sid=%s", fb_sid)
+        else:
+            logger.warning("[firebase-save] Firebase 同步失敗或回傳 False")
+            fb_sid = None
+    except Exception as ex:
+        logger.error("[firebase-save] Firebase 同步例外: %s", ex, exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Firebase 同步失敗: {ex}")
+
+    if not fb_sid:
+        raise HTTPException(status_code=502, detail="Firebase 同步失敗，請稍後重試")
+
+    # ── 回傳 ─────────────────────────────────────────────────────────────────────
+    response: dict = {
+        "ok":                 True,
+        "firebase_session_id": str(fb_sid),
+        "subject_name":       payload.subject_name,
+        "sample_count":       payload.sample_count,
+        "storage":            "firebase_only",   # 明確標示：不寫 PostgreSQL
+    }
+
+    if _bdna_result and _bdna_result.get("valid"):
+        response["braindna"] = {
+            "mindStress":   _bdna_result.get("stress"),
+            "mindBalance":  _bdna_result.get("balance"),
+            "mindEnergy":   _bdna_result.get("energy"),
+            "overallScore": _bdna_result.get("overall"),
+            "bands":        _bdna_result.get("bands"),
+        }
+
+    if _qeeg_result:
+        abilities = _qeeg_result.get("ability_scores", {})
+        response["qeeg"] = {
+            k: v.get("score") for k, v in abilities.items()
+        }
+
+    return response

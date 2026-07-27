@@ -1053,6 +1053,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         from app.services.braindna_algorithms import compute_all as _bdna_compute
         _sess_obj = db.query(M.Session).filter(M.Session.session_id == session_id).first()
         _is_child = (getattr(_sess_obj, "report_type", None) or "").lower() in ("child", "child_report")
+        _child_age = getattr(_sess_obj, "subject_age", None) if _is_child else None
 
         # 來源 1：Firebase 180 筆特徵（最權威）
         if _sess_obj and _sess_obj.firebase_session_id:
@@ -1062,7 +1063,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
                 _fb_features = _aio.run(fetch_eeg_features(_sess_obj.firebase_session_id))
                 if _fb_features and len(_fb_features) >= 10:
                     _fb_raw = firebase_features_to_raw_arrays(_fb_features)
-                    _result = _bdna_compute(_fb_raw, is_child=_is_child)
+                    _result = _bdna_compute(_fb_raw, is_child=_is_child, child_age=_child_age)
                     if _result.get("valid") and _result.get("bands"):
                         _bdna_bands = _result["bands"]
                         _bdna_source = "firebase_180"
@@ -1072,7 +1073,7 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         # 來源 2：PostgreSQL raw_arrays_json
         if _bdna_bands is None and _sess_obj and _sess_obj.raw_arrays_json:
             _raw = _json.loads(_sess_obj.raw_arrays_json)
-            _result = _bdna_compute(_raw, is_child=_is_child)
+            _result = _bdna_compute(_raw, is_child=_is_child, child_age=_child_age)
             if _result.get("valid") and _result.get("bands"):
                 _bdna_bands = _result["bands"]
                 _bdna_source = "pg_raw_arrays"

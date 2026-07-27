@@ -154,19 +154,76 @@ CHILD_CAP: Dict[str, int] = {
     "r_hgamma":  20_000,   # 成人: 10K  | 兒童均值: ~17K → 提高至 20K
 }
 
-CHILD_PROP_RANGE: Dict[str, tuple] = {
-    # key: (level1, level2) — 兒童以正確 CAP 計算後的實際佔比區間
-    # 2026-07-27 校準修正：原先只基於 Session #63（3歲），導致 9 歲兒童 alpha/beta 大量超出 level2 →滿分100
-    # 現依多樣本觀測（Session #63 3歲 + Session #113 9歲）大幅放寬 level2，確保不輕易滿分
-    "r_delta":  (0.30, 0.60),   # 文獻: 39~49% | 放寬區間讓不同年齡兒童均可分布
-    "r_theta":  (0.08, 0.25),   # 文獻: ~25%   | 稍微放寬 level2
-    "r_lalpha": (0.015, 0.150), # 文獻: ~7.5%  | #113實測7.8%→舊版直接滿分，新level2=15%→分數73
-    "r_halpha": (0.015, 0.150), # 文獻: ~7.5%  | 同上
-    "r_lbeta":  (0.010, 0.100), # 文獻: ~4%    | #113實測6.5%→舊版滿分，新level2=10%→分數81
-    "r_hbeta":  (0.020, 0.100), # 文獻: ~4%    | #113實測6.3%→分數77
-    "r_lgamma": (0.015, 0.060), # 文獻: ~2%    | 放寬 level2 保留分化空間
-    "r_hgamma": (0.010, 0.050), # 文獻: ~2%    | 放寬 level2
+# ─────────────────────────────────────────────────────────────────────────────
+# 兒童年齡分段 proportionRange 閾值（Greve et al. 2025, Springer Nature）
+# 來源：N=450 健康兒童，Fp1-Fp2 相對功率（P50 = level1，P95 = level2）
+# 校正因子 ×0.93：論文僅報告 0-30Hz 頻段，我們的 BrainDNA 包含 gamma（~7%）
+#   → 所有頻段比例在含 gamma 的分母下約為論文值 × 0.93
+# Alpha/Beta 子頻段：等分（/2）估計（low/high 各佔約 50%）
+# Gamma：論文無數據，依多樣本實測估計
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CHILD_PR_2_5: Dict[str, tuple] = {
+    # 2-5 歲：Delta P50=49.2% P95=60.2%，Theta P50=17.8% P95=22.2%
+    #         Alpha P50=12.0% P95=16.3%，Beta P50=12.9% P95=24.4%
+    "r_delta":  (0.46, 0.56),
+    "r_theta":  (0.17, 0.21),
+    "r_lalpha": (0.056, 0.076),
+    "r_halpha": (0.056, 0.076),
+    "r_lbeta":  (0.060, 0.113),
+    "r_hbeta":  (0.060, 0.113),
+    "r_lgamma": (0.025, 0.050),  # 實測估計
+    "r_hgamma": (0.015, 0.035),  # 實測估計
 }
+
+_CHILD_PR_6_9: Dict[str, tuple] = {
+    # 6-9 歲：Delta P50=46.8% P95=57.7%，Theta P50=18.7% P95=23.0%
+    #         Alpha P50=13.4% P95=19.1%，Beta P50=14.0% P95=20.4%
+    "r_delta":  (0.44, 0.54),
+    "r_theta":  (0.17, 0.21),
+    "r_lalpha": (0.062, 0.089),
+    "r_halpha": (0.062, 0.089),
+    "r_lbeta":  (0.065, 0.095),
+    "r_hbeta":  (0.065, 0.095),
+    "r_lgamma": (0.025, 0.055),  # 實測估計
+    "r_hgamma": (0.015, 0.040),  # 實測估計
+}
+
+_CHILD_PR_10_13: Dict[str, tuple] = {
+    # 10-13 歲：Delta P50=42.5% P95=57.0%，Theta P50=19.1% P95=23.5%
+    #           Alpha P50=15.2% P95=20.1%，Beta P50=15.8% P95=21.8%
+    "r_delta":  (0.40, 0.53),
+    "r_theta":  (0.18, 0.22),
+    "r_lalpha": (0.071, 0.093),
+    "r_halpha": (0.071, 0.093),
+    "r_lbeta":  (0.073, 0.101),
+    "r_hbeta":  (0.073, 0.101),
+    "r_lgamma": (0.025, 0.060),  # 實測估計
+    "r_hgamma": (0.015, 0.045),  # 實測估計
+}
+
+# 向後相容別名（未知年齡時使用 6-9 歲作為預設）
+CHILD_PROP_RANGE: Dict[str, tuple] = _CHILD_PR_6_9
+
+
+def _get_child_prop_range(age: Optional[int]) -> Dict[str, tuple]:
+    """
+    根據兒童年齡回傳對應的 proportionRange 閾值表。
+    依據：Greve et al. 2025, Springer Nature, Fp1-Fp2 (N=450)
+      ≤ 5 歲 → _CHILD_PR_2_5
+      6-9 歲 → _CHILD_PR_6_9
+      10-13 歲 → _CHILD_PR_10_13
+      14+ 歲  → _PROP_RANGE（成人標準）
+    """
+    if age is None:
+        return _CHILD_PR_6_9   # 未知年齡：預設學齡兒童
+    if age <= 5:
+        return _CHILD_PR_2_5
+    if age <= 9:
+        return _CHILD_PR_6_9
+    if age <= 13:
+        return _CHILD_PR_10_13
+    return _PROP_RANGE          # 14+ 歲視為成人
 
 
 BDNA_GOOD_SIGNAL_THRESHOLD = 50  # 與 qEEG pipeline 一致：ThinkGear good_signal < 50 = 乾淨秒
@@ -268,7 +325,8 @@ def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None,
 # 與 BrainDNA evaluationReport 的 *Strip 值完全一致。
 # ─────────────────────────────────────────────────────────────────────────────
 def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
-                          _scale: str = "") -> Optional[Dict[str, int]]:
+                          _scale: str = "",
+                          child_age: Optional[int] = None) -> Optional[Dict[str, int]]:
     """
     輸入：raw_arrays（8 個頻段原始陣列，index 對齊，通常 180 秒）
     輸出：{ "low_alpha": int, "high_alpha": int, ... }
@@ -297,12 +355,14 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
         active_cap = CHILD_CAP if is_child else CAP
         min_delta_q = float(MIN_DELTA_QUALITY)
 
+    # 選取對應年齡的 proportionRange 閾值表
+    prop_range_table = _get_child_prop_range(child_age) if is_child else _PROP_RANGE
+
     # 若輸入已是 best window（由 compute_all 傳入），直接使用；
     # 若直接呼叫此函式（n >= 30），自動選 best window。
     if n >= WINDOW_SIZE * 2:
         raw_arrays = _select_best_window(
-            raw_arrays, cap=active_cap,
-            pr_table=CHILD_PROP_RANGE if is_child else _PROP_RANGE)
+            raw_arrays, cap=active_cap, pr_table=prop_range_table)
         n = len(raw_arrays.get("r_lalpha") or [])
 
     prop_sum = {k: 0.0 for k in RAW_KEYS}
@@ -327,8 +387,6 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
 
     if valid == 0:
         return None
-
-    prop_range_table = CHILD_PROP_RANGE if is_child else _PROP_RANGE
 
     def _norm(k: str) -> int:
         raw_prop = prop_sum[k] / valid          # 步驟一：原始佔比 0.0~1.0
@@ -609,7 +667,8 @@ def calc_mind_energy(attn: List[int], medi: List[int]) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 # 總入口：從 raw_arrays 計算全部 BrainDNA 指標
 # ─────────────────────────────────────────────────────────────────────────────
-def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
+def compute_all(raw_arrays: Dict[str, List], is_child: bool = False,
+                child_age: Optional[int] = None) -> Dict:
     """
     輸入 raw_arrays，回傳完整的 BrainDNA 指標字典。
     完全對應 BrainDNA evaluationReport.py 的資料流：
@@ -640,15 +699,17 @@ def compute_all(raw_arrays: Dict[str, List], is_child: bool = False) -> Dict:
     else:
         # best 30-second window（一次選取；兒童使用 CHILD_CAP 讓選取基準一致）
         active_cap = CHILD_CAP if is_child else CAP
-    best_win = _select_best_window(
-        raw_arrays, cap=active_cap,
-        pr_table=CHILD_PROP_RANGE if is_child else _PROP_RANGE)
+
+    # 依年齡選取對應的 proportionRange 閾值表
+    _pr_table = _get_child_prop_range(child_age) if is_child else _PROP_RANGE
+    best_win = _select_best_window(raw_arrays, cap=active_cap, pr_table=_pr_table)
 
     attn = [max(0, min(100, int(v))) for v in (best_win.get("attn") or [])]
     medi = [max(0, min(100, int(v))) for v in (best_win.get("medi") or [])]
 
     # bands：傳入 best_win + 偵測到的 scale，讓子函式不必重複偵測
-    bands = calc_band_proportions(best_win, is_child=is_child, _scale=scale)
+    bands = calc_band_proportions(best_win, is_child=is_child, _scale=scale,
+                                  child_age=child_age)
     if bands is None:
         return {"valid": False, "input_scale": scale}
 
