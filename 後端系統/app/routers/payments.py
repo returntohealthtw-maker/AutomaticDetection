@@ -821,9 +821,10 @@ def my_payments(
         q = q.filter(M.Payment.consultant_id == user.consultant_id)
     rows = q.order_by(M.Payment.created_at.desc()).limit(limit).all()
 
+    is_admin = user.role == "admin"
     out = []
     for r in rows:
-        out.append({
+        item = {
             "payment_id":        r.payment_id,
             "order_id":          r.order_id,
             "subject_name":      r.subject_name,
@@ -839,7 +840,11 @@ def my_payments(
             "created_at":        r.created_at,
             "paid_at":           r.paid_at,
             "notes":             r.notes,
-        })
+        }
+        if is_admin:
+            item["_consultant_id"]   = r.consultant_id
+            item["_consultant_name"] = r.consultant_name
+        out.append(item)
     return {"ok": True, "count": len(out), "payments": out}
 
 
