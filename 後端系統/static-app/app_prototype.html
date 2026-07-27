@@ -3701,9 +3701,6 @@ function _showSubjectDetail(idx) {
       const rtLabel   = REPORT_ZH[sess.report_type] || sess.report_type || '—';
       const hasRpt    = sess.report_status === 'completed' && sess.report_url;
       const statusDot = hasRpt ? '🟢' : sess.report_status === 'generating' ? '🟡' : sess.report_status === 'failed' ? '🔴' : '⚪';
-      const mbtiChip  = sess.mbti
-        ? `<span style="background:#ede7f6;color:#4527a0;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;">${sess.mbti}</span>`
-        : '';
       const scoreChip = sess.overall_score != null
         ? `<span style="background:#e8f5e9;color:#2e7d32;padding:1px 8px;border-radius:8px;font-size:11px;">綜合 ${sess.overall_score}</span>`
         : '';
@@ -3746,7 +3743,7 @@ function _showSubjectDetail(idx) {
             <div style="font-size:13px;font-weight:600;color:#1a1a2e;">${statusDot} ${rtLabel}</div>
             <div style="font-size:11px;color:#aaa;">${dateStr}</div>
           </div>
-          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">${mbtiChip}${scoreChip}</div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">${scoreChip}</div>
           ${indicatorsHtml}
           ${rptStatus}
         </div>`;
