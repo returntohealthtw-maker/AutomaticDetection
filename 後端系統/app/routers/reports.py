@@ -1670,7 +1670,7 @@ def diag_mbti(
     用於排查「MBTI 永遠 ISTP」問題。"""
     import math
     from scipy.stats import norm as _norm
-    from app.services.algorithms import _norm100_to_raw, BandAverages, compute_mbti, compute_mbti_layers_from_captures, aggregate_mbti_profiles
+    from app.services.algorithms import _to_raw, BandAverages, compute_mbti, compute_mbti_layers_from_captures, aggregate_mbti_profiles
     from app.algorithms.bagua import Bagua
     from app.algorithms.data_stats import DATA_STATS
 
@@ -1705,9 +1705,9 @@ def diag_mbti(
     )
     result = compute_mbti(avg_obj)
 
-    # 計算過程
-    raw_la = _norm100_to_raw(lo_alpha_avg)
-    raw_th = _norm100_to_raw(theta_avg)
+    # 計算過程（_to_raw 自動識別 raw ThinkGear 值 vs 0-100 分數）
+    raw_la = _to_raw(lo_alpha_avg)
+    raw_th = _to_raw(theta_avg)
     la_mean = DATA_STATS["lowAlpha"]["mean"]
     la_std  = DATA_STATS["lowAlpha"]["std"]
     p_la = float(_norm.cdf(math.log10(max(raw_la, 0.1)), la_mean, la_std))
@@ -1748,7 +1748,7 @@ def diag_mbti(
             "lo_alpha_avg_from_db": round(lo_alpha_avg, 2),
             "hi_alpha_avg_from_db": round(hi_alpha_avg, 2),
             "theta_avg_from_db":    round(theta_avg, 2),
-            "note": "DB 儲存的是 bandTo100 正規化值 (0-100)；若顯示 >100 則為舊版原始值"
+            "note": "DB 儲存的是原始 ThinkGear 值（新版），高值（>1000）代表原始格式"
         },
         "calculation": {
             "lo_alpha_normalized": round(lo_alpha_avg, 2),

@@ -345,30 +345,36 @@ def compute_all_indices(avg: BandAverages) -> dict:
 
 def _norm100_to_raw(v: float) -> float:
     """
-    還原 Android bandTo100() 正規化：
-        bandTo100(raw) = log10(raw + 1) / 6.0 * 100
-        → raw = 10^(v * 0.06) − 1
-    DB 的 low_alpha / theta 等欄位存的是 0-100 正規化值，
-    Bagua.calcBagua / getPersonalityFromBagua 需要原始 ThinkGear 值（~萬為單位）。
+    將 0-100 BrainDNA 分數還原成適合 Bagua 計算的 ThinkGear 尺度：
+        raw = 10^(v * 0.06) − 1
+    僅適用於 0-100 範圍的輸入。若輸入已是原始 ThinkGear 值（> 1000），
+    請改用 _to_raw()，它會自動判斷並跳過轉換。
     """
     v = max(0.01, float(v))
     return (10.0 ** (v * 0.06)) - 1.0
+
+
+def _to_raw(v: float) -> float:
+    """將 BandAverages 0-100 分數或原始 ThinkGear 值統一轉為適合 Bagua 計算的原始尺度。
+    若值已 > 1000（原始 ThinkGear 值）直接使用，否則套 _norm100_to_raw。"""
+    if v > 1000:
+        return float(v)
+    return _norm100_to_raw(v)
 
 
 def compute_mbti(avg: BandAverages) -> dict:
     """
     使用 BrainDNA 原始八卦演算法計算 MBTI（移植自 BrainDNA/braindna/algorithms/）：
 
-        1. bandTo100 反函數還原 DB 的 0-100 值 → 原始 ThinkGear 值
+        1. 取得 raw ThinkGear 尺度的 lowAlpha / theta（支援 0-100 或原始值輸入）
         2. Bagua.calcBagua(lowAlpha)          → 八卦（7 型，乾兌震巽坎艮坤）
         3. Personality.getPersonalityFromBagua(bagua, theta)  → MBTI 16 型
         4. 顯示分數從 laPct / thPct 推導（方向與型別字母一致）
 
     與前端 _etComputeMBTILayers 原型層完全相同的演算流程。
     """
-    # 1. 還原 raw ThinkGear 值
-    raw_la = _norm100_to_raw(avg.low_alpha)
-    raw_th = _norm100_to_raw(avg.theta)
+    raw_la = _to_raw(avg.low_alpha)
+    raw_th = _to_raw(avg.theta)
 
     # 2. 八卦（8 卦系統含離卦，與前端 _etBaguaMBTI(useLi=True) 完全一致）
     #    laPct 0.250~0.375 帶：theta_p > 0.5 → 離卦(INFJ/INFP)，否則震卦(ENFJ/ENFP)
@@ -706,8 +712,8 @@ def compute_mbti_group_scoring(captures: list) -> list | None:
         if la <= 0 or th <= 0:
             continue
 
-        raw_la = _norm100_to_raw(la)
-        raw_th = _norm100_to_raw(th)
+        raw_la = _to_raw(la)
+        raw_th = _to_raw(th)
         la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD))
         th_pct = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD))
 
@@ -724,12 +730,11 @@ def compute_mbti_group_scoring(captures: list) -> list | None:
         lg = _get(c, "low_gamma")
         hg = _get(c, "high_gamma")
 
-        # MindColor 必須用原始值計算（歸一化值的 gamma/alpha 比值不在正常範圍）
-        raw_ha = _norm100_to_raw(ha) if ha > 0 else 0.0
-        raw_hb = _norm100_to_raw(hb) if hb > 0 else 0.0
-        raw_lb = _norm100_to_raw(lb) if lb > 0 else 0.0
-        raw_lg = _norm100_to_raw(lg) if lg > 0 else 0.0
-        raw_hg = _norm100_to_raw(hg) if hg > 0 else 0.0
+        raw_ha = _to_raw(ha) if ha > 0 else 0.0
+        raw_hb = _to_raw(hb) if hb > 0 else 0.0
+        raw_lb = _to_raw(lb) if lb > 0 else 0.0
+        raw_lg = _to_raw(lg) if lg > 0 else 0.0
+        raw_hg = _to_raw(hg) if hg > 0 else 0.0
         mind_color = _calc_mind_color(raw_ha, raw_la, raw_hb, raw_lb, raw_lg, raw_hg)
 
         # 兌/巽 的 beta vs theta 比較也使用原始值（正規化後比例關係失真）
@@ -1040,8 +1045,9 @@ def compute_mbti_layers_from_captures(captures: list, raw_arrays: dict = None) -
         r_la = [float(v) for v in (raw_arrays.get("r_lalpha") or []) if v]
         r_th = [float(v) for v in (raw_arrays.get("r_theta")  or []) if v]
     else:
-        r_la = [_norm100_to_raw(_get(c, "low_alpha")) for c in captures if _get(c, "low_alpha") > 0]
-        r_th = [_norm100_to_raw(_get(c, "theta"))     for c in captures if _get(c, "theta")     > 0]
+        # 直接使用 captures 的原始值（DB 儲存的是原始 ThinkGear 值，不再做 bandTo100 逆轉換）
+        r_la = [float(_get(c, "low_alpha")) for c in captures if _get(c, "low_alpha") > 0]
+        r_th = [float(_get(c, "theta"))     for c in captures if _get(c, "theta")     > 0]
 
     if len(r_la) < 4 or len(r_th) < 4:
         fb = compute_mbti(compute_averages(captures)) if captures else {"mbti_type": "INTP", "type": "INTP"}
@@ -1060,8 +1066,8 @@ def compute_mbti_layers_from_captures(captures: list, raw_arrays: dict = None) -
         window_mbtis = []
         for wi in range(len(captures) // 30):
             seg = captures[wi*30:(wi+1)*30]
-            seg_la = [_norm100_to_raw(_get(c, "low_alpha")) for c in seg if _get(c, "low_alpha") > 0]
-            seg_th = [_norm100_to_raw(_get(c, "theta"))     for c in seg if _get(c, "theta")     > 0]
+            seg_la = [float(_get(c, "low_alpha")) for c in seg if _get(c, "low_alpha") > 0]
+            seg_th = [float(_get(c, "theta"))     for c in seg if _get(c, "theta")     > 0]
             if seg_la and seg_th:
                 r = _mbti_layer_from_raw_arrays(seg_la, seg_th)
                 window_mbtis.append({"type": r.get("type", archetype_type), "window_idx": wi,

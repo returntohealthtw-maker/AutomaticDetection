@@ -404,21 +404,38 @@ async def sync_to_firebase(
 
             batch_size = 100   # Firebase schema 上限 100 筆/次
             total_uploaded = 0
+
+            # EEG batch 上傳必須使用 Bearer Token（不能用 service key）：
+            # Firebase /api/eeg/batch 端點檢查 session.userId === req.user.uid。
+            # service key 的 uid='railway-backend'，但 session 的 userId 是真實 Firebase 用戶，
+            # 因此 service key 上傳會得到 403 FORBIDDEN。改用 Bearer Token（migration 帳號）即可通過。
+            eeg_headers = _get_auth_headers(force_bearer=True)
+            if not eeg_headers:
+                # Bearer Token 取不到時，回退 service key（可能仍 403，但至少嘗試）
+                logger.warning("[Firebase] Bearer Token 不可用，EEG batch 改用 Service Key（可能 403）")
+                eeg_headers = headers
+
             for i in range(0, len(features), batch_size):
                 batch = features[i:i + batch_size]
+                eeg_body = {
+                    "sessionId": fb_session_id,
+                    "sourceApp": SOURCE_APP,
+                    "features":  batch,
+                }
                 eeg_resp = await client.post(
                     f"{FIREBASE_API_BASE}/eeg/batch",
-                    headers=headers,
-                    json={
-                        "sessionId": fb_session_id,
-                        "sourceApp": SOURCE_APP,
-                        "features":  batch,
-                    },
+                    headers=eeg_headers,
+                    json=eeg_body,
                 )
+                # 若 Bearer Token 也被拒（首次 session 由 service key 建立）：
+                # 不中斷整個 sync 流程，只記錄警告（分數仍會寫入 PATCH）
                 if eeg_resp.status_code not in (200, 201):
-                    logger.error("[Firebase] 上傳 EEG batch 失敗 %s: %s",
-                                 eeg_resp.status_code, eeg_resp.text[:200])
-                    return False
+                    logger.warning("[Firebase] EEG batch 上傳失敗 %s（%d/%d 批）: %s",
+                                   eeg_resp.status_code, i // batch_size + 1,
+                                   -(-len(features) // batch_size),
+                                   eeg_resp.text[:200])
+                    # 繼續上傳其餘批次（盡力而為），不直接 return False
+                    continue
                 total_uploaded += len(batch)
 
             logger.info("[Firebase] 已上傳 %d 筆 EEG 特徵值 → fb_sid=%s",
@@ -461,11 +478,11 @@ async def sync_to_firebase(
 
 def _captures_to_features(captures: List[Any]) -> list:
     """
-    將 Android 上傳的 180 筆 ThinkGear bandTo100 擷取值轉換為 Firebase EEG 特徵格式。
+    將 Android 上傳的 180 筆 ThinkGear 原始擷取值轉換為 Firebase EEG 特徵格式（相對功率比例）。
 
     captures 是 CaptureItem 或 EegCapture 物件列表；
-    其中的 delta/theta/... 均為 ThinkGear bandTo100 值（0~100 scale）。
-    直接用這些值計算相對功率比例，無需再做 bandTo100 轉換。
+    其中的 delta/theta/... 為 ThinkGear 原始值（raw scale）。
+    計算各頻段相對功率比例後上傳 Firebase。
     """
     features = []
     for cap in captures:
@@ -529,7 +546,7 @@ async def sync_captures_to_firebase(
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
 
-    captures 中為 ThinkGear bandTo100 值（0~100），直接計算相對比例後上傳。
+    captures 中為 ThinkGear 原始值，計算相對功率比例後上傳。
     回傳 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外）。
     """
     # 優先使用 X-Service-Key（admin 權限）；未設定時 fallback Bearer Token

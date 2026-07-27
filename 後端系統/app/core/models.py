@@ -65,11 +65,11 @@ class Session(Base):
     bagua         = Column(String(20), nullable=True)
     overall_score = Column(Integer, nullable=True)
     # 演算模式記錄（每個 session 儲存的資料品質標記）：
-    # 'bdna_raw'           = BrainDNA 完整演算（原始 ThinkGear 值，最高精度）
-    # 'bdna_norm100'       = BrainDNA 降級演算（bandTo100 值做佔比，次高精度）
-    # 'fallback_no_raw'    = 無 raw_arrays，使用前端 bandTo100 平均（最低精度）
-    # 'fallback_exception' = BrainDNA 例外失敗，使用前端值
-    # 'fallback_bdna_invalid_*' = BrainDNA valid=False，使用前端值
+    # 'bdna_raw'               = BrainDNA 完整演算（原始 ThinkGear 值）
+    # 'no_raw_arrays'          = 無 raw_arrays，bands 使用前端傳入值
+    # 'bdna_exception'         = BrainDNA 例外失敗，bands 使用前端值
+    # 'bdna_invalid_not_raw'   = 非原始 ThinkGear 值，不支援（拒絕）
+    # 'bdna_invalid_unknown'   = 資料不足無法演算
     bdna_mode     = Column(String(40), nullable=True)
     # Firebase 同步後取得的 session UUID（供後續從 Firebase 讀取 180 筆特徵用）
     firebase_session_id = Column(String(100), nullable=True)
@@ -110,7 +110,7 @@ class EegCapture(Base):
     low_gamma    = Column(Integer, default=0)
     high_gamma   = Column(Integer, default=0)
     feedback     = Column(Integer, default=0)
-    # BrainDNA 算術平均 MBTI 專用：bandTo100(arithmetic_mean_raw_lowAlpha/theta)
+    # MBTI 計算輔助欄位：各捕獲的 low_alpha / theta 原始值
     mbti_la      = Column(Integer, nullable=True)
     mbti_theta   = Column(Integer, nullable=True)
 

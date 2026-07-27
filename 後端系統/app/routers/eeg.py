@@ -187,7 +187,7 @@ def save_eeg_stats(
         total_captures  = int(payload.sample_count or 0),
         status          = 1,  # 1=成功
         created_at      = now_ts,
-        bdna_mode       = _bdna_mode,  # 記錄演算來源（bdna_raw / bdna_norm100 / fallback_*）
+        bdna_mode       = _bdna_mode,  # 記錄演算來源（bdna_raw / no_raw_arrays / bdna_exception / bdna_invalid_*）
     )
     db.add(sess)
     db.flush()  # 拿到 session_id
@@ -251,23 +251,15 @@ def save_eeg_stats(
                 from app.services.braindna_algorithms import (
                     _select_best_window as _sbw,
                     MIN_DELTA_QUALITY as _MDQ,
-                    _detect_input_scale as _scale_detect,
                 )
-                _mbti_scale = _bdna_result.get("input_scale", "raw")
-                _mbti_cap = {k: 100 for k in ["r_delta","r_theta","r_lalpha","r_halpha","r_lbeta","r_hbeta","r_lgamma","r_hgamma"]} \
-                            if _mbti_scale == "norm100" else None
-                bw = _sbw(payload.raw_arrays, cap=_mbti_cap)
+                bw = _sbw(payload.raw_arrays)
                 import statistics as _stat
                 _bw_delta = bw.get("r_delta") or []
                 def _mean_raw(key):
                     arr = bw.get(key) or []
-                    if _mbti_scale == "raw":
-                        # raw 模式：排除 delta<MIN_DELTA_QUALITY 的低品質秒
-                        valid = [v for j, v in enumerate(arr)
-                                 if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
-                    else:
-                        # norm100 模式：不套用 delta 品質過濾，直接取所有非零秒
-                        valid = [v for v in arr if v > 0]
+                    # 排除 delta<MIN_DELTA_QUALITY 的低品質秒
+                    valid = [v for j, v in enumerate(arr)
+                             if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
                     return _stat.mean(valid) if valid else (_stat.mean([v for v in arr if v > 0]) if arr else 0.0)
                 mbti_result = _qmbti({
                     "lowAlpha":  _mean_raw("r_lalpha"),
