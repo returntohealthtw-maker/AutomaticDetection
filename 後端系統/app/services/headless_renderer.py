@@ -270,6 +270,7 @@ def start_headless_job(
             "gamma_low":  lo_gamma_val,
         },
         "attention":      attn_val,
+        "focus":          attn_val,   # React App 用 focus（attention 的別名），缺少時 MBTI E/J 軸計算為 NaN
         "relaxation":     medi_val,
         "sample_count":   (brainwave_data or {}).get("sample_count"),
         "session_id":     session_id,
