@@ -187,18 +187,17 @@ def start_headless_job(
     lo_gamma_opt = _first(_opt(b7, "gamma_low"),  _opt(ba, "low_gamma"),  _opt(ba, "gamma_low"))
     hi_gamma_opt = _first(_opt(b7, "gamma_high"), _opt(ba, "high_gamma"), _opt(ba, "gamma_high"))
 
-    # ── QEEG 七大能力分數（僅成人報告使用；兒童沿用 eSense，QEEG 以成人常模校正不適用）──
-    _is_child_report = (report_type or "").lower().startswith("child")
+    # ── QEEG 七大能力分數（成人與兒童報告均使用 qEEG 校正值，確保後台與報告一致）──
     _qeeg_ab = (brainwave_data or {}).get("qeeg_abilities") or {}
-    _qfocus      = _qeeg_ab.get("focus")       if not _is_child_report else None
-    _qrelax      = _qeeg_ab.get("relaxation")  if not _is_child_report else None
-    _qintuition  = _qeeg_ab.get("intuition")   if not _is_child_report else None
-    _qenergy     = _qeeg_ab.get("energy")      if not _is_child_report else None
-    _qlogic      = _qeeg_ab.get("logic")       if not _is_child_report else None
-    _qawareness  = _qeeg_ab.get("awareness")   if not _is_child_report else None
-    _qempathy    = _qeeg_ab.get("empathy")     if not _is_child_report else None
+    _qfocus      = _qeeg_ab.get("focus")
+    _qrelax      = _qeeg_ab.get("relaxation")
+    _qintuition  = _qeeg_ab.get("intuition")
+    _qenergy     = _qeeg_ab.get("energy")
+    _qlogic      = _qeeg_ab.get("logic")
+    _qawareness  = _qeeg_ab.get("awareness")
+    _qempathy    = _qeeg_ab.get("empathy")
 
-    # focus / relaxation：成人優先使用 QEEG（族群常模校正）；兒童維持 eSense 原始值
+    # focus / relaxation：優先使用 qEEG 校正值（成人與兒童均適用）；無 qEEG 時退回 eSense
     attn_val  = _val_or_50(_qfocus   if _qfocus   is not None else attn_opt)
     medi_val  = _val_or_50(_qrelax   if _qrelax   is not None else medi_opt)
     delta_val = _val_or_50(delta_opt)
