@@ -554,15 +554,36 @@ def trigger_external_report(
         # 使用本機內建親子報告（優先），或 fallback 到外部 Railway
         if _is_local("parent_child"):
             pc_base = _local_base_url() + "/parent-child"
+            # result_url 需使用公開 Railway URL，否則使用者拿到 localhost 無法開啟
+            rd = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            if rd:
+                _public_origin = rd if rd.startswith("http") else f"https://{rd}"
+            elif settings.PUBLIC_BASE_URL:
+                _public_origin = settings.PUBLIC_BASE_URL.rstrip("/")
+            else:
+                _public_origin = None  # 無法取得公開 URL，保留 localhost（降級）
         else:
             pc_base = FALLBACK_URLS.get("parent_child", base)
-        return _call_parent_child(
+            _public_origin = None
+
+        result = _call_parent_child(
             base=pc_base,
             family_name=family_name,
             members=members,
             image_mode=e.get("image_mode", "none"),
             selected_sections=e.get("selected_sections"),
         )
+
+        # 將 result_url / status_url / stream_url 中的 localhost 替換為公開 URL
+        if result.get("ok") and _public_origin and "127.0.0.1" in (result.get("result_url") or ""):
+            _local_prefix = pc_base  # 例如 http://127.0.0.1:8000/parent-child
+            _public_prefix = _public_origin + "/parent-child"
+            for _key in ("result_url", "status_url", "stream_url"):
+                if result.get(_key):
+                    result[_key] = result[_key].replace(_local_prefix, _public_prefix)
+            logger.info("[orchestrator] parent_child result_url 已替換為公開 URL: %s", result.get("result_url"))
+
+        return result
 
     # 成人/兒童：URL prefill 模式
     # api_base 三層 fallback：extra 指定 > settings.PUBLIC_BASE_URL > RAILWAY_PUBLIC_DOMAIN
