@@ -101,6 +101,9 @@
     transition:border-color 0.2s; background:white;
   }
   .form-input:focus { border-color:#00BCD4; }
+  .form-input.field-invalid { border-color:#e53935 !important; background:#fff5f5; }
+  .field-error { display:none; font-size:11px; color:#e53935; margin-top:3px; }
+  .field-error.visible { display:block; }
   /* 密碼欄位 + 顯示/隱藏切換按鈕 */
   .password-wrap { position:relative; }
   .password-wrap > .form-input { padding-right:44px; }
@@ -1648,29 +1651,34 @@
           <div style="text-align:center;color:#aaa;font-size:13px;margin:10px 0;">— 或填寫新受測者 —</div>
 
           <div class="form-group">
-            <label class="form-label">姓名 *</label>
-            <input class="form-input" id="subject-name-input" placeholder="請輸入姓名">
+            <label class="form-label">姓名 <span style="color:#e53935;">*</span></label>
+            <input class="form-input" id="subject-name-input" placeholder="請輸入姓名" oninput="_clearFieldError(this)">
+            <span class="field-error" id="subject-name-error"></span>
           </div>
           <div class="form-group">
-            <label class="form-label">Email *</label>
-            <input class="form-input" type="email" id="subject-email-input" placeholder="example@email.com">
+            <label class="form-label">Email <span style="color:#e53935;">*</span></label>
+            <input class="form-input" type="email" id="subject-email-input" placeholder="example@email.com" oninput="_clearFieldError(this)">
+            <span class="field-error" id="subject-email-error"></span>
           </div>
           <div class="form-group">
-            <label class="form-label">手機 *</label>
-            <input class="form-input" type="tel" id="subject-phone-input" placeholder="09xxxxxxxx">
+            <label class="form-label">手機 <span style="color:#e53935;">*</span></label>
+            <input class="form-input" type="tel" id="subject-phone-input" placeholder="09xxxxxxxx" oninput="_clearFieldError(this)">
+            <span class="field-error" id="subject-phone-error"></span>
           </div>
           <div class="form-group">
-            <label class="form-label">出生日期 *</label>
-            <input class="form-input" type="date" id="subject-birth-input" value="2014-03-15" oninput="updateSubjectAge()" onchange="updateSubjectAge()">
+            <label class="form-label">出生日期 <span style="color:#e53935;">*</span></label>
+            <input class="form-input" type="date" id="subject-birth-input" value="2014-03-15" oninput="updateSubjectAge();_clearFieldError(this)" onchange="updateSubjectAge();_clearFieldError(this)">
             <div id="subject-age-display" style="font-size:11px;color:#00BCD4;margin-top:4px;">📅 目前年齡：12 歲</div>
+            <span class="field-error" id="subject-birth-error"></span>
           </div>
           <div class="form-group">
-            <label class="form-label">性別 *</label>
+            <label class="form-label">性別 <span style="color:#e53935;">*</span></label>
             <div class="radio-group" id="subject-gender-group">
-              <div class="radio-btn selected" data-gender="男" onclick="selectRadio(this)">男</div>
-              <div class="radio-btn" data-gender="女" onclick="selectRadio(this)">女</div>
-              <div class="radio-btn" data-gender="其他" onclick="selectRadio(this)">其他</div>
+              <div class="radio-btn selected" data-gender="男" onclick="selectRadio(this);_clearGroupError('subject-gender-group')">男</div>
+              <div class="radio-btn" data-gender="女" onclick="selectRadio(this);_clearGroupError('subject-gender-group')">女</div>
+              <div class="radio-btn" data-gender="其他" onclick="selectRadio(this);_clearGroupError('subject-gender-group')">其他</div>
             </div>
+            <span class="field-error" id="subject-gender-error"></span>
           </div>
           <div class="form-group">
             <label class="form-label">職業 / 稱謂</label>
@@ -4359,14 +4367,67 @@ async function adminSubjectDelete(id) {
   }
 }
 
+function _showFieldError(inputId, errorId, msg) {
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById(errorId);
+  if (inp) inp.classList.add('field-invalid');
+  if (err) { err.textContent = msg; err.classList.add('visible'); }
+}
+function _clearFieldError(el) {
+  if (!el) return;
+  el.classList.remove('field-invalid');
+  const errEl = document.getElementById(el.id.replace('-input', '-error'));
+  if (errEl) { errEl.textContent = ''; errEl.classList.remove('visible'); }
+}
+function _clearGroupError(groupId) {
+  const err = document.getElementById(groupId.replace('subject-', 'subject-').replace('-group', '-error'));
+  if (err) { err.textContent = ''; err.classList.remove('visible'); }
+  const grp = document.getElementById(groupId);
+  if (grp) grp.style.border = '';
+}
+
 async function submitSubject() {
   const v = _getSubjectFormValues();
 
-  // 基本驗證
-  if (!v.name)            { showToast('請輸入姓名', 'warn'); return; }
-  if (!v.email || !v.email.includes('@')) { showToast('請輸入有效的 Email', 'warn'); return; }
-  if (!v.phone)           { showToast('請輸入手機', 'warn'); return; }
-  if (!v.birth_date)      { showToast('請選擇出生日期', 'warn'); return; }
+  // 清除所有舊的錯誤狀態
+  ['subject-name-input','subject-email-input','subject-phone-input','subject-birth-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('field-invalid');
+  });
+  ['subject-name-error','subject-email-error','subject-phone-error','subject-birth-error','subject-gender-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = ''; el.classList.remove('visible'); }
+  });
+
+  // 逐一驗證必填欄位
+  let firstError = null;
+  if (!v.name) {
+    _showFieldError('subject-name-input', 'subject-name-error', '請輸入姓名');
+    firstError = firstError || 'subject-name-input';
+  }
+  if (!v.email || !v.email.includes('@')) {
+    _showFieldError('subject-email-input', 'subject-email-error', v.email ? '請輸入有效的 Email（需包含 @）' : '請輸入 Email');
+    firstError = firstError || 'subject-email-input';
+  }
+  if (!v.phone) {
+    _showFieldError('subject-phone-input', 'subject-phone-error', '請輸入手機號碼');
+    firstError = firstError || 'subject-phone-input';
+  }
+  if (!v.birth_date) {
+    _showFieldError('subject-birth-input', 'subject-birth-error', '請選擇出生日期');
+    firstError = firstError || 'subject-birth-input';
+  }
+  if (!v.gender) {
+    const errEl = document.getElementById('subject-gender-error');
+    if (errEl) { errEl.textContent = '請選擇性別'; errEl.classList.add('visible'); }
+    firstError = firstError || 'subject-gender-group';
+  }
+  if (firstError) {
+    const el = document.getElementById(firstError);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('請填寫所有必填欄位（標有 * 的欄位）', 'warn');
+    return;
+  }
 
   // 全域變數（供後續畫面使用）
   _currentSubjectName   = v.name;
