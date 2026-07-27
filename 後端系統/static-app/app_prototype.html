@@ -5302,10 +5302,11 @@ let _eegSimState = null;        // 模擬器內部 state
 let _currentReportType  = '';
 
 async function createPaymentOrder(reportType, amount, subjectName) {
+  // 使用 apiFetch 確保自動帶入 Authorization Bearer token
+  // 這樣後端才能把 consultant_id / consultant_name 寫入付款記錄
   try {
-    const resp = await fetch(`${API_BASE}/payments/create`, {
+    const resp = await apiFetch('/payments/create', {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ report_type: reportType, amount, subject_name: subjectName })
     });
     const data = await resp.json();
