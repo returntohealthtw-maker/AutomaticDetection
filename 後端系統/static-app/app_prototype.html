@@ -8636,8 +8636,18 @@ async function _loadVipAssignPane() {
     ]);
     if (!rPay.ok || !rCons.ok) throw new Error('API 錯誤');
 
-    const { payments } = await rPay.json();
+    const { payments: rawPayments } = await rPay.json();
     _vipAssignConsultants = await rCons.json();   // [{consultant_id, name, ...}]
+
+    // 同一受測者可能有多筆 VIP 付款，只保留最新（payment_id 最大）那筆
+    const byName = {};
+    (rawPayments || []).forEach(p => {
+      if (!p.subject_name) return;
+      if (!byName[p.subject_name] || p.payment_id > byName[p.subject_name].payment_id) {
+        byName[p.subject_name] = p;
+      }
+    });
+    const payments = Object.values(byName);
 
     if (!payments || payments.length === 0) {
       listEl.innerHTML = '<div style="text-align:center;color:#4caf50;padding:40px;font-size:14px;">✅ 所有 VIP 付款都已指派顧問！</div>';
