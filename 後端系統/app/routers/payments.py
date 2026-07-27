@@ -816,15 +816,16 @@ def my_payments(
     admin 可看全部；一般顧問只看自己的。
     """
     user = require_user(authorization, db)
+    is_admin = user.role == "admin"
+
     q = db.query(M.Payment)
-    if user.role != "admin":
+    if not is_admin:
         q = q.filter(M.Payment.consultant_id == user.consultant_id)
     rows = q.order_by(M.Payment.created_at.desc()).limit(limit).all()
 
-    is_admin = user.role == "admin"
     out = []
     for r in rows:
-        item = {
+        out.append({
             "payment_id":        r.payment_id,
             "order_id":          r.order_id,
             "subject_name":      r.subject_name,
@@ -840,12 +841,83 @@ def my_payments(
             "created_at":        r.created_at,
             "paid_at":           r.paid_at,
             "notes":             r.notes,
-        }
-        if is_admin:
-            item["_consultant_id"]   = r.consultant_id
-            item["_consultant_name"] = r.consultant_name
-        out.append(item)
+        })
     return {"ok": True, "count": len(out), "payments": out}
+
+
+@router.patch("/{payment_id}/assign-consultant")
+def assign_payment_consultant(
+    payment_id: int,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    [Admin only] 將付款記錄指派給特定顧問（設定 consultant_id）。
+    body: { "consultant_id": <int> }
+    用途：VIP 付款建立時若沒有設顧問歸屬，管理員可在此補指派。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要管理員權限")
+
+    payment = db.query(M.Payment).filter(M.Payment.payment_id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="付款記錄不存在")
+
+    new_cid = body.get("consultant_id")
+    if new_cid is None:
+        raise HTTPException(status_code=422, detail="缺少 consultant_id 欄位")
+
+    # 查顧問是否存在
+    from app.core.models import Consultant as MConsultant
+    cons = db.query(MConsultant).filter(MConsultant.consultant_id == new_cid).first()
+    if not cons:
+        raise HTTPException(status_code=404, detail=f"顧問 {new_cid} 不存在")
+
+    payment.consultant_id   = new_cid
+    payment.consultant_name = cons.name
+    db.commit()
+    return {
+        "ok": True,
+        "payment_id": payment_id,
+        "consultant_id": new_cid,
+        "consultant_name": cons.name,
+    }
+
+
+@router.get("/admin/vip-unassigned")
+def list_vip_unassigned(
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    [Admin only] 列出尚未指派顧問的 VIP 付款記錄（consultant_id = NULL）。
+    """
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要管理員權限")
+
+    rows = db.query(M.Payment).filter(
+        M.Payment.report_type.in_(["life_vip", "child_vip"]),
+        M.Payment.status == "paid",
+        M.Payment.consultant_id.is_(None),
+    ).order_by(M.Payment.payment_id.desc()).all()
+
+    return {
+        "ok": True,
+        "count": len(rows),
+        "payments": [
+            {
+                "payment_id":   r.payment_id,
+                "subject_name": r.subject_name,
+                "report_type":  r.report_type,
+                "paid_at":      r.paid_at,
+                "created_at":   r.created_at,
+            }
+            for r in rows
+        ],
+    }
 
 
 def _session_has_valid_eeg(

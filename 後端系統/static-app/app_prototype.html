@@ -1197,6 +1197,7 @@
           <button class="admin-tab"        data-tab="reports"   onclick="switchAdminTab('reports')">📁 報告管理</button>
           <button class="admin-tab"        data-tab="monitor"   onclick="switchAdminTab('monitor')">🔍 生成監看</button>
           <button class="admin-tab"        data-tab="eeg-compare" onclick="switchAdminTab('eeg-compare')">🔬 腦波比對</button>
+          <button class="admin-tab"        data-tab="vip-assign"  onclick="switchAdminTab('vip-assign')">💳 VIP 指派</button>
         </div>
 
         <!-- ── 帳號審核分頁 ─────────────────────────────────────── -->
@@ -1439,6 +1440,15 @@
             <button class="btn btn-sm" style="background:#1976d2;color:white;font-size:11px;padding:6px 10px;flex-shrink:0;" onclick="renderAdminMonitor()">🔄 立即更新</button>
           </div>
           <div id="admin-monitor-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
+        </div>
+
+        <!-- ── VIP 付款指派分頁（admin only）──────────────────────── -->
+        <div id="admin-pane-vip-assign" style="display:none;flex-direction:column;flex:1;overflow:hidden;background:#f5f7fa;">
+          <div style="background:#4a148c;color:white;padding:10px 16px;display:flex;gap:8px;align-items:center;">
+            <span style="font-size:12px;flex:1;">💳 VIP 付款歸屬指派 ─ 將未指派顧問的 VIP 付款分配給對應顧問，使顧問可在關係報告中看到該客戶。</span>
+            <button onclick="_loadVipAssignPane()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:11px;padding:6px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">🔄 重新載入</button>
+          </div>
+          <div id="vip-assign-list" style="flex:1;overflow-y:auto;padding:12px 16px 24px;"></div>
         </div>
       </div>
 
@@ -5871,11 +5881,12 @@ function _persistEegStats(stats) {
     return window._lastEegPersistPromise;
   }
 
-  // ── 瀏覽器 / 非 Android WebView 路徑：使用 /eeg/save-stats ─────────────────
+  // ── 瀏覽器 / 非 Android WebView 路徑：使用 /eeg/firebase-save ───────────────
+  // 資料直接存入 Firebase eeg_features，不寫本地 PostgreSQL / SQLite。
   window._lastEegPersistPromise = (async () => {
     try {
       const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
-      const r = await apiFetch('/eeg/save-stats', {
+      const r = await apiFetch('/eeg/firebase-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5883,10 +5894,7 @@ function _persistEegStats(stats) {
           subject_birthday:      (document.getElementById('subject-birth-input')||{}).value || '',
           subject_gender:        _currentSubjectGender || '',
           subject_age:           _currentSubjectAge,
-          subject_id:            _currentSubjectId,
           report_type:           reportType,
-          order_id:              _currentOrderId || null,
-          paid_amount:           null,
           sample_count:          stats.sample_count,
           attention_percentage:  stats.attention_percentage,
           meditation_percentage: stats.meditation_percentage,
@@ -5896,23 +5904,27 @@ function _persistEegStats(stats) {
       });
       if (r && r.ok) {
         const d = await r.json();
-        window._lastEegSessionId = d.session_id;
-        window._lastFirebaseSyncOk = d.firebase_sync_ok || false;
-        window._lastFirebaseSessionId = d.firebase_session_id || null;
-        window._lastQeegBandScores = d.qeeg_band_scores || null;
-        window._lastQeegSignalGrade = d.qeeg_signal_grade || null;
-        window._lastQeegAbilityScores = d.qeeg_ability_scores || null;
-        const fbStatus = d.firebase_sync_ok
-          ? `Firebase ✓ (${d.captures_saved || 0} 筆)`
-          : 'Firebase 同步失敗（資料已存 PostgreSQL）';
-        console.log(`[EEG] 已寫入 DB session_id=${d.session_id}, ${fbStatus}`);
-        return d.session_id;
+        // firebase-save 只回傳 firebase_session_id，沒有 session_id（不寫 DB）
+        window._lastEegSessionId        = null;
+        window._lastFirebaseSyncOk      = true;
+        window._lastFirebaseSessionId   = d.firebase_session_id || null;
+        window._lastQeegBandScores      = null;
+        window._lastQeegSignalGrade     = null;
+        window._lastQeegAbilityScores   = d.qeeg ? Object.fromEntries(
+          Object.entries(d.qeeg).map(([k, v]) => [k, { score: v }])
+        ) : null;
+        console.log(`[EEG] Firebase-Only 儲存成功 fb_sid=${d.firebase_session_id}`,
+                    `storage=${d.storage}`);
+        // 回傳 firebase_session_id 讓後續報告使用
+        return d.firebase_session_id || null;
       } else {
-        console.warn('[EEG] save-stats 失敗', r && r.status);
+        let errMsg = `HTTP ${r ? r.status : 'N/A'}`;
+        try { const e = await r.json(); errMsg = e.detail || errMsg; } catch (_) {}
+        console.warn('[EEG] firebase-save 失敗:', errMsg);
         return null;
       }
     } catch (e) {
-      console.warn('[EEG] save-stats 例外', e);
+      console.warn('[EEG] firebase-save 例外', e);
       return null;
     }
   })();
@@ -8181,9 +8193,9 @@ async function openRelation(type) {
   // 先跳頁、顯示載入中
   document.getElementById('relation-select-title').textContent = cfg.title;
   document.getElementById('relation-hint').innerHTML =
-    `💡 以下為已完成 <b>VIP 版個人報告</b>的人員，請選擇 <b>${cfg.minPersons} 位${cfg.minPersons===3?' 以上':''}</b>，選定後系統將直接生成「${cfg.label}」，無需重新檢測。`;
+    `💡 以下為已有<b>腦波檢測記錄</b>的人員，請選擇 <b>${cfg.minPersons} 位${cfg.minPersons===3?' 以上':''}</b>，選定後系統將直接生成「${cfg.label}」，無需重新檢測。`;
   document.getElementById('relation-list').innerHTML =
-    '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入 VIP 名單中…</div>';
+    '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">載入名單中…</div>';
   document.getElementById('relation-count-label').textContent = '可選人員';
   document.getElementById('relation-empty').style.display = 'none';
   document.getElementById('relation-selected-info').style.display = 'none';
@@ -8575,6 +8587,7 @@ function switchAdminTab(tab) {
     reports:        '報告管理 · 雲端 PDF',
     monitor:        '報告生成監看 · 即時進度與錯誤日誌',
     'eeg-compare':  '🔬 腦波比對診斷',
+    'vip-assign':   '💳 VIP 付款 · 顧問歸屬指派',
   };
   const titleEl = document.getElementById('admin-console-title');
   if (titleEl) titleEl.textContent = titleMap[tab] || '管理員後台';
@@ -8589,6 +8602,8 @@ function switchAdminTab(tab) {
   if (monitorEl) monitorEl.style.display = (tab === 'monitor') ? 'flex' : 'none';
   const eegCmpEl = document.getElementById('admin-pane-eeg-compare');
   if (eegCmpEl) eegCmpEl.style.display = (tab === 'eeg-compare') ? 'flex' : 'none';
+  const vipAssignEl = document.getElementById('admin-pane-vip-assign');
+  if (vipAssignEl) vipAssignEl.style.display = (tab === 'vip-assign') ? 'flex' : 'none';
 
   // 離開監看分頁時停止自動更新
   if (tab !== 'monitor' && _monitorTimer) { clearInterval(_monitorTimer); _monitorTimer = null; }
@@ -8601,6 +8616,92 @@ function switchAdminTab(tab) {
   else if (tab === 'reports')      renderAdminReports();
   else if (tab === 'monitor')      { renderAdminMonitor(); _toggleMonitorAutorefresh(); }
   else if (tab === 'eeg-compare')  loadEegCompare();
+  else if (tab === 'vip-assign')   _loadVipAssignPane();
+}
+
+// ─── VIP 付款顧問歸屬指派（admin only）────────────────────────────────────────
+let _vipAssignConsultants = [];   // 顧問清單 cache
+
+async function _loadVipAssignPane() {
+  const listEl = document.getElementById('vip-assign-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">⏳ 載入中…</div>';
+
+  try {
+    // 同時取：未指派的 VIP 付款 + 所有顧問清單
+    const [rPay, rCons] = await Promise.all([
+      apiFetch('/payments/admin/vip-unassigned'),
+      apiFetch('/auth/consultants'),
+    ]);
+    if (!rPay.ok || !rCons.ok) throw new Error('API 錯誤');
+
+    const { payments } = await rPay.json();
+    _vipAssignConsultants = await rCons.json();   // [{consultant_id, name, ...}]
+
+    if (!payments || payments.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;color:#4caf50;padding:40px;font-size:14px;">✅ 所有 VIP 付款都已指派顧問！</div>';
+      return;
+    }
+
+    const consOptions = _vipAssignConsultants
+      .filter(c => c.role !== 'admin')
+      .map(c => `<option value="${c.consultant_id}">${c.name}</option>`)
+      .join('');
+
+    listEl.innerHTML = `
+      <div style="margin-bottom:12px;font-size:12px;color:#888;">
+        共 <b>${payments.length}</b> 筆 VIP 付款尚未指派顧問。請為每位受測者選擇所屬顧問後點「指派」。
+      </div>
+      ${payments.map(p => {
+        const dt = p.paid_at ? new Date(p.paid_at * 1000).toLocaleDateString('zh-TW') : '—';
+        return `
+        <div id="vip-row-${p.payment_id}" style="background:white;border:1px solid #e0e0e0;border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:120px;">
+            <div style="font-weight:600;font-size:14px;">${p.subject_name || '—'}</div>
+            <div style="font-size:11px;color:#888;">付款ID: ${p.payment_id} &nbsp;|&nbsp; ${p.report_type} &nbsp;|&nbsp; ${dt}</div>
+          </div>
+          <select id="vip-cons-sel-${p.payment_id}" style="padding:6px 10px;border:1px solid #ccc;border-radius:8px;font-size:13px;flex-shrink:0;">
+            <option value="">— 選擇顧問 —</option>
+            ${consOptions}
+          </select>
+          <button onclick="_assignVipConsultant(${p.payment_id})"
+            style="background:#7C3AED;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">
+            指派
+          </button>
+          <span id="vip-assign-msg-${p.payment_id}" style="font-size:12px;color:#4caf50;flex-shrink:0;"></span>
+        </div>`;
+      }).join('')}
+    `;
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:#e53935;padding:20px;font-size:13px;">載入失敗：${e.message}</div>`;
+  }
+}
+
+async function _assignVipConsultant(paymentId) {
+  const sel = document.getElementById(`vip-cons-sel-${paymentId}`);
+  const msg = document.getElementById(`vip-assign-msg-${paymentId}`);
+  if (!sel || !sel.value) { if (msg) msg.textContent = '請先選擇顧問'; return; }
+
+  const consultantId = parseInt(sel.value, 10);
+  try {
+    const r = await apiFetch(`/payments/${paymentId}/assign-consultant`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consultant_id: consultantId }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+
+    // 指派成功：隱藏這一列
+    if (msg) msg.textContent = `✅ 已指派給 ${data.consultant_name}`;
+    const row = document.getElementById(`vip-row-${paymentId}`);
+    if (row) {
+      row.style.opacity = '0.4';
+      row.style.pointerEvents = 'none';
+    }
+  } catch (e) {
+    if (msg) { msg.style.color = '#e53935'; msg.textContent = `❌ ${e.message}`; }
+  }
 }
 
 // ─── 腦波比對診斷：逐一顯示最近 N 筆 session 的頻段平均值 ─────────────────────
