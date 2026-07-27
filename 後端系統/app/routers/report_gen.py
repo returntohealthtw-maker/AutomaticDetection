@@ -562,17 +562,35 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
         merged_extra["session_id"]  = req.session_id
         merged_extra["subject_id"]  = req.subject_id
 
-        # 夫妻報告：若 extra 含 wife_session_id，自動從 DB 補充第二人腦波資料
+        # 夫妻報告：若 extra 含 wife_session_id，自動從 DB 補充第二人腦波資料及基本資訊
         if req.report_type in ("marital",) and "wife_session_id" in merged_extra:
             wife_sid = merged_extra["wife_session_id"]
-            if wife_sid and not merged_extra.get("wife_brainwave_data"):
+            if wife_sid:
                 try:
-                    wife_bw = _bw_from_session(db, int(wife_sid))
-                    if wife_bw:
-                        merged_extra["wife_brainwave_data"] = wife_bw
-                        logger.info("[report-gen/start] 夫妻第二人腦波已從 session_id=%s 補充", wife_sid)
+                    wife_sid_int = int(wife_sid)
+                    # 補充腦波
+                    if not merged_extra.get("wife_brainwave_data"):
+                        wife_bw = _bw_from_session(db, wife_sid_int)
+                        if wife_bw:
+                            merged_extra["wife_brainwave_data"] = wife_bw
+                            logger.info("[report-gen/start] 夫妻第二人腦波已從 session_id=%s 補充", wife_sid)
+                    # 從 session 補充太太的年齡與檢測日期（前端未送或為 0 時才補）
+                    wife_sess = db.query(M.Session).filter(
+                        M.Session.session_id == wife_sid_int
+                    ).first()
+                    if wife_sess:
+                        if not merged_extra.get("wife_age"):
+                            age = getattr(wife_sess, "subject_age", None) or 0
+                            if age:
+                                merged_extra["wife_age"] = age
+                        if not merged_extra.get("wife_detected_at"):
+                            ca = getattr(wife_sess, "created_at", None)
+                            if ca:
+                                import datetime as _dt
+                                merged_extra["wife_detected_at"] = _dt.datetime.fromtimestamp(
+                                    ca).strftime("%Y-%m-%d")
                 except Exception as e:
-                    logger.warning("[report-gen/start] 夫妻第二人腦波補充失敗: %s", e)
+                    logger.warning("[report-gen/start] 夫妻第二人資料補充失敗: %s", e)
 
         # 親子報告：若 extra.members 含 session_id，自動補充各成員腦波資料
         if req.report_type == "parent_child" and merged_extra.get("members"):

@@ -217,6 +217,7 @@ def _call_marital(
         "wife": {
             "name":      wife.get("name", "太太"),
             "age":       int(wife.get("age", 0) or 0),
+            "detected_at": (meta or {}).get("wife_detected_at", ""),
             "brainwave": wife.get("brainwave") or _bw_to_seven_indices(wife.get("bw", {})),
         },
     }

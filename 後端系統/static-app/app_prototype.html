@@ -8318,6 +8318,8 @@ async function generateRelationReport() {
       husband_session_id: p0 ? p0.session_id : null,
       wife_name:          p1 ? p1.name : '',
       wife_session_id:    p1 ? p1.session_id : null,
+      // 補充太太的年齡，讓報告正確顯示（後端也會從 session 補充，這是雙保險）
+      wife_age:           p1 ? (p1.age || null) : null,
     };
   } else if (reportType === 'parent_child') {
     const roleMap   = ['dad', 'mom', 'child1', 'child2'];
