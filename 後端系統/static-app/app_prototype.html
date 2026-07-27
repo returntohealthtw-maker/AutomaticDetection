@@ -3663,6 +3663,8 @@ function _showSubjectDetail(idx) {
   if (!s) return;
   const subjectName = s.name || '—';
   const sessions = (window._earningsSessions || []).filter(x => x.subject_name === subjectName);
+  const isAdmin = (_currentUser || {}).role === 'admin';
+
   const REPORT_ZH = {
     adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
     marital:'婚姻關係', parent_child:'親子關係',
@@ -3675,23 +3677,69 @@ function _showSubjectDetail(idx) {
     return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
   };
 
+  // 基本資料區塊
+  const age     = s.age  != null ? `${s.age} 歲` : '—';
+  const gender  = s.gender === 'M' ? '男' : s.gender === 'F' ? '女' : '—';
+  const occ     = s.occupation ? `<span style="font-size:12px;color:#888;">💼 ${s.occupation}</span>` : '';
+  const basicHtml = `
+    <div style="background:#f4f6fb;border-radius:12px;padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:#2D3561;margin-bottom:8px;">👤 基本資料</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:#444;">
+        <div><span style="color:#999;">年齡</span> <strong>${age}</strong></div>
+        <div><span style="color:#999;">性別</span> <strong>${gender}</strong></div>
+        ${s.birthday ? `<div style="grid-column:1/-1;"><span style="color:#999;">生日</span> <strong>${s.birthday}</strong></div>` : ''}
+        ${occ ? `<div style="grid-column:1/-1;">${occ}</div>` : ''}
+      </div>
+    </div>`;
+
   let sessHtml = '';
   if (sessions.length === 0) {
     sessHtml = `<div style="text-align:center;padding:24px;color:#aaa;font-size:13px;">尚未有腦波檢測紀錄</div>`;
   } else {
-    sessions.forEach(s => {
-      const dateStr  = fmtTs(s.created_at);
-      const rtLabel  = REPORT_ZH[s.report_type] || s.report_type || '—';
-      const hasRpt   = s.report_status === 'completed' && s.report_url;
-      const statusDot = hasRpt ? '🟢' : s.report_status === 'generating' ? '🟡' : s.report_status === 'failed' ? '🔴' : '⚪';
-      const mbtiChip = s.mbti ? `<span style="background:#ede7f6;color:#4527a0;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;">${s.mbti}</span>` : '';
-      const scoreChip = s.overall_score != null ? `<span style="background:#e8f5e9;color:#2e7d32;padding:1px 8px;border-radius:8px;font-size:11px;">綜合 ${s.overall_score}</span>` : '';
-      const rptBtn = hasRpt
-        ? `<a href="${s.report_url}" target="_blank"
-               style="display:inline-block;margin-top:8px;padding:6px 14px;background:#2D3561;color:white;border-radius:8px;font-size:12px;text-decoration:none;">
-             📄 查看報告
-           </a>`
+    sessions.forEach(sess => {
+      const dateStr   = fmtTs(sess.created_at);
+      const rtLabel   = REPORT_ZH[sess.report_type] || sess.report_type || '—';
+      const hasRpt    = sess.report_status === 'completed' && sess.report_url;
+      const statusDot = hasRpt ? '🟢' : sess.report_status === 'generating' ? '🟡' : sess.report_status === 'failed' ? '🔴' : '⚪';
+      const mbtiChip  = sess.mbti
+        ? `<span style="background:#ede7f6;color:#4527a0;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:700;">${sess.mbti}</span>`
         : '';
+      const scoreChip = sess.overall_score != null
+        ? `<span style="background:#e8f5e9;color:#2e7d32;padding:1px 8px;border-radius:8px;font-size:11px;">綜合 ${sess.overall_score}</span>`
+        : '';
+
+      // qEEG / BrainDNA 指標（壓力 / 平衡 / 活力）
+      const indicatorBar = (label, val, color) => {
+        if (val == null) return '';
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <span style="font-size:10px;color:#888;width:28px;flex-shrink:0;">${label}</span>
+          <div style="flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;">
+            <div style="width:${val}%;height:100%;background:${color};border-radius:3px;"></div>
+          </div>
+          <span style="font-size:10px;color:#555;width:24px;text-align:right;">${val}</span>
+        </div>`;
+      };
+      const indicatorsHtml = (sess.mind_stress != null || sess.mind_balance != null || sess.mind_energy != null)
+        ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;">
+            <div style="font-size:10px;color:#999;margin-bottom:6px;">📊 腦波指標</div>
+            ${indicatorBar('壓力', sess.mind_stress, '#ef5350')}
+            ${indicatorBar('平衡', sess.mind_balance, '#42a5f5')}
+            ${indicatorBar('活力', sess.mind_energy, '#66bb6a')}
+          </div>`
+        : '';
+
+      // 顧問只能看到報告完成狀態，不能點開報告 PDF；管理員才有連結
+      const rptStatus = hasRpt
+        ? (isAdmin
+            ? `<a href="${sess.report_url}" target="_blank"
+                   style="display:inline-block;margin-top:8px;padding:6px 14px;background:#2D3561;color:white;border-radius:8px;font-size:12px;text-decoration:none;">
+                 📄 查看報告
+               </a>`
+            : `<div style="margin-top:8px;font-size:11px;color:#2e7d32;font-weight:600;">✅ 報告已完成</div>`)
+        : (sess.report_status === 'generating'
+            ? `<div style="margin-top:8px;font-size:11px;color:#f57c00;font-weight:600;">⏳ 報告生成中</div>`
+            : '');
+
       sessHtml += `
         <div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3699,7 +3747,8 @@ function _showSubjectDetail(idx) {
             <div style="font-size:11px;color:#aaa;">${dateStr}</div>
           </div>
           <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">${mbtiChip}${scoreChip}</div>
-          ${rptBtn}
+          ${indicatorsHtml}
+          ${rptStatus}
         </div>`;
     });
   }
@@ -3726,6 +3775,8 @@ function _showSubjectDetail(idx) {
                 style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
       <div style="overflow-y:auto;padding:16px;flex:1;">
+        ${basicHtml}
+        <div style="font-size:12px;font-weight:700;color:#2D3561;margin-bottom:8px;">🧠 腦波檢測記錄</div>
         ${sessHtml}
       </div>
     </div>
