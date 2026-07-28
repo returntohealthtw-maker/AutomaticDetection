@@ -489,22 +489,23 @@ async def _generate_pdf(session, indices: dict, mbti: dict, avg) -> str:
 
 async def _upload_pdf(pdf_path: str, report_id: int) -> str:
     """
-    上傳 PDF 到 GCS（若未設定 GCS，使用本地路徑）
+    上傳 PDF 到 GCS，回傳永久 base URL（不帶簽名，永久有效）。
+    若 GCS 未設定，使用本地路徑（僅開發環境 fallback）。
     """
-    if not settings.GCS_BUCKET_NAME:
+    from app.services.gcs_uploader import upload_pdf_get_base_url, is_configured
+    if not is_configured():
         # 本地開發模式：直接回傳本地路徑
         base_url = settings.REPORT_BASE_URL
         filename = os.path.basename(pdf_path)
         return f"{base_url}/{filename}"
 
     try:
-        from google.cloud import storage
-        client  = storage.Client(project=settings.GCS_PROJECT_ID)
-        bucket  = client.bucket(settings.GCS_BUCKET_NAME)
-        blob    = bucket.blob(f"reports/{os.path.basename(pdf_path)}")
-        blob.upload_from_filename(pdf_path)
-        blob.make_public()
-        return blob.public_url
+        object_name = f"reports/general/{os.path.basename(pdf_path)}"
+        gcs_url = upload_pdf_get_base_url(pdf_path, object_name)
+        if gcs_url:
+            return gcs_url
+        # 上傳失敗 fallback
+        return f"{settings.REPORT_BASE_URL}/{os.path.basename(pdf_path)}"
     except Exception as e:
         print(f"[WARN] GCS upload failed, using local: {e}")
         return f"{settings.REPORT_BASE_URL}/{os.path.basename(pdf_path)}"
