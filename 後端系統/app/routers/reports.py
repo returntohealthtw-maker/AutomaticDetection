@@ -382,8 +382,9 @@ def record_report(
                 M.Report.session_id == payload.session_id,
                 M.Report.talent_report_kind == _kind,
             ).first()
-        if rep is None:
-            # fallback：同 session_id 且尚未有 kind 標記的報告（舊資料相容）
+            # 若找不到同種類的報告，就新增一筆（不覆蓋其他種類）
+        else:
+            # 沒有 kind 資訊（舊格式）：只更新 session 下第一筆無 kind 記錄
             rep = db.query(M.Report).filter(
                 M.Report.session_id == payload.session_id,
                 M.Report.talent_report_kind == None,  # noqa: E711
