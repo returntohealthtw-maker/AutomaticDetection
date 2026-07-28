@@ -11,6 +11,7 @@ import time
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 import logging
 
@@ -588,7 +589,25 @@ def list_my_sessions(
     user = require_user(authorization, db)
     q = db.query(M.Session)
     if user.role != "admin":
-        q = q.filter(M.Session.consultant_name == user.name)
+        # 撈法（三層 OR 相容舊、新資料）：
+        # 1. consultant_name == user.name（傳統字串比對，相容舊資料）
+        # 2. subject_id IN (此顧問所有 subjects)（via subject_id FK）
+        # 3. subject_name IN (此顧問所有 subjects 的名字，for session 未填 subject_id 的舊資料）
+        my_subjects = (
+            db.query(M.Subject.subject_id, M.Subject.name)
+              .filter(M.Subject.consultant_id == user.consultant_id)
+              .all()
+        )
+        my_subject_ids   = [s.subject_id for s in my_subjects]
+        my_subject_names = [s.name for s in my_subjects]
+
+        conditions = [M.Session.consultant_name == user.name]
+        if my_subject_ids:
+            conditions.append(M.Session.subject_id.in_(my_subject_ids))
+        if my_subject_names:
+            conditions.append(M.Session.subject_name.in_(my_subject_names))
+
+        q = q.filter(or_(*conditions))
     rows = q.order_by(M.Session.session_id.desc()).limit(limit).all()
 
     session_ids = [s.session_id for s in rows]

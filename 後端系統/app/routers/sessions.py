@@ -149,8 +149,31 @@ def upload_session(
         return ms_val // 1000 if ms_val > 10_000_000_000 else ms_val
 
     # 1. 建立場次記錄
+    # 嘗試從 subjects 表找到對應的受測者，填入 subject_id（三種查法）
+    linked_subject_id = None
+    if req.subject_name:
+        # a. 先用 consultant_name 找到對應顧問的 subject
+        consultant_row = db.query(models.Consultant).filter(
+            models.Consultant.name == req.consultant_name
+        ).first() if req.consultant_name else None
+        if consultant_row:
+            subj_row = db.query(models.Subject).filter(
+                models.Subject.name == req.subject_name,
+                models.Subject.consultant_id == consultant_row.consultant_id,
+            ).first()
+            if subj_row:
+                linked_subject_id = subj_row.subject_id
+        # b. 若找不到，只靠 subject_name 全表查（相容 admin 上傳）
+        if linked_subject_id is None:
+            subj_row = db.query(models.Subject).filter(
+                models.Subject.name == req.subject_name
+            ).first()
+            if subj_row:
+                linked_subject_id = subj_row.subject_id
+
     session = models.Session(
         consultant_name  = req.consultant_name,
+        subject_id       = linked_subject_id,
         subject_name     = req.subject_name,
         subject_birthday = req.subject_birthday,
         subject_gender   = req.subject_gender,
