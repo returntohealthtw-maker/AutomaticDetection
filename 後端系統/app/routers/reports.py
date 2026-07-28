@@ -375,7 +375,19 @@ def record_report(
 
     rep = None
     if payload.session_id:
-        rep = db.query(M.Report).filter(M.Report.session_id == payload.session_id).first()
+        # 同 session_id + 同 report 種類才算同一筆，避免不同類型報告互相覆蓋
+        _kind = f"{payload.report_type}_{payload.variant}" if payload.report_type and payload.variant else None
+        if _kind:
+            rep = db.query(M.Report).filter(
+                M.Report.session_id == payload.session_id,
+                M.Report.talent_report_kind == _kind,
+            ).first()
+        if rep is None:
+            # fallback：同 session_id 且尚未有 kind 標記的報告（舊資料相容）
+            rep = db.query(M.Report).filter(
+                M.Report.session_id == payload.session_id,
+                M.Report.talent_report_kind == None,  # noqa: E711
+            ).first()
 
     # 🔑 受測者 FK 解析（避免 callback 寫入孤兒）
     # 1. 若 session 已有 subject_id → 直接用
