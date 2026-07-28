@@ -252,14 +252,15 @@ def _run_full_generation(
             job["save_error"] = str(e)
             logger.error("save report failed: %s", e)
 
-        # ── 生成 PDF + 上傳 GCS + 寫回 DB ────────────────────────────
+        # ── 生成 PDF bytes → 直傳 GCS（不寫本地磁碟）────────────────────────
         pdf_url = None
         if not job.get("cancelled"):
             try:
                 from . import pdf_builder, gcs_uploader
-                pdf_local = f"generated_reports/{job_id}.pdf"
-                pdf_builder.render_report_pdf(
-                    out_path=pdf_local,
+                safe_name = (subject_name or "report").replace("/", "_").replace(" ", "_")
+                object_name = f"reports/{report_type}_{variant}_{safe_name}_{job_id}.pdf"
+
+                pdf_bytes = pdf_builder.render_report_pdf_bytes(
                     subject_name=subject_name,
                     report_type=report_type,
                     variant=variant,
@@ -271,19 +272,15 @@ def _run_full_generation(
                 )
                 job["pdf_status"] = "rendered"
 
-                # 上傳 GCS（取永久 base URL，預覽時再用 signed-url endpoint 重新簽署）
-                from .pdf_builder import REPORTS_LABEL
-                safe_name = (subject_name or "report").replace("/", "_").replace(" ", "_")
-                object_name = f"reports/{report_type}_{variant}_{safe_name}_{job_id}.pdf"
-                gcs_base_url = gcs_uploader.upload_pdf_get_base_url(pdf_local, object_name)
+                gcs_base_url = gcs_uploader.upload_pdf_bytes(pdf_bytes, object_name)
 
                 if gcs_base_url:
                     pdf_url = gcs_base_url
                     job["pdf_status"] = "uploaded"
                     job["pdf_url"] = pdf_url
-                    logger.info("✅ PDF 已上傳 GCS（永久 base URL）→ %s", object_name)
+                    logger.info("✅ PDF bytes 已直傳 GCS → %s", object_name)
                 else:
-                    # GCS 沒設好 → 用主後端的下載端點（僅限容器存活期間有效）
+                    # GCS 未設定，fallback 到本地端點（重新部署後失效）
                     job["pdf_status"] = "local_only"
                     base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
                     if base and not base.startswith("http"):

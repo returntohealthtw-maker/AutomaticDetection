@@ -52,57 +52,18 @@ def _signed_days() -> int:
 
 def upload_pdf(local_path: str, object_name: str) -> Optional[str]:
     """
-    上傳 PDF 到 GCS，回傳一個 7 天有效的 signed URL（用於 email 連結）。
-
-    失敗回 None；呼叫端可決定是否 fallback。
-    """
-    if not is_configured():
-        logger.warning("GCS 未設定（缺 GCS_BUCKET_NAME 或 GCP_SERVICE_ACCOUNT_JSON）")
-        return None
-
-
-def upload_pdf_get_base_url(local_path: str, object_name: str) -> Optional[str]:
-    """
-    上傳 PDF 到 GCS，回傳永久 base URL（不帶簽名、永久有效）。
-    格式：https://storage.googleapis.com/{bucket}/{object_name}
-
-    供儲存在 DB；需要可存取連結時，再呼叫 generate_fresh_signed_url() 取簽名 URL。
+    上傳 PDF 到 GCS，回傳 7 天有效的 signed URL（供 email 連結用）。
     失敗回 None。
     """
     if not is_configured():
         logger.warning("GCS 未設定（缺 GCS_BUCKET_NAME 或 GCP_SERVICE_ACCOUNT_JSON）")
         return None
-
     if not os.path.isfile(local_path):
         logger.error("GCS 上傳失敗：本地檔案不存在 %s", local_path)
         return None
-
     try:
         from google.cloud import storage
         from google.oauth2 import service_account
-
-        creds_dict = _credentials_dict()
-        credentials = service_account.Credentials.from_service_account_info(creds_dict)
-        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
-        bucket_name = _bucket_name()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(object_name)
-        blob.upload_from_filename(local_path, content_type="application/pdf")
-        base_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
-        logger.info("✅ GCS 上傳成功（base URL）gs://%s/%s", bucket_name, object_name)
-        return base_url
-    except Exception as e:
-        logger.exception("GCS 上傳失敗：%s", e)
-        return None
-
-    if not os.path.isfile(local_path):
-        logger.error("GCS 上傳失敗：本地檔案不存在 %s", local_path)
-        return None
-
-    try:
-        from google.cloud import storage
-        from google.oauth2 import service_account
-
         creds_dict = _credentials_dict()
         credentials = service_account.Credentials.from_service_account_info(creds_dict)
         client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
@@ -119,6 +80,62 @@ def upload_pdf_get_base_url(local_path: str, object_name: str) -> Optional[str]:
         return url
     except Exception as e:
         logger.exception("GCS 上傳失敗：%s", e)
+        return None
+
+
+def upload_pdf_get_base_url(local_path: str, object_name: str) -> Optional[str]:
+    """
+    上傳 PDF 到 GCS（從本地檔案），回傳永久 base URL。
+    """
+    if not is_configured():
+        logger.warning("GCS 未設定（缺 GCS_BUCKET_NAME 或 GCP_SERVICE_ACCOUNT_JSON）")
+        return None
+    if not os.path.isfile(local_path):
+        logger.error("GCS 上傳失敗：本地檔案不存在 %s", local_path)
+        return None
+    try:
+        from google.cloud import storage
+        from google.oauth2 import service_account
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket_name = _bucket_name()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        blob.upload_from_filename(local_path, content_type="application/pdf")
+        base_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
+        logger.info("✅ GCS 上傳成功（base URL）gs://%s/%s", bucket_name, object_name)
+        return base_url
+    except Exception as e:
+        logger.exception("GCS 上傳失敗：%s", e)
+        return None
+
+
+def upload_pdf_bytes(pdf_bytes: bytes, object_name: str) -> Optional[str]:
+    """
+    直接把 PDF bytes 上傳到 GCS，不寫本地磁碟。
+    回傳永久 base URL（https://storage.googleapis.com/{bucket}/{object_name}）。
+    失敗回 None。
+    """
+    if not is_configured():
+        logger.warning("GCS 未設定（缺 GCS_BUCKET_NAME 或 GCP_SERVICE_ACCOUNT_JSON）")
+        return None
+    try:
+        from google.cloud import storage
+        from google.oauth2 import service_account
+        import io
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket_name = _bucket_name()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        blob.upload_from_file(io.BytesIO(pdf_bytes), content_type="application/pdf")
+        base_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
+        logger.info("✅ GCS bytes 上傳成功 gs://%s/%s (%d bytes)", bucket_name, object_name, len(pdf_bytes))
+        return base_url
+    except Exception as e:
+        logger.exception("GCS bytes 上傳失敗：%s", e)
         return None
 
 

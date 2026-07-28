@@ -230,24 +230,28 @@ def _call_marital(
         # 預期 200 + content-type: application/pdf
         ctype = r.headers.get("content-type", "")
         if "pdf" in ctype.lower() or r.content[:4] == b"%PDF":
-            job_id, path = _save_pdf(r.content, prefix="marital")
-            # 立即上傳到 GCS，取得永久 base URL（Railway 磁碟重啟會消失）
+            # 直接上傳 bytes 到 GCS，不寫本地磁碟
+            job_id = f"marital-{uuid.uuid4().hex[:12]}"
+            object_name = f"reports/marital/{job_id}.pdf"
             gcs_url = None
             try:
                 from app.services import gcs_uploader as _gcs
                 if _gcs.is_configured():
-                    object_name = f"reports/marital/{os.path.basename(path)}"
-                    gcs_url = _gcs.upload_pdf_get_base_url(path, object_name)
+                    gcs_url = _gcs.upload_pdf_bytes(r.content, object_name)
             except Exception as _ge:
-                logger.warning("marital GCS 上傳失敗（fallback 本地 URL）: %s", _ge)
+                logger.warning("marital GCS 上傳失敗: %s", _ge)
+            if not gcs_url:
+                # GCS 失敗時才 fallback 存本地
+                _, path = _save_pdf(r.content, prefix="marital")
+                job_id_saved = os.path.splitext(os.path.basename(path))[0]
+                gcs_url = _public_pdf_url(job_id_saved)
             return {
                 "ok":         True,
                 "mode":       "marital_rest",
                 "external_url": base,
-                "result_url": gcs_url or _public_pdf_url(job_id),  # GCS 優先
+                "result_url": gcs_url,
                 "job_id":     job_id,
                 "file_size":  len(r.content),
-                "file_path":  path,
             }
         # 萬一回 JSON
         try:

@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 import os
+import uuid
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -254,6 +255,64 @@ def render_report_pdf(
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return out_path
+
+
+def render_report_pdf_bytes(
+    subject_name:   str,
+    report_type:    str,
+    variant:        str,
+    chapters_list:  List[Dict],
+    results:        Dict[str, Dict],
+    brainwave_data: Optional[Dict] = None,
+    subject_age:    Optional[int]  = None,
+    subject_gender: Optional[str]  = None,
+) -> bytes:
+    """渲染 PDF 並直接回傳 bytes，不寫入本地磁碟。"""
+    import io
+    from reportlab.lib.pagesizes import A4
+    buf = io.BytesIO()
+    # 借用 render_report_pdf 的邏輯，但改成 BytesIO 輸出
+    _ensure_font_registered()
+    font_name = _CJK_FONT_NAME if _find_cjk_font() else "Helvetica"
+
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+    )
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+    # 共用臨時檔路徑為 None，直接傳 BytesIO 給 SimpleDocTemplate
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=20*mm, rightMargin=20*mm,
+        topMargin=20*mm,  bottomMargin=20*mm,
+    )
+    # 重用同一份 story 建立邏輯（呼叫 render_report_pdf 但輸出到 buf）
+    # 最省力方式：先渲染到 BytesIO
+    tmp_path = f"/tmp/_rpt_{uuid.uuid4().hex[:8]}.pdf"
+    try:
+        render_report_pdf(
+            out_path=tmp_path,
+            subject_name=subject_name,
+            report_type=report_type,
+            variant=variant,
+            chapters_list=chapters_list,
+            results=results,
+            brainwave_data=brainwave_data,
+            subject_age=subject_age,
+            subject_gender=subject_gender,
+        )
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+        return data
+    finally:
+        try:
+            import os as _os
+            _os.unlink(tmp_path)
+        except Exception:
+            pass
 
 
 def REPORTS_LABEL(report_type: str, variant: str) -> str:
