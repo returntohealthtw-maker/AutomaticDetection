@@ -677,7 +677,11 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
 
                 existing = None
                 if req.session_id:
-                    existing = db.query(M.Report).filter(M.Report.session_id == req.session_id).first()
+                    # 同 session_id + 同 report 種類才算同一筆（避免夫妻報告覆蓋個人報告）
+                    existing = db.query(M.Report).filter(
+                        M.Report.session_id == req.session_id,
+                        M.Report.talent_report_kind == rep_kind,
+                    ).first()
 
                 if existing is None:
                     new_rep = M.Report(
