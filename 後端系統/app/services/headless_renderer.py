@@ -372,6 +372,7 @@ def start_headless_job(
         _active_jobs[job_id] = {
             "job_id":        job_id,
             "report_type":   report_type,
+            "variant":       variant,
             "subject_name":  subject_name,
             "subject_email": subject_email,
             "vercel_url":    target_url,
@@ -501,10 +502,19 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                         try:
                             from app.core.database import SessionLocal
                             from app.core import models as _M
+                            # 取出此 job 的 report_type/variant，避免找到其他種類的舊報告
+                            _job_meta = _active_jobs.get(job_id, {})
+                            _rtype    = _job_meta.get("report_type", "")
+                            _rvar     = _job_meta.get("variant", "")
+                            _rkind    = f"{_rtype}_{_rvar}" if _rtype and _rvar else None
                             with SessionLocal() as _db:
-                                rep = _db.query(_M.Report).filter(
-                                    _M.Report.session_id == session_id
-                                ).first()
+                                _q = _db.query(_M.Report).filter(
+                                    _M.Report.session_id == session_id,
+                                )
+                                if _rkind:
+                                    # 有種類：只找同種類的報告（避免找到舊的夫妻/個人報告）
+                                    _q = _q.filter(_M.Report.talent_report_kind == _rkind)
+                                rep = _q.first()
                                 if rep and rep.status == "completed" and rep.pdf_url:
                                     final_msg = f"DB callback 確認完成 (pdf_url={rep.pdf_url[:60]})"
                                     break
@@ -600,10 +610,17 @@ async def _run_job(job_id: str, target_url: str, session_id: Optional[int], api_
                     import json as _json
                     from app.core.database import SessionLocal
                     from app.core import models as _M
+                    _job_meta2 = _active_jobs.get(job_id, {})
+                    _rtype2    = _job_meta2.get("report_type", "")
+                    _rvar2     = _job_meta2.get("variant", "")
+                    _rkind2    = f"{_rtype2}_{_rvar2}" if _rtype2 and _rvar2 else None
                     with SessionLocal() as _db:
-                        rep = _db.query(_M.Report).filter(
-                            _M.Report.session_id == session_id
-                        ).first()
+                        _q2 = _db.query(_M.Report).filter(
+                            _M.Report.session_id == session_id,
+                        )
+                        if _rkind2:
+                            _q2 = _q2.filter(_M.Report.talent_report_kind == _rkind2)
+                        rep = _q2.first()
                         if rep and rep.status in ("generating", "pending"):
                             rep.status = "failed"
                             # 1. 寫入專用 error_message 欄位（管理員後台查詢用）
