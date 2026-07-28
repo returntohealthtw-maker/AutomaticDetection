@@ -158,16 +158,50 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
 
 
 @router.get("/pdf/{job_id}")
-def get_pdf(job_id: str):
-    """下載外部報告系統生成並存好的 PDF"""
+def get_pdf(
+    job_id: str,
+    db: DbSession = Depends(get_db),
+):
+    """下載外部報告系統生成並存好的 PDF。
+    優先從本地磁碟提供（Railway 重啟後不存在），
+    若本地找不到，查 DB 的 report.pdf_url：
+      - 若是 GCS URL → 重新產生 signed URL 並 302 redirect
+      - 否則 404
+    """
     # 防 path traversal
     if "/" in job_id or "\\" in job_id or ".." in job_id:
         raise HTTPException(400, "非法 job_id")
+
+    # 1. 本地磁碟有 → 直接提供
     path = REPORTS_DIR / f"{job_id}.pdf"
-    if not path.exists():
-        raise HTTPException(404, "找不到報告檔案")
-    return FileResponse(str(path), media_type="application/pdf",
-                        filename=f"{job_id}.pdf")
+    if path.exists():
+        return FileResponse(str(path), media_type="application/pdf",
+                            filename=f"{job_id}.pdf")
+
+    # 2. 本地無 → 嘗試從 DB 找此 job_id 對應的報告
+    from fastapi.responses import RedirectResponse
+    from app.services import gcs_uploader as _gcs
+
+    try:
+        rep = (
+            db.query(M.Report)
+              .filter(M.Report.pdf_url.contains(job_id))
+              .order_by(M.Report.report_id.desc())
+              .first()
+        )
+        if rep and rep.pdf_url:
+            pdf_url = rep.pdf_url
+            # 若已是 GCS URL → 產生新 signed URL 後 redirect
+            if "storage.googleapis.com" in pdf_url:
+                fresh = _gcs.generate_fresh_signed_url(pdf_url, days=7)
+                if fresh:
+                    return RedirectResponse(url=fresh, status_code=302)
+                # GCS 在但沒法簽 → 仍嘗試直接 redirect（若 bucket 公開）
+                return RedirectResponse(url=pdf_url, status_code=302)
+    except Exception as _e:
+        logger.warning("get_pdf DB lookup failed: %s", _e)
+
+    raise HTTPException(404, "找不到報告檔案（本地已清除，且無 GCS 備份）")
 
 
 # ─── Pydantic Schemas ────────────────────────────────────────────────────

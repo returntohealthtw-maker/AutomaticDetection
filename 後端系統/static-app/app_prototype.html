@@ -8537,6 +8537,30 @@ function openExternalUrl(url) {
   window.open(url, '_blank', 'noopener');
 }
 
+// 預覽 PDF：先呼叫 signed-url API 取得有效連結，再開啟
+// sessionId: 用於呼叫 /reports/session/{id}/signed-url
+// fallbackUrl: 若 API 失敗時直接開啟的 url（可能已失效）
+async function _previewPdf(sessionId, fallbackUrl) {
+  if (!sessionId && !fallbackUrl) return;
+  // 若 pdf_url 已是 GCS URL，直接呼叫 signed-url
+  try {
+    if (sessionId) {
+      const r = await apiFetch(`/reports/session/${sessionId}/signed-url?days=7`);
+      if (r && r.ok) {
+        const d = await r.json();
+        const url = d.signed_url || d.pdf_url || fallbackUrl;
+        if (url) { openExternalUrl(url); return; }
+      }
+    }
+  } catch(e) { /* ignore */ }
+  // fallback：直接開啟原始 url
+  if (fallbackUrl) {
+    openExternalUrl(fallbackUrl);
+  } else {
+    alert('無法取得報告連結，請重新生成報告。');
+  }
+}
+
 function copyPayLink(anchorId) {
   const a = document.getElementById(anchorId);
   if (!a) return;
@@ -9422,7 +9446,7 @@ function _renderAllSubjectCard(s) {
         ? '<span style="background:#4caf50;color:white;font-size:10px;padding:1px 6px;border-radius:8px;">📧 已寄</span>'
         : '<span style="background:#ff9800;color:white;font-size:10px;padding:1px 6px;border-radius:8px;">⏳ 待寄</span>';
       const pdfBtn = r.pdf_url
-        ? `<a href="${esc(r.pdf_url)}" target="_blank" style="color:#1976d2;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">🔍 預覽 PDF</a>
+        ? `<a href="javascript:void(0)" onclick="_previewPdf(${r.session_id || 'null'}, '${esc(r.pdf_url)}')" style="color:#1976d2;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">🔍 預覽 PDF</a>
            <a href="${esc(r.pdf_url)}" download style="color:#388e3c;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">⬇️ 下載</a>`
         : '<span style="color:#999;font-size:11px;margin-left:6px;">無 PDF</span>';
       return `
@@ -9663,7 +9687,7 @@ function _filterMissingList() {
       ? `<button onclick="_regenerateSessionReport(${s.session_id}, '${(s.subject_name || '').replace(/'/g, "\\'")}')" style="background:#7e57c2;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新生成</button>`
       : '';
     const view = s.has_pdf
-      ? `<a href="${s.pdf_url}" target="_blank" rel="noopener" style="background:#1976d2;color:white;text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;text-align:center;">🔍 預覽 PDF</a>`
+      ? `<button onclick="_previewPdf(${s.session_id}, '${(s.pdf_url||'').replace(/'/g,"\\'")}')" style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;text-align:center;">🔍 預覽 PDF</button>`
       : '';
     const canDelete = s.health !== 'session_failed' && s.health !== 'in_progress';
     const del = canDelete && s.report_id
@@ -10305,7 +10329,7 @@ function _filterAdminReports() {
           ${headlessErrTxt}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <button onclick="openExternalUrl('${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
+          <button onclick="_previewPdf(${r.session_id||'null'}, '${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
           ${r.session_id
             ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>`

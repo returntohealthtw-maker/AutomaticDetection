@@ -231,11 +231,20 @@ def _call_marital(
         ctype = r.headers.get("content-type", "")
         if "pdf" in ctype.lower() or r.content[:4] == b"%PDF":
             job_id, path = _save_pdf(r.content, prefix="marital")
+            # 立即上傳到 GCS，取得永久 base URL（Railway 磁碟重啟會消失）
+            gcs_url = None
+            try:
+                from app.services import gcs_uploader as _gcs
+                if _gcs.is_configured():
+                    object_name = f"reports/marital/{os.path.basename(path)}"
+                    gcs_url = _gcs.upload_pdf_get_base_url(path, object_name)
+            except Exception as _ge:
+                logger.warning("marital GCS 上傳失敗（fallback 本地 URL）: %s", _ge)
             return {
                 "ok":         True,
                 "mode":       "marital_rest",
                 "external_url": base,
-                "result_url": _public_pdf_url(job_id),
+                "result_url": gcs_url or _public_pdf_url(job_id),  # GCS 優先
                 "job_id":     job_id,
                 "file_size":  len(r.content),
                 "file_path":  path,
