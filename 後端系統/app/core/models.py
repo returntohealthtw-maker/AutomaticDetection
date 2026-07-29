@@ -85,7 +85,7 @@ class Session(Base):
     algo_mode = Column(String(20), nullable=True, default="braindna")
 
     captures    = relationship("EegCapture", back_populates="session", cascade="all, delete-orphan")
-    report      = relationship("Report", back_populates="session", uselist=False)
+    reports     = relationship("Report", back_populates="session")
     company     = relationship("Company")
 
 
@@ -122,7 +122,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     report_id    = Column(Integer, primary_key=True, autoincrement=True)
-    session_id   = Column(Integer, ForeignKey("sessions.session_id", ondelete="CASCADE"), unique=True)
+    session_id   = Column(Integer, ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=True, index=True)
     # 受測者主檔 FK（雙保險：即使 session_id 是 NULL，仍可定位到受測者）
     subject_id   = Column(Integer, ForeignKey("subjects.subject_id", ondelete="SET NULL"), nullable=True, index=True)
     status       = Column(String(20), default="pending")  # pending/processing/completed/failed
@@ -140,7 +140,7 @@ class Report(Base):
     created_at   = Column(TIMESTAMP, server_default=func.now())
     completed_at = Column(TIMESTAMP, nullable=True)
 
-    session      = relationship("Session", back_populates="report")
+    session      = relationship("Session", back_populates="reports")
     indices      = relationship("ReportIndex", back_populates="report", cascade="all, delete-orphan")
 
 

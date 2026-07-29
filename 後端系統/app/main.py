@@ -374,6 +374,21 @@ def _run_lightweight_migrations():
     if not has_column("sessions", "algo_mode"):
         pending.append("ALTER TABLE sessions ADD COLUMN algo_mode VARCHAR(20) DEFAULT 'braindna'")
 
+    # ── 結構性修改（約束 / 索引，需單獨執行）────────────────────────────────
+    # 移除 reports.session_id 的 UNIQUE 約束（原先設計一 session 只能一筆報告，
+    # 現在改為允許同一 session 有多種報告類型：personal / marital / parent_child）
+    with engine.connect() as conn:
+        for drop_sql in [
+            "ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_session_id_key",
+            "ALTER TABLE reports DROP CONSTRAINT IF EXISTS uq_reports_session_id",
+        ]:
+            try:
+                conn.execute(text(drop_sql))
+                conn.commit()
+                print(f"[DB-MIGRATE] STRUCTURAL OK: {drop_sql}")
+            except Exception as _se:
+                print(f"[DB-MIGRATE] STRUCTURAL skip: {_se}")
+
     if not pending:
         print("[DB-MIGRATE] all columns up-to-date, nothing to do")
         return
