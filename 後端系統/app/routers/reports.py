@@ -2591,6 +2591,14 @@ def admin_update_report_summary(
     if new_kind is not None:
         updates.append("talent_report_kind = :kind")
         params["kind"] = new_kind
+    new_status = body.get("status")
+    if new_status in ("failed", "generating", "completed", "pending"):
+        updates.append("status = :status")
+        params["status"] = new_status
+    new_pdf_url = body.get("pdf_url")
+    if new_pdf_url is not None:
+        updates.append("pdf_url = :pdf_url")
+        params["pdf_url"] = new_pdf_url or None
     if updates:
         sql = _text("UPDATE reports SET " + ", ".join(updates) + " WHERE report_id = :rid")
         db.execute(sql, params)
