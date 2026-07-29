@@ -2473,6 +2473,31 @@ def admin_link_session(
     }
 
 
+@router.post("/{report_id}/update-summary")
+def admin_update_report_summary(
+    report_id: int,
+    body: dict,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """admin 更新報告的 client_summary（修正關係報告成員資訊）。"""
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "僅 admin 可執行")
+    rep = db.query(M.Report).filter(M.Report.report_id == report_id).first()
+    if not rep:
+        raise HTTPException(404, f"找不到報告 #{report_id}")
+    import json as _json
+    new_summary = body.get("client_summary")
+    if new_summary is not None:
+        rep.client_summary = new_summary if isinstance(new_summary, str) else _json.dumps(new_summary, ensure_ascii=False)
+    new_kind = body.get("talent_report_kind")
+    if new_kind is not None:
+        rep.talent_report_kind = new_kind
+    db.commit()
+    return {"ok": True, "report_id": report_id}
+
+
 @router.post("/{report_id}/manual-link-subject")
 def admin_manual_link_subject(
     report_id: int,
