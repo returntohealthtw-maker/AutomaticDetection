@@ -42,11 +42,32 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]:
     """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。
 
+    優先順序：
+      1. reports._session_to_brainwave_data → 已含 Firebase BrainDNA 優先邏輯，與後台顯示一致
+      2. 若上述失敗，fallback 到 raw captures 本地 BrainDNA 計算
+
     重要：
       - 必須帶 sample_count（前端 / validator 會檢查 ≥ 30）
       - 不能用 `x or 50` 假裝有資料（會把 0 變 50 → 全部 50% bug）
       - 0 / None 用實際讀到的 capture 行數推 sample_count
     """
+    # ── 優先：重用 reports._session_to_brainwave_data（Firebase BrainDNA → pg_raw → db_avg）
+    # 這樣夫妻/親子報告與後台「受測者資訊」腦波數據面板完全一致
+    try:
+        from app.routers.reports import _session_to_brainwave_data as _std_bw
+        result = _std_bw(db, session_id)
+        if result:
+            ba = result.get("bands_avg") or {}
+            sc = result.get("sample_count") or 0
+            # 若 sample_count >= 1（bandTo100 只有 1 筆也允許），且 bands_avg 有資料，直接使用
+            has_bands = any(ba.get(k) for k in ("delta","theta","low_alpha","high_alpha","low_beta","high_beta"))
+            if has_bands:
+                logger.info("[_bw_from_session] session_id=%s 使用 reports._session_to_brainwave_data (source=%s, sample_count=%s)",
+                            session_id, result.get("_source"), sc)
+                return result
+    except Exception as _e:
+        logger.warning("[_bw_from_session] _session_to_brainwave_data 失敗，fallback 到 local BrainDNA: %s", _e)
+
     caps = db.query(M.EegCapture).filter(
         M.EegCapture.session_id == session_id,
         M.EegCapture.is_baseline == 0,
@@ -58,6 +79,7 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     if not caps:
         return None
     n = len(caps)
+
 
     def avg_nz(attr):
         """只把『非 None』的值納入平均，避免被 NULL 拉低到 0"""
