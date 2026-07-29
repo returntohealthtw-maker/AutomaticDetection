@@ -1673,6 +1673,33 @@ def diag() -> dict:
     }
 
 
+@router.get("/diag/report/{report_id}")
+def diag_report(
+    report_id: int,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """診斷：用 raw SQL 直接讀取指定報告的欄位值。"""
+    from sqlalchemy import text as _text
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403)
+    row = db.execute(
+        _text("SELECT report_id, session_id, status, talent_report_kind, length(client_summary), left(pdf_url, 80) FROM reports WHERE report_id = :rid"),
+        {"rid": report_id}
+    ).fetchone()
+    if not row:
+        raise HTTPException(404)
+    return {
+        "report_id": row[0],
+        "session_id": row[1],
+        "status": row[2],
+        "talent_report_kind": row[3],
+        "client_summary_len": row[4],
+        "pdf_url_prefix": row[5],
+    }
+
+
 @router.get("/diag/mbti/{session_id}")
 def diag_mbti(
     session_id: int,
