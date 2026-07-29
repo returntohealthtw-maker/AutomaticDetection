@@ -9451,10 +9451,10 @@ function _renderAllSubjectCard(s) {
         : '<span style="color:#999;font-size:11px;margin-left:6px;">無 PDF</span>';
       return `
         <div style="padding:6px 8px;border-left:3px solid #1976d2;background:#f8fafc;margin:4px 0;border-radius:4px;font-size:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-weight:700;color:#1a3a6e;">#${r.report_id}</span>
+          <span style="font-weight:700;color:#1a3a6e;" title="報告序號（Report ID）">報告 #${r.report_id}</span>
+          <span style="color:#1976d2;font-size:10px;" title="檢測場次序號（Session ID）">檢測 #${r.session_id || '—'}</span>
           <span style="color:#666;">${esc(r.report_kind || r.report_type || '—')}</span>
           ${statusBadge}
-          <span style="color:#999;">Session ${r.session_id || '—'}</span>
           <span style="color:#999;font-size:10px;">${r.completed_at ? esc(r.completed_at.replace('T',' ').slice(0,16)) : ''}</span>
           <div style="flex:1;"></div>
           ${pdfBtn}
@@ -10301,7 +10301,8 @@ function _filterAdminReports() {
         <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:700;color:#1a3a6e;">
             ${isRelation ? '💞' : '👤'} ${isRelation ? memberNames : esc(r.subject_name || '(未知)')}${subjMetaTxt}
-            <span style="color:#888;font-weight:400;font-size:11px;margin-left:4px;">#${r.report_id}</span>
+            <span style="color:#888;font-weight:400;font-size:11px;margin-left:4px;" title="報告序號（Report ID）">報告 #${r.report_id}</span>
+            ${r.session_id != null ? `<span style="color:#1976d2;font-weight:400;font-size:11px;margin-left:4px;" title="檢測場次序號（Session ID）">· 檢測 #${r.session_id}</span>` : ''}
           </div>
           <div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             ${kindBadge}
@@ -10315,7 +10316,7 @@ function _filterAdminReports() {
           <div style="font-size:10px;color:#999;margin-top:3px;">
             🕒 ${r.completed_at ? new Date(r.completed_at).toLocaleString('zh-TW') : '未完成'}
             · ${statusLabel}
-            · <span style="color:#aaa;">Session: ${r.session_id != null ? `<a href="#" onclick="event.preventDefault();_linkReportToSession(${r.report_id},'${esc(r.subject_name||'')}');return false;" title="點擊重新連結到其他 Session" style="color:#1976d2;text-decoration:underline;">#${r.session_id}</a>` : '<a href="#" onclick="event.preventDefault();_linkReportToSession('+r.report_id+',\''+esc(r.subject_name||'')+'\');return false;" style="color:#e65100;font-weight:700;text-decoration:underline;" title="尚未連結 Session，點擊設定">未連結 ⚠️</a>'}</span>
+            · <span style="color:#aaa;">檢測 Session: ${r.session_id != null ? `<a href="#" onclick="event.preventDefault();_linkReportToSession(${r.report_id},'${esc(r.subject_name||'')}');return false;" title="Session ID（點擊重新連結到其他 Session）" style="color:#1976d2;text-decoration:underline;">#${r.session_id}</a>` : '<a href="#" onclick="event.preventDefault();_linkReportToSession('+r.report_id+',\''+esc(r.subject_name||'')+'\');return false;" style="color:#e65100;font-weight:700;text-decoration:underline;" title="尚未連結 Session，點擊設定">未連結 ⚠️</a>'}</span>
           </div>
           ${membersBadge}
           ${r.image_quality === 'ok'
