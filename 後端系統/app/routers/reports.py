@@ -2488,14 +2488,23 @@ def admin_update_report_summary(
     if not rep:
         raise HTTPException(404, f"找不到報告 #{report_id}")
     import json as _json
+    from sqlalchemy import text as _text
+    updates = []
+    params: dict = {"rid": report_id}
     new_summary = body.get("client_summary")
     if new_summary is not None:
-        rep.client_summary = new_summary if isinstance(new_summary, str) else _json.dumps(new_summary, ensure_ascii=False)
+        cs_str = new_summary if isinstance(new_summary, str) else _json.dumps(new_summary, ensure_ascii=False)
+        updates.append("client_summary = :cs")
+        params["cs"] = cs_str
     new_kind = body.get("talent_report_kind")
     if new_kind is not None:
-        rep.talent_report_kind = new_kind
-    db.commit()
-    return {"ok": True, "report_id": report_id}
+        updates.append("talent_report_kind = :kind")
+        params["kind"] = new_kind
+    if updates:
+        sql = _text("UPDATE reports SET " + ", ".join(updates) + " WHERE report_id = :rid")
+        db.execute(sql, params)
+        db.commit()
+    return {"ok": True, "report_id": report_id, "fields_updated": updates}
 
 
 @router.post("/{report_id}/manual-link-subject")
