@@ -1176,6 +1176,7 @@ def _do_regenerate_one(
     session_id: int,
     notify_email: Optional[str],
     variant: str = "full",
+    report_id: Optional[int] = None,
 ) -> dict:
     """單筆重生核心：reset Report、組 brainwave_data、觸發 trigger_external_report。
 
@@ -1194,7 +1195,11 @@ def _do_regenerate_one(
         return {"ok": False, "session_id": session_id,
                 "subject_name": s.subject_name, "error": "找不到腦波資料 (EegCapture 為空)"}
 
-    r = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    r = (
+        db.query(M.Report).filter(M.Report.report_id == report_id).first()
+        if report_id else
+        db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    )
     if r is None:
         import uuid
         r = M.Report(
@@ -1334,6 +1339,7 @@ def _do_regenerate_one(
 class RegenerateReportIn(BaseModel):
     notify_email: Optional[str] = None
     variant:      str = "full"
+    report_id:    Optional[int] = None  # 指定重生哪份報告（同一 session 有多份時使用）
 
 
 @router.post("/sessions/{session_id}/regenerate")
@@ -1354,6 +1360,7 @@ def regenerate_report_for_session(
         db, session_id,
         notify_email=p.notify_email,
         variant=p.variant,
+        report_id=p.report_id,
     )
     if not res.get("ok"):
         raise HTTPException(400, res.get("error") or "重新生成失敗")
