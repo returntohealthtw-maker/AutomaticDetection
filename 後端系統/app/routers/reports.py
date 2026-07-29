@@ -2504,7 +2504,17 @@ def admin_update_report_summary(
         sql = _text("UPDATE reports SET " + ", ".join(updates) + " WHERE report_id = :rid")
         db.execute(sql, params)
         db.commit()
-    return {"ok": True, "report_id": report_id, "fields_updated": updates}
+        # 立即驗讀確認
+        verify_sql = _text("SELECT client_summary, talent_report_kind FROM reports WHERE report_id = :rid")
+        verify_row = db.execute(verify_sql, {"rid": report_id}).fetchone()
+        return {
+            "ok": True,
+            "report_id": report_id,
+            "fields_updated": updates,
+            "verified_kind": verify_row[1] if verify_row else None,
+            "verified_cs_len": len(verify_row[0] or "") if verify_row else -1,
+        }
+    return {"ok": True, "report_id": report_id, "fields_updated": []}
 
 
 @router.post("/{report_id}/manual-link-subject")
