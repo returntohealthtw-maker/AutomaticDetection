@@ -96,26 +96,50 @@ def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]
     def _gv(cap, attr):
         return float(getattr(cap, attr, None) or 0)
 
-    # 排除低品質秒（delta 過低代表電極接觸不良，僅適用原始 ThinkGear 值）
-    good = [c for c in caps if _gv(c, "delta") >= MIN_DELTA_QUALITY]
-    if len(good) < 15:
-        good = caps  # 資料不足時不過濾
+    # ── 偵測資料格式：若 delta 均值 < 1000 視為 bandTo100（已正規化到 0-100）────
+    # 此情況發生在舊版 APP 只存一筆 bandTo100 平均值，直接當 0-100 分使用，
+    # 不能再跑 BrainDNA proportionRange（那是設計給 raw ThinkGear 萬位數值用的）
+    delta_avg = sum(_gv(c, "delta") for c in caps) / max(len(caps), 1)
+    is_band_to_100 = delta_avg < 1000
 
-    prop_sum = {k: 0.0 for k in RAW_KEYS}
-    valid_n  = 0
-    for c in good:
-        uncapped_total = sum(_gv(c, _ATTR[k]) for k in RAW_KEYS)
-        if uncapped_total == 0:
-            continue
-        for k in RAW_KEYS:
-            prop_sum[k] += _clamp(_gv(c, _ATTR[k]), CAP[k]) / uncapped_total
-        valid_n += 1
+    if is_band_to_100:
+        # 直接用 bandTo100 值做平均（不做 proportionRange）
+        def _avg_b(attr):
+            vals = [_gv(c, attr) for c in caps if _gv(c, attr) > 0]
+            return round(sum(vals) / len(vals)) if vals else 50
 
-    if valid_n > 0:
-        sc = {k: round(_proportion_range(prop_sum[k] / valid_n, *_PROP_RANGE[k]) * 100)
-              for k in RAW_KEYS}
+        sc = {
+            "r_delta":  _avg_b("delta"),
+            "r_theta":  _avg_b("theta"),
+            "r_lalpha": _avg_b("low_alpha"),
+            "r_halpha": _avg_b("high_alpha"),
+            "r_lbeta":  _avg_b("low_beta"),
+            "r_hbeta":  _avg_b("high_beta"),
+            "r_lgamma": _avg_b("low_gamma"),
+            "r_hgamma": _avg_b("high_gamma"),
+        }
+        logger.info("[_bw_from_session] session_id=%s 偵測到 bandTo100 格式 (delta_avg=%.1f)，直接使用", session_id, delta_avg)
     else:
-        sc = {k: 50 for k in RAW_KEYS}
+        # 排除低品質秒（delta 過低代表電極接觸不良，僅適用原始 ThinkGear 值）
+        good = [c for c in caps if _gv(c, "delta") >= MIN_DELTA_QUALITY]
+        if len(good) < 15:
+            good = caps  # 資料不足時不過濾
+
+        prop_sum = {k: 0.0 for k in RAW_KEYS}
+        valid_n  = 0
+        for c in good:
+            uncapped_total = sum(_gv(c, _ATTR[k]) for k in RAW_KEYS)
+            if uncapped_total == 0:
+                continue
+            for k in RAW_KEYS:
+                prop_sum[k] += _clamp(_gv(c, _ATTR[k]), CAP[k]) / uncapped_total
+            valid_n += 1
+
+        if valid_n > 0:
+            sc = {k: round(_proportion_range(prop_sum[k] / valid_n, *_PROP_RANGE[k]) * 100)
+                  for k in RAW_KEYS}
+        else:
+            sc = {k: 50 for k in RAW_KEYS}
 
     d_score  = sc["r_delta"];  th_score = sc["r_theta"]
     la_score = sc["r_lalpha"]; ha_score = sc["r_halpha"]
