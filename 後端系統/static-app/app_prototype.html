@@ -8577,12 +8577,13 @@ function openExternalUrl(url) {
 // 預覽 PDF：先呼叫 signed-url API 取得有效連結，再開啟
 // sessionId: 用於呼叫 /reports/session/{id}/signed-url
 // fallbackUrl: 若 API 失敗時直接開啟的 url（可能已失效）
-async function _previewPdf(sessionId, fallbackUrl) {
+async function _previewPdf(sessionId, fallbackUrl, reportId) {
   if (!sessionId && !fallbackUrl) return;
-  // 若 pdf_url 已是 GCS URL，直接呼叫 signed-url
+  // 呼叫 signed-url，若有 reportId 一起帶入（session 有多份報告時必須指定）
   try {
     if (sessionId) {
-      const r = await apiFetch(`/reports/session/${sessionId}/signed-url?days=7`);
+      const qs = reportId ? `?days=7&report_id=${reportId}` : `?days=7`;
+      const r = await apiFetch(`/reports/session/${sessionId}/signed-url${qs}`);
       if (r && r.ok) {
         const d = await r.json();
         const url = d.signed_url || d.pdf_url || fallbackUrl;
@@ -9483,7 +9484,7 @@ function _renderAllSubjectCard(s) {
         ? '<span style="background:#4caf50;color:white;font-size:10px;padding:1px 6px;border-radius:8px;">📧 已寄</span>'
         : '<span style="background:#ff9800;color:white;font-size:10px;padding:1px 6px;border-radius:8px;">⏳ 待寄</span>';
       const pdfBtn = r.pdf_url
-        ? `<a href="javascript:void(0)" onclick="_previewPdf(${r.session_id || 'null'}, '${esc(r.pdf_url)}')" style="color:#1976d2;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">🔍 預覽 PDF</a>
+        ? `<a href="javascript:void(0)" onclick="_previewPdf(${r.session_id || 'null'}, '${esc(r.pdf_url)}', ${r.report_id})" style="color:#1976d2;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">🔍 預覽 PDF</a>
            <a href="${esc(r.pdf_url)}" download style="color:#388e3c;text-decoration:none;font-size:11px;font-weight:600;margin-left:6px;">⬇️ 下載</a>`
         : '<span style="color:#999;font-size:11px;margin-left:6px;">無 PDF</span>';
       return `
@@ -10367,7 +10368,7 @@ function _filterAdminReports() {
           ${headlessErrTxt}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <button onclick="_previewPdf(${r.session_id||'null'}, '${(r.pdf_url||'').replace(/'/g,"\\'")}')" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
+          <button onclick="_previewPdf(${r.session_id||'null'}, '${(r.pdf_url||'').replace(/'/g,"\\'")}', ${r.report_id})" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
           ${sendBtn}
           ${r.session_id
             ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>`

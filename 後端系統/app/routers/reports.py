@@ -30,6 +30,7 @@ BUILD_VERSION = "planc-v15-timeout-45min"
 def get_report_signed_url(
     session_id: int,
     days: int = Query(default=7, ge=1, le=30),
+    report_id: Optional[int] = Query(default=None, description="指定報告 ID（session 有多份報告時必須傳入）"),
     db: Session = Depends(get_db),
 ):
     """
@@ -37,8 +38,23 @@ def get_report_signed_url(
 
     供其他 APP 取得報告 PDF 連結使用（每次請求均產生新的有效連結）。
     - days: 有效天數，預設 7 天，最長 30 天
+    - report_id: 若 session 有多份報告（個人/夫妻等），必須指定哪份
     """
-    rep = db.query(M.Report).filter(M.Report.session_id == session_id).first()
+    q = db.query(M.Report).filter(M.Report.session_id == session_id)
+    if report_id is not None:
+        q = q.filter(M.Report.report_id == report_id)
+    else:
+        # 沒有指定 report_id：優先取個人報告（life_script），其次取第一筆完成的
+        q_completed = q.filter(M.Report.status == "completed", M.Report.pdf_url != None)  # noqa: E711
+        rep = q_completed.order_by(
+            # 個人報告優先（life_script_vip / life_script_full / life_script_trial）
+            M.Report.talent_report_kind.like("life_script%").desc(),
+            M.Report.report_id.desc(),
+        ).first()
+        if not rep:
+            rep = q.first()
+    if report_id is not None:
+        rep = q.first()
     if not rep:
         raise HTTPException(status_code=404, detail="此 session 尚無報告")
     if rep.status != "completed":
