@@ -3672,6 +3672,11 @@ function _showSubjectDetail(idx) {
   const subjectName = s.name || '—';
   const sessions = (window._earningsSessions || []).filter(x => x.subject_name === subjectName);
 
+  // 從 admin 報告快取找出此受測者所有報告（含多種類型）
+  const allReports = (window._adminReportsCache || []).filter(r =>
+    (r.subject_name || '') === subjectName
+  );
+
   const REPORT_ZH = {
     adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
     marital:'婚姻關係', parent_child:'親子關係',
@@ -3739,6 +3744,27 @@ function _showSubjectDetail(idx) {
             ? `<div style="margin-top:8px;font-size:11px;color:#f57c00;font-weight:600;">⏳ 報告生成中</div>`
             : '');
 
+      // 此 session 的所有報告（從 allReports 裡找 session_id 相符的）
+      const sessReports = allReports.filter(r => r.session_id === sess.session_id);
+      const REPORT_KIND_ZH = {
+        life_script_vip:'個人腦波 VIP', life_script_full:'個人腦波完整', life_script_trial:'個人腦波體驗',
+        marital_vip:'夫妻共振 VIP', marital_full:'夫妻共振完整', marital_trial:'夫妻共振體驗',
+        parent_child_vip:'親子共振 VIP', parent_child_full:'親子共振完整',
+        child_full:'兒童天賦完整', child_vip:'兒童天賦 VIP', child_trial:'兒童天賦體驗',
+      };
+      const rptListHtml = sessReports.length > 0
+        ? `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #e0e0e0;">
+            <div style="font-size:10px;color:#999;margin-bottom:4px;">📑 報告列表</div>
+            ${sessReports.map(r => {
+              const kindZh = REPORT_KIND_ZH[r.report_kind] || r.report_kind_zh || r.report_kind || '—';
+              const dot = r.status === 'completed' ? '🟢' : r.status === 'generating' ? '🟡' : r.status === 'failed' ? '🔴' : '⚪';
+              return `<div style="font-size:11px;color:#555;margin-bottom:3px;">
+                ${dot} 報告 #${r.report_id} · ${kindZh}
+              </div>`;
+            }).join('')}
+          </div>`
+        : rptStatus;
+
       sessHtml += `
         <div style="background:#f9f9f9;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3747,7 +3773,7 @@ function _showSubjectDetail(idx) {
           </div>
           <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">${scoreChip}</div>
           ${indicatorsHtml}
-          ${rptStatus}
+          ${rptListHtml}
         </div>`;
     });
   }
@@ -3783,6 +3809,17 @@ function _showSubjectDetail(idx) {
   // 點背景關閉
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+
+  // 若 admin 報告快取還沒有，背景自動 fetch 再更新報告列表
+  if (!window._adminReportsCache || window._adminReportsCache.length === 0) {
+    apiFetch('/reports/list?limit=200').then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return;
+      window._adminReportsCache = data.reports || [];
+      // 重新渲染 modal（若還在開著）
+      const m = document.getElementById('_subject-detail-modal');
+      if (m) _showSubjectDetail(idx);
+    }).catch(() => {});
+  }
 }
 
 // ─── 歷史紀錄：動態載入該帳號的檢測場次 ─────────────────────────────────
