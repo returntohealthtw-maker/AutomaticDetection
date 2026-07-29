@@ -94,7 +94,7 @@ _PROP_RANGE = {
 # 2. 每個視窗計算 lowGamma 佔比，再 proportionRange 評分
 # 3. 取得分最高的視窗（代表「腦波最佳狀態」）
 # ─────────────────────────────────────────────────────────────────────────────
-WINDOW_SIZE = 90   # 改為 90 秒視窗（原 30 秒）：更穩定，減少短暫峰值造成滿分
+WINDOW_SIZE = 30   # 與前端 JavaScript BrainDNA 保持一致（個人報告使用 30s 視窗）
 # 原始 BrainDNA 使用 30 秒，但實測發現最佳 30 秒視窗的 theta/alpha 比例
 # 可遠高於全場均值（本例 theta: 全場17% vs 最佳30s視窗22%），導致假性100分。
 # 改為 90 秒視窗後，各頻段比例更接近全場均值，與文獻校準基準一致。
@@ -369,7 +369,7 @@ def calc_band_proportions(raw_arrays: Dict[str, List], is_child: bool = False,
         uncapped_total = sum(raw_row.values())   # 未截斷總和 → 分母（永遠不截斷）
         if uncapped_total <= 0:
             continue
-        # 電極接觸品質過濾（僅 raw 模式有效；norm100 模式 min_delta_q=0）
+        # 電極接觸品質過濾（delta < MIN_DELTA_QUALITY 的低品質秒排除）
         if raw_row["r_delta"] < min_delta_q:
             continue
         for k in RAW_KEYS:
