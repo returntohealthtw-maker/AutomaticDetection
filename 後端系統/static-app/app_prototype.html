@@ -7153,7 +7153,7 @@ function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(
 // 把 N 秒分成每 30 秒一個視窗，選 lowGamma 佔比最高的視窗
 function _bdnaSelectBestWindow(acc, isChild) {
   const n = (acc.r_lalpha||[]).length;
-  const WIN = 30;
+  const WIN = 90;  // 90 秒視窗：與後端 braindna_algorithms.py WINDOW_SIZE=90 一致
   if (n < WIN) return acc;
   // 兒童使用較高的 lgamma CAP 和對應的 proportionRange 閾值
   const capTable = isChild ? _BDNA_CAP_CHILD : _BDNA_CAP;

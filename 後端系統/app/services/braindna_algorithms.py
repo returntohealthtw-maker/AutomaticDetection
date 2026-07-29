@@ -94,10 +94,12 @@ _PROP_RANGE = {
 # 2. 每個視窗計算 lowGamma 佔比，再 proportionRange 評分
 # 3. 取得分最高的視窗（代表「腦波最佳狀態」）
 # ─────────────────────────────────────────────────────────────────────────────
-WINDOW_SIZE = 30   # 與前端 JavaScript BrainDNA 保持一致（個人報告使用 30s 視窗）
-# 原始 BrainDNA 使用 30 秒，但實測發現最佳 30 秒視窗的 theta/alpha 比例
-# 可遠高於全場均值（本例 theta: 全場17% vs 最佳30s視窗22%），導致假性100分。
-# 改為 90 秒視窗後，各頻段比例更接近全場均值，與文獻校準基準一致。
+# Best window selection 視窗大小（用於 BrainDNA maxArray 最佳窗選取）
+# 90 秒視窗比 30 秒更穩定，避免短暫峰值造成假性 100 分
+WINDOW_SIZE = 90   # 90 秒視窗：個人/夫妻/親子報告統一使用
+
+# MindColor 投票視窗：固定 30 秒（BrainDNA 設計為 6 視窗投票，需保持 30s）
+MINDCOLOR_WINDOW = 30
 
 # 信號品質下限（供 calc_band_proportions 及 MBTI 計算共用）
 # delta < 30K = 電極接觸不良（族群均值 ~198K，30K ≈ 15%）
@@ -555,14 +557,14 @@ def calc_mind_color(raw_arrays: Dict[str, List]) -> int:
             _arr_mean(raw_arrays.get("r_hgamma") or []),
         )
 
-    # BrainDNA 最多 6 個視窗（含最後不足 30 秒的部分視窗）
-    num_windows = min(math.ceil(n / WINDOW_SIZE), 6)
+    # BrainDNA 最多 6 個視窗（含最後不足 30 秒的部分視窗）：MindColor 固定用 30s 視窗
+    num_windows = min(math.ceil(n / MINDCOLOR_WINDOW), 6)
     mind_color_count = [0, 0, 0, 0]
     mind_color_list  = []
 
     for i in range(num_windows):
-        start = i * WINDOW_SIZE
-        end   = start + WINDOW_SIZE
+        start = i * MINDCOLOR_WINDOW
+        end   = start + MINDCOLOR_WINDOW
 
         def _win_mean(key: str, _s: int = start, _e: int = end) -> float:
             arr = raw_arrays.get(key) or []

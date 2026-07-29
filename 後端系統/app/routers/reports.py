@@ -1290,14 +1290,26 @@ def _do_regenerate_one(
     # marital / parent_child → 直接 REST API
     regen_extra: dict = {"session_id": session_id, "subject_id": resolved_regen_sid}
 
-    # 關係報告重新生成：從 client_summary 取回配偶/成員資訊
+    # 關係報告重新生成：從 client_summary 取回配偶/成員資訊，並主動取得妻子腦波資料
     if ext_report_type in ("marital", "parent_child"):
         try:
             import json as _rjson
             cs_regen = _rjson.loads(r.client_summary or "{}")
             if ext_report_type == "marital":
-                if cs_regen.get("wife_session_id"):
-                    regen_extra["wife_session_id"] = cs_regen["wife_session_id"]
+                wife_sid = cs_regen.get("wife_session_id")
+                if wife_sid:
+                    regen_extra["wife_session_id"] = wife_sid
+                    # ★ 關鍵修正：主動從 wife session 取得腦波資料，否則 marital 報告兩人都用丈夫的值
+                    try:
+                        wife_bw = _session_to_brainwave_data(db, wife_sid)
+                        if wife_bw:
+                            regen_extra["wife_brainwave_data"] = wife_bw
+                            logger.info("[_do_regenerate_one] 取得妻子 session=%s 腦波資料 source=%s",
+                                        wife_sid, wife_bw.get("_source"))
+                        else:
+                            logger.warning("[_do_regenerate_one] 妻子 session=%s 無腦波資料", wife_sid)
+                    except Exception as _wb_err:
+                        logger.warning("[_do_regenerate_one] 取妻子腦波失敗 session=%s: %s", wife_sid, _wb_err)
                 if cs_regen.get("wife_name"):
                     regen_extra["wife_name"] = cs_regen["wife_name"]
                 if cs_regen.get("husband_name"):
@@ -1306,6 +1318,19 @@ def _do_regenerate_one(
                 regen_extra["members"] = cs_regen["members"]
         except Exception as _re:
             logger.warning("[_do_regenerate_one] 讀取 client_summary 關係成員失敗: %s", _re)
+
+    # ── 夫妻報告：從 wife_session_id 自動抓取妻子腦波資料 ──
+    if ext_report_type == "marital" and regen_extra.get("wife_session_id"):
+        try:
+            wife_sid = int(regen_extra["wife_session_id"])
+            wife_bw = _session_to_brainwave_data(db, wife_sid)
+            if wife_bw:
+                regen_extra["wife_brainwave_data"] = wife_bw
+                logger.info("[_do_regenerate_one] 已取得妻子腦波 session_id=%s", wife_sid)
+            else:
+                logger.warning("[_do_regenerate_one] 妻子腦波為空 wife_session_id=%s", wife_sid)
+        except Exception as _we:
+            logger.warning("[_do_regenerate_one] 取妻子腦波失敗: %s", _we)
 
     try:
         result = report_orchestrator.trigger_external_report(
