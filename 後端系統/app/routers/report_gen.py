@@ -538,8 +538,10 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
 
             existing_rep = None
             if req.session_id:
+                _rep_kind = f"{req.report_type}_{req.variant}"
                 existing_rep = db.query(M.Report).filter(
-                    M.Report.session_id == req.session_id
+                    M.Report.session_id == req.session_id,
+                    M.Report.talent_report_kind == _rep_kind,
                 ).first()
             if existing_rep is None:
                 # 🔑 解析 subject_id：前端有傳 → 直接用；否則從 session 反查
