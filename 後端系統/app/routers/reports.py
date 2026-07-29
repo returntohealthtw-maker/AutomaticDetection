@@ -1324,6 +1324,22 @@ def _do_regenerate_one(
                 "subject_name": resolved_regen_name or s.subject_name,
                 "error": f"trigger 失敗：{type(e).__name__}: {e}"}
 
+    # ── marital_rest / parent_child_rest：同步完成，主動把 DB 更新為 completed ──
+    ext_mode = result.get("mode", "")
+    if result.get("ok") and ext_mode in ("marital_rest", "parent_child_rest"):
+        try:
+            from sqlalchemy import func as _sqlfunc
+            pdf_url = result.get("result_url") or result.get("file_path") or ""
+            r.status       = "completed"
+            r.pdf_url      = pdf_url
+            r.email_sent   = 0
+            r.completed_at = _sqlfunc.now()
+            db.commit()
+            logger.info("[_do_regenerate_one] %s 重生完成，report_id=%s, pdf=%s",
+                        ext_mode, r.report_id, (pdf_url or "")[:60])
+        except Exception as _db_err:
+            logger.warning("[_do_regenerate_one] 更新 DB completed 失敗: %s", _db_err)
+
     return {
         "ok":            bool(result.get("ok", False)),
         "session_id":    session_id,
