@@ -1200,6 +1200,29 @@ def _do_regenerate_one(
         if report_id else
         db.query(M.Report).filter(M.Report.session_id == session_id).first()
     )
+    # ── 決定這次走哪種外部模式（在修改 DB 之前先算好，避免修改後因例外卡住）──
+    from app.services import report_orchestrator as _ro_check
+    _kind_check = (r.talent_report_kind or "").lower() if r else ""
+    if "child" in _kind_check:
+        _pre_ext_type = "child"
+    elif "marital" in _kind_check:
+        _pre_ext_type = "marital"
+    elif "parent_child" in _kind_check or "parent" in _kind_check:
+        _pre_ext_type = "parent_child"
+    else:
+        _sess_rt = (s.report_type or "").lower()
+        if "child" in _sess_rt:
+            _pre_ext_type = "child"
+        elif "marital" in _sess_rt:
+            _pre_ext_type = "marital"
+        elif "parent" in _sess_rt:
+            _pre_ext_type = "parent_child"
+        else:
+            _pre_ext_type = "life_script"
+    # marital / parent_child 走同步 REST → 先打外部 API，成功才更新 DB
+    # life_script / child 走 headless → 先設 generating，等 callback
+    _is_sync_rest = _pre_ext_type in ("marital", "parent_child")
+
     if r is None:
         import uuid
         r = M.Report(
@@ -1213,14 +1236,19 @@ def _do_regenerate_one(
         db.flush()
     else:
         from datetime import datetime as _dt
-        r.status       = "generating"   # 用 generating 讓前端顯示「⏳ 生成中」
-        r.pdf_url      = None
-        r.email_sent   = 0
-        r.created_at   = _dt.now()      # ← 重置計時器，避免立刻顯示「卡住 >30 分鐘」
-        r.completed_at = None
-        if notify_email:
-            r.notify_email = notify_email
-        # 🧹 清掉 client_summary 裡的舊失敗訊息，避免「重新生成中」仍顯示上次的錯誤
+        _old_pdf_url = r.pdf_url      # 備份舊 URL，外部呼叫失敗時可還原
+        _old_status  = r.status
+
+        if not _is_sync_rest:
+            # headless 模式：先設 generating，讓前端顯示「⏳ 生成中」
+            r.status       = "generating"
+            r.pdf_url      = None
+            r.email_sent   = 0
+            r.created_at   = _dt.now()
+            r.completed_at = None
+            if notify_email:
+                r.notify_email = notify_email
+        # 🧹 清掉 client_summary 裡的舊失敗訊息
         if r.client_summary:
             try:
                 import json as _jclr
@@ -1233,8 +1261,14 @@ def _do_regenerate_one(
                     r.client_summary = _jclr.dumps(_cs_clr, ensure_ascii=False)
             except Exception:
                 pass
-    db.commit()
-    db.refresh(r)
+
+    # 🔒 提前快取 report_id / notify_email，避免後續 DB 操作讓 ORM 物件 detach
+    _cached_report_id    = r.report_id if r.report_id else None
+    _cached_notify_email = r.notify_email
+
+    if not _is_sync_rest:
+        db.commit()
+        db.refresh(r)
 
     # 觸發外部 React App（漂亮版報告）
     from app.services import report_orchestrator
@@ -1345,36 +1379,48 @@ def _do_regenerate_one(
             extra=regen_extra,
         )
     except Exception as e:
+        logger.error("[_do_regenerate_one] trigger 拋例外: %s: %s", type(e).__name__, e)
+        # sync-REST 類型：外部呼叫失敗，不修改 DB（保留原有 pdf_url / status）
         return {"ok": False, "session_id": session_id,
                 "subject_name": resolved_regen_name or s.subject_name,
                 "error": f"trigger 失敗：{type(e).__name__}: {e}"}
 
     # ── marital_rest / parent_child_rest：同步完成，主動把 DB 更新為 completed ──
     ext_mode = result.get("mode", "")
-    if result.get("ok") and ext_mode in ("marital_rest", "parent_child_rest"):
-        try:
-            from sqlalchemy import func as _sqlfunc
-            pdf_url = result.get("result_url") or result.get("file_path") or ""
-            r.status       = "completed"
-            r.pdf_url      = pdf_url
-            r.email_sent   = 0
-            r.completed_at = _sqlfunc.now()
-            db.commit()
-            logger.info("[_do_regenerate_one] %s 重生完成，report_id=%s, pdf=%s",
-                        ext_mode, r.report_id, (pdf_url or "")[:60])
-        except Exception as _db_err:
-            logger.warning("[_do_regenerate_one] 更新 DB completed 失敗: %s", _db_err)
+    if ext_mode in ("marital_rest", "parent_child_rest"):
+        if result.get("ok"):
+            try:
+                from sqlalchemy import func as _sqlfunc
+                from datetime import datetime as _dt2
+                pdf_url = result.get("result_url") or result.get("file_path") or ""
+                db.execute(
+                    __import__("sqlalchemy").text(
+                        "UPDATE reports SET status='completed', pdf_url=:u, email_sent=0, "
+                        "completed_at=NOW() WHERE report_id=:rid"
+                    ),
+                    {"u": pdf_url, "rid": _cached_report_id},
+                )
+                db.commit()
+                logger.info("[_do_regenerate_one] %s 重生完成，report_id=%s, pdf=%s",
+                            ext_mode, _cached_report_id, (pdf_url or "")[:60])
+            except Exception as _db_err:
+                logger.warning("[_do_regenerate_one] 更新 DB completed 失敗: %s", _db_err)
+        else:
+            # 外部呼叫失敗 → 不破壞 DB，靜默返回（DB 未被修改）
+            logger.warning("[_do_regenerate_one] %s 失敗，保留原 DB 狀態 report_id=%s error=%s",
+                           ext_mode, _cached_report_id, result.get("error"))
 
     return {
         "ok":            bool(result.get("ok", False)),
         "session_id":    session_id,
-        "report_id":     r.report_id,
+        "report_id":     _cached_report_id,
         "subject_name":  resolved_regen_name or s.subject_name,
-        "notify_email":  r.notify_email,
+        "notify_email":  _cached_notify_email,
         "external_mode": result.get("mode"),
         "job_id":        result.get("job_id"),
         "error":         result.get("error"),
     }
+
 
 
 class RegenerateReportIn(BaseModel):
