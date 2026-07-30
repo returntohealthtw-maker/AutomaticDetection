@@ -197,7 +197,7 @@ def upload_session(
             session_id  = session.session_id,
             seq_num     = c.seq_num,
             is_baseline = c.is_baseline,
-            captured_at = c.captured_at,
+            captured_at = _to_unix_s(c.captured_at),  # Android 送毫秒，轉換為秒才不 overflow
             good_signal = c.good_signal,
             attention   = c.attention,
             meditation  = c.meditation,
