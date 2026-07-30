@@ -755,6 +755,42 @@ def admin_firebase_diag(
     return result
 
 
+@router.get("/admin/firebase-session/{fb_session_id}")
+def admin_firebase_session_check(
+    fb_session_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    【管理員】直接用 Service Key 讀取 Firebase 中某 session 的 EEG 特徵筆數。
+    用於驗證 Firebase 資料是否正確儲存。
+    """
+    import asyncio
+    user = require_user(authorization, db)
+    if user.role != "admin":
+        raise HTTPException(403, "需要管理員權限")
+
+    try:
+        from app.services.firebase_sync import fetch_eeg_features
+        features = asyncio.run(fetch_eeg_features(fb_session_id))
+    except Exception as e:
+        return {"ok": False, "error": str(e), "fb_session_id": fb_session_id}
+
+    if features is None:
+        return {"ok": False, "eeg_count": 0, "fb_session_id": fb_session_id,
+                "note": "Firebase 回傳 None（無資料或認證失敗）"}
+
+    first = features[0] if features else {}
+    return {
+        "ok": True,
+        "eeg_count": len(features),
+        "fb_session_id": fb_session_id,
+        "sample_fields": list(first.keys())[:10] if first else [],
+        "sample_delta": first.get("delta") or first.get("deltaRatio"),
+        "sample_good_signal": first.get("goodSignal") or first.get("good_signal"),
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Firebase-Only 上傳端點：只寫 Firebase，完全不碰本地 PostgreSQL / SQLite
 # ──────────────────────────────────────────────────────────────────────────────
