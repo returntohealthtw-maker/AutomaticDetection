@@ -8121,6 +8121,17 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'up_full_vip':   '加購升級：完整版 → VIP版',
     'up_trial_vip':  '加購升級：體驗版 → VIP版',
   };
+
+  // ── 管理員 NT$1 測試模式：點選任何正式報告，統一導向 NT$1 測試付款畫面 ──
+  // 管理員可測試所有報告類型的完整流程（付款 → 腦波 → 報告生成），不需支付正式費用
+  const _adminNt1Test = ((_currentUser || {}).role === 'admin') && reportKey !== 'test_1';
+  if (_adminNt1Test) {
+    qrScreen = 'screen-qr-test';
+    // 測試畫面標題顯示實際測試的報告類型，方便辨識
+    const _testTitleEl = document.getElementById('qr-test-title');
+    if (_testTitleEl) _testTitleEl.textContent = '[Admin NT$1] ' + (reportNames[reportKey] || reportKey);
+  }
+
   const titleMap = {
     'screen-qr-trial':   'qr-trial-title',
     'screen-qr-full':    'qr-full-title',
@@ -8145,7 +8156,8 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
       'test_1':1,
       'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000
     };
-    const amt = (cfg && typeof cfg.amount === 'number') ? cfg.amount : (fallbackMap[reportKey] || 3000);
+    // 管理員 NT$1 測試模式：忽略正式定價，一律使用 NT$1
+    const amt = _adminNt1Test ? 1 : ((cfg && typeof cfg.amount === 'number') ? cfg.amount : (fallbackMap[reportKey] || 3000));
 
     // QR 畫面上的「NT$XX」金額顯示：依角色不同要動態更新（直營商完整版要顯示 NT$4,800 而非 NT$5,000）
     try {
