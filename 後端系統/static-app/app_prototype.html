@@ -5994,40 +5994,21 @@ function _persistEegStats(stats) {
     window._lastEegPersistPromise = Promise.resolve(null);
     return window._lastEegPersistPromise;
   }
-  // ── Android WebView 路徑：ApiUploader 已上傳 180 筆原始資料，Railway 計算一切 ──
-  // 跳過 /eeg/save-stats（避免建立重複 session + 避免 bandTo100 一筆值入庫）
-  // 等待 CLS_DB → ApiUploader → WebAppActivity → JSBridge.onUploadResult 回呼
-  const _inAndroidWebView = !!(window.JSBridge && typeof Android !== 'undefined' ||
-                               window.JSBridge && window.JSBridge.startStreamingEeg);
-  if (_inAndroidWebView) {
-    console.log('[EEG] Android WebView 模式：跳過 /eeg/save-stats，等待 ApiUploader 回呼...');
-    window._lastEegPersistPromise = new Promise((resolve) => {
-      const _timeout = setTimeout(() => {
-        console.warn('[EEG] ApiUploader 回呼逾時（60s），session_id 未取得');
-        resolve(null);
-      }, 60000);  // 最多等 60 秒
-      // ApiUploader 完成後 WebAppActivity 呼叫此函式
-      window.JSBridge.onUploadResult = function(sessionId, reportId, errMsg) {
-        clearTimeout(_timeout);
-        if (sessionId && sessionId > 0) {
-          window._lastEegSessionId = sessionId;
-          console.log('[EEG] ApiUploader 完成 session_id=' + sessionId + ' report_id=' + reportId);
-          resolve(sessionId);
-        } else {
-          console.warn('[EEG] ApiUploader 失敗:', errMsg);
-          resolve(null);
-        }
-      };
-    });
-    return window._lastEegPersistPromise;
-  }
+  // ── 緊急修復 2026-07-30：一律走 /eeg/save-stats（寫 PostgreSQL + Firebase）──
+  // 根因：
+  // 1) Android 判斷誤用 typeof Android（實際注入名是 AndroidBridge）→ 永遠判錯
+  // 2) 誤改走 /eeg/firebase-save（明確不寫 PostgreSQL）→ 後台受測者資訊看不到新檢測
+  // 3) WebApp 串流路徑未呼叫 CLS_DB.endSession → ApiUploader 不會執行，不能依賴它
+  // 正確長期方案是接上 CLS_DB→ApiUploader；在那之前必須用 save-stats 保證入庫。
+  const _inAndroidWebView = !!(typeof AndroidBridge !== 'undefined' && AndroidBridge &&
+    (typeof AndroidBridge.startStreamingEeg === 'function' ||
+     typeof AndroidBridge.stopStreamingEeg === 'function'));
+  console.log('[EEG] persist via /eeg/save-stats', _inAndroidWebView ? '(Android WebView)' : '(browser)');
 
-  // ── 瀏覽器 / 非 Android WebView 路徑：使用 /eeg/firebase-save ───────────────
-  // 資料直接存入 Firebase eeg_features，不寫本地 PostgreSQL / SQLite。
   window._lastEegPersistPromise = (async () => {
     try {
-      const reportType = (_currentReportType || '').startsWith('child_') ? 'child' : 'adult';
-      const r = await apiFetch('/eeg/firebase-save', {
+      const reportType = _currentReportType || 'adult';
+      const r = await apiFetch('/eeg/save-stats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6035,7 +6016,10 @@ function _persistEegStats(stats) {
           subject_birthday:      (document.getElementById('subject-birth-input')||{}).value || '',
           subject_gender:        _currentSubjectGender || '',
           subject_age:           _currentSubjectAge,
+          subject_id:            _currentSubjectId || null,
           report_type:           reportType,
+          order_id:              _currentOrderId || null,
+          paid_amount:           null,
           sample_count:          stats.sample_count,
           attention_percentage:  stats.attention_percentage,
           meditation_percentage: stats.meditation_percentage,
@@ -6045,27 +6029,25 @@ function _persistEegStats(stats) {
       });
       if (r && r.ok) {
         const d = await r.json();
-        // firebase-save 只回傳 firebase_session_id，沒有 session_id（不寫 DB）
-        window._lastEegSessionId        = null;
-        window._lastFirebaseSyncOk      = true;
+        window._lastEegSessionId        = d.session_id || null;
+        window._lastFirebaseSyncOk      = !!d.firebase_sync_ok;
         window._lastFirebaseSessionId   = d.firebase_session_id || null;
-        window._lastQeegBandScores      = null;
-        window._lastQeegSignalGrade     = null;
-        window._lastQeegAbilityScores   = d.qeeg ? Object.fromEntries(
-          Object.entries(d.qeeg).map(([k, v]) => [k, { score: v }])
-        ) : null;
-        console.log(`[EEG] Firebase-Only 儲存成功 fb_sid=${d.firebase_session_id}`,
-                    `storage=${d.storage}`);
-        // 回傳 firebase_session_id 讓後續報告使用
-        return d.firebase_session_id || null;
+        window._lastQeegBandScores      = d.qeeg_band_scores || null;
+        window._lastQeegSignalGrade     = d.qeeg_signal_grade || null;
+        window._lastQeegAbilityScores   = d.qeeg_ability_scores || null;
+        const fbStatus = d.firebase_sync_ok
+          ? `Firebase OK`
+          : 'Firebase 同步失敗（PostgreSQL 已存）';
+        console.log(`[EEG] 已寫入 DB session_id=${d.session_id}, ${fbStatus}`);
+        return d.session_id;
       } else {
         let errMsg = `HTTP ${r ? r.status : 'N/A'}`;
         try { const e = await r.json(); errMsg = e.detail || errMsg; } catch (_) {}
-        console.warn('[EEG] firebase-save 失敗:', errMsg);
+        console.warn('[EEG] save-stats 失敗:', errMsg);
         return null;
       }
     } catch (e) {
-      console.warn('[EEG] firebase-save 例外', e);
+      console.warn('[EEG] save-stats 例外', e);
       return null;
     }
   })();
