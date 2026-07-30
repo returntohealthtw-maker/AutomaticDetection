@@ -9535,6 +9535,16 @@ function _renderAllSubjectCard(s) {
     const loBeta    = hasB7 ? b7.beta_low   : (ba.low_beta   || ba.beta  || 0);
     const hiGamma   = hasB7 ? b7.gamma_high : (ba.high_gamma || ba.gamma || 0);
     const loGamma   = hasB7 ? b7.gamma_low  : (ba.low_gamma  || ba.gamma || 0);
+    const deltaVal  = hasB7 ? (b7.delta || ba.delta) : ba.delta;
+
+    // 資料來源標籤（firebase_180 = 最準，pg_raw_arrays = 準，avg_approx = 近似，db_avg = 原始值）
+    const bwSource = bw._source || 'db_avg';
+    const sourceColor = bwSource === 'firebase_180' ? '#2e7d32' :
+                        bwSource === 'pg_raw_arrays' ? '#1565c0' :
+                        bwSource === 'avg_approx'    ? '#e65100' : '#999';
+    const sourceLbl = bwSource === 'firebase_180' ? '180筆BrainDNA' :
+                      bwSource === 'pg_raw_arrays' ? '本地BrainDNA' :
+                      bwSource === 'avg_approx'    ? '平均近似(0-100)' : '原始值';
     // 電極接觸不良警示：eSense 值兩者均為 0
     const badContact = (bw.attention_percentage === 0 && bw.meditation_percentage === 0);
     const contactWarn = badContact
@@ -9552,6 +9562,7 @@ function _renderAllSubjectCard(s) {
     bwHtml = `
       <div style="font-size:11px;color:#666;margin-bottom:6px;">最新檢測 (Session #${s.latest_session_id})
         <span style="font-size:10px;color:#999;margin-left:6px;">樣本數 ${bw.sample_count||'—'}</span>
+        <span style="font-size:9px;color:${sourceColor};margin-left:8px;font-weight:600;background:${sourceColor}22;padding:1px 6px;border-radius:4px;">${sourceLbl}</span>
       </div>
       ${contactWarn}
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px;">
@@ -9568,7 +9579,7 @@ function _renderAllSubjectCard(s) {
       <div style="display:flex;gap:5px;flex-wrap:wrap;">
         ${cell('High γ', hiGamma, '#c62828', '感知整合')}
         ${cell('Low γ',  loGamma, '#e53935', '社會覺察')}
-        ${cell('Delta',  ba.delta, '#546e7a', '深層修復')}
+        ${cell('Delta',  deltaVal, '#546e7a', '深層修復')}
       </div>`;
   }
 
