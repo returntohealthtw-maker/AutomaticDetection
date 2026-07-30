@@ -30,7 +30,7 @@ class Session(Base):
     subject_gender   = Column(String(1))
     subject_age      = Column(Integer, default=0)
     company_id       = Column(Integer, ForeignKey("companies.company_id", ondelete="SET NULL"), nullable=True)
-    report_type      = Column(String(10), default="adult")   # adult / child
+    report_type      = Column(String(50), default="adult")   # adult / child / child_report / child_trial 等
     # 企業天賦報告：teacher / student（對應報告範本教師版／學生版）
     report_audience  = Column(String(20), default="student")
     start_time       = Column(Integer, default=0)

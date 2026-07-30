@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.07.29.06"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.07.30.01"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -373,6 +373,10 @@ def _run_lightweight_migrations():
     # 演算法模式（braindna / qeeg / both）
     if not has_column("sessions", "algo_mode"):
         pending.append("ALTER TABLE sessions ADD COLUMN algo_mode VARCHAR(20) DEFAULT 'braindna'")
+
+    # ── 欄位長度擴展 ────────────────────────────────────────────────────────────
+    # sessions.report_type 原本只有 VARCHAR(10)，導致 "child_report"(12字) / "child_trial"(11字) 上傳 500
+    pending.append("ALTER TABLE sessions ALTER COLUMN report_type TYPE VARCHAR(50)")
 
     # ── 結構性修改（約束 / 索引，需單獨執行）────────────────────────────────
     # 移除 reports.session_id 的 UNIQUE 約束（原先設計一 session 只能一筆報告，
