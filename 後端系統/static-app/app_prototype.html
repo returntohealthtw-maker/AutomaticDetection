@@ -6153,27 +6153,20 @@ function _ingestEegSample(s) {
   _eegLiveAccum.r_lgamma.push(_rLg);
   _eegLiveAccum.r_hgamma.push(_rHg);
 
-  // ─── 採集畫面即時 bar：與結果頁/報告使用完全相同的 BrainDNA proportionRange 演算法 ───
-  // 資料 ≥ 5 秒後啟用；不足 5 秒時以「當前秒原始佔比」過渡顯示
+  // ─── 採集畫面即時 bar：使用「當前秒原始佔比」讓方塊每秒動態波動 ───
+  // 不用累積 BrainDNA 均值（它每秒只有微小變化，視覺上幾乎靜止）
+  // BrainDNA 的精確結果只用於採集結束後的結果頁計算
   let displayD = d, displayTh = th, displayAl = al, displayBe = be, displayGa = ga;
-  const _isChildLive = (_currentReportType || '').toLowerCase().indexOf('child') !== -1;
-  const _liveBdna = _calcBrainDNABands(_eegLiveAccum, _isChildLive);
-  if (_liveBdna) {
-    displayD  = _liveBdna.deV;
-    displayTh = _liveBdna.thV;
-    displayAl = Math.round((_liveBdna.loA + _liveBdna.hiA) / 2);
-    displayBe = Math.round((_liveBdna.loB + _liveBdna.hiB) / 2);
-    displayGa = Math.round((_liveBdna.loG + _liveBdna.hiG) / 2);
-  } else {
-    const _rTot = _rD + _rTh + _rLa + _rHa + _rLb + _rHb + _rLg + _rHg;
-    if (_rTot > 0) {
-      displayD  = Math.round(_rD  / _rTot * 100);
-      displayTh = Math.round(_rTh / _rTot * 100);
-      displayAl = Math.round((_rLa + _rHa) / _rTot * 100);
-      displayBe = Math.round((_rLb + _rHb) / _rTot * 100);
-      displayGa = Math.round((_rLg + _rHg) / _rTot * 100);
-    }
+  const _rTot = _rD + _rTh + _rLa + _rHa + _rLb + _rHb + _rLg + _rHg;
+  if (_rTot > 0) {
+    // 原始佔比（每秒即時更新，視覺上有明顯波動）
+    displayD  = Math.round(_rD  / _rTot * 100);
+    displayTh = Math.round(_rTh / _rTot * 100);
+    displayAl = Math.round((_rLa + _rHa) / _rTot * 100);
+    displayBe = Math.round((_rLb + _rHb) / _rTot * 100);
+    displayGa = Math.round((_rLg + _rHg) / _rTot * 100);
   }
+  // fallback：若 raw_* 未傳（相容舊版），用 bandTo100 正規化值
 
   // 連續低品質計數：att ≤ 5 AND med ≤ 5（含全零）= 電極接觸不良
   // ThinkGear 規格：att=0 明確代表「無讀數」；1-5 在正常配戴下極不可能出現
