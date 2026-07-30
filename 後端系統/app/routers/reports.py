@@ -1123,12 +1123,11 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         _bdna_theta = float(_bdna_bands.get("theta", _bdna_theta))
     # ─────────────────────────────────────────────────────────────────────────
 
-    # ── bands_7 只放 0-100 的 BrainDNA 計算結果 ──────────────────────────────
-    # 若完整 BrainDNA（180 筆）失敗，使用 DB 平均值跑 proportionRange 作為近似 fallback
-    # （比顯示 80000 這種原始值更有意義）
+    # ── bands_7：只在 BrainDNA 180 筆計算成功時才填入 0-100 值 ──────────────
+    # 若計算失敗（_bdna_bands is None），bands_7 = {} → 前端 fallback 到 bands_avg 原始值
+    # 不做 avg_approx fallback（每 session 跑 compute_all 會讓 overview 端點超時）
     _bands_7 = {}
     if _bdna_bands:
-        # 完整計算成功 → 使用 0-100 結果
         _bands_7 = {
             "theta":      _bdna_theta,
             "alpha_high": hi_alpha,
@@ -1139,46 +1138,6 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
             "gamma_low":  lo_gamma,
             "delta":      _bdna_delta,
         }
-    else:
-        # Fallback：以單筆平均值跑 proportionRange（近似 0-100）
-        try:
-            from app.services.braindna_algorithms import compute_all as _bdna_fb
-            _single_row = {
-                k: [v] for k, v in {
-                    "delta":      _safe_float(avg.delta),
-                    "theta":      _safe_float(avg.theta),
-                    "low_alpha":  _safe_float(avg.low_alpha),
-                    "high_alpha": _safe_float(avg.high_alpha),
-                    "low_beta":   _safe_float(avg.low_beta),
-                    "high_beta":  _safe_float(avg.high_beta),
-                    "low_gamma":  _safe_float(avg.low_gamma),
-                    "high_gamma": _safe_float(avg.high_gamma),
-                }.items()
-            }
-            _fb_result = _bdna_fb(_single_row, is_child=_is_child, child_age=_child_age)
-            if _fb_result.get("valid") and _fb_result.get("bands"):
-                _fb_b = _fb_result["bands"]
-                _bdna_delta = float(_fb_b.get("delta", _bdna_delta))
-                _bdna_theta = float(_fb_b.get("theta", _bdna_theta))
-                lo_alpha = float(_fb_b.get("low_alpha",  lo_alpha))
-                hi_alpha = float(_fb_b.get("high_alpha", hi_alpha))
-                lo_beta  = float(_fb_b.get("low_beta",   lo_beta))
-                hi_beta  = float(_fb_b.get("high_beta",  hi_beta))
-                lo_gamma = float(_fb_b.get("low_gamma",  lo_gamma))
-                hi_gamma = float(_fb_b.get("high_gamma", hi_gamma))
-                _bands_7 = {
-                    "theta":      _bdna_theta,
-                    "alpha_high": hi_alpha,
-                    "alpha_low":  lo_alpha,
-                    "beta_high":  hi_beta,
-                    "beta_low":   lo_beta,
-                    "gamma_high": hi_gamma,
-                    "gamma_low":  lo_gamma,
-                    "delta":      _bdna_delta,
-                }
-                _bdna_source = "avg_approx"
-        except Exception:
-            pass  # bands_7 留空，前端 fallback 到 bands_avg 原始值
 
     # ── 讀取 qEEG 七大能力分數（存在 Session.qeeg_scores_json）──────────────
     _qeeg_abilities = None
