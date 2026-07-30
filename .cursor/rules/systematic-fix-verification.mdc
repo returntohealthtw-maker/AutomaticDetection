@@ -1,0 +1,67 @@
+---
+description: 修復 bug 前後必須做系統性端對端驗證，禁止「說找到了但沒確認」
+alwaysApply: true
+---
+
+# 系統性修復驗證流程（每次修改程式都必須執行）
+
+## 修改前：先確認根本原因
+
+1. **追蹤完整錯誤鏈**：從使用者看到的現象，一層一層往上找到真正的 JS/Python 例外或邏輯錯誤
+2. **不假設，要驗證**：用 grep/read 找到實際的程式碼，確認變數是否定義、函數是否存在於該 scope
+3. **確認為何之前能運作**：若以前正常，現在不行，要找出「哪個改動造成差異」
+
+## 修改後：三步驟強制驗證
+
+### 步驟 1：本地確認修改正確
+- 修改後立刻 grep 驗證修改點已落地（不依賴記憶）
+- 確認版本號已同步更新（`APP_HTML_VERSION` 每次改 HTML/JS 都要 +1）
+
+### 步驟 2：部署後確認版本上線
+```python
+# 部署完必執行：確認 html_version 已更新
+r = requests.get('.../api/v1/app/version')
+assert r.json()['html_version'] == '期望版本', '部署未完成！'
+```
+
+### 步驟 3：API 端對端測試
+```python
+# 必須用真實 payload 打 API，確認 HTTP 200
+r = s.post('.../api/v1/eeg/save-stats', json=test_payload)
+assert r.status_code == 200, f'API 失敗: {r.status_code} {r.text}'
+```
+若 API 返回 500/422，**不能跳過，必須先修好 API 再 commit**。
+
+## 成人版 vs 兒童版報告
+
+- `report_type` 為 `life_script` / `marital` / `parent_child` → **成人版**
+- `report_type` 為 `child` 或以 `child_` 開頭 → **兒童版**（使用 `CHILD_PROP_RANGE` 閾值）
+- `_isChild` 判斷必須統一用：`(_currentReportType||'').startsWith('child_') || _currentReportType==='child'`
+- 禁止在函數內直接使用未定義的 `reportType` 變數，一律用 `_currentReportType`
+
+## 新增 model 欄位或列舉值時的強制檢查
+
+### 新增 DB 欄位時
+每次在 `models.py` 新增或修改欄位，必須確認：
+1. `String(N)` 的 N **是否容納所有可能的值**（列出最長的值計算字數）
+2. 新欄位需要加對應的 migration（`ALTER TABLE ... ADD COLUMN` 或 `ALTER TABLE ... ALTER COLUMN ... TYPE`）
+
+### 新增前端報告類型字串時（如 `child_trial`、`child_report`）
+每次加入新的報告類型，必須執行：
+```python
+# 計算所有新字串的長度，對照 models.py 的 String(N)
+# 例：Session.report_type = Column(String(??))
+for s in ['child_trial', 'child_full', 'child_vip', 'life_script', 'parent_child']:
+    print(len(s), s)
+```
+若任何值超過 N，**必須同步更新欄位長度 + 加 migration，不得只改前端**。
+
+### 過去因此犯過的錯（2026-04-22 起）
+- `child_trial` (11字) 超過 `VARCHAR(10)` → 上傳 500，資料遺失，持續潛伏 3 個月
+
+
+
+- ❌ 說「找到問題了」但不執行 API/端對端測試就算完成
+- ❌ commit 後沒確認 Railway 部署版本號已更新
+- ❌ 只修 client-side，不確認 server-side API 也能正常接收資料
+- ❌ 在非 global scope 引用未定義的全域變數（如 `reportType`、`subjectId` 等）
