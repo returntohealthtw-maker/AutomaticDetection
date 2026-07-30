@@ -988,7 +988,7 @@ def sessions_with_status(
     }
 
 
-def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
+def _session_to_brainwave_data(db: Session, session_id: int, skip_firebase: bool = False) -> Optional[dict]:
     """從 EegCapture 重組 trigger_external_report 期望的 brainwave_data 格式。
 
     格式：
@@ -1085,7 +1085,8 @@ def _session_to_brainwave_data(db: Session, session_id: int) -> Optional[dict]:
         _child_age = getattr(_sess_obj, "subject_age", None) if _is_child else None
 
         # 來源 1：Firebase 180 筆特徵（最權威）
-        if _sess_obj and _sess_obj.firebase_session_id:
+        # skip_firebase=True 時跳過（避免 overview 批次呼叫時 90+ 次 HTTP 超時）
+        if not skip_firebase and _sess_obj and _sess_obj.firebase_session_id:
             try:
                 import asyncio as _aio
                 from app.services.firebase_sync import fetch_eeg_features, firebase_features_to_raw_arrays
@@ -2108,7 +2109,8 @@ def all_subjects_overview(
         bw = None
         if latest:
             try:
-                bw = _session_to_brainwave_data(db, latest.session_id)
+                # skip_firebase=True：批次處理時不打 Firebase，避免 90+ 次 HTTP 導致超時
+                bw = _session_to_brainwave_data(db, latest.session_id, skip_firebase=True)
             except Exception:
                 bw = None
 
