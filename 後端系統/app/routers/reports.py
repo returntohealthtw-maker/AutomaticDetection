@@ -1107,6 +1107,31 @@ def _session_to_brainwave_data(db: Session, session_id: int, skip_firebase: bool
             if _result.get("valid") and _result.get("bands"):
                 _bdna_bands = _result["bands"]
                 _bdna_source = "pg_raw_arrays"
+
+        # 來源 3：直接從已載入的 eeg_captures（Android 原生上傳路徑）
+        # detection 已在記憶體中，不需要額外 DB 查詢，只做 CPU 計算，無 I/O 開銷
+        if _bdna_bands is None and len(detection) >= 10:
+            _pg_raw = {
+                "r_delta":       [d.get("delta",      0) or 0 for d in detection],
+                "r_theta":       [d.get("theta",      0) or 0 for d in detection],
+                "r_lalpha":      [d.get("low_alpha",  0) or 0 for d in detection],
+                "r_halpha":      [d.get("high_alpha", 0) or 0 for d in detection],
+                "r_lbeta":       [d.get("low_beta",   0) or 0 for d in detection],
+                "r_hbeta":       [d.get("high_beta",  0) or 0 for d in detection],
+                "r_lgamma":      [d.get("low_gamma",  0) or 0 for d in detection],
+                "r_hgamma":      [d.get("high_gamma", 0) or 0 for d in detection],
+                "r_attention":   [d.get("attention",  0) or 0 for d in detection],
+                "r_meditation":  [d.get("meditation", 0) or 0 for d in detection],
+                "r_good_signal": [d.get("good_signal",200) if d.get("good_signal") is not None else 200
+                                  for d in detection],
+            }
+            try:
+                _result = _bdna_compute(_pg_raw, is_child=_is_child, child_age=_child_age)
+                if _result.get("valid") and _result.get("bands"):
+                    _bdna_bands = _result["bands"]
+                    _bdna_source = "pg_captures"
+            except Exception:
+                pass
     except Exception:
         pass  # 回退到 DB 平均值
 
