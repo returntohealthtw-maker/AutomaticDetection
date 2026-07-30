@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.07.30.08"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.07.30.09"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -377,6 +377,17 @@ def _run_lightweight_migrations():
     # ── 欄位長度擴展 ────────────────────────────────────────────────────────────
     # sessions.report_type 原本只有 VARCHAR(10)，導致 "child_report"(12字) / "child_trial"(11字) 上傳 500
     pending.append("ALTER TABLE sessions ALTER COLUMN report_type TYPE VARCHAR(50)")
+
+    # ── 測試資料清理（2026-07-30）────────────────────────────────────────────────
+    # 開發驗證時誤用真實受測者名稱「鄭靜怡」作為測試 session 的 subject_name，
+    # 導致後台「受測者資訊」顯示這筆隨機假資料為她的最新檢測結果（session #129）。
+    # 此 migration 將所有純測試 session 的 subject_name 改為前綴 "_test_" 格式，
+    # 使其不再被判定為真實受測者的最新 session。
+    pending.append(
+        "UPDATE sessions SET subject_name = '_test_' || subject_name"
+        " WHERE session_id IN (127,128,129,130,131,133,134)"
+        " AND subject_name NOT LIKE '_test_%'"
+    )
 
     # ── 結構性修改（約束 / 索引，需單獨執行）────────────────────────────────
     # 移除 reports.session_id 的 UNIQUE 約束（原先設計一 session 只能一筆報告，

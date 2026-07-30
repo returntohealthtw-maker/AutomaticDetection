@@ -7093,7 +7093,7 @@ const _BDNA_PR_CHILD = {
 // proportionRange 閾值（level1=p50中位數, level2=觀測最大值×1.3，依17筆實測資料重新校正 2026-07-13）
 // 這是初始值；頁面載入後會自動從 /api/v1/config/braindna-params 抓最新值覆蓋，永遠與後端同步
 let _BDNA_PR   = { r_delta:[0.47,0.60],  r_theta:[0.14,0.26],
-                   r_lalpha:[0.040,0.080], r_halpha:[0.033,0.080],
+                   r_lalpha:[0.040,0.110], r_halpha:[0.033,0.090],
                    r_lbeta:[0.028,0.060],  r_hbeta:[0.041,0.100],
                    r_lgamma:[0.028,0.070], r_hgamma:[0.020,0.060] };
 function _bdnaPR(v,l1,l2){ if(l1>l2||l1<0||v<=0)return 0; if(v>=l2)return 1; if(v<=l1)return v/l1*0.5; return (v-l1)/(l2-l1)*0.5+0.5; }
