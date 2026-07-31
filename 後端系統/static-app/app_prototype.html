@@ -1757,7 +1757,7 @@
           </div>
 
           <!-- 腦波分析人生劇本 -->
-          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+          <div data-age-group="adult" style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
             <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
               🎭 腦波分析人生劇本
               <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">成人</span>
@@ -1791,7 +1791,7 @@
           </div>
 
           <!-- 兒童腦波天賦解碼 -->
-          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+          <div data-age-group="child" style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
             <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
               🌟 兒童腦波天賦解碼
               <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">兒童</span>
@@ -1822,6 +1822,15 @@
                 <div class="report-price" style="color:#b8860b;">NT$12,000</div>
               </div>
             </div>
+          </div>
+
+          <!-- 青少年未來人生戰略發展（籌備中） -->
+          <div data-age-group="teen" style="background:#f5f5f7;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:1px dashed #c7c7cc;">
+            <div style="font-size:14px;font-weight:700;color:#6b6b70;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+              🚀 青少年未來人生戰略發展
+              <span style="background:#eceff1;color:#546e7a;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">青少年</span>
+            </div>
+            <div style="font-size:12px;color:#888;padding:6px 0;">敬請期待，即將推出（13-17 歲專屬報告）</div>
           </div>
 
           <!-- 加購升級 -->
@@ -4812,6 +4821,29 @@ function _applyRolePricing() {
         `selectSingleReport(this,'${key}','${cfg.display}','${cfg.qrScreen}')`,
       );
     }
+  });
+
+  _applyAgeGating();
+}
+
+// ─── 年齡防呆機制：依受測者生日算出的年齡，只顯示對應報告卡片 ──────────────
+// ≤12 歲 → child；13-17 歲 → teen；≥18 歲 → adult；無生日資料 → null（不過濾）。
+// 管理員帳號不受限制，一律看得到全部卡片，方便測試與示範。
+function _ageGroupOf(age) {
+  if (age === null || age === undefined || isNaN(age)) return null;
+  if (age <= 12) return 'child';
+  if (age <= 17) return 'teen';
+  return 'adult';
+}
+
+function _applyAgeGating() {
+  const screen = document.getElementById('screen-reports');
+  if (!screen) return;
+  const u = _currentUser || _getAuth() || {};
+  const isAdmin = u.role === 'admin';
+  const grp = _ageGroupOf(_currentSubjectAge);
+  screen.querySelectorAll('[data-age-group]').forEach(el => {
+    el.style.display = (isAdmin || !grp || el.getAttribute('data-age-group') === grp) ? '' : 'none';
   });
 }
 
