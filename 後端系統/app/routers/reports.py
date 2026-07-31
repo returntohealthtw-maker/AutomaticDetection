@@ -31,15 +31,18 @@ def get_report_signed_url(
     session_id: int,
     days: int = Query(default=7, ge=1, le=30),
     report_id: Optional[int] = Query(default=None, description="指定報告 ID（session 有多份報告時必須傳入）"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     為指定 session 的報告重新產生有效的 GCS Signed URL。
 
-    供其他 APP 取得報告 PDF 連結使用（每次請求均產生新的有效連結）。
+    🔒 隱私規則：僅管理員可呼叫（後台預覽/除錯用）。一般顧問不得取得客戶報告的
+    下載連結，此端點過去未做任何權限檢查，屬於隱私漏洞，現已修正為管理員專用。
     - days: 有效天數，預設 7 天，最長 30 天
     - report_id: 若 session 有多份報告（個人/夫妻等），必須指定哪份
     """
+    require_admin(authorization, db)
     q = db.query(M.Report).filter(M.Report.session_id == session_id)
     if report_id is not None:
         q = q.filter(M.Report.report_id == report_id)
@@ -521,6 +524,7 @@ def list_reports(
     import json as _json
 
     user = require_user(authorization, db)
+    _is_admin = (user.role == "admin")
 
     # ⚠️ 不再過濾 pdf_url，所有 Report 列出（包含尚未完成、外部生成失敗的）
     # 這樣 admin 才能完整看到「這個系統受測者所有生成過的報告」
@@ -703,7 +707,8 @@ def list_reports(
             "subject_email":    rep.notify_email or subject_email_real,
             "report_kind":      rep.talent_report_kind,
             "report_kind_zh":   _kind_zh(rep.talent_report_kind),
-            "pdf_url":          rep.pdf_url,
+            # 🔒 隱私規則：顧問不得透過 API 直接取得客戶報告 PDF 連結，僅管理員可見
+            "pdf_url":          rep.pdf_url if _is_admin else None,
             "status":           rep.status,
             "email_sent":       rep.email_sent,
             "completed_at":     rep.completed_at.isoformat() if rep.completed_at else None,
@@ -840,6 +845,7 @@ def sessions_with_status(
       - 其他（剛跑沒多久的 pending）                       → "in_progress"
     """
     user = require_user(authorization, db)
+    _is_admin = (user.role == "admin")
 
     q = db.query(M.Session).order_by(M.Session.session_id.desc())
     if user.role != "admin" or only_mine:
@@ -969,7 +975,8 @@ def sessions_with_status(
             "report_id":    r.report_id if r else None,
             "report_status": (r.status if r else "none"),
             "has_pdf":      bool(r and r.pdf_url),
-            "pdf_url":      r.pdf_url if r else None,
+            # 🔒 隱私規則：顧問不得透過 API 直接取得客戶報告 PDF 連結，僅管理員可見
+            "pdf_url":      (r.pdf_url if r else None) if _is_admin else None,
             "email_sent":   r.email_sent if r else 0,
             "notify_email": r.notify_email if r else None,
             "completed_at": r.completed_at.isoformat() if (r and r.completed_at) else None,
@@ -1311,7 +1318,9 @@ def _do_regenerate_one(
     # talent_report_kind 格式："life_script_full" / "child_trial" / "marital_full" 等
     # 優先用 Report 已記錄的種類，fallback 到 Session.report_type 推算
     kind_str = (r.talent_report_kind or "").lower()
-    if "child" in kind_str:
+    if "teen" in kind_str:
+        ext_report_type = "teen"
+    elif "child" in kind_str:
         ext_report_type = "child"
     elif "marital" in kind_str:
         ext_report_type = "marital"
@@ -1320,7 +1329,9 @@ def _do_regenerate_one(
     else:
         # fallback：從 Session.report_type 推算
         sess_rt = (s.report_type or "").lower()
-        if "child" in sess_rt:
+        if "teen" in sess_rt:
+            ext_report_type = "teen"
+        elif "child" in sess_rt:
             ext_report_type = "child"
         elif "marital" in sess_rt:
             ext_report_type = "marital"
@@ -1786,7 +1797,8 @@ def by_subject(
     db: Session = Depends(get_db),
 ) -> dict:
     """依受測者 email 查報告（受測者自己看用）"""
-    require_user(authorization, db)
+    _by_subj_user = require_user(authorization, db)
+    _is_admin = (_by_subj_user.role == "admin")
     rows = db.query(M.Report).filter(
         M.Report.notify_email == email,
         M.Report.pdf_url.isnot(None),
@@ -1798,7 +1810,8 @@ def by_subject(
             {
                 "report_id": r.report_id,
                 "report_kind": r.talent_report_kind,
-                "pdf_url": r.pdf_url,
+                # 🔒 隱私規則：顧問不得透過 API 直接取得客戶報告 PDF 連結，僅管理員可見
+                "pdf_url": r.pdf_url if _is_admin else None,
                 "completed_at": r.completed_at.isoformat() if r.completed_at else None,
             }
             for r in rows

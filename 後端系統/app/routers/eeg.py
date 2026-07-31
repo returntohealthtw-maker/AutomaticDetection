@@ -451,6 +451,7 @@ def get_session_stats(
     回傳格式與 _lastEegCapture 相同，前端可直接傳給 _renderResultsFromEeg。
     """
     user = require_user(authorization, db)
+    _is_admin = (user.role == "admin")
 
     sess = db.query(M.Session).filter(M.Session.session_id == session_id).first()
     if not sess:
@@ -569,7 +570,8 @@ def get_session_stats(
         "bdna_mode":    getattr(sess, "bdna_mode", None),
         "firebase_session_id": getattr(sess, "firebase_session_id", None),
         "report_status": rep.status if rep else None,
-        "report_url":    rep.pdf_url if rep else None,
+        # 🔒 隱私規則：顧問不得透過 API 直接取得客戶報告 PDF 連結，僅管理員可見
+        "report_url":    (rep.pdf_url if rep else None) if _is_admin else None,
         "email_sent":    rep.email_sent if rep else 0,
         "braindna_result": braindna_result,   # ← MBTI / 壓力 / 平衡 / 活力（從 DB 取出）
         "qeeg_abilities": _qeeg_abilities,    # ← qEEG 七大能力分數（族群常模校正，0-100）
@@ -587,6 +589,7 @@ def list_my_sessions(
     回傳欄位含 report_status / report_url，供 APP「歷史紀錄」顯示。
     """
     user = require_user(authorization, db)
+    _is_admin = (user.role == "admin")
     q = db.query(M.Session)
     if user.role != "admin":
         # 撈法（三層 OR 相容舊、新資料）：
@@ -635,7 +638,8 @@ def list_my_sessions(
             "bdna_mode":           getattr(s, "bdna_mode", None),
             "firebase_session_id": getattr(s, "firebase_session_id", None),
             "report_status": (rep.status if rep else None),
-            "report_url":    (rep.pdf_url if rep else None),
+            # 🔒 隱私規則：顧問不得透過 API 直接取得客戶報告 PDF 連結，僅管理員可見
+            "report_url":    ((rep.pdf_url if rep else None) if _is_admin else None),
             "report_variant":(getattr(rep, "variant", None) if rep else None),
             # BrainDNA 計算結果（供歷史紀錄頁及管理頁顯示 MBTI）
             "mbti":          getattr(s, "mbti", None),

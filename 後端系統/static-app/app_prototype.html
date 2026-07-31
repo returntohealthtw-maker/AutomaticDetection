@@ -3588,7 +3588,7 @@ async function refreshEarningsData() {
         const occ = s.occupation ? `<span style="font-size:11px;color:#888;">💼 ${s.occupation}</span>` : '';
         const subjSessions = sessions.filter(x => x.subject_name === s.name);
         const sessCount = subjSessions.length;
-        const hasReport = subjSessions.some(x => x.report_status === 'completed' && x.report_url);
+        const hasReport = subjSessions.some(x => x.report_status === 'completed');
         const sessInfo = sessCount > 0
           ? `<span style="font-size:11px;color:#1565c0;background:#e3f2fd;padding:1px 7px;border-radius:8px;">${sessCount} 次檢測${hasReport ? ' · 有報告' : ''}</span>`
           : `<span style="font-size:11px;color:#aaa;">尚未做腦波</span>`;
@@ -3720,7 +3720,7 @@ function _showSubjectDetail(idx) {
     sessions.forEach(sess => {
       const dateStr   = fmtTs(sess.created_at);
       const rtLabel   = REPORT_ZH[sess.report_type] || sess.report_type || '—';
-      const hasRpt    = sess.report_status === 'completed' && sess.report_url;
+      const hasRpt    = sess.report_status === 'completed';
       const statusDot = hasRpt ? '🟢' : sess.report_status === 'generating' ? '🟡' : sess.report_status === 'failed' ? '🔴' : '⚪';
       const scoreChip = sess.overall_score != null
         ? `<span style="background:#e8f5e9;color:#2e7d32;padding:1px 8px;border-radius:8px;font-size:11px;">綜合 ${sess.overall_score}</span>`
@@ -3915,7 +3915,7 @@ function _renderHistoryList() {
     groups[monthKey].forEach(s => {
       const lbl = _historyReportLabel(s.report_type);
       const isSuccess = s.status === 1;
-      const reportDone = s.report_status === 'completed' && s.report_url;
+      const reportDone = s.report_status === 'completed';
       let statusTag, extraNote = '', reportTagsHtml = '';
       if (!isSuccess) {
         statusTag = `<span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">❌ 失敗</span>`;
@@ -5216,9 +5216,10 @@ async function startFullReportGeneration(opts) {
   const finalSubjectName = subjectName || _currentSubjectName || '受測者';
 
   try {
-    const resp = await fetch(`${API_BASE}/report-gen/start`, {
+    // 用 apiFetch（帶 Authorization）：後端才能判斷呼叫者是否為管理員，
+    // 藉此決定關係報告（夫妻/親子）的 PDF 連結是否可回傳（隱私規則：顧問一律看不到）
+    const resp = await apiFetch('/report-gen/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subject_name:         finalSubjectName,
         subject_email:        subjectEmail,
@@ -5277,29 +5278,41 @@ async function startFullReportGeneration(opts) {
         return;
       }
 
-      // 2) parent_child_rest：HomeAnalysisReport — 已下單 /generate，跳到報告頁
+      // 2) parent_child_rest：HomeAnalysisReport — 已下單 /generate
+      //    🔒 隱私規則：顧問看不到、也拿不到報告連結，一律由後端直接 Email 給受測者
+      //    （管理員帳號後端仍會回傳 result_url，供後台除錯用；一般顧問則只有 data.message）
       if (xmode === 'parent_child_rest') {
-        if (data.result_url) {
-          if (emailBar) emailBar.className = 'rg-email-bar done';
-          if (emailText) {
-            emailText.innerHTML = `🤖 親子報告生成中…<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">點此查看進度 →</a>`;
-          }
-          setTimeout(() => {
-            try { window.location.href = data.result_url; }
-            catch (e) { try { window.open(data.result_url, '_blank'); } catch (e2) {} }
-          }, 1500);
-        } else {
+        if (!data.ok) {
           if (emailBar) emailBar.className = 'rg-email-bar error';
           if (emailText) emailText.textContent = `❌ 親子報告下單失敗：${data.error || ''}`;
+        } else if (data.result_url) {
+          // 管理員專用：可直接查看進度連結
+          if (emailBar) emailBar.className = 'rg-email-bar done';
+          if (emailText) {
+            emailText.innerHTML = `🤖 [管理員] 親子報告生成中…<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">點此查看進度 →</a>`;
+          }
+        } else {
+          if (emailBar) emailBar.className = 'rg-email-bar done';
+          if (emailText) emailText.textContent = data.message || '✅ 親子報告已開始生成，完成後將直接以 Email 寄送給受測者。';
         }
         return;
       }
 
-      // 3) marital_rest：marital-report 已直接回 PDF，呈現下載連結
-      if (xmode === 'marital_rest' && data.result_url) {
-        if (emailBar) emailBar.className = 'rg-email-bar done';
-        if (emailText) {
-          emailText.innerHTML = `✅ 夫妻報告已生成！<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">下載 PDF →</a>${subjectEmail ? '（已寄送 Email）' : ''}`;
+      // 3) marital_rest：夫妻報告已生成
+      //    🔒 隱私規則：顧問看不到、也拿不到 PDF 連結，一律由後端直接 Email 給受測者
+      if (xmode === 'marital_rest') {
+        if (!data.ok) {
+          if (emailBar) emailBar.className = 'rg-email-bar error';
+          if (emailText) emailText.textContent = `❌ 夫妻報告生成失敗：${data.error || ''}`;
+        } else if (data.result_url) {
+          // 管理員專用：可直接下載
+          if (emailBar) emailBar.className = 'rg-email-bar done';
+          if (emailText) {
+            emailText.innerHTML = `✅ [管理員] 夫妻報告已生成！<a href="${data.result_url}" target="_blank" style="color:#fff;text-decoration:underline;font-weight:700;">下載 PDF →</a>`;
+          }
+        } else {
+          if (emailBar) emailBar.className = 'rg-email-bar done';
+          if (emailText) emailText.textContent = data.message || '✅ 夫妻報告已生成完成，將直接以 Email 寄送給受測者。';
         }
         return;
       }
@@ -8497,10 +8510,11 @@ async function generateRelationReport() {
   }
 
   // 呼叫後端
+  // 用 apiFetch（帶 Authorization）：後端才能判斷呼叫者是否為管理員，
+  // 藉此決定關係報告（夫妻/親子）的 PDF 連結是否可回傳（隱私規則：顧問一律看不到）
   try {
-    const resp = await fetch(`${API_BASE}/report-gen/start`, {
+    const resp = await apiFetch('/report-gen/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subject_name:   p0 ? p0.name : names,
         subject_email:  emails[0] || null,
@@ -8531,31 +8545,34 @@ async function generateRelationReport() {
       return;
     }
 
+    // 🔒 隱私規則：顧問完成生成後看不到、也拿不到報告 PDF/連結，一律由後端直接
+    // Email 給受測者本人（見後端 send_report_link_email）。管理員帳號後端仍會回傳
+    // result_url，供後台除錯／預覽用；一般顧問只會拿到 data.message 文字。
     if (xmode === 'marital_rest') {
-      // 夫妻報告：直接有 PDF
       statusBar.style.background  = '#e8f5e9';
       statusBar.style.borderColor = '#66bb6a';
       statusBar.style.color       = '#2e7d32';
-      statusBar.textContent = '✅ 夫妻腦波報告已生成完成！';
+      statusBar.textContent = data.result_url ? '✅ 夫妻腦波報告已生成完成！' : (data.message || '✅ 夫妻腦波報告已生成完成，將直接以 Email 寄送給受測者。');
       doneTitle.textContent = '報告已完成 🎉';
       if (data.result_url) {
+        // 僅管理員可見（供後台測試/除錯）
         resultBtns.style.display = 'block';
         resultBtns.innerHTML = `<a href="${data.result_url}" target="_blank"
           style="display:block;background:#c2185b;color:white;border-radius:12px;padding:12px;font-weight:700;text-decoration:none;font-size:14px;margin-bottom:8px;">
-          📄 下載夫妻報告 PDF →</a>`;
+          📄 [管理員] 下載夫妻報告 PDF →</a>`;
       }
     } else if (xmode === 'parent_child_rest') {
-      // 親子報告：跳到報告生成頁面
       statusBar.style.background  = '#e8f5e9';
       statusBar.style.borderColor = '#66bb6a';
       statusBar.style.color       = '#2e7d32';
-      statusBar.textContent = '✅ 親子報告已開始生成，請點下方連結查看進度。';
+      statusBar.textContent = data.result_url ? '✅ 親子報告已開始生成，請點下方連結查看進度。' : (data.message || '✅ 親子報告已開始生成，完成後將直接以 Email 寄送給受測者。');
       doneTitle.textContent = '報告生成中 🌿';
       if (data.result_url) {
+        // 僅管理員可見（供後台測試/除錯）
         resultBtns.style.display = 'block';
         resultBtns.innerHTML = `<a href="${data.result_url}" target="_blank"
           style="display:block;background:#c2185b;color:white;border-radius:12px;padding:12px;font-weight:700;text-decoration:none;font-size:14px;margin-bottom:8px;">
-          📊 查看親子報告進度 →</a>`;
+          📊 [管理員] 查看親子報告進度 →</a>`;
       }
     } else {
       statusBar.style.background  = '#fffde7';

@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti
 from app.services.report_generator import generate_report_async
 from app.routers.monitor import broadcast
-from app.routers.auth import require_user as get_current_user
+from app.routers.auth import require_user as get_current_user, require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["腦波數據"])
 
@@ -469,8 +469,18 @@ def get_session_captures(session_id: int, db: DbSession = Depends(get_db)):
 
 
 @router.get("/reports/{report_id}/status")
-def get_report_status(report_id: int, db: DbSession = Depends(get_db)):
-    """查詢報告生成狀態（Android 可輪詢）"""
+def get_report_status(
+    report_id: int,
+    authorization: Optional[str] = Header(None),
+    db: DbSession = Depends(get_db),
+):
+    """查詢報告生成狀態（管理員專用）。
+
+    🔒 隱私規則：此端點過去完全未做權限檢查（任何人皆可用連續的 report_id
+    枚舉取得所有客戶報告的下載連結），屬於嚴重隱私漏洞，現已修正為管理員專用。
+    （目前 Android App 與後台皆未呼叫此端點，鎖定不影響既有功能。）
+    """
+    require_admin(authorization, db)
     report = db.query(models.Report).filter(
         models.Report.report_id == report_id
     ).first()

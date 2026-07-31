@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.07.31.01"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.07.31.02"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -152,6 +152,13 @@ if _STATIC_APP_DIR:
     if os.path.isdir(_CHILD_REPORT_APP_DIR):
         app.mount("/child-report-app", StaticFiles(directory=_CHILD_REPORT_APP_DIR, html=True), name="child-report-app")
         print(f"[child-report-app] OK 本機兒童 React App 掛載：{_CHILD_REPORT_APP_DIR}")
+
+    # 掛載青少年報告 React App（獨立專案，複製自 child-report-app 並沿用其
+    # 已內建的「國際心教育」青少年學生版章節內容，僅改 auto=1 headless 觸發方式）
+    _TEEN_REPORT_APP_DIR = os.path.join(_STATIC_APP_DIR, "teen-report-app")
+    if os.path.isdir(_TEEN_REPORT_APP_DIR):
+        app.mount("/teen-report-app", StaticFiles(directory=_TEEN_REPORT_APP_DIR, html=True), name="teen-report-app")
+        print(f"[teen-report-app] OK 本機青少年 React App 掛載：{_TEEN_REPORT_APP_DIR}")
 
 # 掛載親子報告靜態資源（封面圖 + 生成圖片）
 _PC_DATA_CANDIDATES = [
@@ -429,7 +436,7 @@ async def _startup_self_audit():
     await asyncio.sleep(5)
     try:
         static_dir = _STATIC_APP_DIR
-        for app_dir_name in ("report-app", "child-report-app"):
+        for app_dir_name in ("report-app", "child-report-app", "teen-report-app"):
             idx = os.path.join(static_dir, app_dir_name, "index.html")
             if not os.path.isfile(idx):
                 continue

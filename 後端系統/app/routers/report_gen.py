@@ -39,6 +39,19 @@ REPORTS_DIR = Path("reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _soft_is_admin(authorization: Optional[str], db: DbSession) -> bool:
+    """非強制性的管理員判斷：驗證失敗一律視為「非管理員」，不拋例外。
+    用途：關係報告（夫妻/親子）完成後，決定是否可把 PDF/連結回傳給呼叫端——
+    顧問帳號一律視為非管理員，避免顧問透過 API 回應直接取得客戶報告下載連結（隱私規則）。
+    """
+    try:
+        from app.routers.auth import require_admin
+        require_admin(authorization, db)
+        return True
+    except Exception:
+        return False
+
+
 def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]:
     """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。
 
@@ -461,7 +474,11 @@ def test_section(req: TestSectionRequest):
 
 
 @router.post("/start")
-def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
+def start_full(
+    req: StartRequest,
+    db: DbSession = Depends(get_db),
+    authorization: Optional[str] = Header(default=None),
+):
     """啟動報告生成（自動依 report_type 路由到外部系統或內建 Gemini）
 
     優先序：
@@ -777,8 +794,48 @@ def start_full(req: StartRequest, db: DbSession = Depends(get_db)):
                     except Exception as _fb_err:
                         logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
 
+                # ── 隱私規則：關係報告 PDF 一律用 Email 直接寄給受測者，不透過顧問轉交 ──
+                # （顧問完成生成後只會看到「已完成/已寄送」文字，看不到、也拿不到下載連結）
+                if pdf_url and resolved_email:
+                    try:
+                        _title = "夫妻腦波共振關係報告" if ext_mode == "marital_rest" else "親子腦波共振關係報告"
+                        _mail_res = email_sender.send_report_link_email(
+                            to=resolved_email,
+                            subject_name=resolved_name,
+                            report_title=_title,
+                            pdf_url=pdf_url,
+                            expires_days=7,
+                        )
+                        if _mail_res and _mail_res.get("ok"):
+                            try:
+                                target_rep = existing if existing is not None else new_rep
+                                target_rep.email_sent = 1
+                                db.commit()
+                            except Exception:
+                                pass
+                            logger.info("[report-gen/start] %s 報告連結已 email 寄送至 %s", ext_mode, resolved_email)
+                        else:
+                            logger.warning("[report-gen/start] %s 報告 email 寄送失敗: %s", ext_mode, _mail_res)
+                    except Exception as _mail_err:
+                        logger.warning("[report-gen/start] 寄送關係報告 email 失敗（可忽略）: %s", _mail_err)
+
             except Exception as db_err:
                 logger.warning("[report-gen/start] 寫入 DB 失敗（%s）: %s", ext_mode, db_err)
+
+        # ── 隱私規則：顧問不得透過 API 回應直接取得客戶報告的下載連結 ──────────
+        # 夫妻／親子報告的 PDF 一律改用 Email 直接寄給受測者（見上方 send_report_link_email）。
+        # 僅管理員（後台除錯用）才能在回應中看到 result_url / external_url 等原始連結。
+        _is_admin_caller = _soft_is_admin(authorization, db)
+        if ext_mode in ("marital_rest", "parent_child_rest") and not _is_admin_caller:
+            return {
+                "ok":            result.get("ok", False),
+                "mode":          "external",
+                "external_mode": result.get("mode"),
+                "report_type":   req.report_type,
+                "message":       "報告已生成完成，將直接以 Email 寄送給受測者" if result.get("ok") else (result.get("error") or "生成失敗"),
+                "email_sent":    bool(resolved_email),
+                "error":         result.get("error"),
+            }
 
         return {
             "ok":              result.get("ok", False),
