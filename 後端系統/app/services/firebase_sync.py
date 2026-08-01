@@ -868,6 +868,8 @@ _REPORT_TYPE_MAP = {
     "adult":        "adult_vip",
     "child":        "child_vip",
     "child_report": "child_vip",
+    "teen":         "teen_vip",
+    "teen_report":  "teen_vip",
     "marital":      "marital",
     "parent_child": "parent_child",
 }

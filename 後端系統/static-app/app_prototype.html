@@ -1824,13 +1824,38 @@
             </div>
           </div>
 
-          <!-- 青少年未來人生戰略發展（籌備中） -->
-          <div data-age-group="teen" style="background:#f5f5f7;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);border:1px dashed #c7c7cc;">
-            <div style="font-size:14px;font-weight:700;color:#6b6b70;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+          <!-- 青少年未來人生戰略發展 -->
+          <div data-age-group="teen" style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
               🚀 青少年未來人生戰略發展
               <span style="background:#eceff1;color:#546e7a;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">青少年</span>
             </div>
-            <div style="font-size:12px;color:#888;padding:6px 0;">敬請期待，即將推出（13-17 歲專屬報告）</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" data-report-key="teen_trial" data-trial-only="1" onclick="selectSingleReport(this,'teen_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">✨</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">體驗版</div>
+                  <div class="desc">基礎升學戰略分析</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$3,000</div>
+              </div>
+              <div class="report-item" data-report-key="teen_full" onclick="selectSingleReport(this,'teen_full','NT$5,000','screen-qr-full')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">⭐</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">完整版</div>
+                  <div class="desc">完整升學與生涯戰略深度解析</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$5,000</div>
+              </div>
+              <div class="report-item" data-report-key="teen_vip" onclick="selectSingleReport(this,'teen_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">👑</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">VIP版 <span style="background:#FFD700;color:#5d4e00;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">最完整</span></div>
+                  <div class="desc">VIP 專屬全方位升學戰略報告</div>
+                </div>
+                <div class="report-price" style="color:#b8860b;">NT$12,000</div>
+              </div>
+            </div>
           </div>
 
           <!-- 加購升級 -->
@@ -3623,6 +3648,9 @@ async function refreshEarningsData() {
       child_trial:{ label:'兒童天賦·體驗版', bg:'#e3f2fd', color:'#1565c0' },
       child_full: { label:'兒童天賦·完整版', bg:'#e3f2fd', color:'#1565c0' },
       child_vip:  { label:'兒童天賦·VIP版',  bg:'#e3f2fd', color:'#1565c0' },
+      teen_trial: { label:'青少年戰略·體驗版', bg:'#eceff1', color:'#37474f' },
+      teen_full:  { label:'青少年戰略·完整版', bg:'#eceff1', color:'#37474f' },
+      teen_vip:   { label:'青少年戰略·VIP版',  bg:'#eceff1', color:'#37474f' },
       test_1:     { label:'NT$1功能測試',     bg:'#fff3e0', color:'#e65100' },
     };
     const t = m[rt] || { label: rt || '—', bg:'#f5f5f5', color:'#666' };
@@ -3687,10 +3715,11 @@ function _showSubjectDetail(idx) {
   );
 
   const REPORT_ZH = {
-    adult:'成人報告', child:'兒童報告', life_script:'人生劇本',
+    adult:'成人報告', child:'兒童報告', teen:'青少年報告', life_script:'人生劇本',
     marital:'婚姻關係', parent_child:'親子關係',
     life_trial:'人生劇本·體驗', life_full:'人生劇本·完整', life_vip:'人生劇本·VIP',
     child_trial:'兒童天賦·體驗', child_full:'兒童天賦·完整', child_vip:'兒童天賦·VIP',
+    teen_trial:'青少年戰略·體驗', teen_full:'青少年戰略·完整', teen_vip:'青少年戰略·VIP',
   };
   const fmtTs = (ts) => {
     if (!ts) return '—';
@@ -3760,6 +3789,7 @@ function _showSubjectDetail(idx) {
         marital_vip:'夫妻共振 VIP', marital_full:'夫妻共振完整', marital_trial:'夫妻共振體驗',
         parent_child_vip:'親子共振 VIP', parent_child_full:'親子共振完整',
         child_full:'兒童天賦完整', child_vip:'兒童天賦 VIP', child_trial:'兒童天賦體驗',
+        teen_full:'青少年戰略完整', teen_vip:'青少年戰略 VIP', teen_trial:'青少年戰略體驗',
       };
       const rptListHtml = sessReports.length > 0
         ? `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #e0e0e0;">
@@ -4710,6 +4740,9 @@ const REPORT_PRICING = {
     child_trial:   { amount: 3000,  display: 'NT$3,000',  qrScreen: 'screen-qr-trial'   },
     child_full:    { amount: 5000,  display: 'NT$5,000',  qrScreen: 'screen-qr-full'    },
     child_vip:     { amount: 12000, display: 'NT$12,000', qrScreen: 'screen-qr-vip'     },
+    teen_trial:    { amount: 3000,  display: 'NT$3,000',  qrScreen: 'screen-qr-trial'   },
+    teen_full:     { amount: 5000,  display: 'NT$5,000',  qrScreen: 'screen-qr-full'    },
+    teen_vip:      { amount: 12000, display: 'NT$12,000', qrScreen: 'screen-qr-vip'     },
     up_trial_full: { amount: 2000,  display: 'NT$2,000',  qrScreen: 'screen-qr-up-2000' },
     up_full_vip:   { amount: 7000,  display: 'NT$7,000',  qrScreen: 'screen-qr-up-7000' },
     up_trial_vip:  { amount: 9000,  display: 'NT$9,000',  qrScreen: 'screen-qr-up-9000' },
@@ -4721,6 +4754,8 @@ const REPORT_PRICING = {
     life_vip:      { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
     child_full:    { amount: 4800,  display: 'NT$4,800',  qrScreen: 'screen-qr-full'    },
     child_vip:     { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
+    teen_full:     { amount: 4800,  display: 'NT$4,800',  qrScreen: 'screen-qr-full'    },
+    teen_vip:      { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
     up_full_vip:   { amount: 4000,  display: 'NT$4,000',  qrScreen: 'screen-qr-up-7000' },
     test_1:        { amount: 1,     display: 'NT$1',      qrScreen: 'screen-qr-test'    },
   },
@@ -5613,6 +5648,9 @@ function _reportKeyToZh(key) {
     'child_trial': '兒童腦波天賦解碼 · 體驗版',
     'child_full':  '兒童腦波天賦解碼 · 完整版',
     'child_vip':   '兒童腦波天賦解碼 · VIP版',
+    'teen_trial':  '青少年未來人生戰略發展 · 體驗版',
+    'teen_full':   '青少年未來人生戰略發展 · 完整版',
+    'teen_vip':    '青少年未來人生戰略發展 · VIP版',
     'test_1':      '🧪 NT$1 功能測試（生成第一章 + 寄信）',
     'up_trial_full': '加購升級：體驗版 → 完整版',
     'up_full_vip':   '加購升級：完整版 → VIP版',
@@ -8084,6 +8122,7 @@ function _parseReportKey(key) {
   // NT$1 測試：用 trial 版（章節 1,3,8,12 共 4 章 ~3-5 分鐘），而非 full（48 節 ~15-20 分鐘）
   if (key === 'test_1')          return { type: 'life_script', variant: 'full',  chapter1Only: false, chaptersToGenerate: [1,2] };
   if (key.startsWith('life_'))   return { type: 'life_script', variant: key.split('_')[1], chapter1Only: false };
+  if (key.startsWith('teen_'))   return { type: 'teen',        variant: key.split('_')[1], chapter1Only: false };
   if (key.startsWith('child_'))  return { type: 'child',       variant: key.split('_')[1], chapter1Only: false };
   if (key.startsWith('up_'))     return { type: 'life_script', variant: 'vip',  chapter1Only: false };
   return { type: 'life_script', variant: 'full', chapter1Only: false };
@@ -8136,6 +8175,9 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'child_trial': '兒童腦波天賦解碼 · 體驗版',
     'child_full':  '兒童腦波天賦解碼 · 完整版',
     'child_vip':   '兒童腦波天賦解碼 · VIP版',
+    'teen_trial':  '青少年未來人生戰略發展 · 體驗版',
+    'teen_full':   '青少年未來人生戰略發展 · 完整版',
+    'teen_vip':    '青少年未來人生戰略發展 · VIP版',
     'test_1':      '🧪 NT$1 功能測試',
     'up_trial_full': '加購升級：體驗版 → 完整版',
     'up_full_vip':   '加購升級：完整版 → VIP版',
@@ -8173,6 +8215,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     const fallbackMap = {
       'life_trial':3000,'life_full':5000,'life_vip':12000,
       'child_trial':3000,'child_full':5000,'child_vip':12000,
+      'teen_trial':3000,'teen_full':5000,'teen_vip':12000,
       'test_1':1,
       'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000
     };
@@ -8308,8 +8351,8 @@ async function _loadVipCustomers() {
     if (rs.ok) sessions = (await rs.json()).sessions || [];
   } catch (e) { }
 
-  // 篩選付 VIP 款的受測者（包含 life_vip、child_vip；paid 才算）
-  const VIP_TYPES = new Set(['life_vip', 'child_vip']);
+  // 篩選付 VIP 款的受測者（包含 life_vip、child_vip、teen_vip；paid 才算）
+  const VIP_TYPES = new Set(['life_vip', 'child_vip', 'teen_vip']);
   const vipPayments = payments.filter(p => VIP_TYPES.has(p.report_type) && p.status === 'paid');
 
   // 以 subject_name 去重，保留最新一筆
@@ -9798,7 +9841,7 @@ function _filterMissingList() {
           </div>
           <div style="font-size:11px;color:#666;margin-top:4px;">
             ${s.consultant ? `👤 ${s.consultant}` : ''} ·
-            ${s.report_type === 'child' ? '🧒 兒童' : '👤 成人'}${s.audience ? ` · ${s.audience}` : ''} ·
+            ${s.report_type === 'child' ? '🧒 兒童' : (s.report_type === 'teen' ? '🚀 青少年' : '👤 成人')}${s.audience ? ` · ${s.audience}` : ''} ·
             📊 ${s.captures} 筆腦波
           </div>
           <div style="font-size:10px;color:#999;margin-top:3px;">
@@ -11219,6 +11262,9 @@ const _PRODUCTS = [
   { key:'child_trial',        label:'兒童天賦 · 體驗版（加盟）',      price:3000,  rolesOnly:['franchise','agent','project','staff'] },
   { key:'child_full',         label:'兒童天賦 · 完整版（加盟）',      price:5000,  rolesOnly:['franchise','agent','project','staff'] },
   { key:'child_vip',          label:'兒童天賦 · VIP版（加盟）',       price:12000, rolesOnly:['franchise','agent','project','staff'] },
+  { key:'teen_trial',         label:'青少年戰略 · 體驗版（加盟）',    price:3000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'teen_full',          label:'青少年戰略 · 完整版（加盟）',    price:5000,  rolesOnly:['franchise','agent','project','staff'] },
+  { key:'teen_vip',           label:'青少年戰略 · VIP版（加盟）',     price:12000, rolesOnly:['franchise','agent','project','staff'] },
   { key:'up_trial_full',      label:'加購升級：體驗→完整（加盟）',    price:2000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
   { key:'up_full_vip',        label:'加購升級：完整→VIP（加盟）',     price:7000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
   { key:'up_trial_vip',       label:'加購升級：體驗→VIP（加盟）',     price:9000,  upgrade:true, rolesOnly:['franchise','agent','project','staff'] },
@@ -11227,6 +11273,8 @@ const _PRODUCTS = [
   { key:'life_vip_direct',    label:'人生劇本 · VIP版（直營）',       price:8800,  rolesOnly:['direct'] },
   { key:'child_full_direct',  label:'兒童天賦 · 完整版（直營）',      price:4800,  rolesOnly:['direct'] },
   { key:'child_vip_direct',   label:'兒童天賦 · VIP版（直營）',       price:8800,  rolesOnly:['direct'] },
+  { key:'teen_full_direct',   label:'青少年戰略 · 完整版（直營）',    price:4800,  rolesOnly:['direct'] },
+  { key:'teen_vip_direct',    label:'青少年戰略 · VIP版（直營）',     price:8800,  rolesOnly:['direct'] },
   { key:'up_full_vip_direct', label:'加購升級：完整→VIP（直營）',     price:4000,  upgrade:true, rolesOnly:['direct'] },
   // ── 共用品項（所有身份）────────────────────────────────────────────
   { key:'relation',           label:'關係報告（共振）',                price:8000  },

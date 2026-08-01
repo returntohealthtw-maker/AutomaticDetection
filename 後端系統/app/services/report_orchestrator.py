@@ -37,6 +37,7 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_URLS = {
     "life_script":  "__local__",   # 代表使用本機 /report-app/
     "child":        "__local__",   # 代表使用本機 /child-report-app/（已移植，不再走 Vercel）
+    "teen":         "__local__",   # 代表使用本機 /teen-report-app/（獨立專案，沿用心教育青少年學生版內容）
     "parent_child": "__local__",   # 代表使用本機 /parent-child/（已移植，不再走 Railway）
     "marital":      "https://web-production-2c7d43.up.railway.app",
 }
@@ -49,11 +50,13 @@ FALLBACK_URLS = {
 # 本機 report-app 的路徑前綴（headless 開瀏覽器時改用 localhost）
 LOCAL_REPORT_APP_PATH       = "/report-app/"
 LOCAL_CHILD_REPORT_APP_PATH = "/child-report-app/"
+LOCAL_TEEN_REPORT_APP_PATH  = "/teen-report-app/"
 
 # 每家系統的 API 模式
 SYSTEM_MODES = {
     "life_script":  "vite_prefill",      # 開連結 + URL 帶 query string 讓 React 自動填表執行
     "child":        "vite_prefill",
+    "teen":         "vite_prefill",
     "parent_child": "parent_child_rest", # HomeAnalysisReport 自帶 /generate
     "marital":      "marital_rest",      # 真實 REST API
 }
@@ -63,6 +66,7 @@ def _url_for(report_type: str) -> Optional[str]:
     mp = {
         "life_script":   settings.REPORT_URL_LIFE_SCRIPT,
         "child":         settings.REPORT_URL_CHILD,
+        "teen":          settings.REPORT_URL_TEEN,
         "parent_child":  settings.REPORT_URL_PARENT_CHILD,
         "marital":       settings.REPORT_URL_MARITAL,
     }
@@ -82,22 +86,25 @@ def _is_local(report_type: str) -> bool:
     """是否走本機內建服務（優先用本機，穩定且不依賴外部 Vercel / Railway）
 
     支援 life_script（/report-app/）、child（/child-report-app/）、
-    parent_child（/parent-child/）。
+    teen（/teen-report-app/）、parent_child（/parent-child/）。
 
     判斷順序：
     1. 環境變數 USE_EXTERNAL_LIFE_SCRIPT=1   → life_script 強制走外部
     2. 環境變數 USE_EXTERNAL_CHILD=1         → child 強制走外部
-    3. 環境變數 USE_EXTERNAL_PARENT_CHILD=1  → parent_child 強制走外部
-    4. 本機對應目錄 / 路由存在 → 走本機
-    5. 否則走外部
+    3. 環境變數 USE_EXTERNAL_TEEN=1          → teen 強制走外部
+    4. 環境變數 USE_EXTERNAL_PARENT_CHILD=1  → parent_child 強制走外部
+    5. 本機對應目錄 / 路由存在 → 走本機
+    6. 否則走外部
     """
-    if report_type not in ("life_script", "child", "parent_child"):
+    if report_type not in ("life_script", "child", "teen", "parent_child"):
         return False
 
     # 強制外部 flag
     if report_type == "life_script" and os.environ.get("USE_EXTERNAL_LIFE_SCRIPT", "").strip() == "1":
         return False
     if report_type == "child" and os.environ.get("USE_EXTERNAL_CHILD", "").strip() == "1":
+        return False
+    if report_type == "teen" and os.environ.get("USE_EXTERNAL_TEEN", "").strip() == "1":
         return False
     if report_type == "parent_child" and os.environ.get("USE_EXTERNAL_PARENT_CHILD", "").strip() == "1":
         return False
@@ -113,8 +120,13 @@ def _is_local(report_type: str) -> bool:
                 return True
         return True  # router 已 include，預設走本機
 
-    # 對應靜態目錄名稱（life_script / child）
-    dir_name = "report-app" if report_type == "life_script" else "child-report-app"
+    # 對應靜態目錄名稱（life_script / child / teen）
+    if report_type == "life_script":
+        dir_name = "report-app"
+    elif report_type == "teen":
+        dir_name = "teen-report-app"
+    else:
+        dir_name = "child-report-app"
     local_index_candidates = [
         f"/app/static-app/{dir_name}/index.html",   # Docker / Railway
         f"static-app/{dir_name}/index.html",          # 本地開發
@@ -440,7 +452,8 @@ def _call_vite_prefill(
     ba = (brainwave_data or {}).get("bands_avg") or {}
     b7 = (brainwave_data or {}).get("bands_7")   or {}  # 真實 High/Low 子頻帶
     _qab = (brainwave_data or {}).get("qeeg_abilities") or {}
-    _is_child_rpt = (report_type or "").lower().startswith("child")
+    # 兒童 / 青少年報告都維持 eSense 專注放鬆值，qEEG 常模僅以成人資料建立，不適用未成年人
+    _is_child_rpt = (report_type or "").lower().startswith("child") or (report_type or "").lower() == "teen"
     # focus/relaxation：成人優先 QEEG 常模校正；兒童維持 eSense（QEEG 以成人常模，不適用兒童）
     attn  = (None if _is_child_rpt else _qab.get("focus"))      or _g(brainwave_data or {}, "attention_percentage")
     medi  = (None if _is_child_rpt else _qab.get("relaxation")) or _g(brainwave_data or {}, "meditation_percentage")
@@ -607,11 +620,13 @@ def trigger_external_report(
         if rd:
             api_base = rd if rd.startswith("http") else f"https://{rd}"
 
-    # life_script / child 走本機靜態 React App（不依賴外部 Vercel）
+    # life_script / child / teen 走本機靜態 React App（不依賴外部 Vercel）
     if _is_local(report_type):
         local_base = _local_base_url()
         if report_type == "child":
             effective_base = local_base + LOCAL_CHILD_REPORT_APP_PATH.rstrip("/")
+        elif report_type == "teen":
+            effective_base = local_base + LOCAL_TEEN_REPORT_APP_PATH.rstrip("/")
         else:
             effective_base = local_base + LOCAL_REPORT_APP_PATH.rstrip("/")
     else:
@@ -636,7 +651,7 @@ def trigger_external_report(
 def diag() -> Dict[str, Any]:
     """逐家列出狀態：URL、API 模式、是否能呼叫"""
     out = {}
-    for rt in ("life_script", "child", "parent_child", "marital"):
+    for rt in ("life_script", "child", "teen", "parent_child", "marital"):
         u = _url_for(rt)
         out[rt] = {
             "url":             u,
@@ -646,6 +661,7 @@ def diag() -> Dict[str, Any]:
             "from_env_or_default": "env" if (
                 (rt == "life_script"  and settings.REPORT_URL_LIFE_SCRIPT)  or
                 (rt == "child"        and settings.REPORT_URL_CHILD)        or
+                (rt == "teen"         and settings.REPORT_URL_TEEN)         or
                 (rt == "parent_child" and settings.REPORT_URL_PARENT_CHILD) or
                 (rt == "marital"      and settings.REPORT_URL_MARITAL)
             ) else "default",

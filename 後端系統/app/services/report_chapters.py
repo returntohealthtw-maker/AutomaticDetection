@@ -153,25 +153,101 @@ LIFE_SCRIPT_CHAPTERS: List[Dict] = [
 TRIAL_CHAPTERS = {1, 3, 8, 12}
 
 
+# ─── 青少年未來人生戰略發展（13-17 歲）──────────────────────────────────────
+# 內容與 teen-report-app（沿用「國際心教育」青少年學生版）的
+# CHAPTER_DEFS_XIN_TEEN_STUDENT 完全一致，僅供後台監看頁顯示章節標題/計數用，
+# 實際內容生成邏輯在 teen-report-app 的 geminiService.ts。
+TEEN_CHAPTERS: List[Dict] = [
+    {"num": 1, "icon": "🚀", "title": "啟動超能力：認識我的五維升級模型", "sections": [
+        {"num": 1, "title": "我的五大升學優勢（最強的競爭武器）"},
+        {"num": 2, "title": "五大武器整合圖譜"},
+        {"num": 3, "title": "從各種檢測項目找出我的隱藏潛力"},
+        {"num": 4, "title": "準備繪製專屬我的升學與未來發展戰略圖"},
+    ]},
+    {"num": 2, "icon": "🎭", "title": "破解性格密碼：考試壓力下的真實自我", "sections": [
+        {"num": 1, "title": "能量模式：壓力下我會社交還是獨處？"},
+        {"num": 2, "title": "學習風格：我偏細節還是整體？"},
+        {"num": 3, "title": "決策大腦：我偏邏輯還是偏感受？"},
+        {"num": 4, "title": "時間管理：我規劃派還是彈性派？"},
+    ]},
+    {"num": 3, "icon": "🧠", "title": "挖掘大腦潛能：我的學科優勢在哪裡？", "sections": [
+        {"num": 1, "title": "我的抽象邏輯與複雜閱讀能力體檢"},
+        {"num": 2, "title": "我是系統整合高手還是創新發想達人？"},
+        {"num": 3, "title": "站上舞台：表達力與研究專注力"},
+        {"num": 4, "title": "找出我的學科競爭優勢象限"},
+    ]},
+    {"num": 4, "icon": "💪", "title": "鍛鍊鋼鐵心智：成長型思維與抗壓力", "sections": [
+        {"num": 1, "title": "改變大腦：我相信能力是可以改變的嗎？"},
+        {"num": 2, "title": "失敗復原術：我的失敗反應模式"},
+        {"num": 3, "title": "撕下標籤：努力是投資不是評價"},
+        {"num": 4, "title": "壓力測試：面對排名的心理彈性與專注維持"},
+    ]},
+    {"num": 5, "icon": "🤝", "title": "人際生存法則：情緒與社群壓力應對", "sections": [
+        {"num": 1, "title": "自我覺察：我是否過度依賴外界評價？"},
+        {"num": 2, "title": "情緒急救：穩定情緒與快速恢復"},
+        {"num": 3, "title": "抗群壓力：我會跟風還是獨立？"},
+        {"num": 4, "title": "負責任決策：學會延遲滿足並考慮長期後果"},
+    ]},
+    {"num": 6, "icon": "🛠️", "title": "成為學習駭客：最關鍵的自主學習力", "sections": [
+        {"num": 1, "title": "抓 Bug 能力：我看得出自己的弱點嗎？"},
+        {"num": 2, "title": "目標拆解術：我能順利制定複習計畫嗎？"},
+        {"num": 3, "title": "動態微調：我會修正讀書策略並優化流程嗎？"},
+        {"num": 4, "title": "覆盤進化論：成敗反思與長期優化"},
+    ]},
+    {"num": 7, "icon": "📡", "title": "看懂我的戰力雷達圖：五大維度總體檢", "sections": [
+        {"num": 1, "title": "解密我的升學人格適配圖與學科優勢"},
+        {"num": 2, "title": "檢視我的抗壓韌性與情緒社交穩定度"},
+        {"num": 3, "title": "我的自主學習成熟度到哪一個等級？"},
+        {"num": 4, "title": "我是獨立作戰派，還是需要高監督型環境？"},
+    ]},
+    {"num": 8, "icon": "🗺️", "title": "畫出升學地圖：找出最配我的科系與環境", "sections": [
+        {"num": 1, "title": "打造屬於我的最佳學習環境"},
+        {"num": 2, "title": "應試派還是研究派？我的最佳策略"},
+        {"num": 3, "title": "科系大哉問：理工／商管／人文社科"},
+        {"num": 4, "title": "國際競賽適配度與我的升學優勢路徑"},
+    ]},
+    {"num": 9, "icon": "🎯", "title": "實戰演練：破解焦慮與群體效應", "sections": [
+        {"num": 1, "title": "擺脫比較心態：群體比較下如何穩定表現？"},
+        {"num": 2, "title": "遠離網路焦慮：穩定自我價值波動"},
+        {"num": 3, "title": "壓力下的抉擇：我會崩潰還是逆境成長？"},
+        {"num": 4, "title": "團隊定位：我是領導者還是跟隨者？"},
+    ]},
+    {"num": 10, "icon": "🏁", "title": "啟動未來：我的終極定位藍圖", "sections": [
+        {"num": 1, "title": "確認我的長期目標與堅持度"},
+        {"num": 2, "title": "盤點智能組合：打造我的未來競爭力"},
+        {"num": 3, "title": "降低升學風險，提升領導潛質"},
+        {"num": 4, "title": "最終產出：我的升學與發展戰略圖"},
+    ]},
+]
+
+# 青少年體驗版章節（對應 teen-report-app 的 0-indexed [0,2,6,9] → 1-indexed 1,3,7,10）
+TEEN_TRIAL_CHAPTERS = {1, 3, 7, 10}
+
+
 def get_chapters(report_type: str, variant: str) -> List[Dict]:
     """
     回傳指定報告類型 + 版本的章節清單
 
     Args:
-        report_type: 'life_script' / 'child' / 'parent_child' / 'marital'
+        report_type: 'life_script' / 'child' / 'teen' / 'parent_child' / 'marital'
         variant:     'trial' / 'full' / 'vip'
 
     Returns:
         list of chapter dicts，每個含 num, icon, title, sections
     """
-    if report_type in ("life_script", "child"):
+    if report_type == "teen":
+        all_chapters = TEEN_CHAPTERS
+        trial_set = TEEN_TRIAL_CHAPTERS
+    elif report_type in ("life_script", "child"):
         all_chapters = LIFE_SCRIPT_CHAPTERS
+        trial_set = TRIAL_CHAPTERS
     else:
         # parent_child / marital 之後從 HomeAnalysisReport / marital-report 接入
         all_chapters = LIFE_SCRIPT_CHAPTERS
+        trial_set = TRIAL_CHAPTERS
 
     if variant == "trial":
-        return [c for c in all_chapters if c["num"] in TRIAL_CHAPTERS]
+        return [c for c in all_chapters if c["num"] in trial_set]
     return list(all_chapters)
 
 

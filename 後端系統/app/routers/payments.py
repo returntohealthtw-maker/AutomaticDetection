@@ -278,6 +278,9 @@ async def create_payment(
         "child_trial": "兒童腦波天賦解碼體驗版",
         "child_full":  "兒童腦波天賦解碼完整版",
         "child_vip":   "兒童腦波天賦解碼VIP版",
+        "teen_trial":  "青少年未來人生戰略發展體驗版",
+        "teen_full":   "青少年未來人生戰略發展完整版",
+        "teen_vip":    "青少年未來人生戰略發展VIP版",
         "test_1":      "功能測試NT1元",
     }
     desc = report_labels.get(req.report_type, "腦波報告")
@@ -899,7 +902,7 @@ def list_vip_unassigned(
         raise HTTPException(status_code=403, detail="需要管理員權限")
 
     rows = db.query(M.Payment).filter(
-        M.Payment.report_type.in_(["life_vip", "child_vip"]),
+        M.Payment.report_type.in_(["life_vip", "child_vip", "teen_vip"]),
         M.Payment.status == "paid",
         M.Payment.consultant_id.is_(None),
     ).order_by(M.Payment.payment_id.desc()).all()
@@ -1083,8 +1086,9 @@ def admin_paid_not_detected(
         report_type = ""
         if pay:
             rt = pay.report_type or ""
-            # life_full → life_script; child_full → child; marital_full → marital; parent_child_full → parent_child
+            # life_full → life_script; child_full → child; teen_full → teen; marital_full → marital; parent_child_full → parent_child
             if rt.startswith("life"):     report_type = "life_script"
+            elif rt.startswith("teen"):   report_type = "teen"
             elif rt.startswith("child"):  report_type = "child"
             elif rt.startswith("marital"):report_type = "marital"
             elif rt.startswith("parent"): report_type = "parent_child"

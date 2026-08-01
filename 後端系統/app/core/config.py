@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     # 預設指向已部署的 4 個系統；要換成自訂網址用 Railway env vars 覆蓋
     REPORT_URL_LIFE_SCRIPT:  str = "https://brianave-report-image.vercel.app"
     REPORT_URL_CHILD:        str = "https://brianwave-child.vercel.app"
+    REPORT_URL_TEEN:         str = ""  # 空字串 = 使用本機 /teen-report-app/，不依賴外部 Vercel
     REPORT_URL_PARENT_CHILD: str = "https://web-production-f1aec.up.railway.app"
     REPORT_URL_MARITAL:      str = "https://web-production-2c7d43.up.railway.app"
     REPORT_REQUEST_TIMEOUT_SEC: int = 900  # 外部生成最多等 15 分鐘
