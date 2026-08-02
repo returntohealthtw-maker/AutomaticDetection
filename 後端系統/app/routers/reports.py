@@ -548,6 +548,7 @@ def list_reports(
         # 主類型
         "life_script":   "成人腦波分析",
         "child":         "兒童腦波天賦解碼",
+        "teen":          "青少年未來人生戰略發展",
         "parent_child":  "親子腦波共振關係報告",
         "marital":       "夫妻腦波共振關係報告",
         # 變體
