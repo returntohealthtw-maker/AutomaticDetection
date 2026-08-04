@@ -12,9 +12,15 @@ firebase_sync.py
   2. Firebase Bearer Token：用 FIREBASE_API_KEY + FIREBASE_SYNC_EMAIL + FIREBASE_SYNC_PASSWORD
      透過 Firebase Auth REST API 取得 id_token，自動快取並在到期前刷新。
 
-資料轉換：
-  ThinkGear raw 值（0 ~ 16,777,215）→ bandTo100 正規化 → 比例（ratio）
-  每筆 sample 會計算各頻段占總功率的百分比，寫入 lowAlphaRatio、thetaRatio 等欄位。
+資料轉換（統一分析引擎規則，見 API_INTEGRATION_GUIDE.md）：
+  1. *Power 欄位：ThinkGear raw 值（0 ~ 16,777,215）原封不動送出，
+     供 Railway calcBrainDnaQeeg() 的 mindStress／bagua／MBTI／qEEG z-score
+     等正式演算法使用「真正的原始功率」。
+  2. *Ratio 欄位：raw → bandTo100 正規化 → 各頻段占總功率的百分比（向下相容）。
+
+  注意：若只送 *Ratio 不送 *Power，Firebase 端會用 `10^(ratio/100*5)` 反推假的
+  原始值，跟真實原始功率的尺度不同，會導致 mindStress 誤判封頂、bagua/MBTI
+  常模判斷失準（2026-08-04 修正 `_captures_to_features` 前的已知問題）。
 """
 
 import asyncio
@@ -478,11 +484,22 @@ async def sync_to_firebase(
 
 def _captures_to_features(captures: List[Any]) -> list:
     """
-    將 Android 上傳的 180 筆 ThinkGear 原始擷取值轉換為 Firebase EEG 特徵格式（相對功率比例）。
+    將 Android 上傳的 180 筆 ThinkGear 原始擷取值轉換為 Firebase EEG 特徵格式。
 
     captures 是 CaptureItem 或 EegCapture 物件列表；
     其中的 delta/theta/... 為 ThinkGear 原始值（raw scale）。
-    計算各頻段相對功率比例後上傳 Firebase。
+
+    依照統一分析引擎規則（見 D:/Write program/Database/ToOtherProject/API_INTEGRATION_GUIDE.md
+    「🔒 核心規則：統一分析引擎」），本函式必須同時送出：
+      1. *Power 欄位：ThinkGear 原始功率值（未正規化），供 Railway calcBrainDnaQeeg()
+         的 mindStress／bagua／qEEG z-score 等演算法使用「真正的原始值」，
+         而不是靠 ratio 反推的粗略估計值（那會導致封頂 100 或常模判斷失準）。
+      2. *Ratio 欄位：相對功率比例（0-100，向下相容舊版消費端）。
+
+    修正紀錄（2026-08-04）：此函式先前只送 *Ratio，未送 *Power，
+    導致 Firebase 端 getRaw() 只能用 `10^(ratio/100*5)` 反推假原始值，
+    造成 mindStress 常被誤判封頂、bagua/MBTI 也因為假數值落在同一常模區間
+    （多數人被誤判為同一種人格）。修正後直接送真正的 ThinkGear raw 值。
     """
     features = []
     for cap in captures:
@@ -512,6 +529,19 @@ def _captures_to_features(captures: List[Any]) -> list:
         feat: dict = {
             "timestamp":       ts,
             "windowSec":       1.0,
+            # ── 原始功率（ThinkGear raw，未正規化）── BrainDNA/qEEG 正式演算法必要欄位
+            "deltaPower":      d  or None,
+            "thetaPower":      th or None,
+            "alphaPower":      (la + ha) or None,
+            "betaPower":       (lb + hb) or None,
+            "gammaPower":      (lg + hg) or None,
+            "lowAlphaPower":   la or None,
+            "highAlphaPower":  ha or None,
+            "lowBetaPower":    lb or None,
+            "highBetaPower":   hb or None,
+            "lowGammaPower":   lg or None,
+            "highGammaPower":  hg or None,
+            # ── 相對比例（0-100 %，向下相容）──
             "deltaRatio":      ratio(d),
             "thetaRatio":      ratio(th),
             "alphaRatio":      ratio(la + ha),
@@ -528,6 +558,9 @@ def _captures_to_features(captures: List[Any]) -> list:
             feat["attentionIndex"]  = round(attn / 100.0, 4)
         if medi > 0:
             feat["meditationIndex"] = round(medi / 100.0, 4)
+
+        # 移除 None 值（Firebase schema 允許 optional，但避免多餘欄位）
+        feat = {k: v for k, v in feat.items() if v is not None}
 
         features.append(feat)
 
