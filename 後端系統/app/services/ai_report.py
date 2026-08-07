@@ -11,6 +11,7 @@ import json
 import os
 import time
 import uuid
+import secrets
 import threading
 import logging
 from pathlib import Path
@@ -399,6 +400,7 @@ def start_full_report(
     subject_age: Optional[int] = None,
     subject_gender: Optional[str] = None,
     session_id: Optional[int] = None,
+    is_admin_caller: bool = False,
 ) -> str:
     """
     啟動報告背景生成，立即回傳 job_id
@@ -407,6 +409,10 @@ def start_full_report(
         chapters_to_generate: 只生成這些章節（如 [1]）。None = 該 variant 全部章節
         subject_email:        生成完自動寄到此 email（None = 不寄）
         session_id:           EEG session_id，用於把 PDF URL 寫回 reports 表
+        is_admin_caller:      發起這次生成的呼叫者是否為管理員（由 report_gen.py 依 Authorization
+                               Header 判斷後傳入）。用於 /status、/stream、/download、/result 等
+                               端點的隱私控制：非管理員發起的 job，一律不會在回應中夾帶 pdf_url，
+                               避免顧問自己輪詢就能取得客戶報告下載連結。
     """
     bw = brainwave_data or _demo_brainwave_data()
 
@@ -441,6 +447,10 @@ def start_full_report(
             "pdf_status":          "pending",
             "pdf_url":             None,
             "session_id":          session_id,
+            # ── 隱私控制：本 job 專屬、短期有效的查看 token（見 verify_view_token）──
+            "is_admin_caller":     bool(is_admin_caller),
+            "view_token":          secrets.token_urlsafe(24),
+            "token_expires_at":    time.time() + 6 * 3600,   # 6 小時後過期（足夠涵蓋最長生成時間）
         }
 
     t = threading.Thread(
@@ -454,6 +464,32 @@ def start_full_report(
 
 def get_job(job_id: str) -> Optional[Dict[str, Any]]:
     return _jobs.get(job_id)
+
+
+def verify_view_token(job_id: str, token: Optional[str]) -> bool:
+    """驗證呼叫者是否持有此 job 的有效查看 token。
+
+    背景：瀏覽器原生 EventSource（SSE）無法自訂 Authorization Header，
+    因此進度查詢類端點（/status、/stream）改用「建立 job 時發放、僅該 job 有效、
+    短期過期」的 token 取代登入驗證，由 report_gen.py 的端點依此決定是否可回傳 pdf_url。
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        return False
+    expected = job.get("view_token")
+    if not expected or not token:
+        return False
+    if not secrets.compare_digest(str(token), str(expected)):
+        return False
+    if time.time() > job.get("token_expires_at", 0):
+        return False
+    return True
+
+
+def is_admin_job(job_id: str) -> bool:
+    """此 job 是否由管理員帳號發起（用於 /download、/result 等需要完全阻擋非管理員的端點）。"""
+    job = _jobs.get(job_id)
+    return bool(job and job.get("is_admin_caller"))
 
 
 def cancel_job(job_id: str) -> bool:

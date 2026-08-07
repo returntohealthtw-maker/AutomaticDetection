@@ -18,7 +18,7 @@ from typing import Optional, List, Dict, Any
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DbSession
@@ -486,6 +486,10 @@ def start_full(
       2. use_external=False → 一定用內建 Gemini
       3. None（預設）       → 若外部 URL 有設就走外部；否則走內建
     """
+    # 🔑 提早判斷呼叫者是否為管理員，外部模式（夫妻/親子）與內建模式（成人/兒童）都會用到，
+    # 避免重複計算，也確保內建模式的 job 從一開始就記錄「是否由管理員發起」。
+    _is_admin_caller = _soft_is_admin(authorization, db)
+
     # 若前端沒有傳 brainwave_data（或 bands_avg 為空），嘗試從 DB 重建
     bw = req.brainwave_data
     if req.session_id and (not bw or not (bw or {}).get("bands_avg")):
@@ -825,7 +829,6 @@ def start_full(
         # ── 隱私規則：顧問不得透過 API 回應直接取得客戶報告的下載連結 ──────────
         # 夫妻／親子報告的 PDF 一律改用 Email 直接寄給受測者（見上方 send_report_link_email）。
         # 僅管理員（後台除錯用）才能在回應中看到 result_url / external_url 等原始連結。
-        _is_admin_caller = _soft_is_admin(authorization, db)
         if ext_mode in ("marital_rest", "parent_child_rest") and not _is_admin_caller:
             return {
                 "ok":            result.get("ok", False),
@@ -863,15 +866,26 @@ def start_full(
         subject_age=req.subject_age,
         subject_gender=req.subject_gender,
         session_id=req.session_id,
+        is_admin_caller=_is_admin_caller,
     )
-    return {"ok": True, "mode": "internal", "job_id": job_id}
+    # view_token：前端輪詢 /status、/stream 時要帶上，才能在「呼叫者是管理員」時看到 pdf_url
+    # （EventSource 無法帶 Authorization Header，改用此 job 專屬 token 取代）
+    _job_data = report_generator.get_job(job_id)
+    view_token = _job_data.get("view_token") if _job_data else None
+    return {"ok": True, "mode": "internal", "job_id": job_id, "view_token": view_token}
 
 
 @router.get("/download/{job_id}.pdf")
-def download_pdf(job_id: str):
-    """下載已生成的 PDF（local fallback：當 GCS 未設或上傳失敗時用）"""
+def download_pdf(job_id: str, token: Optional[str] = Query(default=None)):
+    """下載已生成的 PDF（local fallback：當 GCS 未設或上傳失敗時用）
+
+    🔒 隱私規則：僅限管理員發起的 job（持有效 view_token）才能下載，
+    顧問即使知道 job_id 也無法取得檔案。此端點目前前端未呼叫，僅供後台除錯用。
+    """
     from fastapi.responses import FileResponse
     import os
+    if not (report_generator.verify_view_token(job_id, token) and report_generator.is_admin_job(job_id)):
+        raise HTTPException(403, "無權限下載此報告")
     path = f"generated_reports/{job_id}.pdf"
     if not os.path.isfile(path):
         raise HTTPException(404, "PDF 不存在或仍在生成中")
@@ -880,11 +894,17 @@ def download_pdf(job_id: str):
 
 
 @router.get("/status/{job_id}")
-def status(job_id: str):
-    """輪詢進度（fallback when SSE 不可用）"""
+def status(job_id: str, token: Optional[str] = Query(default=None)):
+    """輪詢進度（fallback when SSE 不可用）
+
+    🔒 隱私規則：pdf_url 僅在「呼叫者持有此 job 的有效 view_token，且此 job 是管理員發起」時才回傳，
+    否則一律回傳 null——避免顧問（或任何攔截到 job_id 的第三方）僅憑輪詢就取得客戶報告下載連結。
+    其餘進度欄位（status/progress/chapters 等）不受影響，不需要 token 也能查詢，維持現有前端相容性。
+    """
     job = report_generator.get_job(job_id)
     if not job:
         raise HTTPException(404, "找不到此 job")
+    _reveal_pdf = report_generator.verify_view_token(job_id, token) and bool(job.get("is_admin_caller"))
     return {
         "job_id":              job_id,
         "status":              job.get("status"),
@@ -903,7 +923,7 @@ def status(job_id: str):
         "email_error":         job.get("email_error", ""),
         # 方案 C 新增：PDF/GCS 狀態
         "pdf_status":          job.get("pdf_status", "pending"),
-        "pdf_url":             job.get("pdf_url"),
+        "pdf_url":             job.get("pdf_url") if _reveal_pdf else None,
         "pdf_error":           job.get("pdf_error", ""),
         "subject_email":       job.get("subject_email", ""),
         "subject_name":        job.get("subject_name", ""),
@@ -912,8 +932,13 @@ def status(job_id: str):
 
 
 @router.get("/stream/{job_id}")
-def stream(job_id: str):
-    """Server-Sent Events 即時進度"""
+def stream(job_id: str, token: Optional[str] = Query(default=None)):
+    """Server-Sent Events 即時進度
+
+    註：目前推送的欄位本來就不含 pdf_url，故不需要額外遮蔽；
+    token 參數保留供前端一致地帶入（EventSource 無法帶 Authorization Header），
+    未來若此串流新增敏感欄位時可直接沿用同一套 verify_view_token 判斷。
+    """
     def event_gen():
         deadline = time.time() + 60 * 60   # 1 小時上限
         last_completed = -1
@@ -967,24 +992,31 @@ def stream(job_id: str):
 
 
 @router.get("/result/{job_id}")
-def result(job_id: str):
-    """取已完成的報告（in-memory 優先，沒有則讀磁碟）"""
-    job = report_generator.get_job(job_id)
-    if job and job.get("status") == "completed":
-        return {
-            "job_id":       job_id,
-            "subject_name": job.get("subject_name"),
-            "report_type":  job.get("report_type"),
-            "variant":      job.get("variant"),
-            "chapters":     job.get("chapters_list", []),
-            "results":      job.get("results", {}),
-        }
+def result(job_id: str, token: Optional[str] = Query(default=None)):
+    """取已完成的報告全文內容（in-memory 優先，沒有則讀磁碟）
 
+    🔒 隱私規則：與 /download 相同，僅限管理員發起的 job（持有效 view_token）才能讀取，
+    此端點目前前端未呼叫，僅供後台除錯用。
+    """
+    job = report_generator.get_job(job_id)
+    if job:
+        if not (report_generator.verify_view_token(job_id, token) and job.get("is_admin_caller")):
+            raise HTTPException(403, "無權限查看此報告內容")
+        if job.get("status") == "completed":
+            return {
+                "job_id":       job_id,
+                "subject_name": job.get("subject_name"),
+                "report_type":  job.get("report_type"),
+                "variant":      job.get("variant"),
+                "chapters":     job.get("chapters_list", []),
+                "results":      job.get("results", {}),
+            }
+        raise HTTPException(404, "報告尚未完成")
+
+    # in-memory job 已消失（例如伺服器重啟）：無法驗證 token 對應的權限，一律拒絕以避免繞過
     file = report_generator.REPORTS_DIR / f"{job_id}.json"
     if file.exists():
-        with open(file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data
+        raise HTTPException(403, "此 job 記憶體快取已消失，無法驗證權限，請改用「報告管理」後台查詢")
 
     raise HTTPException(404, "報告不存在或尚未完成")
 

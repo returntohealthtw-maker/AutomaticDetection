@@ -5070,6 +5070,7 @@ async function _initAuthOnBoot() {
 // 🧠 AI 報告生成（Gemini）— 整合 services/report_generator
 // ────────────────────────────────────────────────────────────────────────
 let _rgJobId        = null;
+let _rgViewToken    = null;  // 本次 job 專屬的查看 token（供 /status、/stream 帶入，非管理員一律看不到 pdf_url）
 let _rgEventSource  = null;
 let _rgChaptersMap  = {};   // num → {title, icon}
 
@@ -5363,6 +5364,7 @@ async function startFullReportGeneration(opts) {
       return;
     }
     _rgJobId = data.job_id;
+    _rgViewToken = data.view_token || null;
     // 內建模式：背景 thread 在主後端跑 → 即使使用者關閉 APP，PDF/GCS/Email 流程仍會完成
     if (emailBar) emailBar.className = 'rg-email-bar pending';
     if (emailText && subjectEmail) {
@@ -5380,7 +5382,8 @@ async function startFullReportGeneration(opts) {
 
 function _connectReportSSE(jobId) {
   if (_rgEventSource) { try { _rgEventSource.close(); } catch(e){} }
-  const url = `${API_BASE}/report-gen/stream/${jobId}`;
+  const tokenQs = _rgViewToken ? `?token=${encodeURIComponent(_rgViewToken)}` : '';
+  const url = `${API_BASE}/report-gen/stream/${jobId}${tokenQs}`;
   _rgEventSource = new EventSource(url);
 
   _rgEventSource.onmessage = (ev) => {
@@ -5406,9 +5409,10 @@ function _connectReportSSE(jobId) {
 }
 
 async function _pollReportStatus(jobId) {
+  const tokenQs = _rgViewToken ? `?token=${encodeURIComponent(_rgViewToken)}` : '';
   while (true) {
     try {
-      const resp = await fetch(`${API_BASE}/report-gen/status/${jobId}`);
+      const resp = await fetch(`${API_BASE}/report-gen/status/${jobId}${tokenQs}`);
       if (!resp.ok) break;
       const data = await resp.json();
       _renderReportProgress(data);
@@ -5460,7 +5464,8 @@ async function _handleReportCompleted() {
 
   // 從 /status 拿 email 結果
   try {
-    const r = await fetch(`${API_BASE}/report-gen/status/${_rgJobId}`);
+    const tokenQs = _rgViewToken ? `?token=${encodeURIComponent(_rgViewToken)}` : '';
+    const r = await fetch(`${API_BASE}/report-gen/status/${_rgJobId}${tokenQs}`);
     const d = await r.json();
     const es = d.email_status || 'skipped';
     if (es === 'sent') {
