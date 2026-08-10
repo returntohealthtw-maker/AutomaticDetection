@@ -1,6 +1,13 @@
 # FastAPI brainwave detection backend
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+#
+# fastapi / starlette / uvicorn 鎖定精確版本（不用 >=）：
+# 2026-08-10 曾因 fastapi/starlette 未鎖版本，Railway 重建時自動抓到
+# starlette 1.0.0（TemplateResponse 簽名從 (name, context) 改為
+# (request, name, context)），造成 parent-child 報告頁全面 500。
+# 以下版本組合已在 Railway production 實測驗證可正常運作。
+fastapi==0.135.1
+starlette==1.0.0
+uvicorn[standard]==0.42.0
 sqlalchemy>=2.0.36
 pymysql>=1.1.1
 psycopg2-binary>=2.9.9
