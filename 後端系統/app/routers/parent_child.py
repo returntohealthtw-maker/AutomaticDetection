@@ -864,54 +864,6 @@ async def favicon():
     return HTMLResponse("", status_code=204)
 
 
-@router.get("/_diag-gcs-roundtrip")
-async def _diag_gcs_roundtrip():
-    """臨時驗證端點：直接測試 upload_json_str / download_json_str 是否在
-    Railway 正式環境中真的能寫入並讀回 GCS（不透過完整報告生成流程）。
-    驗證完成後應移除此端點。"""
-    from app.services import gcs_uploader
-    test_id = f"_diag_test_{uuid.uuid4().hex[:8]}"
-    object_name = f"reports/parent_child/{test_id}.json"
-    test_payload = {"diag": True, "ts": time.time(), "marker": "roundtrip-check"}
-    test_str = json.dumps(test_payload, ensure_ascii=False)
-
-    result = {"is_configured": gcs_uploader.is_configured()}
-    try:
-        upload_url = gcs_uploader.upload_json_str(test_str, object_name)
-        result["upload_url"] = upload_url
-        result["upload_ok"] = bool(upload_url)
-    except Exception as e:
-        result["upload_ok"] = False
-        result["upload_error"] = f"{type(e).__name__}: {e}"
-
-    try:
-        downloaded = gcs_uploader.download_json_str(object_name)
-        result["download_ok"] = downloaded is not None
-        result["content_matches"] = (downloaded == test_str)
-        result["downloaded_preview"] = (downloaded or "")[:200]
-    except Exception as e:
-        result["download_ok"] = False
-        result["download_error"] = f"{type(e).__name__}: {e}"
-
-    # 清理測試物件
-    try:
-        from google.cloud import storage
-        from google.oauth2 import service_account
-        creds_dict = json.loads(os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "{}"))
-        if creds_dict:
-            credentials = service_account.Credentials.from_service_account_info(creds_dict)
-            client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
-            bucket = client.bucket(os.environ.get("GCS_BUCKET_NAME", ""))
-            blob = bucket.blob(object_name)
-            if blob.exists():
-                blob.delete()
-                result["cleanup_ok"] = True
-    except Exception as e:
-        result["cleanup_error"] = f"{type(e).__name__}: {e}"
-
-    return JSONResponse(result)
-
-
 @router.get("/api-test")
 async def api_test():
     if not _key_is_set():
