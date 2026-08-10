@@ -935,9 +935,9 @@ async def api_test():
 async def index(request: Request):
     cover_url, backcover_url = _cover_urls()
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "api_key_set":   _key_is_set(),
             "cover_url":     cover_url,
             "backcover_url": backcover_url,
@@ -1208,9 +1208,9 @@ async def report(request: Request, job_id: str):
     job = jobs.get(job_id)
     if job and job.get("status") == "completed":
         return templates.TemplateResponse(
+            request,
             "report.html",
             {
-                "request":       request,
                 "job_id":        job_id,
                 "family_name":   job.get("family_name", ""),
                 "members":       job.get("members", []),
@@ -1253,9 +1253,9 @@ async def report(request: Request, job_id: str):
         members  = saved.get("members", [])
         chapters = _build_chapters(members)
         return templates.TemplateResponse(
+            request,
             "report.html",
             {
-                "request":       request,
                 "job_id":        job_id,
                 "family_name":   saved.get("family_name", ""),
                 "members":       members,
