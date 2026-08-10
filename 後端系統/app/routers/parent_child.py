@@ -817,7 +817,7 @@ def _run_generation(
             job["progress"] = int(completed / total * 100)
             job["completed_sections"] = completed
 
-    # Persist to disk
+    # Persist to disk + GCS backup（Railway 重啟後可從 GCS 恢復）
     try:
         payload = {
             "job_id": job_id,
@@ -828,9 +828,18 @@ def _run_generation(
             "chapters": job["chapters_list"],
             "created_at": time.time(),
         }
+        json_str = json.dumps(payload, ensure_ascii=False, indent=2)
+        # 1. 寫本地磁碟（當次重啟前可直接讀）
         report_path = _REPORTS_DIR / f"{job_id}.json"
         with open(report_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write(json_str)
+        # 2. 同步備份到 GCS（Railway 重啟後仍可恢復）
+        try:
+            from app.services import gcs_uploader
+            gcs_uploader.upload_json_str(json_str, f"reports/parent_child/{job_id}.json")
+        except Exception as gcs_err:
+            import logging as _log
+            _log.getLogger(__name__).warning("[parent-child] GCS 備份失敗（不影響本次生成）：%s", gcs_err)
     except Exception as e:
         job["save_error"] = str(e)
 
@@ -1167,10 +1176,32 @@ async def report(request: Request, job_id: str):
         )
 
     # Fall back to disk
+    saved = None
     report_file = _REPORTS_DIR / f"{job_id}.json"
     if report_file.exists():
-        with open(report_file, "r", encoding="utf-8") as f:
-            saved = json.load(f)
+        try:
+            with open(report_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+        except Exception:
+            saved = None
+
+    # Fall back to GCS（Railway 重啟後 disk 被清空，但 GCS 備份仍在）
+    if saved is None:
+        try:
+            from app.services import gcs_uploader
+            json_str = gcs_uploader.download_json_str(f"reports/parent_child/{job_id}.json")
+            if json_str:
+                saved = json.loads(json_str)
+                # 順便寫回本地磁碟，避免同一次運行期間重複從 GCS 下載
+                try:
+                    with open(report_file, "w", encoding="utf-8") as f:
+                        f.write(json_str)
+                except Exception:
+                    pass
+        except Exception:
+            saved = None
+
+    if saved is not None:
         members  = saved.get("members", [])
         chapters = _build_chapters(members)
         return templates.TemplateResponse(

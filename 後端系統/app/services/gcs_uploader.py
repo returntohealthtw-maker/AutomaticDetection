@@ -264,6 +264,62 @@ def generate_fresh_signed_url(pdf_url: str, days: Optional[int] = None) -> Optio
         return None
 
 
+def upload_json_str(json_str: str, object_name: str) -> Optional[str]:
+    """
+    把 JSON 字串直接上傳到 GCS（不寫本地磁碟）。
+    回傳永久 base URL，失敗回 None。
+    用於：親子報告 JSON 持久化備份（避免 Railway 重啟後報告消失）。
+    """
+    if not is_configured():
+        logger.warning("upload_json_str: GCS 未設定，跳過備份")
+        return None
+    try:
+        from google.cloud import storage
+        from google.oauth2 import service_account
+        import io
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        bucket_name = _bucket_name()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        blob.upload_from_file(
+            io.BytesIO(json_str.encode("utf-8")),
+            content_type="application/json",
+        )
+        base_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
+        logger.info("✅ GCS JSON 備份成功 gs://%s/%s", bucket_name, object_name)
+        return base_url
+    except Exception as e:
+        logger.exception("upload_json_str 失敗：%s", e)
+        return None
+
+
+def download_json_str(object_name: str) -> Optional[str]:
+    """
+    從 GCS 下載 JSON 字串。
+    回傳字串內容，失敗或不存在回 None。
+    用於：親子報告 Railway 重啟後的 GCS 恢復。
+    """
+    if not is_configured():
+        return None
+    try:
+        from google.cloud import storage
+        from google.oauth2 import service_account
+        creds_dict = _credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = storage.Client(project=creds_dict.get("project_id"), credentials=credentials)
+        blob = client.bucket(_bucket_name()).blob(object_name)
+        if not blob.exists():
+            return None
+        content = blob.download_as_text(encoding="utf-8")
+        logger.info("✅ GCS JSON 恢復成功 gs://%s/%s", _bucket_name(), object_name)
+        return content
+    except Exception as e:
+        logger.exception("download_json_str 失敗：%s", e)
+        return None
+
+
 def list_pdfs(prefix: str = "", max_items: int = 500) -> list[dict]:
     """
     直接列出 GCS bucket 裡所有 PDF（後台『報告管理 → GCS 全部檔案』用）。
