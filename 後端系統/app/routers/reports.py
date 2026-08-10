@@ -641,6 +641,36 @@ def list_reports(
                 # 目前還沒有確定漏圖 → 暫標為 ok
                 img_quality_by_sid[sid_evt] = "ok"
 
+    # ── 親子 / 夫妻報告：即時偵測背景生成是否仍在跑（同 process 讀 in-memory jobs）──
+    # 這類報告在任務「送出」的當下就會把 Report.status 標成 completed 並存好
+    # pdf_url（因為外部生成是非同步的），但實際 48 節內容可能還要跑 10~15 分鐘。
+    # 若沒有這段偵測，後台會顯示「預覽PDF」可點，但點開卻是「報告不存在或已過期」
+    # （其實只是還沒生成完），造成誤會。
+    import re as _re
+    _pc_jobs = None
+    try:
+        from app.routers import parent_child as _pc_module
+        _pc_jobs = _pc_module.jobs
+    except Exception:
+        _pc_jobs = None
+
+    def _generation_progress(pdf_url: Optional[str]) -> Optional[dict]:
+        if not pdf_url or not _pc_jobs:
+            return None
+        m = _re.search(r"/parent-child/report/([0-9a-fA-F-]+)", pdf_url)
+        if not m:
+            return None
+        job_id = m.group(1)
+        job = _pc_jobs.get(job_id)
+        if not job or job.get("status") == "completed":
+            return None  # 已完成或找不到（可能已重啟，視同完成，交給實際開啟時判斷）
+        return {
+            "generation_status":         job.get("status", "running"),
+            "generation_progress":       job.get("progress", 0),
+            "generation_current_section": job.get("current_section", ""),
+            "generation_current_chapter": job.get("current_chapter", ""),
+        }
+
     out = []
     for rep, sess in rows:
         cons = cons_map.get(sess.consultant_name) if (sess and sess.consultant_name) else None
@@ -724,6 +754,8 @@ def list_reports(
             "image_quality":    img_quality_by_sid.get(rep.session_id) if rep.session_id else None,
             # 關係報告專屬：所有成員姓名 + session_id（admin 後台顯示與重新生成用）
             "relation_members": relation_members,
+            # 親子/夫妻報告：若背景仍在生成，附上即時進度（None = 視為已完成）
+            **(_generation_progress(rep.pdf_url) or {}),
         })
     return {"ok": True, "count": len(out), "reports": out}
 

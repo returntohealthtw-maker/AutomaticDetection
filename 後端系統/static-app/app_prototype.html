@@ -10369,15 +10369,21 @@ function _filterAdminReports() {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   listEl.innerHTML = rows.map(r => {
     const dbStatus     = r.status || (r.pdf_url ? 'completed' : 'pending');
-    const isGenerating = (dbStatus === 'generating' || dbStatus === 'pending') && !r.pdf_url;
+    // 親子/夫妻關係報告：DB 狀態在「任務送出」當下就標記 completed + 存好 pdf_url，
+    // 但實際內容可能還要跑 10~15 分鐘。用後端即時偵測的 generation_status 判斷
+    // 是否真的還在跑，避免顯示「預覽PDF」卻點開變成「報告不存在或已過期」。
+    const relationStillGenerating = (r.generation_status === 'running' || r.generation_status === 'pending');
+    const isGenerating = ((dbStatus === 'generating' || dbStatus === 'pending') && !r.pdf_url) || relationStillGenerating;
     const isFailed     = dbStatus === 'failed';
-    const pendingSend  = !r.email_sent && r.pdf_url;       // PDF 好了但 admin 尚未核准寄信
+    const pendingSend  = !r.email_sent && r.pdf_url && !relationStillGenerating;       // PDF 好了但 admin 尚未核准寄信
     // 有 PDF 就一律顯示寄信按鈕（已寄過→「再次寄信」，未寄→「預覽後寄信」）
-    const sendBtn = r.pdf_url
+    const sendBtn = (r.pdf_url && !relationStillGenerating)
       ? (r.email_sent
           ? `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#546e7a;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="已寄過，可再次寄給其他人">📨 再次寄信</button>`
           : `<button onclick="_adminSendReportEmail(${r.report_id})" style="background:#ff9800;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;">📨 預覽後寄信</button>`)
-      : '';
+      : (relationStillGenerating
+          ? `<button disabled style="background:#ccc;color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:not-allowed;opacity:0.6;" title="報告仍在背景生成中，完成後才能寄信">📨 生成中…</button>`
+          : '');
 
     // 受測者顯示：姓名 · 年齡 · 性別
     const subjMeta = [];
@@ -10423,14 +10429,25 @@ function _filterAdminReports() {
         : (r.email_sent ? '<span style="color:#4CAF50;">✉️ 已寄信</span>'
                         : '<span style="color:#ff9800;font-weight:700;">⏳ 待管理員核准寄信</span>');
 
-    // 進度條（僅 generating 狀態顯示，由 _startGeneratingPoll 動態更新）
-    const progressBar = isGenerating ? `
+    // 進度條：
+    //  - 一般報告（life_script/child）：僅顯示外框，由 _startGeneratingPoll 動態更新
+    //  - 親子/夫妻關係報告：後端 /reports/list 已回傳即時進度，直接畫出百分比與章節
+    const relationProgressBar = relationStillGenerating ? `
+      <div style="margin-top:6px;">
+        <div style="background:#fce4ec;border-radius:6px;height:10px;overflow:hidden;">
+          <div style="background:linear-gradient(90deg,#c2185b,#f06292);height:100%;width:${r.generation_progress || 0}%;transition:width 1.2s ease;border-radius:6px;"></div>
+        </div>
+        <div style="font-size:10px;color:#c2185b;margin-top:3px;font-weight:600;">
+          🌿 關係報告生成中 ${r.generation_progress || 0}%${r.generation_current_section ? ` · ${esc(r.generation_current_section)}` : ''}
+        </div>
+      </div>` : '';
+    const progressBar = relationStillGenerating ? relationProgressBar : (isGenerating ? `
       <div id="rpt-prog-wrap-${r.report_id}" data-session="${r.session_id||''}" style="margin-top:6px;">
         <div style="background:#e3f2fd;border-radius:6px;height:10px;overflow:hidden;">
           <div id="rpt-prog-${r.report_id}" style="background:linear-gradient(90deg,#1565c0,#42a5f5);height:100%;width:0%;transition:width 1.2s ease;border-radius:6px;"></div>
         </div>
         <div id="rpt-prog-txt-${r.report_id}" style="font-size:10px;color:#1565c0;margin-top:3px;font-weight:600;">⏳ 等待進度資料...</div>
-      </div>` : '';
+      </div>` : '');
 
     // 關係報告成員清單（含腦波展開）
     const isRelation = (r.relation_members && r.relation_members.length > 0);
@@ -10489,7 +10506,7 @@ function _filterAdminReports() {
           ${headlessErrTxt}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-          <button onclick="_previewPdf(${r.session_id||'null'}, '${(r.pdf_url||'').replace(/'/g,"\\'")}', ${r.report_id})" ${r.pdf_url ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${r.pdf_url ? '' : 'opacity:0.4;'}">${isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載')}</button>
+          <button onclick="_previewPdf(${r.session_id||'null'}, '${(r.pdf_url||'').replace(/'/g,"\\'")}', ${r.report_id})" ${(r.pdf_url && !relationStillGenerating) ? '' : 'disabled'} style="background:#1976d2;color:white;border:none;font-size:11px;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;${(r.pdf_url && !relationStillGenerating) ? '' : 'opacity:0.4;cursor:not-allowed;'}" title="${relationStillGenerating ? '報告仍在背景生成中，尚未完成，請稍後再試' : ''}">${relationStillGenerating ? `⏳ 生成中 ${r.generation_progress || 0}%` : (isGenerating ? '⏳ 生成中' : (pendingSend ? '🔍 預覽 PDF' : '⬇️ 下載'))}</button>
           ${sendBtn}
           ${r.session_id
             ? `<button onclick="_regenFromDbRecords(${r.session_id},'${esc(r.subject_email||'')}','${esc(r.subject_name||'')}')" style="background:${isFailed ? '#f44336' : '#7b1fa2'};color:white;border:none;font-size:11px;padding:6px 10px;border-radius:6px;font-weight:600;cursor:pointer;" title="${isFailed ? '生成失敗，重新觸發' : '強制重新生成（將覆蓋現有報告）'}">🔄 重新生成</button>`
