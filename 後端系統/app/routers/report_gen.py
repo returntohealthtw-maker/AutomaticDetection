@@ -52,6 +52,63 @@ def _soft_is_admin(authorization: Optional[str], db: DbSession) -> bool:
         return False
 
 
+def _age_group_of(age: Optional[int]) -> Optional[str]:
+    """與前端 app_prototype.html 的 _ageGroupOf() 完全對應：
+    ≤12 歲 → child；13-17 歲 → teen；≥18 歲 → adult；年齡未知 → None（不擋）。
+    """
+    if age is None:
+        return None
+    try:
+        age = int(age)
+    except (TypeError, ValueError):
+        return None
+    if age <= 12:
+        return "child"
+    if age <= 17:
+        return "teen"
+    return "adult"
+
+
+def _check_age_report_match(req: "StartRequest") -> None:
+    """🚨 硬擋第二道防線：單人報告（成人/青少年/兒童）的 report_type 必須符合受測者實際年齡。
+
+    背景：2026-08-10 發現「NT$1 功能測試」按鈕沒有 data-age-group、也未經前端年齡防呆過濾，
+    寫死一定送出 report_type='life_script'，導致 15 歲受測者被生成成人報告。
+    僅前端防呆不可靠（任何新增入口都可能忘記檢查），因此後端在真正啟動生成前一律再驗證一次：
+    - 只驗證單人報告（life_script / teen / child），關係報告（marital / parent_child）不驗證
+      （因為一份報告本就同時涉及大人與小孩，不適用單一年齡分類）
+    - 受測者年齡未知（None）→ 無法判斷，不擋
+    - 管理員主動勾選「略過年齡防呆」（age_gate_override=True）→ 放行，供測試用
+    """
+    SINGLE_PERSON_TYPES = {"life_script": "adult", "teen": "teen", "child": "child"}
+    expected_group = SINGLE_PERSON_TYPES.get(req.report_type)
+    if expected_group is None:
+        return  # 關係報告或其他類型，不在此規則範圍內
+
+    if req.age_gate_override:
+        return  # 管理員已主動確認略過
+
+    actual_group = _age_group_of(req.subject_age)
+    if actual_group is None:
+        return  # 年齡未知，無法判斷，不擋（維持與前端一致的保守策略）
+
+    if actual_group != expected_group:
+        label = {"child": "兒童（≤12歲）", "teen": "青少年（13-17歲）", "adult": "成人（≥18歲）"}
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "AGE_REPORT_MISMATCH",
+                "message": (
+                    f"報告類型與受測者年齡不符：受測者 {req.subject_age} 歲屬於「{label.get(actual_group, actual_group)}」，"
+                    f"但要求生成的是「{label.get(expected_group, expected_group)}」報告，已擋下以避免生成錯誤的報告。"
+                ),
+                "subject_age": req.subject_age,
+                "expected_group": expected_group,
+                "actual_group": actual_group,
+            },
+        )
+
+
 def _bw_from_session(db: DbSession, session_id: int) -> Optional[Dict[str, Any]]:
     """從 EegCapture 重建 brainwave_data，供 brainwave_data 為空時自動補充。
 
@@ -287,6 +344,7 @@ class StartRequest(BaseModel):
     session_id:           Optional[int] = None        # 從 /eeg/save-stats 拿到的 session_id，外部完成後可 callback
     extra:                Optional[Dict[str, Any]] = None  # 關係報告用：wife_session_id / members 等多人資料
     qeeg_ability_scores:  Optional[Dict[str, Any]] = None  # QEEG 七大能力（前端即時傳入；後端若 DB 有值也可補充）
+    age_gate_override:    Optional[bool] = False       # 管理員主動勾選略過年齡防呆時為 True（見下方 _check_age_report_match）
 
 
 class ChaptersQuery(BaseModel):
@@ -489,6 +547,9 @@ def start_full(
     # 🔑 提早判斷呼叫者是否為管理員，外部模式（夫妻/親子）與內建模式（成人/兒童）都會用到，
     # 避免重複計算，也確保內建模式的 job 從一開始就記錄「是否由管理員發起」。
     _is_admin_caller = _soft_is_admin(authorization, db)
+
+    # 🚨 硬擋第二道防線：report_type 是否符合受測者實際年齡（見 _check_age_report_match 說明）
+    _check_age_report_match(req)
 
     # 若前端沒有傳 brainwave_data（或 bands_avg 為空），嘗試從 DB 重建
     bw = req.brainwave_data
