@@ -1751,6 +1751,17 @@
             </div>
           </div>
 
+          <!-- 年齡防呆提示（僅管理員看得到；一般顧問一律強制過濾，不會看到此區塊）──
+               管理員預設也會依受測者實際年齡只顯示對應報告卡片，避免手滑點錯（例如幫15歲受測者
+               誤點成人報告）。若管理員確實需要測試其他年齡分類，才勾選下方核取方塊主動略過防呆。 -->
+          <div id="age-gate-banner" style="display:none;background:#fff3e0;border:1px solid #ffcc80;border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+            <div id="age-gate-banner-text" style="font-size:12px;color:#e65100;font-weight:700;margin-bottom:6px;">🛡️ 年齡防呆已啟用</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#888;cursor:pointer;">
+              <input type="checkbox" id="age-gate-override" onchange="_applyAgeGating()" style="cursor:pointer;">
+              我確定要略過年齡防呆，顯示全部年齡分類卡片（測試用，請小心選擇）
+            </label>
+          </div>
+
           <!-- 個人報告 -->
           <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
             <span style="background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:10px;font-size:11px;">個人報告</span>
@@ -4863,7 +4874,9 @@ function _applyRolePricing() {
 
 // ─── 年齡防呆機制：依受測者生日算出的年齡，只顯示對應報告卡片 ──────────────
 // ≤12 歲 → child；13-17 歲 → teen；≥18 歲 → adult；無生日資料 → null（不過濾）。
-// 管理員帳號不受限制，一律看得到全部卡片，方便測試與示範。
+// 🔒 2026-08-10 修正：管理員曾因這裡「一律不過濾」，替 15 歲受測者誤點成人報告
+// （生成 life_script_full，非預期的 teen_full）。改成管理員預設也套用年齡防呆，
+// 只有主動勾選 #age-gate-override 才略過（見 screen-reports 內的提示區塊）。
 function _ageGroupOf(age) {
   if (age === null || age === undefined || isNaN(age)) return null;
   if (age <= 12) return 'child';
@@ -4877,8 +4890,21 @@ function _applyAgeGating() {
   const u = _currentUser || _getAuth() || {};
   const isAdmin = u.role === 'admin';
   const grp = _ageGroupOf(_currentSubjectAge);
+
+  // 管理員專屬的「主動略過防呆」提示區塊：只有 grp 已知（受測者有生日資料）時才顯示，
+  // 一般顧問看不到此區塊、也無法略過防呆。
+  const banner = document.getElementById('age-gate-banner');
+  const overrideEl = document.getElementById('age-gate-override');
+  if (banner) banner.style.display = (isAdmin && grp) ? '' : 'none';
+  const bannerText = document.getElementById('age-gate-banner-text');
+  if (bannerText && grp) {
+    const label = { child: '兒童（≤12歲）', teen: '青少年（13-17歲）', adult: '成人（≥18歲）' }[grp] || grp;
+    bannerText.textContent = `🛡️ 已依受測者年齡（${_currentSubjectAge}歲）鎖定為「${label}」報告卡片`;
+  }
+  const bypass = isAdmin && !!(overrideEl && overrideEl.checked);
+
   screen.querySelectorAll('[data-age-group]').forEach(el => {
-    el.style.display = (isAdmin || !grp || el.getAttribute('data-age-group') === grp) ? '' : 'none';
+    el.style.display = (bypass || !grp || el.getAttribute('data-age-group') === grp) ? '' : 'none';
   });
 }
 
