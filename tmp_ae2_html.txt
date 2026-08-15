@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>?行郭瑼Ｘ葫蝟餌絞 ??App ??</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    background:#1a1a2e;
+    display:flex; justify-content:center; align-items:center;
+    height:100vh; overflow:hidden;
+    font-family:'Segoe UI','Microsoft JhengHei',sans-serif;
+  }
+
+  /* Phone Frame */
+  .phone-wrap {
+    position:relative;
+    transform-origin: center center;
+    transition: none;
+    flex-shrink: 0;
+  }
+  .phone-frame {
+    width:390px; height:844px; background:#0d0d1a;
+    border-radius:50px; border:8px solid #2a2a4a;
+    box-shadow:0 0 0 2px #111, 0 30px 80px rgba(0,0,0,0.8), inset 0 0 20px rgba(255,255,255,0.03);
+    position:relative; overflow:hidden;
+  }
+  .phone-notch {
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:120px; height:30px; background:#0d0d1a; border-radius:0 0 18px 18px;
+    z-index:100;
+  }
+  .phone-screen {
+    width:100%; height:100%; overflow:hidden; border-radius:44px; background:#F5F7FA;
+    position:relative;
+  }
+
+  /* Screens */
+  .screen {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:none; flex-direction:column; overflow-y:auto; overflow-x:hidden;
+    transition:all 0.3s ease;
+  }
+  .screen.active { display:flex; }
+
+  /* Status Bar */
+  .status-bar {
+    background:var(--header-bg, #2D3561); color:white;
+    padding:10px 20px 6px; display:flex; justify-content:space-between;
+    align-items:center; font-size:11px; flex-shrink:0; padding-top:32px;
+  }
+  .status-bar .time { font-weight:600; }
+  .status-bar .icons { display:flex; gap:4px; align-items:center; }
+
+  /* Top Bar */
+  .top-bar {
+    background:var(--header-bg, #2D3561); color:white;
+    padding:14px 20px; display:flex; align-items:center; gap:12px;
+    flex-shrink:0;
+  }
+  .top-bar .back-btn {
+    width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+    border-radius:50%; background:rgba(255,255,255,0.15); cursor:pointer; border:none;
+    color:white; font-size:16px; flex-shrink:0;
+  }
+  .top-bar h2 { font-size:17px; font-weight:600; flex:1; }
+  .top-bar .step-badge {
+    background:rgba(255,255,255,0.2); padding:3px 10px;
+    border-radius:12px; font-size:11px;
+  }
+
+  /* Content */
+  .content { flex:1; padding:16px; overflow-y:auto; }
+  .content-scroll { flex:1; overflow-y:auto; }
+
+  /* Cards */
+  .card {
+    background:white; border-radius:16px; padding:16px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.08); margin-bottom:12px;
+  }
+  .card-title { font-size:13px; color:#888; margin-bottom:8px; font-weight:500; }
+  .card h3 { font-size:16px; color:#1a1a2e; font-weight:600; }
+
+  /* Form */
+  .form-group { margin-bottom:14px; }
+  .form-label { font-size:12px; color:#666; margin-bottom:5px; display:block; font-weight:500; }
+  .form-input {
+    width:100%; padding:11px 14px; border:1.5px solid #e8eaf0;
+    border-radius:10px; font-size:14px; color:#1a1a2e; outline:none;
+    transition:border-color 0.2s; background:white;
+  }
+  .form-input:focus { border-color:#00BCD4; }
+  .form-select {
+    width:100%; padding:11px 14px; border:1.5px solid #e8eaf0;
+    border-radius:10px; font-size:14px; color:#1a1a2e; outline:none; background:white;
+    appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 14px center;
+  }
+  .radio-group { display:flex; gap:10px; flex-wrap:wrap; }
+  .radio-btn {
+    padding:8px 16px; border:1.5px solid #e8eaf0; border-radius:20px;
+    font-size:13px; cursor:pointer; transition:all 0.2s; color:#555; background:white;
+  }
+  .radio-btn.selected { border-color:#00BCD4; background:#e0f7fa; color:#006064; }
+
+  /* Buttons */
+  .btn {
+    width:100%; padding:15px; border-radius:14px; font-size:16px;
+    font-weight:600; cursor:pointer; border:none; transition:all 0.2s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-primary { background:linear-gradient(135deg,#FF6B35,#f7462a); color:white; }
+  .btn-primary:active { transform:scale(0.97); }
+  .btn-secondary { background:#f0f2f8; color:#2D3561; }
+  .btn-outline { background:white; border:2px solid #2D3561; color:#2D3561; }
+  .btn-sm { padding:10px 20px; width:auto; font-size:14px; border-radius:10px; }
+  .btn-success { background:linear-gradient(135deg,#00C853,#00897B); color:white; }
+
+  /* Bottom Nav */
+  .bottom-nav {
+    background:white; display:flex; border-top:1px solid #f0f0f0;
+    padding:8px 0 20px; flex-shrink:0;
+  }
+  .nav-item {
+    flex:1; display:flex; flex-direction:column; align-items:center;
+    gap:3px; cursor:pointer; padding:4px 0;
+  }
+  .nav-item .nav-icon { font-size:22px; }
+  .nav-item .nav-label { font-size:10px; color:#aaa; }
+  .nav-item.active .nav-label { color:#2D3561; font-weight:600; }
+  .nav-item.active .nav-icon { filter:drop-shadow(0 0 3px #2D3561); }
+
+  /* ========== SCREEN 1: SPLASH ========== */
+  #screen-splash {
+    background:linear-gradient(160deg,#1a1a3e 0%,#2D3561 50%,#1a3a5c 100%);
+    align-items:center; justify-content:center; gap:24px;
+  }
+  .splash-logo { font-size:72px; }
+  .splash-title { color:white; font-size:28px; font-weight:700; text-align:center; }
+  .splash-sub { color:rgba(255,255,255,0.6); font-size:14px; text-align:center; }
+  .splash-wave {
+    display:flex; gap:4px; align-items:center; height:40px;
+  }
+  .wave-bar {
+    width:4px; background:linear-gradient(180deg,#00BCD4,#00BCD4);
+    border-radius:4px; animation:wave 1.2s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1){height:20px;animation-delay:0s}
+  .wave-bar:nth-child(2){height:35px;animation-delay:0.1s}
+  .wave-bar:nth-child(3){height:28px;animation-delay:0.2s}
+  .wave-bar:nth-child(4){height:40px;animation-delay:0.3s}
+  .wave-bar:nth-child(5){height:32px;animation-delay:0.4s}
+  .wave-bar:nth-child(6){height:24px;animation-delay:0.5s}
+  .wave-bar:nth-child(7){height:38px;animation-delay:0.4s}
+  .wave-bar:nth-child(8){height:28px;animation-delay:0.3s}
+  .wave-bar:nth-child(9){height:18px;animation-delay:0.2s}
+  @keyframes wave {
+    0%,100%{transform:scaleY(0.5);opacity:0.5}
+    50%{transform:scaleY(1);opacity:1}
+  }
+
+  /* ========== SCREEN 2: LOGIN ========== */
+  #screen-login { background:white; --header-bg:#fff; }
+  .login-header {
+    background:linear-gradient(160deg,#1a1a3e,#2D3561);
+    padding:60px 30px 40px; text-align:center;
+  }
+  .login-header .logo { font-size:48px; margin-bottom:8px; }
+  .login-header h1 { color:white; font-size:22px; font-weight:700; }
+  .login-header p { color:rgba(255,255,255,0.7); font-size:13px; margin-top:4px; }
+  .login-body { padding:24px 20px; flex:1; }
+  .login-title { font-size:20px; font-weight:700; color:#1a1a2e; margin-bottom:4px; }
+  .login-sub { font-size:13px; color:#888; margin-bottom:24px; }
+
+  /* ========== SCREEN 3: HOME ========== */
+  #screen-home { --header-bg:#2D3561; }
+  .home-header {
+    background:linear-gradient(135deg,#2D3561,#1a3a5c);
+    padding:52px 20px 24px; color:white;
+  }
+  .home-greeting { font-size:13px; opacity:0.8; }
+  .home-name { font-size:22px; font-weight:700; margin:2px 0 16px; }
+  .credits-card {
+    background:rgba(255,255,255,0.15); border-radius:14px;
+    padding:14px 16px; display:flex; justify-content:space-between; align-items:center;
+    backdrop-filter:blur(10px);
+  }
+  .credits-left .label { font-size:11px; opacity:0.8; }
+  .credits-left .amount { font-size:28px; font-weight:700; }
+  .credits-left .unit { font-size:13px; opacity:0.8; }
+  .btn-buy {
+    background:#FF6B35; color:white; border:none; padding:8px 16px;
+    border-radius:20px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .start-btn {
+    margin:16px; padding:18px; background:linear-gradient(135deg,#FF6B35,#f7462a);
+    border-radius:16px; display:flex; align-items:center; gap:14px;
+    cursor:pointer; box-shadow:0 4px 20px rgba(255,107,53,0.4);
+    border:none; width:calc(100% - 32px); text-align:left;
+  }
+  .start-btn .icon { font-size:36px; }
+  .start-btn .text .title { color:white; font-size:17px; font-weight:700; }
+  .start-btn .text .sub { color:rgba(255,255,255,0.8); font-size:12px; margin-top:2px; }
+  .section-title { font-size:14px; font-weight:600; color:#333; padding:0 16px 8px; margin-top:4px; }
+  .history-item {
+    margin:0 16px 10px; background:white; border-radius:14px;
+    padding:14px 16px; box-shadow:0 2px 10px rgba(0,0,0,0.06); cursor:pointer;
+  }
+  .history-item .hi-top { display:flex; justify-content:space-between; align-items:center; }
+  .history-item .hi-name { font-size:15px; font-weight:600; color:#1a1a2e; }
+  .history-item .hi-date { font-size:11px; color:#aaa; }
+  .history-item .hi-tags { display:flex; gap:6px; margin-top:6px; }
+  .tag { padding:3px 10px; border-radius:10px; font-size:11px; font-weight:500; }
+  .tag-blue { background:#e3f2fd; color:#1565c0; }
+  .tag-green { background:#e8f5e9; color:#2e7d32; }
+  .tag-purple { background:#f3e5f5; color:#6a1b9a; }
+  .tag-status { padding:4px 10px; border-radius:10px; font-size:11px; font-weight:600; }
+  .tag-done { background:#e8f5e9; color:#2e7d32; }
+  .tag-progress { background:#fff3e0; color:#e65100; }
+
+  /* ========== SCREEN 4: SUBJECT INFO ========== */
+  #screen-subject { --header-bg:#2D3561; }
+  .progress-bar-wrap { padding:0 20px 14px; background:#2D3561; }
+  .progress-steps { display:flex; gap:6px; }
+  .progress-step {
+    flex:1; height:4px; border-radius:2px;
+    background:rgba(255,255,255,0.3);
+  }
+  .progress-step.done { background:#00BCD4; }
+  .progress-step.active { background:white; }
+  .warning-box {
+    background:#fff3cd; border:1px solid #ffc107; border-radius:10px;
+    padding:10px 14px; font-size:12px; color:#856404; margin-bottom:12px;
+    display:flex; gap:8px; align-items:flex-start;
+  }
+
+  /* ========== SCREEN 5: REPORT SELECTION ========== */
+  #screen-reports { --header-bg:#2D3561; }
+  .report-item {
+    background:white; border-radius:14px; padding:14px 16px;
+    margin-bottom:10px; box-shadow:0 2px 10px rgba(0,0,0,0.06);
+    display:flex; align-items:center; gap:12px; cursor:pointer;
+    border:2px solid transparent; transition:all 0.2s;
+  }
+  .report-item.selected { border-color:#00BCD4; background:#f0fdff; }
+  .report-icon { font-size:28px; width:44px; text-align:center; }
+  .report-info { flex:1; }
+  .report-info .name { font-size:14px; font-weight:600; color:#1a1a2e; }
+  .report-info .desc { font-size:11px; color:#888; margin-top:2px; }
+  .report-price { font-size:13px; font-weight:700; color:#2D3561; white-space:nowrap; }
+  .custom-checkbox {
+    width:22px; height:22px; border-radius:6px; border:2px solid #ddd;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    transition:all 0.2s;
+  }
+  .report-item.selected .custom-checkbox { background:#00BCD4; border-color:#00BCD4; }
+  .total-bar {
+    background:white; border-top:1px solid #f0f0f0;
+    padding:14px 16px; display:flex; justify-content:space-between; align-items:center;
+    flex-shrink:0;
+  }
+  .total-bar .label { font-size:13px; color:#666; }
+  .total-bar .amount { font-size:20px; font-weight:700; color:#2D3561; }
+  .total-bar .balance { font-size:11px; color:#888; }
+
+  /* ========== SCREEN 6: PAYMENT ========== */
+  #screen-payment { --header-bg:#2D3561; }
+  .package-card {
+    background:white; border-radius:16px; padding:16px;
+    margin-bottom:10px; box-shadow:0 2px 10px rgba(0,0,0,0.06);
+    cursor:pointer; border:2px solid transparent; transition:all 0.2s;
+    display:flex; align-items:center; gap:14px;
+  }
+  .package-card.selected { border-color:#FF6B35; background:#fff5f2; }
+  .package-card .pkg-icon { font-size:32px; }
+  .package-card .pkg-info { flex:1; }
+  .package-card .pkg-name { font-size:15px; font-weight:700; color:#1a1a2e; }
+  .package-card .pkg-desc { font-size:12px; color:#888; margin-top:2px; }
+  .package-card .pkg-price { font-size:16px; font-weight:700; color:#FF6B35; }
+  .best-badge {
+    background:#FF6B35; color:white; font-size:10px; font-weight:700;
+    padding:2px 8px; border-radius:10px; margin-left:8px;
+  }
+  .payment-methods { display:flex; gap:10px; margin-bottom:16px; }
+  .pay-method {
+    flex:1; padding:12px 8px; background:white; border-radius:12px;
+    border:2px solid #e8eaf0; text-align:center; cursor:pointer; transition:all 0.2s;
+  }
+  .pay-method.selected { border-color:#2D3561; background:#f0f2f8; }
+  .pay-method .pm-icon { font-size:22px; }
+  .pay-method .pm-name { font-size:11px; color:#555; margin-top:4px; }
+
+  /* ========== SCREEN 7: MBTI QUESTIONNAIRE ========== */
+  #screen-mbti { --header-bg:#6B3FA0; }
+  #screen-mbti .status-bar { background:#6B3FA0; }
+  #screen-mbti .top-bar { background:#6B3FA0; }
+  .mbti-progress { padding:0 20px 14px; background:#6B3FA0; }
+  .mbti-dots { display:flex; gap:6px; justify-content:center; }
+  .mbti-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:rgba(255,255,255,0.3); transition:all 0.3s;
+  }
+  .mbti-dot.done { background:white; }
+  .mbti-dot.active { background:#00BCD4; width:20px; border-radius:4px; }
+  .question-card {
+    background:white; border-radius:20px; padding:24px 20px;
+    margin:16px; box-shadow:0 4px 20px rgba(0,0,0,0.1);
+  }
+  .q-dim-badge {
+    display:inline-flex; padding:4px 12px; border-radius:20px;
+    font-size:11px; font-weight:600; margin-bottom:14px;
+  }
+  .q-num { font-size:12px; color:#aaa; margin-bottom:8px; }
+  .q-text { font-size:16px; font-weight:600; color:#1a1a2e; line-height:1.5; margin-bottom:20px; }
+  .q-options { display:flex; flex-direction:column; gap:10px; }
+  .q-option {
+    padding:14px 16px; border-radius:12px; border:2px solid #e8eaf0;
+    font-size:14px; color:#333; cursor:pointer; transition:all 0.2s;
+    display:flex; align-items:center; gap:10px;
+  }
+  .q-option.selected { border-color:#6B3FA0; background:#f5f0ff; color:#4a0080; }
+  .q-option .opt-radio {
+    width:20px; height:20px; border-radius:50%; border:2px solid #ccc;
+    flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    transition:all 0.2s;
+  }
+  .q-option.selected .opt-radio { border-color:#6B3FA0; background:#6B3FA0; }
+  .mbti-nav { display:flex; gap:10px; padding:0 16px 16px; }
+
+  /* ========== SCREEN 8: DEVICE CONNECTION ========== */
+  #screen-connect { --header-bg:#2D3561; background:#F5F7FA; }
+  .device-status-card {
+    background:white; border-radius:18px; padding:24px;
+    margin-bottom:12px; box-shadow:0 2px 12px rgba(0,0,0,0.08);
+  }
+  .scan-animation {
+    width:120px; height:120px; border-radius:50%;
+    background:linear-gradient(135deg,#e3f2fd,#e1f5fe);
+    margin:0 auto 16px; display:flex; align-items:center; justify-content:center;
+    font-size:44px; position:relative;
+  }
+  .scan-ring {
+    position:absolute; width:100%; height:100%; border-radius:50%;
+    border:2px solid #00BCD4; animation:scan-pulse 2s ease-out infinite;
+    opacity:0;
+  }
+  .scan-ring:nth-child(2) { animation-delay:0.5s; }
+  @keyframes scan-pulse {
+    0%{transform:scale(1);opacity:0.8}
+    100%{transform:scale(1.5);opacity:0}
+  }
+  .device-found {
+    background:#f8f9ff; border:2px solid #00BCD4; border-radius:14px;
+    padding:14px 16px; display:flex; align-items:center; gap:12px;
+  }
+  .device-found .dev-icon { font-size:32px; }
+  .device-found .dev-info { flex:1; }
+  .device-found .dev-name { font-size:15px; font-weight:700; color:#1a1a2e; }
+  .device-found .dev-id { font-size:11px; color:#888; }
+  .signal-bars { display:flex; gap:3px; align-items:flex-end; height:20px; }
+  .sig-bar { width:5px; background:#e0e0e0; border-radius:2px; }
+  .sig-bar.active { background:#00C853; }
+  .sig-bar:nth-child(1){height:7px}
+  .sig-bar:nth-child(2){height:12px}
+  .sig-bar:nth-child(3){height:17px}
+  .sig-bar:nth-child(4){height:22px}
+  .contact-checks { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .contact-item {
+    background:#f8f9ff; border-radius:10px; padding:10px 12px;
+    display:flex; align-items:center; gap:8px; font-size:13px; color:#333;
+  }
+  .check-icon { font-size:16px; }
+
+  /* ========== SCREEN 9: BASELINE ========== */
+  #screen-baseline { --header-bg:#2D3561; background:#1a1a3e; }
+  #screen-baseline .status-bar { background:#2D3561; }
+  #screen-baseline .top-bar { background:#2D3561; }
+  .baseline-body {
+    flex:1; background:linear-gradient(180deg,#1a1a3e,#0d1a2e);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px; gap:24px;
+  }
+  .baseline-icon { font-size:64px; animation:breathe 4s ease-in-out infinite; }
+  @keyframes breathe {
+    0%,100%{transform:scale(1);filter:drop-shadow(0 0 10px rgba(0,188,212,0.3))}
+    50%{transform:scale(1.1);filter:drop-shadow(0 0 20px rgba(0,188,212,0.7))}
+  }
+  .baseline-title { color:white; font-size:22px; font-weight:700; text-align:center; }
+  .baseline-sub { color:rgba(255,255,255,0.6); font-size:14px; text-align:center; line-height:1.6; }
+  .baseline-timer {
+    width:120px; height:120px; border-radius:50%;
+    border:4px solid rgba(255,255,255,0.1);
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .timer-ring {
+    position:absolute; width:100%; height:100%;
+    transform:rotate(-90deg);
+  }
+  .timer-circle-bg { fill:none; stroke:rgba(255,255,255,0.1); stroke-width:4; }
+  .timer-circle { fill:none; stroke:#00BCD4; stroke-width:4; stroke-linecap:round;
+    stroke-dasharray:326; stroke-dashoffset:100; transition:stroke-dashoffset 1s linear; }
+  .timer-text { color:white; font-size:28px; font-weight:700; }
+  .baseline-tips { width:100%; }
+  .tip-item { color:rgba(255,255,255,0.75); font-size:13px; padding:6px 0; display:flex; gap:8px; }
+
+  /* ========== SCREEN 10: DETECTION ========== */
+  #screen-detect { background:#0a0f1e; --header-bg:#0a0f1e; }
+  #screen-detect .status-bar { background:#0a0f1e; }
+  .detect-header {
+    background:linear-gradient(180deg,#0a0f1e,#111827);
+    padding:50px 20px 16px;
+  }
+  .detect-header .dh-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .detect-header .dh-subject { color:white; font-size:13px; opacity:0.8; }
+  .detect-header .dh-status { color:#00C853; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px; }
+  .live-dot { width:8px; height:8px; background:#00C853; border-radius:50%; animation:blink 1s infinite; }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+  .time-display { text-align:center; margin-bottom:12px; }
+  .time-big { color:white; font-size:52px; font-weight:200; letter-spacing:4px; }
+  .time-label { color:rgba(255,255,255,0.5); font-size:12px; }
+  .progress-ring-wrap { display:flex; justify-content:center; margin-bottom:8px; }
+  .detect-progress-bar {
+    height:6px; background:rgba(255,255,255,0.1); border-radius:3px;
+    margin:0 20px 8px;
+  }
+  .detect-progress-fill {
+    height:100%; border-radius:3px;
+    background:linear-gradient(90deg,#00BCD4,#00E5FF);
+    width:60%; transition:width 1s linear;
+  }
+  .detect-progress-label {
+    text-align:center; color:rgba(255,255,255,0.5); font-size:11px; margin-bottom:14px;
+  }
+  .metrics-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    padding:0 16px; margin-bottom:12px;
+  }
+  .metric-card {
+    background:rgba(255,255,255,0.07); border-radius:14px; padding:14px;
+    border:1px solid rgba(255,255,255,0.08);
+  }
+  .metric-card .m-label { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:4px; }
+  .metric-card .m-value { font-size:26px; font-weight:700; color:white; }
+  .metric-card .m-bar { height:4px; background:rgba(255,255,255,0.1); border-radius:2px; margin-top:8px; }
+  .metric-card .m-fill { height:100%; border-radius:2px; }
+  .m-fill-attn { background:linear-gradient(90deg,#00BCD4,#00E5FF); width:72%; }
+  .m-fill-medi { background:linear-gradient(90deg,#AB47BC,#CE93D8); width:58%; }
+  .wave-chart {
+    margin:0 16px 12px; background:rgba(255,255,255,0.05);
+    border-radius:14px; padding:14px; border:1px solid rgba(255,255,255,0.08);
+  }
+  .wave-chart-title { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px; }
+  .wave-bands { display:flex; gap:8px; }
+  .band-item { flex:1; text-align:center; }
+  .band-label { font-size:10px; margin-bottom:4px; }
+  .band-bar-wrap { height:50px; display:flex; align-items:flex-end; justify-content:center; }
+  .band-bar { width:20px; border-radius:3px 3px 0 0; }
+  .band-val { font-size:10px; color:rgba(255,255,255,0.5); margin-top:4px; }
+  .faa-card {
+    margin:0 16px 12px; background:rgba(0,188,212,0.1);
+    border-radius:14px; padding:12px 14px; border:1px solid rgba(0,188,212,0.2);
+  }
+  .faa-card .fc-label { font-size:11px; color:rgba(0,188,212,0.8); margin-bottom:4px; }
+  .faa-card .fc-val { color:#00E5FF; font-size:18px; font-weight:700; }
+  .faa-card .fc-hint { color:rgba(0,188,212,0.7); font-size:11px; margin-left:8px; }
+  .detect-footer {
+    background:rgba(0,0,0,0.4); padding:12px 16px 28px;
+    border-top:1px solid rgba(255,255,255,0.05); flex-shrink:0;
+  }
+  .detect-footer .warning { font-size:11px; color:rgba(255,255,255,0.4); text-align:center; margin-bottom:10px; }
+  .detect-buttons { display:flex; gap:10px; }
+  .btn-end { flex:1; padding:14px; background:rgba(255,82,82,0.2); border:1px solid rgba(255,82,82,0.4); border-radius:12px; color:#ff5252; font-weight:600; font-size:14px; cursor:pointer; }
+
+  /* ========== SCREEN 11: RESULTS ========== */
+  #screen-results { --header-bg:#2D3561; }
+  .result-header {
+    background:linear-gradient(135deg,#1a1a3e,#2D3561);
+    padding:50px 20px 24px; text-align:center; color:white;
+  }
+  .result-icon { font-size:56px; margin-bottom:8px; }
+  .result-title { font-size:22px; font-weight:700; }
+  .result-sub { font-size:13px; opacity:0.7; margin-top:4px; }
+  .score-section { margin-bottom:16px; }
+  .score-item { margin-bottom:12px; }
+  .score-item .si-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .score-item .si-name { font-size:14px; font-weight:600; color:#1a1a2e; }
+  .score-item .si-score { font-size:14px; font-weight:700; }
+  .score-bar { height:10px; background:#f0f0f0; border-radius:5px; overflow:hidden; }
+  .score-fill { height:100%; border-radius:5px; transition:width 1s ease; }
+  .mbti-result-card {
+    background:linear-gradient(135deg,#6B3FA0,#4a148c);
+    border-radius:18px; padding:20px; text-align:center; color:white; margin-bottom:12px;
+  }
+  .mbti-type { font-size:42px; font-weight:800; letter-spacing:4px; margin-bottom:4px; }
+  .mbti-name { font-size:16px; font-weight:500; opacity:0.9; }
+  .mbti-dims { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+  .mbti-dim {
+    background:rgba(255,255,255,0.15); border-radius:10px; padding:8px 10px;
+  }
+  .mbti-dim .dim-letters { font-size:16px; font-weight:700; }
+  .mbti-dim .dim-bar-wrap {
+    height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin:6px 0;
+  }
+  .mbti-dim .dim-fill { height:100%; border-radius:2px; background:rgba(255,255,255,0.8); }
+  .mbti-dim .dim-pct { font-size:10px; opacity:0.8; }
+  .confidence-badge {
+    display:inline-flex; padding:4px 12px; border-radius:20px; font-size:11px;
+    font-weight:600; margin-top:8px;
+  }
+  .conf-high { background:rgba(0,200,83,0.2); color:#00C853; border:1px solid rgba(0,200,83,0.4); }
+
+  /* ========== SCREEN 12: HISTORY ========== */
+  #screen-history { --header-bg:#2D3561; }
+  .filter-bar {
+    background:white; padding:10px 16px; display:flex; gap:8px;
+    overflow-x:auto; flex-shrink:0; border-bottom:1px solid #f0f0f0;
+  }
+  .filter-chip {
+    padding:6px 14px; border-radius:16px; font-size:12px; font-weight:500;
+    background:#f0f2f8; color:#666; cursor:pointer; white-space:nowrap; border:none;
+  }
+  .filter-chip.active { background:#2D3561; color:white; }
+
+  /* ========== SCREEN: SETTINGS ========== */
+  #screen-settings { --header-bg:#2D3561; }
+  .settings-section-label { font-size:12px; color:#888; padding:14px 16px 6px; font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+  .setting-item {
+    background:white; padding:14px 16px; display:flex; align-items:center; gap:12px;
+    cursor:pointer; border-bottom:1px solid #f5f5f5;
+  }
+  .setting-item:last-child { border-bottom:none; }
+  .setting-item .si-icon { font-size:20px; width:28px; text-align:center; }
+  .setting-item .si-label { flex:1; font-size:14px; color:#1a1a2e; }
+  .setting-item .si-value { font-size:13px; color:#aaa; }
+  .setting-item .si-arrow { color:#ccc; font-size:16px; }
+
+  /* Utility */
+  .divider { height:1px; background:#f0f0f0; margin:8px 0; }
+  .spacer { height:16px; }
+  .text-center { text-align:center; }
+  .text-muted { color:#888; font-size:12px; }
+  .badge-new { background:#FF6B35; color:white; padding:2px 6px; border-radius:8px; font-size:10px; font-weight:700; }
+
+  /* Nav Bar Overlay */
+  .nav-overlay {
+    position:absolute; bottom:0; left:0; right:0;
+    background:white; border-top:1px solid #f0f0f0;
+    display:flex; padding:8px 0 20px; z-index:10;
+  }
+  .nav-overlay .nav-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
+  .nav-overlay .nav-icon { font-size:22px; }
+  .nav-overlay .nav-label { font-size:10px; color:#aaa; }
+  .nav-overlay .nav-item.active .nav-label { color:#2D3561; font-weight:600; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:0; }
+
+  /* Navigation Info */
+  .nav-hint {
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.7); color:white; padding:8px 20px;
+    border-radius:20px; font-size:12px; white-space:nowrap;
+    pointer-events:none; z-index:999;
+    animation:fade-hint 3s ease forwards;
+  }
+  @keyframes fade-hint{0%{opacity:0;transform:translateX(-50%) translateY(10px)}20%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0}}
+
+  /* Screen nav buttons ??fixed to viewport, outside phone-wrap */
+  .flow-nav {
+    position:fixed; top:50%; right:16px; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:8px; z-index:200;
+  }
+  .flow-btn {
+    width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+    font-size:16px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 10px rgba(0,0,0,0.3);
+  }
+  .flow-btn-prev { background:#555; color:white; }
+  .flow-btn-next { background:#FF6B35; color:white; }
+
+  /* Screen Index List ??fixed to viewport */
+  .screen-list {
+    position:fixed; left:16px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:6px; z-index:200;
+  }
+  .screen-dot {
+    width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.3);
+    cursor:pointer; transition:all 0.2s;
+  }
+  .screen-dot.active { background:white; width:10px; height:10px; }
+  .screen-dot:hover { background:rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+<div class="phone-wrap">
+
+  <!-- Phone Frame -->
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+
+      <!-- ===== SCREEN 1: SPLASH ===== -->
+      <div class="screen active" id="screen-splash">
+        <div class="splash-wave">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        </div>
+        <div class="splash-logo">??</div>
+        <div class="splash-title">?行郭瑼Ｘ葫蝟餌絞</div>
+        <div class="splash-sub">BrainScan Pro</div>
+        <div style="margin-top:48px;">
+          <button class="btn btn-primary" style="width:220px;background:rgba(255,255,255,0.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.3);" onclick="goto('screen-login')">
+            ?脣蝟餌絞
+          </button>
+        </div>
+        <div style="position:absolute;bottom:40px;color:rgba(255,255,255,0.3);font-size:11px;">
+          v1.0.0 繚 ?其犖?行郭??蝟餌絞
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 2: LOGIN ===== -->
+      <div class="screen" id="screen-login">
+        <div class="login-header">
+          <div class="logo">??</div>
+          <h1>?行郭瑼Ｘ葫蝟餌絞</h1>
+          <p>撠平?行郭?? 繚 蝎暹?鈭箸瘣?</p>
+        </div>
+        <div class="login-body">
+          <div class="login-title">憿批??餃</div>
+          <div class="login-sub">隢撓?交?董??蝣?/div>
+          <div class="form-group">
+            <label class="form-label">??</label>
+            <input class="form-input" type="tel" placeholder="09XX-XXX-XXX" value="0912-345-678">
+          </div>
+          <div class="form-group">
+            <label class="form-label">撖Ⅳ</label>
+            <input class="form-input" type="password" placeholder="隢撓?亙?蝣? value="?ＴＴＴＴＴＴＴ?>
+          </div>
+          <div style="text-align:right;margin-bottom:20px;">
+            <a href="#" style="font-size:13px;color:#2D3561;">敹?撖Ⅳ嚗?/a>
+          </div>
+          <button class="btn btn-primary" onclick="goto('screen-home')">
+            ?餃
+          </button>
+          <div style="text-align:center;margin-top:20px;">
+            <span class="text-muted">擐活雿輻嚗?/span>
+            <a href="#" style="font-size:13px;color:#2D3561;font-weight:600;"> ?舐窗??敺董??/a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 3: HOME ===== -->
+      <div class="screen" id="screen-home">
+        <div class="status-bar">
+          <span class="time">9:41</span>
+          <span class="icons">? ??</span>
+        </div>
+        <div class="home-header">
+          <div class="home-greeting">?? ?典末</div>
+          <div class="home-name">????憿批?</div>
+          <div class="credits-card">
+            <div class="credits-left">
+              <div class="label">?桀??脣</div>
+              <div><span class="amount">NT$12,500</span></div>
+            </div>
+            <button class="btn-buy" onclick="goto('screen-earnings')">?亦?蝝啁?</button>
+          </div>
+        </div>
+
+        <div style="padding-bottom:80px;">
+          <div style="padding:16px 16px 0;">
+            <button class="start-btn" onclick="goto('screen-subject')">
+              <span class="icon">?妒</span>
+              <span class="text">
+                <div class="title">???唳炎皜?/div>
+                <div class="sub">憛怠?葫????繚 ?豢??勗? 繚 ???⊿?</div>
+              </span>
+              <span style="color:rgba(255,255,255,0.6);font-size:20px;">??/span>
+            </button>
+          </div>
+
+          <div class="section-title">?餈?瑼Ｘ葫</div>
+
+          <div class="history-item" onclick="goto('screen-results')">
+            <div class="hi-top">
+              <span class="hi-name">?喳???/span>
+              <span class="tag-status tag-done">??摰?</span>
+            </div>
+            <div class="hi-tags">
+              <span class="tag tag-purple">MBTI</span>
+              <span class="tag tag-blue">隤摮貊?</span>
+              <span class="tag tag-green">憯?蝞∠?</span>
+            </div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">隞予 10:30 繚 3??</div>
+          </div>
+
+          <div class="history-item">
+            <div class="hi-top">
+              <span class="hi-name">????/span>
+              <span class="tag-status" style="background:#e3f2fd;color:#1565c0;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">?? ?亦?</span>
+            </div>
+            <div class="hi-tags">
+              <span class="tag tag-blue">憯?蝞∠?</span>
+              <span class="tag tag-green">??隤輻?</span>
+            </div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">?典予 14:20 繚 3??</div>
+          </div>
+
+          <div class="history-item">
+            <div class="hi-top">
+              <span class="hi-name">撘萄之??/span>
+              <span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">?????憭望?</span>
+            </div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">?典予 09:15 繚 ?芣暺?/div>
+          </div>
+        </div>
+
+        <!-- Bottom Nav -->
+        <div class="nav-overlay">
+          <div class="nav-item active" onclick="goto('screen-home')">
+            <span class="nav-icon">??</span>
+            <span class="nav-label" style="color:#2D3561;font-weight:600;">擐?</span>
+          </div>
+          <div class="nav-item" onclick="goto('screen-history')">
+            <span class="nav-icon">??</span>
+            <span class="nav-label">蝝??/span>
+          </div>
+          <div class="nav-item" onclick="goto('screen-settings')">
+            <span class="nav-icon">??</span>
+            <span class="nav-label">閮剖?</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 4: SUBJECT INFO ===== -->
+      <div class="screen" id="screen-subject">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-home')">??/button>
+          <h2>?葫????/h2>
+          <span class="step-badge">甇仿? 1/4</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-steps">
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+            <div class="progress-step"></div>
+          </div>
+        </div>
+        <div class="content" style="padding-bottom:24px;">
+          <div class="card" style="margin-bottom:12px;padding:12px 14px;background:#e3f2fd;border:1px solid #90caf9;">
+            <div style="font-size:13px;color:#1565c0;display:flex;align-items:center;gap:8px;">
+              <span>?</span>
+              <span>?豢?撌脫??葫??憛怠神</span>
+            </div>
+            <select class="form-select" style="margin-top:8px;">
+              <option>???豢?撌脫??葫????/option>
+              <option>?喳???12甇莎??剖僑蝝?</option>
+              <option>???梧?14甇莎??怠僑蝝?</option>
+            </select>
+          </div>
+
+          <div style="text-align:center;color:#aaa;font-size:13px;margin:10px 0;">???‵撖急?葫????/div>
+
+          <div class="form-group">
+            <label class="form-label">憪? *</label>
+            <input class="form-input" placeholder="隢撓?亙???>
+          </div>
+          <div class="form-group">
+            <label class="form-label">?箇??交? *</label>
+            <input class="form-input" type="date" value="2014-03-15">
+            <div style="font-size:11px;color:#00BCD4;margin-top:4px;">?? ?桀?撟湧翩嚗?2 甇?/div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">?批 *</label>
+            <div class="radio-group">
+              <div class="radio-btn selected" onclick="selectRadio(this)">??/div>
+              <div class="radio-btn" onclick="selectRadio(this)">憟?/div>
+              <div class="radio-btn" onclick="selectRadio(this)">?嗡?</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">??寞??</label>
+            <input class="form-input" placeholder="隢‵撖恬??∪??征嚗?>
+          </div>
+          <div class="form-group">
+            <label class="form-label">?桀?雿輻?亦</label>
+            <input class="form-input" placeholder="隢‵撖恬??∪??征嚗?>
+          </div>
+
+          <button class="btn btn-primary" onclick="goto('screen-reports')">
+            銝?甇伐??豢??勗? ??          </button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 5: REPORT SELECTION ===== -->
+      <div class="screen" id="screen-reports">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-subject')">??/button>
+          <h2>?豢??勗??</h2>
+          <span class="step-badge">甇仿? 2/4</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-steps">
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding:12px 16px 16px;">
+
+          <!-- ?犖?勗? -->
+          <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:10px;font-size:11px;">?犖?勗?</span>
+          </div>
+
+          <!-- ?行郭??鈭箇?? -->
+          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+              ? ?行郭??鈭箇??
+              <span style="background:#fff3e0;color:#e65100;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">?犖</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" onclick="selectSingleReport(this,'life_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??/div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">擃???/div>
+                  <div class="desc">?箇?鈭箇????</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$3,000</div>
+              </div>
+              <div class="report-item" onclick="selectSingleReport(this,'life_full','NT$5,000','screen-qr-full')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">潃?/div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">摰??/div>
+                  <div class="desc">摰鈭箇??瘛勗漲閫??</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$5,000</div>
+              </div>
+              <div class="report-item" onclick="selectSingleReport(this,'life_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">VIP??<span style="background:#FFD700;color:#5d4e00;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">?摰</span></div>
+                  <div class="desc">VIP 撠惇?冽雿圾???/div>
+                </div>
+                <div class="report-price" style="color:#b8860b;">NT$12,000</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ?咱?行郭憭抵釵閫?Ⅳ -->
+          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+              ?? ?咱?行郭憭抵釵閫?Ⅳ
+              <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;">?咱</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" onclick="selectSingleReport(this,'child_trial','NT$3,000','screen-qr-trial')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??/div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">擃???/div>
+                  <div class="desc">?箇?憭抵釵瞏??</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$3,000</div>
+              </div>
+              <div class="report-item" onclick="selectSingleReport(this,'child_full','NT$5,000','screen-qr-full')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">潃?/div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">摰??/div>
+                  <div class="desc">摰憭抵釵瘛勗漲閫??</div>
+                </div>
+                <div class="report-price" style="color:#FF6B35;">NT$5,000</div>
+              </div>
+              <div class="report-item" onclick="selectSingleReport(this,'child_vip','NT$12,000','screen-qr-vip')" style="margin:0;border-color:#FFD700;background:#fffef0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">VIP??<span style="background:#FFD700;color:#5d4e00;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">?摰</span></div>
+                  <div class="desc">VIP 撠惇?冽雿圾???/div>
+                </div>
+                <div class="report-price" style="color:#b8860b;">NT$12,000</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ???勗? -->
+          <div style="font-size:13px;font-weight:700;color:#2D3561;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="background:#fce4ec;color:#c2185b;padding:2px 10px;border-radius:10px;font-size:11px;">???勗?</span>
+          </div>
+          <div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div style="font-size:12px;color:#888;margin-bottom:10px;">?? ???寧?撌脣???VIP ?犖?勗?</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">???抽??/div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">閬芸??行郭?望???勗?</div>
+                  <div class="desc">??閬芸??行郭?梢陷???芋撘?/div>
+                </div>
+                <div style="color:#c2185b;font-size:13px;font-weight:700;">??/div>
+              </div>
+              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">憭怠氖?行郭?望???勗?</div>
+                  <div class="desc">??憭怠氖?行郭???芋撘?/div>
+                </div>
+                <div style="color:#c2185b;font-size:13px;font-weight:700;">??/div>
+              </div>
+              <div class="report-item" onclick="goto('screen-relation-select')" style="margin:0;">
+                <div class="report-icon" style="font-size:20px;width:32px;">??</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">?噤?行郭?望???勗?</div>
+                  <div class="desc">???噤?行郭憟?摨西?皞??/div>
+                </div>
+                <div style="color:#c2185b;font-size:13px;font-weight:700;">??/div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: QR 隞狡嚗?撽? NT$3,000嚗?==== -->
+      <div class="screen" id="screen-qr-trial">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>?Ⅳ隞狡</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;text-align:center;">
+            <div style="font-size:13px;color:#888;margin-bottom:4px;">?豢??寞?</div>
+            <div style="font-size:18px;font-weight:700;color:#1a1a2e;" id="qr-trial-title">?行郭??鈭箇?? 繚 擃???/div>
+            <div style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$3,000</div>
+            <div style="font-size:12px;color:#888;">憿批?隞?隞狡嚗?皜祈誑?暸??臭?憿批?</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">? 憿批??Ⅳ隞狡</div>
+            <img src="/static-app/ecpay/qr_3000.png" alt="擃???QR Code" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">隞狡??敺?脣銝?甇伐??⊿???蝣箄?</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ?梧? <span class="qr-countdown">隢 15:00 ?批???甈?/span>
+            </div>
+            <!-- ?剝?? -->
+            <div id="qr-trial-link-box" style="width:100%;background:#f8f9ff;border:1px dashed #c5cae9;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#7986cb;margin-bottom:6px;font-weight:600;">?? ?????隞狡</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-trial-link" href="#" target="_blank" style="font-size:12px;color:#3949ab;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-trial-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #7986cb;background:white;border-radius:8px;font-size:11px;color:#3949ab;cursor:pointer;">銴ˊ</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <!-- 隞狡???蝷箏 -->
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">蝑?隞狡銝哨?瘥?3 蝘?Ⅱ隤?..</div>
+          </div>
+
+          <!-- ?皜祈岫?? -->
+          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-trial')">
+            ?妒 ?皜祈岫嚗芋?砌?甈暹???          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">?? ?梁??????摰????</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: QR 隞狡嚗??渡? NT$5,000嚗?==== -->
+      <div class="screen" id="screen-qr-full">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>?Ⅳ隞狡</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;text-align:center;">
+            <div style="font-size:13px;color:#888;margin-bottom:4px;">?豢??寞?</div>
+            <div style="font-size:18px;font-weight:700;color:#1a1a2e;" id="qr-full-title">?行郭??鈭箇?? 繚 摰??/div>
+            <div style="font-size:32px;font-weight:800;color:#FF6B35;margin:8px 0;">NT$5,000</div>
+            <div style="font-size:12px;color:#888;">憿批?隞?隞狡嚗?皜祈誑?暸??臭?憿批?</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">? 憿批??Ⅳ隞狡</div>
+            <img src="/static-app/ecpay/qr_5000.png" alt="摰??QR Code" style="width:200px;height:200px;border-radius:12px;border:2px solid #f0f0f0;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">隞狡??敺?脣銝?甇伐??⊿???蝣箄?</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ?梧? <span class="qr-countdown">隢 15:00 ?批???甈?/span>
+            </div>
+            <!-- ?剝?? -->
+            <div id="qr-full-link-box" style="width:100%;background:#f8f9ff;border:1px dashed #c5cae9;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#7986cb;margin-bottom:6px;font-weight:600;">?? ?????隞狡</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-full-link" href="#" target="_blank" style="font-size:12px;color:#3949ab;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-full-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #7986cb;background:white;border-radius:8px;font-size:11px;color:#3949ab;cursor:pointer;">銴ˊ</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">蝑?隞狡銝哨?瘥?3 蝘?Ⅱ隤?..</div>
+          </div>
+
+          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-full')">
+            ?妒 ?皜祈岫嚗芋?砌?甈暹???          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">?? ?梁??????摰????</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: QR 隞狡嚗IP??NT$12,000嚗?==== -->
+      <div class="screen" id="screen-qr-vip">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>?Ⅳ隞狡</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#5d4037,#8d6e63);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:4px;">?豢??寞?</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-vip-title">?行郭??鈭箇?? 繚 VIP??/div>
+            <div style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$12,000</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.7);">?? VIP 撠惇?? 繚 ?摰?勗?</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">? 憿批??Ⅳ隞狡</div>
+            <img src="/static-app/ecpay/qr_12000.png" alt="VIP??QR Code" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">隞狡??敺?脣銝?甇伐??⊿???蝣箄?</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ?梧? <span class="qr-countdown">隢 15:00 ?批???甈?/span>
+            </div>
+            <!-- ?剝?? -->
+            <div id="qr-vip-link-box" style="width:100%;background:#fffde7;border:1px dashed #FFD700;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#f9a825;margin-bottom:6px;font-weight:600;">?? ?????隞狡</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-vip-link" href="#" target="_blank" style="font-size:12px;color:#f57f17;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-vip-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #FFD700;background:white;border-radius:8px;font-size:11px;color:#f57f17;cursor:pointer;">銴ˊ</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">蝑?隞狡銝哨?瘥?3 蝘?Ⅱ隤?..</div>
+          </div>
+
+          <button class="btn" style="width:100%;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:13px;" onclick="simulatePaid('screen-qr-vip')">
+            ?妒 ?皜祈岫嚗芋?砌?甈暹???          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">?? ?梁??????摰????</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: ???勗??訾犖 ===== -->
+      <div class="screen" id="screen-relation-select">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>?豢???鈭?/h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;">
+          <div style="background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#c2185b;">
+            ? 隞乩??箏歇摰? VIP ?犖?勗??犖?∴?隢??2 雿?閬芸??勗??舫 3 雿誑銝?
+          </div>
+
+          <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px;">?舫鈭箏嚗 4 鈭綽?</div>
+
+          <div id="relation-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">??/div>
+              <div style="flex:1;">
+                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">?喳???/div>
+                <div style="font-size:11px;color:#888;margin-top:2px;">12甇?繚 2026/03/03 摰? VIP</div>
+              </div>
+              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
+            </div>
+            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f093fb,#f5576c);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">??/div>
+              <div style="flex:1;">
+                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">????/div>
+                <div style="font-size:11px;color:#888;margin-top:2px;">14甇?繚 2026/03/02 摰? VIP</div>
+              </div>
+              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
+            </div>
+            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#43e97b,#38f9d7);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">??/div>
+              <div style="flex:1;">
+                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">????/div>
+                <div style="font-size:11px;color:#888;margin-top:2px;">38甇?繚 2026/02/28 摰? VIP</div>
+              </div>
+              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
+            </div>
+            <div class="relation-person" onclick="togglePerson(this)" style="background:white;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fa709a,#fee140);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;flex-shrink:0;">撘?/div>
+              <div style="flex:1;">
+                <div style="font-size:14px;font-weight:600;color:#1a1a2e;">撘萄之??/div>
+                <div style="font-size:11px;color:#888;margin-top:2px;">42甇?繚 2026/02/20 摰? VIP</div>
+              </div>
+              <div class="person-check" style="width:24px;height:24px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all 0.2s;"></div>
+            </div>
+          </div>
+
+          <div id="relation-selected-info" style="background:#f8f9ff;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#2D3561;display:none;">
+            撌脤??<span id="relation-selected-names" style="font-weight:700;"></span>
+          </div>
+
+          <button class="btn btn-primary" id="relation-submit-btn" style="opacity:0.4;pointer-events:none;" onclick="goto('screen-results')">
+            ?????勗? ??          </button>
+          <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">?勗?撠????Email</div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN: ?脣?敦 ===== -->
+      <div class="screen" id="screen-earnings">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-home')">??/button>
+          <h2>?脣?敦</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
+
+          <!-- ?脣蝮質汗 -->
+          <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px 16px;color:white;">
+            <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">?祆?蝮賜??/div>
+            <div style="font-size:36px;font-weight:800;color:#4CAF50;">NT$12,500</div>
+            <div style="display:flex;gap:16px;margin-top:12px;">
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
+                <div style="font-size:11px;opacity:0.7;">?祆?隞嗆</div>
+                <div style="font-size:20px;font-weight:700;">8 隞?/div>
+              </div>
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;flex:1;text-align:center;">
+                <div style="font-size:11px;opacity:0.7;">撟喳?瘥辣</div>
+                <div style="font-size:20px;font-weight:700;">NT$1,563</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ?膜?敦 -->
+          <div style="padding:16px;">
+            <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:12px;">瘥??膜蝝??/div>
+
+            <!-- ?桃? -->
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">?喳???/div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">?行郭??鈭箇?? 繚 VIP??/div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/03 09:41</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$3,000</div>
+                  <div style="font-size:10px;color:#aaa;">?桀 NT$12,000 繚 ?膜25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#f3e5f5;color:#6a1b9a;padding:2px 8px;border-radius:8px;font-size:11px;">VIP??/span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">撌脣撣?/span>
+              </div>
+            </div>
+
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">????/div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">?咱?行郭憭抵釵閫?Ⅳ 繚 摰??/div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/02 14:20</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$1,250</div>
+                  <div style="font-size:10px;color:#aaa;">?桀 NT$5,000 繚 ?膜25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:8px;font-size:11px;">摰??/span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">撌脣撣?/span>
+              </div>
+            </div>
+
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">????繚 撘萄之??/div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">憭怠氖?行郭?望???勗?</div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/01 11:00</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#4CAF50;">+NT$2,000</div>
+                  <div style="font-size:10px;color:#aaa;">?桀 NT$8,000 繚 ?膜25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#fce4ec;color:#c2185b;padding:2px 8px;border-radius:8px;font-size:11px;">???勗?</span>
+                <span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:8px;font-size:11px;">撌脣撣?/span>
+              </div>
+            </div>
+
+            <div style="background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;opacity:0.7;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:#1a1a2e;">?之??/div>
+                  <div style="font-size:11px;color:#888;margin-top:2px;">?行郭??鈭箇?? 繚 擃???/div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">2026/03/01 09:00</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:16px;font-weight:700;color:#ff9800;">+NT$750</div>
+                  <div style="font-size:10px;color:#aaa;">?桀 NT$3,000 繚 ?膜25%</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;height:1px;background:#f5f5f5;"></div>
+              <div style="display:flex;gap:6px;margin-top:8px;">
+                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">擃???/span>
+                <span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:8px;font-size:11px;">敺撣?/span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="nav-overlay">
+          <div class="nav-item" onclick="goto('screen-home')"><span class="nav-icon">??</span><span class="nav-label" style="color:#2D3561;font-weight:600;">擐?</span></div>
+          <div class="nav-item" onclick="goto('screen-history')"><span class="nav-icon">??</span><span class="nav-label">蝝??/span></div>
+          <div class="nav-item" onclick="goto('screen-settings')"><span class="nav-icon">??</span><span class="nav-label">閮剖?</span></div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 6: PAYMENT (??嚗????? ===== -->
+      <div class="screen" id="screen-payment">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>鞈潸眺暺</h2>
+        </div>
+        <div class="content" style="padding-bottom:24px;">
+          <div class="card" style="background:#fff3e0;border:1px solid #ffb74d;margin-bottom:16px;">
+            <div style="font-size:13px;color:#e65100;">?? 暺銝雲</div>
+            <div style="font-size:12px;color:#888;margin-top:4px;">?桀?擗?嚗?b style="color:#1a1a2e;">1 暺?/b>嚗甈⊿?閬?<b style="color:#e65100;">4 暺?/b></div>
+          </div>
+
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:10px;">?豢?暺憟?</div>
+
+          <div class="package-card" onclick="selectPackage(this)">
+            <span class="pkg-icon">??</span>
+            <div class="pkg-info">
+              <div class="pkg-name">?箇???繚 10 暺?/div>
+              <div class="pkg-desc">瘥? NT$30</div>
+            </div>
+            <div class="pkg-price">NT$300</div>
+          </div>
+          <div class="package-card selected" onclick="selectPackage(this)">
+            <span class="pkg-icon">??</span>
+            <div class="pkg-info">
+              <div class="pkg-name">璅???繚 30 暺?韐?3 暺?<span class="best-badge">??迭餈?/span></div>
+              <div class="pkg-desc">瘥?蝝?NT$24</div>
+            </div>
+            <div class="pkg-price">NT$800</div>
+          </div>
+          <div class="package-card" onclick="selectPackage(this)">
+            <span class="pkg-icon">??</span>
+            <div class="pkg-info">
+              <div class="pkg-name">撠平??繚 60 暺?韐?10 暺?</div>
+              <div class="pkg-desc">瘥?蝝?NT$21</div>
+            </div>
+            <div class="pkg-price">NT$1,500</div>
+          </div>
+
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin:16px 0 10px;">隞狡?孵?</div>
+          <div class="payment-methods">
+            <div class="pay-method selected" onclick="selectPayMethod(this)">
+              <div class="pm-icon">?</div>
+              <div class="pm-name">靽∠??/div>
+            </div>
+            <div class="pay-method" onclick="selectPayMethod(this)">
+              <div class="pm-icon">?</div>
+              <div class="pm-name">ATM 頧董</div>
+            </div>
+            <div class="pay-method" onclick="selectPayMethod(this)">
+              <div class="pm-icon">?</div>
+              <div class="pm-name">頞?隞?Ⅳ</div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="goto('screen-mbti')">
+            ??隞狡嚗絞銝??嚗?
+          </button>
+          <div style="text-align:center;margin-top:12px;font-size:11px;color:#aaa;">
+            ?? ?梁??????摰????
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 7: MBTI QUESTIONNAIRE ===== -->
+      <div class="screen" id="screen-mbti">
+        <div class="status-bar" style="background:#6B3FA0;"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar" style="background:#6B3FA0;">
+          <button class="back-btn" onclick="goto('screen-reports')">??/button>
+          <h2>MBTI ?葫?</h2>
+          <span class="step-badge">甇仿? 3/4</span>
+        </div>
+        <div class="mbti-progress">
+          <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;margin-bottom:8px;">蝚?3 / 10 憿?/div>
+          <div class="mbti-dots" id="mbti-dots">
+            <div class="mbti-dot done"></div>
+            <div class="mbti-dot done"></div>
+            <div class="mbti-dot active"></div>
+            <div class="mbti-dot"></div><div class="mbti-dot"></div><div class="mbti-dot"></div>
+            <div class="mbti-dot"></div><div class="mbti-dot"></div><div class="mbti-dot"></div>
+            <div class="mbti-dot"></div>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding-bottom:16px;">
+          <div class="question-card">
+            <span class="q-dim-badge" style="background:#e8f5e9;color:#2e7d32;">E / I 蝬剖漲</span>
+            <div class="q-num">蝚?3 憿?/div>
+            <div class="q-text">?其??冗鈭方?????嚗?虜?死...</div>
+            <div class="q-options" id="mbti-options">
+              <div class="q-option" onclick="selectMBTI(this)">
+                <div class="opt-radio"></div>
+                ?鈭?蝎曉???嚗蝜潛??之摰嗡???              </div>
+              <div class="q-option selected" onclick="selectMBTI(this)">
+                <div class="opt-radio">??/div>
+                ?脫?鈭??閬??犖?????賣敺?              </div>
+            </div>
+          </div>
+          <div style="padding:0 16px;">
+            <div style="background:#f8f9ff;border-radius:14px;padding:12px 14px;font-size:12px;color:#888;line-height:1.6;">
+              ? <b>?內嚗?/b>隢?撟單???撖行???蝑?瘝?撠銋????瑞?獢??瘜Ｙ??????? MBTI ?斗??蝣箸扼?            </div>
+          </div>
+        </div>
+
+        <div class="mbti-nav">
+          <button class="btn btn-secondary btn-sm" onclick="goto('screen-reports')" style="flex:1;">??銝?憿?/button>
+          <button class="btn btn-primary btn-sm" onclick="goto('screen-connect')" style="flex:2;">銝?憿???/button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 8: DEVICE CONNECTION ===== -->
+      <div class="screen" id="screen-connect">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <button class="back-btn" onclick="goto('screen-mbti')">??/button>
+          <h2>???行郭閮剖?</h2>
+          <span class="step-badge">甇仿? 4/4</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-steps">
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+          </div>
+        </div>
+
+        <div class="content" style="padding-bottom:24px;">
+          <div class="device-status-card">
+            <div class="scan-animation">
+              <div class="scan-ring"></div>
+              <div class="scan-ring"></div>
+              ?
+            </div>
+            <div style="text-align:center;font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:4px;">????閮剖?銝?..</div>
+            <div style="text-align:center;font-size:12px;color:#888;margin-bottom:16px;">隢Ⅱ隤瘜ａ撣嗅歇??</div>
+
+            <div class="device-found">
+              <span class="dev-icon">?</span>
+              <div class="dev-info">
+                <div class="dev-name">EEG Headband #001</div>
+                <div class="dev-id">BT MAC: A4:C1:38:XX:XX:XX</div>
+              </div>
+              <div>
+                <div class="signal-bars">
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                  <div class="sig-bar active"></div>
+                </div>
+                <div style="font-size:10px;color:#00C853;text-align:center;margin-top:2px;">?臬末</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">?餅扔?亥孛?釭</div>
+            <div class="contact-checks">
+              <div class="contact-item">
+                <span class="check-icon">??/span> 憿嚗p1嚗?              </div>
+              <div class="contact-item">
+                <span class="check-icon">??/span> 撌西喳冗嚗1嚗?              </div>
+            </div>
+            <div style="margin-top:10px;padding:8px 10px;background:#e8f5e9;border-radius:8px;font-size:12px;color:#2e7d32;">
+              ??Fp1 ?桅?撠梁?嚗???⊿?
+            </div>
+            <div style="margin-top:6px;padding:7px 10px;background:#fff8e1;border-radius:8px;font-size:11px;color:#f57f17;">
+              ?對? 甇方身??桅?嚗p1嚗?E/I 蝬剖漲?嫣誑 帣/帢 瘥潔摯蝞?            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">?葫??/div>
+            <div style="font-size:15px;font-weight:600;">?喳???/div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">12甇?繚 ?豢??勗?嚗BTI???亙飛蝧??恣????暺?</div>
+          </div>
+
+          <button class="btn btn-primary" onclick="goto('screen-baseline')">
+            ????摰?嚗?憪??臬蝺????          </button>
+          <div style="text-align:center;margin-top:10px;font-size:11px;color:#aaa;">
+            ? ?????銝????????暺
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 9: BASELINE ===== -->
+      <div class="screen" id="screen-baseline">
+        <div class="status-bar" style="background:#2D3561;"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar" style="background:#2D3561;">
+          <button class="back-btn" onclick="goto('screen-connect')">??/button>
+          <h2>撱箇???箇?</h2>
+        </div>
+        <div class="baseline-body">
+          <div class="baseline-icon">??</div>
+          <div class="baseline-title">隢??擛???/div>
+          <div class="baseline-sub">甇?閮??葫???行郭?箇?<br>隢??葫???潦?閬牧閰?/div>
+
+          <div class="baseline-timer">
+            <svg class="timer-ring" viewBox="0 0 120 120">
+              <circle class="timer-circle-bg" cx="60" cy="60" r="52"/>
+              <circle class="timer-circle" id="baseline-circle" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="timer-text" id="baseline-time">0:22</div>
+          </div>
+
+          <div class="baseline-tips">
+            <div class="tip-item">??儭????潛?</div>
+            <div class="tip-item">?井 靽?摰?嚗?閬牧閰?/div>
+            <div class="tip-item">?? ?暸???嚗?嗅??/div>
+          </div>
+
+          <button class="btn" style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.2);" onclick="goto('screen-detect')">
+            頝喲?嚗?仿?憪??
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 10: DETECTION ===== -->
+      <div class="screen" id="screen-detect">
+        <div class="status-bar" style="background:#0a0f1e;"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
+          <div class="detect-header">
+            <div class="dh-top">
+              <span class="dh-subject">? ?喳???繚 12甇?/span>
+              <span class="dh-status"><span class="live-dot"></span> ?⊿?銝?/span>
+            </div>
+            <div class="time-display">
+              <div class="time-big" id="detect-time">1:48</div>
+              <div class="time-label">?拚???</div>
+            </div>
+            <div class="detect-progress-bar">
+              <div class="detect-progress-fill" id="detect-fill" style="width:40%;"></div>
+            </div>
+            <div class="detect-progress-label" id="detect-label">撌脫??72 / 180 蝘?/div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="m-label">瘜冽???/div>
+              <div class="m-value">72</div>
+              <div class="m-bar"><div class="m-fill m-fill-attn"></div></div>
+            </div>
+            <div class="metric-card">
+              <div class="m-label">?交?暸?</div>
+              <div class="m-value">58</div>
+              <div class="m-bar"><div class="m-fill m-fill-medi"></div></div>
+            </div>
+          </div>
+
+          <div class="wave-chart">
+            <div class="wave-chart-title">?行郭?餃葆?單?撘瑕漲</div>
+            <div class="wave-bands">
+              <div class="band-item">
+                <div class="band-label" style="color:#607d8b;font-size:10px;">帤</div>
+                <div class="band-bar-wrap">
+                  <div class="band-bar" style="height:20%;background:#607d8b;opacity:0.7;"></div>
+                </div>
+                <div class="band-val">雿?/div>
+              </div>
+              <div class="band-item">
+                <div class="band-label" style="color:#9c27b0;font-size:10px;">庛</div>
+                <div class="band-bar-wrap">
+                  <div class="band-bar" style="height:40%;background:#9c27b0;"></div>
+                </div>
+                <div class="band-val">銝?/div>
+              </div>
+              <div class="band-item">
+                <div class="band-label" style="color:#4caf50;font-size:10px;">帢</div>
+                <div class="band-bar-wrap">
+                  <div class="band-bar" style="height:75%;background:#4caf50;"></div>
+                </div>
+                <div class="band-val">擃?/div>
+              </div>
+              <div class="band-item">
+                <div class="band-label" style="color:#ff9800;font-size:10px;">帣</div>
+                <div class="band-bar-wrap">
+                  <div class="band-bar" style="height:60%;background:#ff9800;"></div>
+                </div>
+                <div class="band-val">銝?/div>
+              </div>
+              <div class="band-item">
+                <div class="band-label" style="color:#f44336;font-size:10px;">帠</div>
+                <div class="band-bar-wrap">
+                  <div class="band-bar" style="height:30%;background:#f44336;"></div>
+                </div>
+                <div class="band-val">雿?/div>
+              </div>
+            </div>
+          </div>
+
+          <div class="faa-card">
+            <div class="fc-label">帣/帢 瘥潘?E/I 隡啁???嚗?/div>
+            <div style="display:flex;align-items:baseline;gap:6px;">
+              <span class="fc-val">1.42</span>
+              <span class="fc-hint">憭??曉?嚗?&gt; 帢嚗?/span>
+            </div>
+            <div style="margin-top:6px;height:4px;background:rgba(0,188,212,0.2);border-radius:2px;">
+              <div style="height:100%;width:59%;background:#00BCD4;border-radius:2px;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(0,188,212,0.5);margin-top:2px;">
+              <span>I嚗?帢 &lt; 1嚗?</span><span>??E嚗?帢 &gt; 1嚗?/span>
+            </div>
+            <div style="margin-top:5px;font-size:10px;color:rgba(255,255,255,0.35);">Fp1 ?桅? 繚 ??FAA</div>
+          </div>
+
+          <div style="margin:0 16px;background:rgba(255,255,255,0.07);border-radius:14px;padding:12px 14px;border:1px solid rgba(255,255,255,0.08);">
+            <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:8px;">?單???霈</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <span style="background:rgba(0,200,83,0.2);color:#00C853;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">? 撠釣?臬末</span>
+              <span style="background:rgba(255,152,0,0.2);color:#ff9800;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">? 憯?銝剔?</span>
+              <span style="background:rgba(0,188,212,0.2);color:#00BCD4;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">? Alpha 銝餃?</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="detect-footer">
+          <div class="warning">?? ?⊿?摰?敺???日??賂?銝剝蝺????</div>
+          <div class="detect-buttons">
+            <button class="btn-end" onclick="goto('screen-results')">??蝯??⊿?</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 11: RESULTS ===== -->
+      <div class="screen" id="screen-results">
+        <div class="status-bar"><span class="time">9:44</span><span class="icons">? ??</span></div>
+        <div style="overflow-y:auto;flex:1;padding-bottom:80px;">
+          <div class="result-header">
+            <div class="result-icon">??/div>
+            <div class="result-title">瑼Ｘ葫摰?嚗?/div>
+            <div class="result-sub">?喳???繚 2026/03/03 09:41 繚 3 ??嚗?80蝑?</div>
+            <div style="margin-top:10px;background:rgba(0,200,83,0.15);border:1px solid rgba(0,200,83,0.3);border-radius:10px;padding:8px 14px;font-size:12px;color:#00C853;display:flex;align-items:center;gap:6px;">
+              ? ?勗???銝哨?摰?敺??芸??潮?葫??Email
+            </div>
+          </div>
+
+          <div style="padding:16px;">
+            <!-- MBTI Result -->
+            <div class="mbti-result-card">
+              <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">? MBTI 鈭箸憿?</div>
+              <div class="mbti-type">ENFP</div>
+              <div class="mbti-name">蝡園??繚 The Campaigner</div>
+              <div class="confidence-badge conf-high">???臭縑摨佗?擃?/div>
+              <div class="mbti-dims">
+                <div class="mbti-dim">
+                  <div class="dim-letters">E <span style="opacity:0.5;font-size:12px;">vs I</span></div>
+                  <div class="dim-bar-wrap">
+                    <div class="dim-fill" style="width:75%;"></div>
+                  </div>
+                  <div class="dim-pct">75% 憭?嚗?帢 1.42嚗?/div>
+                </div>
+                <div class="mbti-dim">
+                  <div class="dim-letters">N <span style="opacity:0.5;font-size:12px;">vs S</span></div>
+                  <div class="dim-bar-wrap">
+                    <div class="dim-fill" style="width:78%;"></div>
+                  </div>
+                  <div class="dim-pct">78% ?渲死嚗?帣 1.35嚗?/div>
+                </div>
+                <div class="mbti-dim">
+                  <div class="dim-letters">F <span style="opacity:0.5;font-size:12px;">vs T</span></div>
+                  <div class="dim-bar-wrap">
+                    <div class="dim-fill" style="width:62%;"></div>
+                  </div>
+                  <div class="dim-pct">62% ??嚗EB 1.45嚗?/div>
+                </div>
+                <div class="mbti-dim">
+                  <div class="dim-letters">P <span style="opacity:0.5;font-size:12px;">vs J</span></div>
+                  <div class="dim-bar-wrap">
+                    <div class="dim-fill" style="width:63%;"></div>
+                  </div>
+                  <div class="dim-pct">63% 隤嚗CR 1.82嚗?/div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Score Cards -->
+            <div class="card">
+              <div class="card-title">???賢?閰摯</div>
+              <div class="score-section">
+                <div class="score-item">
+                  <div class="si-header">
+                    <span class="si-name">?? 隤摮貊?瞏?</span>
+                    <span class="si-score" style="color:#2D3561;">78 ??/span>
+                  </div>
+                  <div class="score-bar">
+                    <div class="score-fill" style="width:78%;background:linear-gradient(90deg,#2D3561,#5c6bc0);"></div>
+                  </div>
+                </div>
+                <div class="score-item">
+                  <div class="si-header">
+                    <span class="si-name">?? 憯?蝞∠??賢?</span>
+                    <span class="si-score" style="color:#00897b;">62 ??/span>
+                  </div>
+                  <div class="score-bar">
+                    <div class="score-fill" style="width:62%;background:linear-gradient(90deg,#00897b,#4db6ac);"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Key Indicators -->
+            <div class="card">
+              <div class="card-title">??行郭??</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
+                  <div style="font-size:10px;color:#888;">瘜冽???CCR嚗?/div>
+                  <div style="font-size:20px;font-weight:700;color:#2D3561;">2.34</div>
+                  <div style="font-size:10px;color:#00C853;">???臬末</div>
+                </div>
+                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
+                  <div style="font-size:10px;color:#888;">憯??Ｗ儔嚗RR嚗?/div>
+                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.32</div>
+                  <div style="font-size:10px;color:#ff9800;">??銝剔?</div>
+                </div>
+                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
+                  <div style="font-size:10px;color:#888;">?扳?蝺?REB嚗?/div>
+                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.45</div>
+                  <div style="font-size:10px;color:#ff9800;">?????曉?</div>
+                </div>
+                <div style="background:#f8f9ff;padding:10px;border-radius:10px;text-align:center;">
+                  <div style="font-size:10px;color:#888;">帣/帢 ?潘?E/I嚗?/div>
+                  <div style="font-size:20px;font-weight:700;color:#2D3561;">1.42</div>
+                  <div style="font-size:10px;color:#00C853;">??憭?</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" style="flex:2;" onclick="goto('screen-home')">?亦?摰?勗? ??/button>
+              <button class="btn btn-secondary" style="flex:1;">銝? PDF</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-overlay">
+          <div class="nav-item" onclick="goto('screen-home')"><span class="nav-icon">??</span><span class="nav-label">擐?</span></div>
+          <div class="nav-item active"><span class="nav-icon">??</span><span class="nav-label" style="color:#2D3561;font-weight:600;">蝝??/span></div>
+          <div class="nav-item" onclick="goto('screen-settings')"><span class="nav-icon">??</span><span class="nav-label">閮剖?</span></div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 12: HISTORY ===== -->
+      <div class="screen" id="screen-history">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar">
+          <h2 style="margin-left:0;">甇瑕蝝??/h2>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-chip active">?券</button>
+          <button class="filter-chip">MBTI</button>
+          <button class="filter-chip">隤摮貊?</button>
+          <button class="filter-chip">憯?蝞∠?</button>
+          <button class="filter-chip">?祇?/button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:12px 16px;padding-bottom:80px;">
+          <div style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500;">2026撟???/div>
+          <div class="history-item" onclick="goto('screen-results')" style="margin:0 0 10px;">
+            <div class="hi-top"><span class="hi-name">?喳???/span><span class="tag-status tag-done">??摰?</span></div>
+            <div class="hi-tags"><span class="tag tag-purple">MBTI</span><span class="tag tag-blue">隤摮貊?</span><span class="tag tag-green">憯?蝞∠?</span></div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/03 09:41 繚 3?? 繚 ??暺?/div>
+          </div>
+          <div class="history-item" style="margin:0 0 10px;">
+            <div class="hi-top"><span class="hi-name">????/span><span class="tag-status tag-done">??摰?</span></div>
+            <div class="hi-tags"><span class="tag tag-blue">憯?蝞∠?</span><span class="tag tag-green">??隤輻?</span></div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/03/02 14:20 繚 3?? 繚 ??暺?/div>
+          </div>
+          <div class="history-item" style="margin:0 0 10px;opacity:0.7;">
+            <div class="hi-top"><span class="hi-name">撘萄之??/span><span class="tag-status" style="background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:10px;font-size:11px;font-weight:600;">?????憭望?</span></div>
+            <div style="font-size:12px;color:#aaa;margin-top:4px;">?????銝剜嚗???</div>
+            <div style="font-size:11px;color:#bbb;margin-top:4px;">2026/03/02 09:15</div>
+          </div>
+          <div style="font-size:12px;color:#888;margin:12px 0 8px;font-weight:500;">2026撟???/div>
+          <div class="history-item" style="margin:0 0 10px;">
+            <div class="hi-top"><span class="hi-name">????/span><span class="tag-status tag-done">??摰?</span></div>
+            <div class="hi-tags"><span class="tag tag-purple">MBTI</span></div>
+            <div style="font-size:11px;color:#bbb;margin-top:6px;">2026/02/28 10:00 繚 3?? 繚 ??暺?/div>
+          </div>
+        </div>
+        <div class="nav-overlay">
+          <div class="nav-item" onclick="goto('screen-home')"><span class="nav-icon">??</span><span class="nav-label">擐?</span></div>
+          <div class="nav-item active"><span class="nav-icon">??</span><span class="nav-label" style="color:#2D3561;font-weight:600;">蝝??/span></div>
+          <div class="nav-item" onclick="goto('screen-settings')"><span class="nav-icon">??</span><span class="nav-label">閮剖?</span></div>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 13: SETTINGS ===== -->
+      <div class="screen" id="screen-settings">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">? ??</span></div>
+        <div class="top-bar"><h2 style="margin-left:0;">閮剖?</h2></div>
+        <div style="flex:1;overflow-y:auto;padding-bottom:80px;">
+          <div style="background:linear-gradient(135deg,#2D3561,#1a3a5c);padding:20px;text-align:center;color:white;">
+            <div style="font-size:48px;margin-bottom:8px;">????/div>
+            <div style="font-size:17px;font-weight:700;">????憿批?</div>
+            <div style="font-size:12px;opacity:0.7;margin-top:2px;">0912-345-678</div>
+            <div style="margin-top:12px;background:rgba(76,175,80,0.3);padding:8px 20px;border-radius:20px;display:inline-block;">
+              ?祆??脣 <b style="color:#4CAF50;">NT$12,500</b>
+            </div>
+          </div>
+          <div class="settings-section-label">撣唾?蝞∠?</div>
+          <div style="background:white;border-radius:0;">
+            <div class="setting-item"><span class="si-icon">?</span><span class="si-label">?犖鞈?</span><span class="si-arrow">??/span></div>
+            <div class="setting-item"><span class="si-icon">??</span><span class="si-label">靽格撖Ⅳ</span><span class="si-arrow">??/span></div>
+          </div>
+          <div class="settings-section-label">暺??甈?/div>
+          <div style="background:white;">
+            <div class="setting-item" onclick="goto('screen-payment')"><span class="si-icon">?</span><span class="si-label">鞈潸眺暺</span><span class="si-arrow">??/span></div>
+            <div class="setting-item"><span class="si-icon">??</span><span class="si-label">暺?啣?蝝??/span><span class="si-arrow">??/span></div>
+            <div class="setting-item"><span class="si-icon">?屁</span><span class="si-label">隞狡閮?</span><span class="si-arrow">??/span></div>
+          </div>
+          <div class="settings-section-label">閮剖?</div>
+          <div style="background:white;">
+            <div class="setting-item"><span class="si-icon">?</span><span class="si-label">撌脤?撠身??/span><span class="si-value">1 ??/span><span class="si-arrow">??/span></div>
+          </div>
+          <div class="settings-section-label">?</div>
+          <div style="background:white;">
+            <div class="setting-item"><span class="si-icon">??</span><span class="si-label">?勗?摰??</span><span class="si-value" style="color:#2D3561;">??</span><span class="si-arrow">??/span></div>
+          </div>
+          <div class="settings-section-label">?</div>
+          <div style="background:white;">
+            <div class="setting-item"><span class="si-icon">??</span><span class="si-label">?梁??輻?</span><span class="si-arrow">??/span></div>
+            <div class="setting-item"><span class="si-icon">??</span><span class="si-label">雿輻璇狡</span><span class="si-arrow">??/span></div>
+            <div class="setting-item"><span class="si-icon">?對?</span><span class="si-label">?</span><span class="si-value">v1.0.0</span></div>
+          </div>
+          <div style="padding:16px;">
+            <button class="btn btn-outline" style="color:#c62828;border-color:#c62828;" onclick="goto('screen-login')">?餃</button>
+          </div>
+        </div>
+        <div class="nav-overlay">
+          <div class="nav-item" onclick="goto('screen-home')"><span class="nav-icon">??</span><span class="nav-label">擐?</span></div>
+          <div class="nav-item" onclick="goto('screen-history')"><span class="nav-icon">??</span><span class="nav-label">蝝??/span></div>
+          <div class="nav-item active"><span class="nav-icon">??</span><span class="nav-label" style="color:#2D3561;font-weight:600;">閮剖?</span></div>
+        </div>
+      </div>
+
+    </div><!-- /phone-screen -->
+  </div><!-- /phone-frame -->
+
+  <!-- Navigation Controls -->
+</div><!-- /phone-wrap -->
+
+<!-- 隞狡蝯? Overlay嚗hone-wrap 憭?銝? zoom 敶梢嚗?->
+<div id="payment-result-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:24px;padding:32px 28px;max-width:320px;width:88%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div id="payment-result-icon" style="font-size:64px;margin-bottom:12px;">??/div>
+    <div id="payment-result-title" style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">隞狡??嚗?/div>
+    <div id="payment-result-msg" style="font-size:14px;color:#888;margin-bottom:24px;line-height:1.5;">甇????行郭瑼Ｘ葫...</div>
+    <button id="payment-result-btn" style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#FF6B35,#f7462a);color:white;font-size:16px;font-weight:700;border:none;cursor:pointer;">
+      ??瑼Ｘ葫 ??    </button>
+  </div>
+</div>
+
+<!-- Nav Buttons ??outside phone-wrap so zoom doesn't affect positioning -->
+<div class="flow-nav">
+  <button class="flow-btn flow-btn-prev" onclick="navPrev()" title="銝????>??/button>
+  <button class="flow-btn flow-btn-next" onclick="navNext()" title="銝????>??/button>
+</div>
+
+<!-- Screen Index Dots -->
+<div class="screen-list" id="screen-list"></div>
+
+<!-- Info Panel -->
+<div style="position:fixed;top:12px;left:50%;transform:translateX(-50%);text-align:center;color:rgba(255,255,255,0.6);font-size:12px;pointer-events:none;white-space:nowrap;">
+  <div id="screen-title" style="font-weight:600;color:white;font-size:14px;"></div>
+  <div style="margin-top:3px;font-size:11px;">暺?????? &nbsp;|&nbsp; ?喳 ?????汗????&nbsp;|&nbsp; ?????萇</div>
+</div>
+
+<script>
+const screens = [
+  { id: 'screen-splash',          label: '???? },
+  { id: 'screen-login',           label: '憿批??餃' },
+  { id: 'screen-home',            label: '銝駁?' },
+  { id: 'screen-earnings',        label: '?脣?敦' },
+  { id: 'screen-subject',         label: '?葫???? },
+  { id: 'screen-reports',         label: '?豢??勗?' },
+  { id: 'screen-qr-trial',        label: '隞狡 繚 擃???NT$3,000' },
+  { id: 'screen-qr-full',         label: '隞狡 繚 摰??NT$5,000' },
+  { id: 'screen-qr-vip',          label: '隞狡 繚 VIP??NT$12,000' },
+  { id: 'screen-relation-select', label: '???勗??訾犖' },
+  { id: 'screen-payment',         label: '鞈潸眺暺嚗??剁?' },
+  { id: 'screen-mbti',            label: 'MBTI ?' },
+  { id: 'screen-connect',         label: '??閮剖?' },
+  { id: 'screen-baseline',        label: '??箇?' },
+  { id: 'screen-detect',          label: '瑼Ｘ葫?脰?銝? },
+  { id: 'screen-results',         label: '瑼Ｘ葫蝯?' },
+  { id: 'screen-history',         label: '甇瑕蝝?? },
+  { id: 'screen-settings',        label: '閮剖?' },
+];
+
+let current = 0;
+
+// Build dots
+const list = document.getElementById('screen-list');
+screens.forEach((s, i) => {
+  const dot = document.createElement('div');
+  dot.className = 'screen-dot' + (i === 0 ? ' active' : '');
+  dot.title = s.label;
+  dot.onclick = () => gotoIndex(i);
+  list.appendChild(dot);
+});
+
+
+function goto(id) {
+  const idx = screens.findIndex(s => s.id === id);
+  if (idx >= 0) gotoIndex(idx);
+}
+
+function gotoIndex(idx) {
+  document.getElementById(screens[current].id).classList.remove('active');
+  document.querySelectorAll('.screen-dot')[current].classList.remove('active');
+  current = idx;
+  document.getElementById(screens[current].id).classList.add('active');
+  document.querySelectorAll('.screen-dot')[current].classList.add('active');
+  document.getElementById('screen-title').textContent = screens[current].label;
+}
+
+function navNext() { gotoIndex((current + 1) % screens.length); }
+function navPrev() { gotoIndex((current - 1 + screens.length) % screens.length); }
+
+function toggleReport(el) {
+  el.classList.toggle('selected');
+  const cb = el.querySelector('.custom-checkbox');
+  cb.textContent = el.classList.contains('selected') ? '?? : '';
+  // Update total
+  const selected = document.querySelectorAll('#screen-reports .report-item.selected').length;
+  document.getElementById('total-points').textContent = (selected * 1 + (el.querySelector('.report-price').textContent.includes('2') ? 1 : 0)) + ' 暺?;
+}
+
+function selectRadio(el) {
+  const group = el.parentElement;
+  group.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function selectMBTI(el) {
+  document.querySelectorAll('#screen-mbti .q-option').forEach(o => {
+    o.classList.remove('selected');
+    o.querySelector('.opt-radio').textContent = '';
+  });
+  el.classList.add('selected');
+  el.querySelector('.opt-radio').textContent = '??;
+}
+
+function selectPackage(el) {
+  document.querySelectorAll('.package-card').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function selectPayMethod(el) {
+  document.querySelectorAll('.pay-method').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ?? 隞狡頛芾岷璈 ?????????????????????????????????????????????????????????????
+// ?芸??菜葫敺垢雿?嚗?阡? localhost嚗?璈? IP嚗?const _isFile = location.protocol === 'file:';
+const _host   = _isFile ? 'localhost' : location.hostname;
+const _port   = _isFile ? '8000' : (location.port || '');
+const _proto  = _isFile ? 'http' : location.protocol.replace(':', '');
+const _portStr = _port ? `:${_port}` : '';
+const API_BASE    = `${_proto}://${_host}${_portStr}/api/v1`;
+const STATIC_BASE = _isFile ? '' : `${_proto}://${_host}${_portStr}/static-app`;
+let _pollTimer   = null;
+let _currentOrderId = null;
+let _pollCountdown  = 15 * 60; // 15 ???嚗?嚗?let _countdownTimer = null;
+
+async function createPaymentOrder(reportType, amount, subjectName) {
+  try {
+    const resp = await fetch(`${API_BASE}/payments/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report_type: reportType, amount, subject_name: subjectName })
+    });
+    const data = await resp.json();
+    return data;
+  } catch (e) {
+    console.error("撱箇?閮憭望?嚗?, e);
+    return null;
+  }
+}
+
+async function pollPaymentStatus(orderId) {
+  try {
+    const resp = await fetch(`${API_BASE}/payments/${orderId}/status`);
+    const data = await resp.json();
+    return data.status;
+  } catch (e) {
+    return "pending";
+  }
+}
+
+function startPaymentPolling(orderId, qrScreenId) {
+  _currentOrderId = orderId;
+  _pollCountdown  = 15 * 60;
+
+  // ?迫銝?甈∠?閮???  if (_pollTimer)    clearInterval(_pollTimer);
+  if (_countdownTimer) clearInterval(_countdownTimer);
+
+  // ?閮?嚗?蝘?啁?Ｖ??擗???
+  _countdownTimer = setInterval(() => {
+    _pollCountdown--;
+    const min = Math.floor(_pollCountdown / 60).toString().padStart(2, "0");
+    const sec = (_pollCountdown % 60).toString().padStart(2, "0");
+    const els = document.querySelectorAll(".qr-countdown");
+    els.forEach(el => el.textContent = `隢 ${min}:${sec} ?批???甈霉);
+
+    if (_pollCountdown <= 0) {
+      clearInterval(_countdownTimer);
+      clearInterval(_pollTimer);
+      showPaymentResult("expired", qrScreenId);
+    }
+  }, 1000);
+
+  // 瘥?3 蝘憚閰Ｖ?甈曄???  _pollTimer = setInterval(async () => {
+    const status = await pollPaymentStatus(orderId);
+    console.log(`[隞狡頛芾岷] 閮 ${orderId} ???${status}`);
+
+    if (status === "paid") {
+      clearInterval(_pollTimer);
+      clearInterval(_countdownTimer);
+      showPaymentResult("paid", qrScreenId);
+    } else if (status === "expired" || status === "failed") {
+      clearInterval(_pollTimer);
+      clearInterval(_countdownTimer);
+      showPaymentResult(status, qrScreenId);
+    }
+  }, 3000);
+}
+
+function showPaymentResult(status, qrScreenId) {
+  const overlay = document.getElementById("payment-result-overlay");
+  const icon    = document.getElementById("payment-result-icon");
+  const title   = document.getElementById("payment-result-title");
+  const msg     = document.getElementById("payment-result-msg");
+  const btn     = document.getElementById("payment-result-btn");
+
+  if (status === "paid") {
+    icon.textContent  = "??;
+    title.textContent = "隞狡??嚗?;
+    msg.textContent   = "甇????行郭瑼Ｘ葫...";
+    btn.textContent   = "??瑼Ｘ葫 ??;
+    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-mbti"); };
+    // 2 蝘??芸?頝唾?
+    setTimeout(() => { overlay.style.display = "none"; goto("screen-mbti"); }, 2000);
+  } else if (status === "expired") {
+    icon.textContent  = "??;
+    title.textContent = "隞狡?暹?";
+    msg.textContent   = "QR Code 撌脣仃??隢??圈???;
+    btn.textContent   = "??豢?";
+    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-reports"); };
+  } else {
+    icon.textContent  = "??;
+    title.textContent = "隞狡憭望?";
+    msg.textContent   = "隢?閰行??舐窗摰Ｘ?";
+    btn.textContent   = "餈?";
+    btn.onclick       = () => { overlay.style.display = "none"; goto("screen-reports"); };
+  }
+  overlay.style.display = "flex";
+}
+
+// ?豢??犖?勗?銝西歲?啣???甈曄??function selectSingleReport(el, reportKey, price, qrScreen) {
+  // ??????  document.querySelectorAll('#screen-reports .report-item').forEach(r => {
+    r.classList.remove('selected');
+    r.style.borderColor = 'transparent';
+    r.style.background = 'white';
+  });
+  // ?訾葉甇日?
+  el.classList.add('selected');
+  el.style.borderColor = '#FF6B35';
+  el.style.background = '#fff5f2';
+
+  // ?湔 QR ?恍璅?嚗??勗?憿?閮剖?璅?嚗?  const reportNames = {
+    'life_trial':  '?行郭??鈭箇?? 繚 擃???,
+    'life_full':   '?行郭??鈭箇?? 繚 摰??,
+    'life_vip':    '?行郭??鈭箇?? 繚 VIP??,
+    'child_trial': '?咱?行郭憭抵釵閫?Ⅳ 繚 擃???,
+    'child_full':  '?咱?行郭憭抵釵閫?Ⅳ 繚 摰??,
+    'child_vip':   '?咱?行郭憭抵釵閫?Ⅳ 繚 VIP??,
+  };
+  const titleMap = {
+    'screen-qr-trial': 'qr-trial-title',
+    'screen-qr-full':  'qr-full-title',
+    'screen-qr-vip':   'qr-vip-title',
+  };
+  const titleEl = document.getElementById(titleMap[qrScreen]);
+  if (titleEl) titleEl.textContent = reportNames[reportKey] || '';
+
+  // 頝喳撠???QR 隞狡?恍銝血??憚閰?  setTimeout(async () => {
+    goto(qrScreen);
+
+    // ??撠
+    const amountMap = { 'life_trial':3000,'life_full':5000,'life_vip':12000,
+                        'child_trial':3000,'child_full':5000,'child_vip':12000 };
+    const amt = amountMap[reportKey] || 3000;
+
+    // ?澆敺垢撱箇?閮嚗EMO 璅∪?嚗?蝡舐?亙??喲???QR Code嚗?    const order = await createPaymentOrder(reportKey, amt, "?葫??);
+    if (order && order.order_id) {
+      _currentOrderId = order.order_id;
+      // ?湔閮 ID 憿舐內
+      const idEls = document.querySelectorAll(".qr-order-id");
+      idEls.forEach(el => el.textContent = `閮??${order.order_id}`);
+
+      // ?湔?剝??嚗??桀??恍 id 撠?嚗?      const linkMap = {
+        'screen-qr-trial': { box: 'qr-trial-link-box', a: 'qr-trial-link' },
+        'screen-qr-full':  { box: 'qr-full-link-box',  a: 'qr-full-link'  },
+        'screen-qr-vip':   { box: 'qr-vip-link-box',   a: 'qr-vip-link'   },
+      };
+      const lm = linkMap[qrScreen];
+      if (lm) {
+        const payUrl = `${location.origin}/pay/${order.order_id}`;
+        const box = document.getElementById(lm.box);
+        const anchor = document.getElementById(lm.a);
+        if (box && anchor) {
+          anchor.href = payUrl;
+          anchor.textContent = payUrl;
+          box.style.display = 'block';
+        }
+      }
+
+      // ??頛芾岷
+      startPaymentPolling(order.order_id, qrScreen);
+    } else {
+      // 敺垢?芸???嚗??舀????匱蝥?demo ?剁?
+      console.warn("敺垢?芷??嚗蝙??Demo 璅∪?");
+    }
+  }, 180);
+}
+
+// ???勗??訾犖
+let selectedPersons = [];
+function togglePerson(el) {
+  const idx = Array.from(document.querySelectorAll('.relation-person')).indexOf(el);
+  const check = el.querySelector('.person-check');
+  const isSelected = el.style.borderColor === 'rgb(194, 24, 91)';
+
+  if (isSelected) {
+    el.style.borderColor = 'transparent';
+    el.style.background = 'white';
+    check.textContent = '';
+    check.style.background = '';
+    check.style.borderColor = '#ddd';
+    selectedPersons = selectedPersons.filter(i => i !== idx);
+  } else {
+    el.style.borderColor = '#c2185b';
+    el.style.background = '#fce4ec';
+    check.textContent = '??;
+    check.style.background = '#c2185b';
+    check.style.borderColor = '#c2185b';
+    check.style.color = 'white';
+    selectedPersons.push(idx);
+  }
+
+  const names = ['?喳???, '????, '????, '撘萄之??];
+  const selectedNames = selectedPersons.map(i => names[i]).join('??);
+  const infoEl = document.getElementById('relation-selected-info');
+  const btnEl  = document.getElementById('relation-submit-btn');
+  const namesEl = document.getElementById('relation-selected-names');
+
+  if (selectedPersons.length >= 2) {
+    infoEl.style.display = 'block';
+    namesEl.textContent = selectedNames;
+    btnEl.style.opacity = '1';
+    btnEl.style.pointerEvents = 'auto';
+  } else {
+    infoEl.style.display = 'none';
+    btnEl.style.opacity = '0.4';
+    btnEl.style.pointerEvents = 'none';
+  }
+}
+
+// ?皜祈岫嚗芋?砌?甈暹???function copyPayLink(anchorId) {
+  const a = document.getElementById(anchorId);
+  if (!a) return;
+  navigator.clipboard.writeText(a.href).then(() => {
+    const btn = a.nextElementSibling;
+    if (btn) { btn.textContent = '撌脰?鋆???; setTimeout(() => btn.textContent = '銴ˊ', 2000); }
+  }).catch(() => {
+    // ???寞?
+    const range = document.createRange();
+    range.selectNode(a);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    document.execCommand('copy');
+    window.getSelection().removeAllRanges();
+  });
+}
+
+async function simulatePaid(qrScreenId) {
+  if (_currentOrderId) {
+    // ?澆敺垢璅⊥ API
+    try {
+      await fetch(`${API_BASE}/payments/simulate-paid/${_currentOrderId}`, { method: "POST" });
+    } catch (e) { /* 敺垢?芸???敹賜嚗?仿＊蝷箸???*/ }
+  }
+  // ?湔憿舐內隞狡??敶?
+  clearInterval(_pollTimer);
+  clearInterval(_countdownTimer);
+  showPaymentResult("paid", qrScreenId);
+}
+
+// Init title
+document.getElementById('screen-title').textContent = screens[0].label;
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navNext();
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navPrev();
+});
+
+// ?? Auto-fit phone to viewport ??????????????????????????????????
+function fitPhone() {
+  const wrap = document.querySelector('.phone-wrap');
+  const PHONE_W = 406;  // 390px + 8px border ? 2
+  const PHONE_H = 860;  // 844px + 8px border ? 2
+  const PAD_TOP = 52;   // top info label height
+  const PAD_SIDE = 80;  // room for left dots + right buttons
+
+  const availW = window.innerWidth  - PAD_SIDE;
+  const availH = window.innerHeight - PAD_TOP;
+
+  const scale = Math.min(availW / PHONE_W, availH / PHONE_H, 1.0);
+
+  // Apply via CSS zoom (preserves layout flow, supported in all modern browsers)
+  wrap.style.zoom = scale.toFixed(4);
+}
+
+window.addEventListener('resize', fitPhone);
+fitPhone();
+</script>
+</body>
+</html>

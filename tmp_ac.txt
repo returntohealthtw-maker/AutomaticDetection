@@ -1,0 +1,1 @@
+ ${a}ms 以避免超過速率限制...`),await ao(a)),j5=Date.now()}let Ac=!1,ud=0;const Hx=3;function P5(){ud+=1,ud>=Hx&&!Ac&&(Ac=!0,console.warn(`[Imagen熔斷] 連續 ${ud} 次配額錯誤（429/quota），本份報告剩餘插圖改用 Canvas/SVG 備援圖，避免重試累積導致逾時失敗。`))}function Gx(){ud=0}async function Dl(a,r=0){let e;try{e=await fetch("/api/gemini",{method:"POST",headers:{"Content-Type":"application/json"}

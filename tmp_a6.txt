@@ -1,0 +1,1 @@
+七八九十][大項條]/.test(a)}function a6(a){return!!a&&["一","二","三","四","五"].every(r=>a.includes("第"+r+"大"))}function u6(a,r,e){const i=zm(a,r,e),u=`${a}-${r}`,s=gw[u],c=i.slice(0,2),l=i.slice(2,4),f=i.slice(4),p=b=>b.map(x=>`${x

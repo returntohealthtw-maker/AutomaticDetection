@@ -1,0 +1,384 @@
+2026-06-28 10:16:42,235 [INFO] ============================================================
+2026-06-28 10:16:42,235 [INFO] Firebase 補同步腳本啟動
+2026-06-28 10:16:42,236 [INFO] ============================================================
+2026-06-28 10:16:42,688 [INFO] ✅ Firebase token 取得（有效至 11:16:42）
+2026-06-28 10:16:43,223 [INFO] ✅ Railway 登入成功
+2026-06-28 10:16:44,546 [INFO] Firebase 現有受測者: 24 位
+2026-06-28 10:16:45,083 [INFO] Firebase 已同步 Railway session: 0 個
+2026-06-28 10:16:45,380 [INFO] Railway 總 sessions: 72
+2026-06-28 10:16:45,380 [INFO] 需要補同步: 72 個 sessions
+2026-06-28 10:16:45,380 [INFO]   ► session 72: 許恩蕊
+2026-06-28 10:16:45,380 [INFO]   ► session 71: 米米
+2026-06-28 10:16:45,381 [INFO]   ► session 70: 邱勝翊
+2026-06-28 10:16:45,381 [INFO]   ► session 69: 潘槿珊
+2026-06-28 10:16:45,381 [INFO]   ► session 68: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 67: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 66: TEST_ADULT
+2026-06-28 10:16:45,381 [INFO]   ► session 65: TEST_CHILD
+2026-06-28 10:16:45,381 [INFO]   ► session 64: 測試受測者
+2026-06-28 10:16:45,381 [INFO]   ► session 63: 李沂穗
+2026-06-28 10:16:45,381 [INFO]   ► session 62: 鄭怡怡
+2026-06-28 10:16:45,381 [INFO]   ► session 61: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 60: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 59: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 58: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 57: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 56: 鄭小怡
+2026-06-28 10:16:45,381 [INFO]   ► session 55: 蘇劭揚
+2026-06-28 10:16:45,381 [INFO]   ► session 54: 蘇晨瑄
+2026-06-28 10:16:45,381 [INFO]   ► session 53: 王映筑
+2026-06-28 10:16:45,381 [INFO]   ► session 52: 鄭小怡
+2026-06-28 10:16:45,382 [INFO]   ► session 51: 鄭小怡
+2026-06-28 10:16:45,382 [INFO]   ► session 50: 鄭小怡
+2026-06-28 10:16:45,382 [INFO]   ► session 49: 王筱琪
+2026-06-28 10:16:45,382 [INFO]   ► session 48: 紀羽珊
+2026-06-28 10:16:45,382 [INFO]   ► session 47: 張佩渝
+2026-06-28 10:16:45,382 [INFO]   ► session 46: 翁嫣黛
+2026-06-28 10:16:45,382 [INFO]   ► session 45: 王筱琪
+2026-06-28 10:16:45,382 [INFO]   ► session 44: 王筱琪
+2026-06-28 10:16:45,382 [INFO]   ► session 43: 劉素惠
+2026-06-28 10:16:45,382 [INFO]   ► session 42: 劉素惠
+2026-06-28 10:16:45,382 [INFO]   ► session 41: 王筱琪
+2026-06-28 10:16:45,382 [INFO]   ► session 40: 邱心又
+2026-06-28 10:16:45,382 [INFO]   ► session 39: 陳暐昕
+2026-06-28 10:16:45,382 [INFO]   ► session 38: 鄭小靜
+2026-06-28 10:16:45,382 [INFO]   ► session 37: 鄭怡怡
+2026-06-28 10:16:45,382 [INFO]   ► session 36: 鄭小怡
+2026-06-28 10:16:45,382 [INFO]   ► session 35: 趙亞倫
+2026-06-28 10:16:45,382 [INFO]   ► session 34: 趙亞倫
+2026-06-28 10:16:45,382 [INFO]   ► session 33: 辜純純
+2026-06-28 10:16:45,382 [INFO]   ► session 32: 黃子茜
+2026-06-28 10:16:45,382 [INFO]   ► session 31: 鄭怡
+2026-06-28 10:16:45,382 [INFO]   ► session 30: 鄭怡怡
+2026-06-28 10:16:45,382 [INFO]   ► session 29: 鄭怡怡
+2026-06-28 10:16:45,383 [INFO]   ► session 28: 貴肥肥
+2026-06-28 10:16:45,383 [INFO]   ► session 27: 洪川雅
+2026-06-28 10:16:45,383 [INFO]   ► session 26: 貴肥肥
+2026-06-28 10:16:45,383 [INFO]   ► session 25: 劉玉璇
+2026-06-28 10:16:45,383 [INFO]   ► session 24: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 23: 楊女毓
+2026-06-28 10:16:45,383 [INFO]   ► session 22: 貴肥肥
+2026-06-28 10:16:45,383 [INFO]   ► session 21: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 20: 肥肥
+2026-06-28 10:16:45,383 [INFO]   ► session 19: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 18: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 17: 楊女毓
+2026-06-28 10:16:45,383 [INFO]   ► session 16: 鄭小靜
+2026-06-28 10:16:45,383 [INFO]   ► session 15: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 14: 鄭小靜
+2026-06-28 10:16:45,383 [INFO]   ► session 13: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 12: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 11: 受測者
+2026-06-28 10:16:45,383 [INFO]   ► session 10: 楊肥點
+2026-06-28 10:16:45,383 [INFO]   ► session 9: 楊女毓
+2026-06-28 10:16:45,384 [INFO]   ► session 8: 鄭小怡
+2026-06-28 10:16:45,384 [INFO]   ► session 7: 鄭小怡
+2026-06-28 10:16:45,384 [INFO]   ► session 6: 鄭小怡
+2026-06-28 10:16:45,384 [INFO]   ► session 5: 貴肥肥
+2026-06-28 10:16:45,384 [INFO]   ► session 4: 貴肥
+2026-06-28 10:16:45,384 [INFO]   ► session 3: 鄭小怡
+2026-06-28 10:16:45,384 [INFO]   ► session 2: 受測者
+2026-06-28 10:16:45,384 [INFO]   ► session 1: 端對端測試者
+2026-06-28 10:16:45,384 [INFO] ▶ session 72: 許恩蕊
+2026-06-28 10:16:45,918 [INFO]   ✅ 受測者建立: 許恩蕊 → ca9be79f-8729-4bee-babd-46a5f5f3048e
+2026-06-28 10:16:47,107 [INFO]   ✅ Firebase session 建立: 9e1fdce8-620d-4fa1-ab0e-c7fbad56ee83
+2026-06-28 10:16:47,626 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:16:48,867 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:16:50,653 [INFO] ▶ session 71: 米米
+2026-06-28 10:16:51,027 [INFO]   ✅ 受測者建立: 米米 → e6ed1c97-1bf7-4fd0-87b5-f292bcf32cc5
+2026-06-28 10:16:52,361 [INFO]   ✅ Firebase session 建立: 8ddb8a49-3ef3-440d-8eb8-5f5650909c13
+2026-06-28 10:16:52,891 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:16:54,209 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:16:56,001 [INFO] ▶ session 70: 邱勝翊
+2026-06-28 10:16:56,374 [INFO]   ✅ 受測者建立: 邱勝翊 → d9628974-a280-40ab-b910-eaf7cced66a3
+2026-06-28 10:16:57,564 [INFO]   ✅ Firebase session 建立: 2e742ce4-e9a7-44e6-b29a-aad480d6d7af
+2026-06-28 10:16:58,085 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:16:59,470 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:01,261 [INFO] ▶ session 69: 潘槿珊
+2026-06-28 10:17:01,633 [INFO]   ✅ 受測者建立: 潘槿珊 → 0e9a544b-0601-45e3-a07f-fa58022564e1
+2026-06-28 10:17:02,853 [INFO]   ✅ Firebase session 建立: fac1ef8e-15a2-44a6-a018-44599387c542
+2026-06-28 10:17:03,387 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:04,662 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:06,458 [INFO] ▶ session 68: 鄭小怡
+2026-06-28 10:17:07,710 [INFO]   ✅ Firebase session 建立: fafe1a56-c234-4d6a-9a9d-61838aadeff2
+2026-06-28 10:17:08,241 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:09,455 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:11,297 [INFO] ▶ session 67: 鄭小怡
+2026-06-28 10:17:12,591 [INFO]   ✅ Firebase session 建立: 20165e22-9b4c-4f91-ad24-259c46c92b2b
+2026-06-28 10:17:13,125 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:14,381 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:16,175 [INFO] ▶ session 66: TEST_ADULT
+2026-06-28 10:17:16,515 [INFO]   ✅ 受測者建立: TEST_ADULT → 1ba32546-bf2d-4d1a-9193-1eabc3613923
+2026-06-28 10:17:17,706 [INFO]   ✅ Firebase session 建立: a82e8dd2-3983-45d0-ba82-14a568eb13ff
+2026-06-28 10:17:18,220 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:19,523 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:21,254 [INFO] ▶ session 65: TEST_CHILD
+2026-06-28 10:17:21,706 [INFO]   ✅ 受測者建立: TEST_CHILD → f5adb94c-5328-4f4b-9250-4be555668068
+2026-06-28 10:17:22,998 [INFO]   ✅ Firebase session 建立: fdf1e637-f087-4e6f-a4e6-1e568bae14ba
+2026-06-28 10:17:23,520 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:24,778 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:26,534 [INFO] ▶ session 64: 測試受測者
+2026-06-28 10:17:27,841 [INFO]   ✅ Firebase session 建立: 99d98dcb-79c9-4064-8407-ebf85908b234
+2026-06-28 10:17:28,356 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:29,601 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:31,681 [INFO] ▶ session 63: 李沂穗
+2026-06-28 10:17:32,654 [INFO]   ✅ 受測者建立: 李沂穗 → fa371d53-fe79-472f-9dd6-993edd17767d
+2026-06-28 10:17:34,087 [INFO]   ✅ Firebase session 建立: adb940a9-c3c4-40ca-aa2d-0d7b35abfc49
+2026-06-28 10:17:34,761 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:35,942 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:37,747 [INFO] ▶ session 62: 鄭怡怡
+2026-06-28 10:17:39,088 [INFO]   ✅ Firebase session 建立: 813b9bb0-f269-4ee7-8365-4687c9e6cdaa
+2026-06-28 10:17:39,612 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:40,903 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:42,680 [INFO] ▶ session 61: 鄭小怡
+2026-06-28 10:17:43,922 [INFO]   ✅ Firebase session 建立: 6334a5b2-d2e2-4944-acf7-48fd8537d41d
+2026-06-28 10:17:44,450 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:45,738 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:47,490 [INFO] ▶ session 60: 鄭小怡
+2026-06-28 10:17:48,667 [INFO]   ✅ Firebase session 建立: 1de286ba-1fae-484c-b737-31823ef12258
+2026-06-28 10:17:49,207 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:50,443 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:52,243 [INFO] ▶ session 59: 鄭小怡
+2026-06-28 10:17:53,483 [INFO]   ✅ Firebase session 建立: f8408f88-3e40-4dbc-ac12-45f1bc9e78d2
+2026-06-28 10:17:54,026 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:17:55,222 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:17:57,004 [INFO] ▶ session 58: 鄭小怡
+2026-06-28 10:17:58,259 [INFO]   ✅ Firebase session 建立: 1834124a-1929-4ca7-81fe-57f6c9534f67
+2026-06-28 10:17:58,786 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:00,021 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:01,868 [INFO] ▶ session 57: 鄭小怡
+2026-06-28 10:18:02,477 [INFO]   ✅ Firebase session 建立: 1668555f-c019-4c6a-9620-9664b459e1c0
+2026-06-28 10:18:03,014 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:03,586 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:04,792 [INFO] ▶ session 56: 鄭小怡
+2026-06-28 10:18:05,385 [INFO]   ✅ Firebase session 建立: a207147b-5193-4e07-9561-4607dc005b52
+2026-06-28 10:18:05,899 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:06,436 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:07,561 [INFO] ▶ session 55: 蘇劭揚
+2026-06-28 10:18:07,976 [INFO]   ✅ 受測者建立: 蘇劭揚 → f0847d53-192e-4c48-9b95-87784e7e07fd
+2026-06-28 10:18:08,559 [INFO]   ✅ Firebase session 建立: c3894aa4-8e9b-4996-accc-9822ce4c0940
+2026-06-28 10:18:09,078 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:09,652 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:10,736 [INFO] ▶ session 54: 蘇晨瑄
+2026-06-28 10:18:11,120 [INFO]   ✅ 受測者建立: 蘇晨瑄 → 681fe69a-94f7-4663-bcdb-29f91a478fb2
+2026-06-28 10:18:11,744 [INFO]   ✅ Firebase session 建立: b822291a-81c9-4f89-aecd-2c51904a38e2
+2026-06-28 10:18:12,269 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:12,897 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:14,013 [INFO] ▶ session 53: 王映筑
+2026-06-28 10:18:14,410 [INFO]   ✅ 受測者建立: 王映筑 → b220eb94-db54-451a-b208-8a7fcb3b5e25
+2026-06-28 10:18:15,050 [INFO]   ✅ Firebase session 建立: bef0799f-e1cd-4c99-b487-509d2d615dee
+2026-06-28 10:18:15,574 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:16,134 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:17,238 [INFO] ▶ session 52: 鄭小怡
+2026-06-28 10:18:17,787 [INFO]   ✅ Firebase session 建立: 8425c89c-04c2-4d3f-a75c-f893a47c11d1
+2026-06-28 10:18:18,303 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:18,875 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:20,061 [INFO] ▶ session 51: 鄭小怡
+2026-06-28 10:18:20,626 [INFO]   ✅ Firebase session 建立: 9280a4c5-080c-4407-b841-292a106e7e3e
+2026-06-28 10:18:21,155 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:21,723 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:22,820 [INFO] ▶ session 50: 鄭小怡
+2026-06-28 10:18:23,390 [INFO]   ✅ Firebase session 建立: 302a60d2-b1c7-402c-aaf1-9838f367e482
+2026-06-28 10:18:23,905 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:24,537 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:25,654 [INFO] ▶ session 49: 王筱琪
+2026-06-28 10:18:26,273 [INFO]   ✅ Firebase session 建立: 149d9012-ce0f-4ccf-97f6-84ee9d13e048
+2026-06-28 10:18:26,803 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:27,373 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:28,471 [INFO] ▶ session 48: 紀羽珊
+2026-06-28 10:18:29,046 [INFO]   ✅ Firebase session 建立: 64678711-0db9-42c3-971f-6e9929fa1856
+2026-06-28 10:18:29,555 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:30,103 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:31,182 [INFO] ▶ session 47: 張佩渝
+2026-06-28 10:18:31,728 [INFO]   ✅ Firebase session 建立: 49548d59-5425-4ec4-80c9-a3360163c81c
+2026-06-28 10:18:32,249 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:32,804 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:33,915 [INFO] ▶ session 46: 翁嫣黛
+2026-06-28 10:18:34,504 [INFO]   ✅ Firebase session 建立: 60501ca7-b4a8-4689-bba8-51aced7ba8b6
+2026-06-28 10:18:35,017 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:35,594 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:36,718 [INFO] ▶ session 45: 王筱琪
+2026-06-28 10:18:37,270 [INFO]   ✅ Firebase session 建立: ada8f6ed-ee18-4a95-a9e6-f1c86abb156f
+2026-06-28 10:18:37,782 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:38,330 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:39,422 [INFO] ▶ session 44: 王筱琪
+2026-06-28 10:18:39,961 [INFO]   ✅ Firebase session 建立: 34f405a5-2152-4281-a9fa-56db6f834b02
+2026-06-28 10:18:40,477 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:41,013 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:42,119 [INFO] ▶ session 43: 劉素惠
+2026-06-28 10:18:42,675 [INFO]   ✅ Firebase session 建立: fba8ca56-0c71-4d47-984a-28ea9e36ca66
+2026-06-28 10:18:43,185 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:43,758 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:44,817 [INFO] ▶ session 42: 劉素惠
+2026-06-28 10:18:45,344 [INFO]   ✅ Firebase session 建立: 50bd588d-643b-4575-a3c9-4f22d2980825
+2026-06-28 10:18:45,859 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:46,399 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:47,534 [INFO] ▶ session 41: 王筱琪
+2026-06-28 10:18:48,079 [INFO]   ✅ Firebase session 建立: cf291a91-ee24-4fd5-9fb1-fc886541328f
+2026-06-28 10:18:48,591 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:49,175 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:50,307 [INFO] ▶ session 40: 邱心又
+2026-06-28 10:18:50,850 [INFO]   ✅ Firebase session 建立: 76a5e3c6-6731-4a79-9c3d-4623bc5905b7
+2026-06-28 10:18:51,365 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:51,931 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:53,039 [INFO] ▶ session 39: 陳暐昕
+2026-06-28 10:18:53,650 [INFO]   ✅ Firebase session 建立: bb1eb23d-6ccb-4ac5-9c19-5556329ef891
+2026-06-28 10:18:54,164 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:54,712 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:55,900 [INFO] ▶ session 38: 鄭小靜
+2026-06-28 10:18:56,447 [INFO]   ✅ Firebase session 建立: 10c1e2bd-dc1a-4f26-81c8-32d55f8e5cc2
+2026-06-28 10:18:56,966 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:18:57,534 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:18:58,625 [INFO] ▶ session 37: 鄭怡怡
+2026-06-28 10:18:59,192 [INFO]   ✅ Firebase session 建立: fb262bb8-258c-49f0-bd12-d8f304974bc2
+2026-06-28 10:18:59,719 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:00,265 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:01,381 [INFO] ▶ session 36: 鄭小怡
+2026-06-28 10:19:01,957 [INFO]   ✅ Firebase session 建立: 8a01b28a-39ad-4a51-b422-569cef64487b
+2026-06-28 10:19:02,473 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:03,066 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:04,167 [INFO] ▶ session 35: 趙亞倫
+2026-06-28 10:19:04,747 [INFO]   ✅ Firebase session 建立: cbfd752c-1ac8-4875-9b90-e09ea94b7273
+2026-06-28 10:19:05,256 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:05,800 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:06,874 [INFO] ▶ session 34: 趙亞倫
+2026-06-28 10:19:07,456 [INFO]   ✅ Firebase session 建立: d4e02cc2-62c6-42ce-8fa6-9abdc1a65707
+2026-06-28 10:19:07,969 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:08,507 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:09,566 [INFO] ▶ session 33: 辜純純
+2026-06-28 10:19:10,131 [INFO]   ✅ Firebase session 建立: 790cdcab-a2ed-4ac7-b307-d0b569857907
+2026-06-28 10:19:10,645 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:11,199 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:12,291 [INFO] ▶ session 32: 黃子茜
+2026-06-28 10:19:12,840 [INFO]   ✅ Firebase session 建立: 78523a20-e8b5-44bd-adcc-61c3c2c1ebbf
+2026-06-28 10:19:13,350 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:13,886 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:14,979 [INFO] ▶ session 31: 鄭怡
+2026-06-28 10:19:15,546 [INFO]   ✅ Firebase session 建立: fc854c51-4334-4167-92b6-40d950867439
+2026-06-28 10:19:16,058 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:16,610 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:17,713 [INFO] ▶ session 30: 鄭怡怡
+2026-06-28 10:19:18,276 [INFO]   ✅ Firebase session 建立: 0ad00989-ea67-478e-b7bc-3b2daa0c9657
+2026-06-28 10:19:18,792 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:19,341 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:20,420 [INFO] ▶ session 29: 鄭怡怡
+2026-06-28 10:19:20,996 [INFO]   ✅ Firebase session 建立: 620a2b4d-42d6-48b4-9ec2-308716706286
+2026-06-28 10:19:21,507 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:22,060 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:23,160 [INFO] ▶ session 28: 貴肥肥
+2026-06-28 10:19:23,727 [INFO]   ✅ Firebase session 建立: 9a47ffb7-fbc8-4500-953c-c79600a25edd
+2026-06-28 10:19:24,243 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:24,802 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:25,883 [INFO] ▶ session 27: 洪川雅
+2026-06-28 10:19:26,442 [INFO]   ✅ Firebase session 建立: 441da71e-ace8-492a-94ea-e103d80660eb
+2026-06-28 10:19:26,982 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:27,556 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:28,643 [INFO] ▶ session 26: 貴肥肥
+2026-06-28 10:19:29,205 [INFO]   ✅ Firebase session 建立: ddd4dd28-7914-4e95-8341-293f006e582e
+2026-06-28 10:19:29,721 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:30,261 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:31,365 [INFO] ▶ session 25: 劉玉璇
+2026-06-28 10:19:31,928 [INFO]   ✅ Firebase session 建立: 597c7f28-c0bd-4bf9-bd91-287fef524e14
+2026-06-28 10:19:32,608 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:33,216 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:34,337 [INFO] ▶ session 24: 受測者
+2026-06-28 10:19:34,927 [INFO]   ✅ Firebase session 建立: ea37a5d1-8278-4c14-ac53-7804b9095ee8
+2026-06-28 10:19:35,495 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:36,123 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:37,305 [INFO] ▶ session 23: 楊女毓
+2026-06-28 10:19:37,889 [INFO]   ✅ Firebase session 建立: 94d0ec6b-739a-4eb1-a468-5e2a2eb051d1
+2026-06-28 10:19:38,403 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:38,933 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:40,046 [INFO] ▶ session 22: 貴肥肥
+2026-06-28 10:19:40,614 [INFO]   ✅ Firebase session 建立: 32005665-16d1-45bd-85db-904968c241e5
+2026-06-28 10:19:41,125 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:41,674 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:42,755 [INFO] ▶ session 21: 受測者
+2026-06-28 10:19:43,316 [INFO]   ✅ Firebase session 建立: 94c8e8cb-e355-43be-9787-2bab3c8c0cee
+2026-06-28 10:19:43,829 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:44,374 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:45,459 [INFO] ▶ session 20: 肥肥
+2026-06-28 10:19:46,002 [INFO]   ✅ Firebase session 建立: 246ce017-d56f-4b09-bb5d-08fac56cfc28
+2026-06-28 10:19:46,517 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:47,103 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:48,194 [INFO] ▶ session 19: 受測者
+2026-06-28 10:19:48,761 [INFO]   ✅ Firebase session 建立: 483108ee-b744-41f3-b03e-eb9ea2a05312
+2026-06-28 10:19:49,293 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:49,851 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:51,191 [INFO] ▶ session 18: 受測者
+2026-06-28 10:19:51,788 [INFO]   ✅ Firebase session 建立: dda70884-b12c-4e5f-a3cc-6d2504e4db04
+2026-06-28 10:19:52,321 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:52,884 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:53,951 [INFO] ▶ session 17: 楊女毓
+2026-06-28 10:19:54,508 [INFO]   ✅ Firebase session 建立: 632675eb-12e0-46c6-bc23-224742cc9661
+2026-06-28 10:19:55,027 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:55,567 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:56,640 [INFO] ▶ session 16: 鄭小靜
+2026-06-28 10:19:57,191 [INFO]   ✅ Firebase session 建立: 4702ed18-b83c-4c2f-a8b4-723ebbba41c0
+2026-06-28 10:19:57,702 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:19:58,282 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:19:59,388 [INFO] ▶ session 15: 受測者
+2026-06-28 10:19:59,991 [INFO]   ✅ Firebase session 建立: ab2762eb-4050-4a1a-8405-0cc0e600a983
+2026-06-28 10:20:00,512 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:01,138 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:02,204 [INFO] ▶ session 14: 鄭小靜
+2026-06-28 10:20:02,818 [INFO]   ✅ Firebase session 建立: 2871519f-fd1a-4506-bad7-ffb4a3bfa0f8
+2026-06-28 10:20:03,337 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:03,914 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:05,055 [INFO] ▶ session 13: 受測者
+2026-06-28 10:20:05,618 [INFO]   ✅ Firebase session 建立: 066a3769-c152-4695-afb9-57018443290f
+2026-06-28 10:20:06,139 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:06,673 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:07,800 [INFO] ▶ session 12: 受測者
+2026-06-28 10:20:08,401 [INFO]   ✅ Firebase session 建立: f057e49c-a679-480b-8ec6-167f06bf8a2c
+2026-06-28 10:20:08,919 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:09,458 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:10,547 [INFO] ▶ session 11: 受測者
+2026-06-28 10:20:11,128 [INFO]   ✅ Firebase session 建立: b9e5861f-7d55-4140-b4ff-c5248663e48e
+2026-06-28 10:20:11,656 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:12,232 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:13,310 [INFO] ▶ session 10: 楊肥點
+2026-06-28 10:20:13,884 [INFO]   ✅ Firebase session 建立: 23568920-8b93-44f7-a899-133030d8880a
+2026-06-28 10:20:14,396 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:14,940 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:16,003 [INFO] ▶ session 9: 楊女毓
+2026-06-28 10:20:16,550 [INFO]   ✅ Firebase session 建立: aa100650-169a-4103-bf6a-db4e023a028e
+2026-06-28 10:20:17,065 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:17,690 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:18,775 [INFO] ▶ session 8: 鄭小怡
+2026-06-28 10:20:19,337 [INFO]   ✅ Firebase session 建立: bd03781c-24d9-4402-89a6-3befdc3008a3
+2026-06-28 10:20:19,867 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:20,399 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:21,502 [INFO] ▶ session 7: 鄭小怡
+2026-06-28 10:20:22,068 [INFO]   ✅ Firebase session 建立: af2449ba-bbab-4085-bf5b-a0be9325596f
+2026-06-28 10:20:22,584 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:23,176 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:24,255 [INFO] ▶ session 6: 鄭小怡
+2026-06-28 10:20:24,806 [INFO]   ✅ Firebase session 建立: e4f0591d-f903-4284-8998-cce0fdd039b1
+2026-06-28 10:20:25,319 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:25,884 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:26,947 [INFO] ▶ session 5: 貴肥肥
+2026-06-28 10:20:27,502 [INFO]   ✅ Firebase session 建立: 30249c46-e1c6-40f5-93e1-f6a442b25b49
+2026-06-28 10:20:28,011 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:28,587 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:29,650 [INFO] ▶ session 4: 貴肥
+2026-06-28 10:20:30,212 [INFO]   ✅ Firebase session 建立: f7f78c08-27c5-448d-a15f-e6d912da4f8f
+2026-06-28 10:20:30,728 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:31,333 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:32,398 [INFO] ▶ session 3: 鄭小怡
+2026-06-28 10:20:32,959 [INFO]   ✅ Firebase session 建立: f5af7e7c-b82e-4183-850c-c3fac0004fae
+2026-06-28 10:20:33,484 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:34,011 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:35,094 [INFO] ▶ session 2: 受測者
+2026-06-28 10:20:35,669 [INFO]   ✅ Firebase session 建立: 341dee71-9ace-4b1e-a0d7-36c4327e5264
+2026-06-28 10:20:36,192 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:36,761 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:37,826 [INFO] ▶ session 1: 端對端測試者
+2026-06-28 10:20:38,177 [INFO]   ✅ 受測者建立: 端對端測試者 → 2c1929cb-9e21-42dd-a75c-0922735bd880
+2026-06-28 10:20:38,746 [INFO]   ✅ Firebase session 建立: a4d015d1-ebae-41be-aa68-6213ab71c60f
+2026-06-28 10:20:39,261 [INFO]   EEG 來源: bands_avg aggregate → 1 筆特徵
+2026-06-28 10:20:39,796 [INFO]   ✅ EEG 上傳 1 筆
+2026-06-28 10:20:40,889 [INFO] ============================================================
+2026-06-28 10:20:40,889 [INFO] 補同步完成：成功 72，失敗 0
+2026-06-28 10:20:40,889 [INFO] ============================================================
+2026-06-28 10:20:40,891 [INFO] 報告已寫入 resync_report.json

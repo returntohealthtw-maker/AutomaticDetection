@@ -1,0 +1,41 @@
+=== \$a\( @ 46156 ===
+.toLowerCase();return n==="input"?!!rr[r.type]:n==="textarea"}function Fr(r,n,o,f){ei?qt?qt.push(f):qt=[f]:ei=f,n=Nh(n,"onChange"),0<n.length&&(o=new $a("onChange","change",null,o,f),r.push({event:o,listeners:n}))}var Ir=null,Kr=null;function pi(r){q2(r,0)}function va(r){var n=Ao(r);if(_s(n))return 
+
+=== \$a\( @ 48947 ===
+f.anchorNode,anchorOffset:f.anchorOffset,focusNode:f.focusNode,focusOffset:f.focusOffset}),Sa&&En(Sa,f)||(Sa=f,f=Nh(Ci,"onSelect"),0<f.length&&(n=new $a("onSelect","select",null,n,o),r.push({event:n,listeners:f}),n.target=xa)))}function Lr(r,n){var o={};return o[r.toLowerCase()]=n.toLowerCase(),o["W
+
+=== \$a\( @ 151064 ===
+){var k=U2((v[mn]||null).action),K=f.submitter;K&&(n=(n=K[mn]||null)?U2(n.formAction):K.getAttribute("formAction"),n!==null&&(k=n,K=null));var ye=new $a("action","action",null,f,v);r.push({event:ye,listeners:[{instance:null,listener:function(){if(f.defaultPrevented){if(Jl!==0){var Be=K?$2(v,K):new F
+
+=== \$a\( @ 1295281 ===
+*Ie-Fe*rt,-Me*Ie-De*rt)},Ft.prototype.applyToPoint=function(O){var ce=O.x*this.sx+O.y*this.shx+this.tx,Te=O.x*this.shy+O.y*this.sy+this.ty;return new $a(ce,Te)},Ft.prototype.applyToRectangle=function(O){var ce=this.applyToPoint(O),Te=this.applyToPoint(new $a(O.x+O.w,O.y+O.h));return new di(ce.x,ce.y
+
+=== \$a\( @ 1295387 ===
+O.x*this.shy+O.y*this.sy+this.ty;return new $a(ce,Te)},Ft.prototype.applyToRectangle=function(O){var ce=this.applyToPoint(O),Te=this.applyToPoint(new $a(O.x+O.w,O.y+O.h));return new di(ce.x,ce.y,Te.x-ce.x,Te.y-ce.y)},Ft.prototype.clone=function(){var O=this.sx,ce=this.shy,Te=this.shx,Ce=this.sy,Ie=t
+
+=== \$a\( @ 1439632 ===
+or(U=0;8>U;++U)W+=y[w+U-32];hi(W>>3,y,w)}function Wn(y,w){var U,W=4;for(U=0;8>U;++U)W+=y[w-1+32*U];hi(W>>3,y,w)}function ba(y,w){hi(128,y,w)}function $a(y,w,U){var W=y[w-U],he=y[w+0],pe=3*(he-W)+ls[1020+y[w-2*U]-y[w+U]],ge=mc[112+(pe+4>>3)];y[w-U]=ni[255+W+mc[112+(pe+3>>3)]],y[w+0]=ni[255+he-ge]}fun
+
+=== \$a\( @ 1440286 ===
+e]<=he&&Ha[255+ge-ve]<=he&&Ha[255+We-je]<=he&&Ha[255+je-Ne]<=he&&Ha[255+Ne-we]<=he}function Li(y,w,U,W){var he=2*W+1;for(W=0;16>W;++W)qo(y,w+W,U,he)&&$a(y,w+W,U)}function Hi(y,w,U,W){var he=2*W+1;for(W=0;16>W;++W)qo(y,w+W*U,1,he)&&$a(y,w+W*U,1)}function is(y,w,U,W){var he;for(he=3;0<he;--he)Li(y,w+=
+
+=== \$a\( @ 1440367 ===
+e}function Li(y,w,U,W){var he=2*W+1;for(W=0;16>W;++W)qo(y,w+W,U,he)&&$a(y,w+W,U)}function Hi(y,w,U,W){var he=2*W+1;for(W=0;16>W;++W)qo(y,w+W*U,1,he)&&$a(y,w+W*U,1)}function is(y,w,U,W){var he;for(he=3;0<he;--he)Li(y,w+=4*U,U,W)}function Es(y,w,U,W){var he;for(he=3;0<he;--he)Hi(y,w+=4,U,W)}function r
+
+=== \$a\( @ 1440598 ===
+ction Es(y,w,U,W){var he;for(he=3;0<he;--he)Hi(y,w+=4,U,W)}function ro(y,w,U,W,he,pe,ge,ve){for(pe=2*pe+1;0<he--;){if(Bo(y,w,U,pe,ge))if(di(y,w,U,ve))$a(y,w,U);else{var we=y,Ne=w,je=U,We=we[Ne-2*je],Ee=we[Ne-je],Pe=we[Ne+0],$e=we[Ne+je],at=we[Ne+2*je],Ge=27*(lt=ls[1020+3*(Pe-Ee)+ls[1020+We-$e]])+63>
+
+=== \$a\( @ 1441035 ===
+e],we[Ne+je]=ni[255+$e-tt],we[Ne+2*je]=ni[255+at-lt]}w+=W}}function Co(y,w,U,W,he,pe,ge,ve){for(pe=2*pe+1;0<he--;){if(Bo(y,w,U,pe,ge))if(di(y,w,U,ve))$a(y,w,U);else{var we=y,Ne=w,je=U,We=we[Ne-je],Ee=we[Ne+0],Pe=we[Ne+je],$e=mc[112+(4+(at=3*(Ee-We))>>3)],at=mc[112+(at+3>>3)],Ge=$e+1>>1;we[Ne-2*je]=n
+
+=== \$a\( @ 1627323 ===
+.get("email")||"";const De={institution:"xin",xinReportType:"teen_student"};Bo.current=Fe,Li.current=me(De),Hi.current=De,P("xin"),ee("teen_student"),$a(Li.current),t(Se),Wn(Fe),m(`🤖 自動模式：${Se} 資料已載入，3 秒後開始生成青少年五維升級報告…`),setTimeout(()=>{b("selection"),setTimeout(()=>{no()},1500)},1500)},[]),vt.useEf
+
+=== \$a\( @ 1632970 ===
+=null?void 0:Se.hasSelectedApiKey)==null?void 0:Me.call(Se))||await((De=(Fe=window.aistudio)==null?void 0:Fe.openSelectKey)==null?void 0:De.call(Fe)),$a(me(ie)),b("selection")},ro=async(_e,Se)=>{const Me=`${_e+1}-${Se+1}`;if(!R.has(Me)){T.current=!1,B(Fe=>new Set([...Fe,Me]));try{const Fe=await ip(_
+
+=== \$a\( @ 1633162 ===
+=>{const Me=`${_e+1}-${Se+1}`;if(!R.has(Me)){T.current=!1,B(Fe=>new Set([...Fe,Me]));try{const Fe=await ip(_e,Se,ya,a,ie),De=await ap(_e,Se,ya,Fe,ie);$a(qe=>qe.map((dt,st)=>st!==_e?dt:{...dt,subSections:dt.subSections.map((Ke,Re)=>Re!==Se?Ke:{...Ke,imageUrl:De.url,content:Fe})}))}catch(Fe){const De=
+
+=== \$a\( @ 1635237 ===
+n_id:it,subject_name:a});try{const xt=await ip(ct.ci,ct.si,_e,a,Me),Et=await ap(ct.ci,ct.si,_e,xt,Me),or=Et.url,Sr=Et.imagenUsed;if(ke.current)return;$a(An=>An.map((Qn,Ca)=>Ca!==ct.ci?Qn:{...Qn,subSections:Qn.subSections.map((an,Pr)=>Pr!==ct.si?an:{...an,imageUrl:or,content:xt})})),st++,g(Math.round

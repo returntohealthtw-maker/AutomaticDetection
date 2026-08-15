@@ -1,0 +1,16 @@
+=== 兒童腦波分析 -> index 1643179 ===
+(new ia({alignment:Oa.CENTER,spacing:{before:3e3,after:600},children:[new xi({text:"我的大腦地圖",bold:!0,size:72,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:"兒童腦波分析專屬成長報告",bold:!0,size:48,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:`姓名：${De}　年齡：${qe||"—"}　日期：${dt||"—"}`,bold:!0,size:36,color:"2563eb"})]}));Ca.
+
+=== 專屬成長報告 -> index 1643185 ===
+a({alignment:Oa.CENTER,spacing:{before:3e3,after:600},children:[new xi({text:"我的大腦地圖",bold:!0,size:72,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:"兒童腦波分析專屬成長報告",bold:!0,size:48,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:`姓名：${De}　年齡：${qe||"—"}　日期：${dt||"—"}`,bold:!0,size:36,color:"2563eb"})]}));Ca.push({
+
+=== CHILDREN -> index -1 ===
+
+=== NEURAL -> index -1 ===
+
+=== GROWTH REPORT -> index -1 ===
+
+=== SPECTRUM -> index -1 ===
+
+=== RAINBOW BRAIN -> index -1 ===
+

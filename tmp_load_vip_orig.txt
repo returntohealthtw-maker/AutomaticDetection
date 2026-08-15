@@ -1,0 +1,70 @@
+async function _loadVipCustomers() {
+  // ?綜童??????? VIP ???????謅???life_vip / child_vip ?????  // ??? sessions ?謘??鳩蝧拚??????輯???擏?
+  let payments = [], sessions = [];
+  try {
+    const [rp, rs] = await Promise.all([
+      apiFetch('/payments/my?limit=200'),
+      apiFetch('/eeg/sessions?limit=200'),
+    ]);
+    if (rp.ok) payments = (await rp.json()).payments || [];
+    if (rs.ok) sessions = (await rs.json()).sessions || [];
+  } catch (e) { }
+
+  // ?剜?蹓??VIP ????謅?????荒? life_vip?蹍ild_vip?牯aid ?????  const VIP_TYPES = new Set(['life_vip', 'child_vip']);
+  const vipPayments = payments.filter(p => VIP_TYPES.has(p.report_type) && p.status === 'paid');
+
+  // ??subject_name ?擏????謕??????  const byName = {};
+  vipPayments.forEach(p => {
+    if (!p.subject_name) return;
+    if (!byName[p.subject_name] || (p.paid_at || 0) > (byName[p.subject_name].paid_at || 0)) {
+      byName[p.subject_name] = p;
+    }
+  });
+
+  // ??? sessions ??age?????????堊垮???age??  const sessionByName = {};
+  sessions.forEach(s => {
+    if (s.subject_name && !sessionByName[s.subject_name]) {
+      sessionByName[s.subject_name] = s;
+    }
+  });
+
+  const pad = n => String(n).padStart(2, '0');
+  _vipCustomers = Object.values(byName).map((p, i) => {
+    const sess = sessionByName[p.subject_name] || {};
+    const d    = p.paid_at ? new Date(p.paid_at * 1000) : new Date((p.created_at || 0) * 1000);
+    return {
+      id:           `p${i}`,
+      name:         p.subject_name,
+      age:          sess.subject_age || null,
+      gender:       sess.subject_gender || null,
+      email:        p.subject_email || '',
+      report_type:  p.report_type,
+      level:        'vip',
+      completedAt:  `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`,
+      avatarColor:  _avatarColor(p.subject_name),
+      // ?銵 session ??????踐?赯????????賂???      session_id:   sess.session_id || null,
+      payment_id:   p.payment_id,
+    };
+  });
+}
+
+const _relationConfigs = {
+  parent: { title: '?鞊??謚???蝜??祈?', label: '?祈??銵????謚????', minPersons: 3, color: '#c2185b', emoji: '??????蝓??? },
+  couple: { title: '?鞊??謚???蝜??剜?', label: '?剜??銵????謚????', minPersons: 2, color: '#c2185b', emoji: '??' },
+  lover:  { title: '?鞊??謚???蝜???桀', label: '??桀?銵????謚????', minPersons: 2, color: '#c2185b', emoji: '??' },
+};
+let _currentRelationType = null;
+let _selectedPersonIds   = [];
+
+async function openRelation(type) {
+  _currentRelationType = type;
+  _selectedPersonIds   = [];
+  const cfg = _relationConfigs[type];
+
+  // ??革?蹓嗽蹓選??瑞???銋抵?
+  document.getElementById('relation-select-title').textContent = cfg.title;
+  document.getElementById('relation-hint').innerHTML =
+    `????鼎??蝞??堆? <b>VIP ???????</b>???????ｇ蹓??<b>${cfg.minPersons} ??{cfg.minPersons===3?' ?鼎?':''}</b>?蹓謍???蝯??恃??鈭????{cfg.label}??????????潘撓??蹐?
+  document.getElementById('relation-list').innerHTML =
+    '<div style="text-align:center;padding:30px;color:#bbb;font-size:13px;">???VIP ???????/div>';
+  document.getElementById('relation-count-label'

@@ -1,0 +1,100 @@
+---
+description: happinesskeeper APP 的腦波資料存取方式 — 多人共振運算
+globs: "**/happinesskeeper/**,**/happiness_keeper/**,**/resonance*"
+alwaysApply: false
+---
+
+# happinesskeeper APP 資料存取規範
+
+## 目的
+
+happinesskeeper APP 需要從 Firebase 大水庫抓取多人腦波資料與報告，進行跨人共振運算。
+
+## 腦波資料來源
+
+所有腦波資料統一從 **Firebase BigQuery** 查詢（效率最高，支援跨人聚合）：
+
+```
+Dataset: gen-lang-client-0435688289.eeg_brainwave
+Table: eeg_features   ← EEG 頻段特徵（每秒一筆）
+Table: sessions       ← session 基本資料
+Table: reports        ← 報告 metadata（含 gcs_report_path）
+```
+
+## 報告 PDF 取得方式
+
+Firebase `reports` collection 的 `pdfUrl` 是不含簽名的基礎 URL：
+```
+https://storage.googleapis.com/brainwave-child-reports/reports/general/xxx.pdf
+```
+需要有效連結時，呼叫 Railway 端點：
+```
+GET https://backend-production-2da61.up.railway.app/api/v1/reports/session/{railway_session_id}/signed-url?days=7
+Headers: Authorization: Bearer {token}
+```
+或直接使用 Firebase `reports` 的 `extraData.gcsPath` 自行簽署。
+
+## 多人共振運算 API
+
+Firebase Cloud Functions 已有現成端點：
+
+```javascript
+// 計算多人共振評分（0-100分）
+POST https://...cloudfunctions.net/api/api/analytics/resonance
+Headers: Authorization: Bearer {firebase_token}
+Body: {
+  "subjectIds": ["subject_uuid_1", "subject_uuid_2", "subject_uuid_3"],
+  "bands": ["alpha", "beta", "theta", "delta", "gamma"],  // 要比對的頻段
+  "days": 90  // 分析最近幾天的資料
+}
+// 回傳: profiles（每人腦波均值）+ pairs（兩兩共振分數）+ bestMatch
+
+// 多人腦波摘要
+GET .../api/analytics/eeg-summary?subjectIds=id1,id2,id3&days=30
+
+// 某指標排行
+GET .../api/analytics/top-subjects?metric=attention&limit=10&days=90
+```
+
+## Firebase 登入方式
+
+```python
+import requests
+r = requests.post(
+    "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword",
+    params={"key": "AIzaSyBc-ZEcT8fvyn-dBZ0Bhm5IsakncVp1ngQ"},
+    json={"email": "YOUR_EMAIL", "password": "YOUR_PASSWORD", "returnSecureToken": True}
+)
+token = r.json()["idToken"]
+headers = {"Authorization": f"Bearer {token}"}
+```
+
+## 若 happinesskeeper 也上傳腦波資料
+
+使用標準 Firebase API：
+```javascript
+POST /api/eeg/batch
+{
+  "sessionId": "firebase_session_uuid",
+  "features": [
+    {
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "windowSec": 1.0,
+      "alphaRatio": 25.5,
+      "betaRatio": 18.3,
+      "thetaRatio": 12.1,
+      "deltaRatio": 35.0,
+      "gammaRatio": 9.1,
+      "attentionIndex": 65.0,
+      "relaxationIndex": 48.0,
+      "signalQuality": 95.0,
+      "isBaseline": false,
+      "seqNum": 0
+    }
+  ]
+}
+```
+
+## 資料架構參考
+
+完整架構見 `.cursor/rules/data-architecture.mdc`

@@ -1,0 +1,15 @@
+=== l6 function ===
+function l6(a){return/[①②③④⑤⑥⑦⑧⑨⑩]|[1-9][、．.]\s*[^\s]|第[一二三四五六七八九十][大項條]/.test(a)}function _chk5da(a){if(!a)return!1;return["一","二","三","四","五"].every((r,i,ar)=>{const s=a.indexOf("第"+r+"大");if(s<0)return!1;const nx=i<4?a.indexOf("第"+ar[i+1]+"大",s+1):-1;return(nx<0?a.length:nx)-s>=80})}function u6(a,r,e){const i=zm(a,r,e),u=`${a}-${r}`,s=gw[u],c=i.slice(0,2),l=i.slice(2,4),f=i.slice(4),p=b=>b.map(
+
+=== q6 fallback ===
+const q6=["一","二","三","四","五"].filter((D,i,ar)=>{const s=(G||"").indexOf("第"+D+"大");if(s<0)return!0;const nx=i<4?(G||"").indexOf("第"+ar[i+1]+"大",s+1):-1;return(nx<0?(G||"").length:nx)-s<80});if(q6.length){const M6=(await Dl({type:"text",prompt:`受測者：${f}\n以下為已寫完的${5-q6.length}條${A}：\n${G}\n\n請只接續撰寫缺少的${q6.map(D=>"第"+D+"大"+A).join("、")}（各150～180字），最後加結語50字。不要重複前文，直接接續輸出。`})).text;M6&&M6.trim()&&(G=G
+
+=== retry loop ===
+let G="";for(let D=0;D<(x?5:3);D++){const fe=D>0?`
+⚠️【重試指令：上一次生成不完整，本次必須寫滿${y}字以上${x?`，且必須完整列出第一大到第五大${A}共5條（每條120字以上，目前缺少：${["一","二","三","四","五"].fil
+
+=== L assignment ===
+
+
+=== X computation ===
+
