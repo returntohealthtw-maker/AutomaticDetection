@@ -424,6 +424,23 @@ def compute_mbti(avg: BandAverages) -> dict:
     }
 
 
+def _raw_band_to_norm100(v: float) -> float:
+    """
+    ThinkGear raw → 0-100 正規化，公式與 firebase_sync._band_to_100（Android bandTo100）完全一致：
+        norm100 = log10(raw + 1) / 6.0 * 100，clamp 至 [0, 100]
+
+    此函式只在偵測到「輸入為原始 ThinkGear 值」時才轉換；若輸入已經是 0-100
+    常模值（例如舊版 APP 上傳的 bandTo100 平均值，或已校正過的 qEEG 分數），
+    原值直接回傳，避免重複正規化。
+    """
+    v = float(v or 0)
+    if v <= 0:
+        return 0.0
+    if v <= 100:
+        return v
+    return min(100.0, max(0.0, math.log10(v + 1) / 6.0 * 100.0))
+
+
 def compute_mbti_v6(avg: BandAverages) -> dict:
     """
     MBTI v6.0 直接競爭演算法（取代八卦中間層，直接從腦波計算4軸）
@@ -437,16 +454,25 @@ def compute_mbti_v6(avg: BandAverages) -> dict:
     輸入：BandAverages（attention=focus，meditation=relaxation，其餘同名）
     輸出：{mbti_type, ei_score, ns_score, tf_score, jp_score,
            eiDiff, nsDiff, tfDiff, jpDiff, secondaries}
+
+    ⚠️ 尺度修正（2026-08-20）：下方各軸公式的係數（0.35、0.40…）是設計給
+    「0-100 常模值」使用的（與 focus / relaxation 這兩個天生就是 0-100 的
+    eSense 值同尺度混合加權）。DB 儲存的 avg.theta / avg.high_alpha 等是
+    「原始 ThinkGear 值」（數萬～數十萬），若直接餵入公式，diff 會被原始
+    量級放大成天文數字，導致每一軸分數幾乎必定被 clamp 到極端值（或因為
+    前端遺漏欄位改用 fallback 0 而全部變成 50%），完全反映不出個體差異
+    ——這是造成「不同孩子算出幾乎一樣的 MBTI」的根本原因之一。因此這裡
+    先把頻段值正規化到 0-100 尺度，才送進下面的加權公式。
     """
-    theta      = float(avg.theta)
-    highAlpha  = float(avg.high_alpha)
-    lowAlpha   = float(avg.low_alpha)
-    lowBeta    = float(avg.low_beta)
-    highBeta   = float(avg.high_beta)
-    highGamma  = float(avg.high_gamma)
-    lowGamma   = float(avg.low_gamma)
-    focus      = float(avg.attention)     # attention → focus
-    relaxation = float(avg.meditation)    # meditation → relaxation
+    theta      = _raw_band_to_norm100(avg.theta)
+    highAlpha  = _raw_band_to_norm100(avg.high_alpha)
+    lowAlpha   = _raw_band_to_norm100(avg.low_alpha)
+    lowBeta    = _raw_band_to_norm100(avg.low_beta)
+    highBeta   = _raw_band_to_norm100(avg.high_beta)
+    highGamma  = _raw_band_to_norm100(avg.high_gamma)
+    lowGamma   = _raw_band_to_norm100(avg.low_gamma)
+    focus      = max(0.0, min(100.0, float(avg.attention)))   # attention → focus，已是 0-100 eSense 值
+    relaxation = max(0.0, min(100.0, float(avg.meditation)))  # meditation → relaxation，已是 0-100 eSense 值
 
     # STEP 1: 4-axis direct competition
     E_score = focus * 0.35 + highGamma * 0.35 + highBeta * 0.30
