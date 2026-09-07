@@ -40,6 +40,7 @@ _PRODUCT_PRICES = {
     "up_trial_full":  2000,
     "up_full_vip":    7000,
     "up_trial_vip":   9000,
+    "up_consult":     4000,
     "test_1":            1,
 }
 

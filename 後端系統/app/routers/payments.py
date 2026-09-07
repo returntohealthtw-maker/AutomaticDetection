@@ -131,8 +131,67 @@ def _db_update_payment(
                     except Exception as _e:
                         logger.warning("[payments] Firebase 同步例外: %s", _e)
                 _th.Thread(target=_bg_sync, args=(_row_snapshot,), daemon=True).start()
+
+                # 「加購報告諮詢」付款成功 → 不生成任何報告，改寄信通知管理員盡快安排諮詢
+                if row.report_type == "up_consult":
+                    _th.Thread(target=_notify_admin_consult_paid, args=(_row_snapshot,), daemon=True).start()
     except Exception as e:
         logger.warning("[payments] DB 更新失敗 (%s)：%s", order_id, e)
+
+
+def _notify_admin_consult_paid(data: dict) -> None:
+    """「加購報告諮詢」付款成功後，寄信通知管理員盡快安排諮詢時間（不觸發任何報告生成）"""
+    try:
+        from app.services.email_sender import send_admin_notify_email
+
+        subject_name    = data.get("subject_name") or "（未填姓名）"
+        consultant_name = data.get("consultant_name") or "（無顧問歸屬）"
+        order_id        = data.get("order_id") or "-"
+        amount          = data.get("amount") or 0
+        paid_at_ts      = data.get("paid_at")
+        paid_at_str = (
+            datetime.fromtimestamp(paid_at_ts).strftime("%Y-%m-%d %H:%M:%S")
+            if paid_at_ts else "-"
+        )
+
+        subject_line = f"🗣️ 加購報告諮詢通知：{subject_name}"
+        html = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f7fa;font-family:'PingFang TC','Microsoft JhengHei','Helvetica Neue',sans-serif;color:#333;">
+  <div style="max-width:600px;margin:0 auto;background:white;">
+    <div style="background:linear-gradient(135deg,#e65100,#ff9800);padding:28px 32px;color:white;">
+      <div style="font-size:13px;opacity:0.9;letter-spacing:2px;">onlineReport · 加購報告諮詢通知</div>
+      <div style="font-size:20px;font-weight:700;margin-top:10px;">{subject_name} 加購了報告諮詢，請預約時間</div>
+    </div>
+    <div style="padding:28px 32px;font-size:14px;line-height:1.9;color:#222;">
+      <table style="width:100%;border-collapse:collapse;background:#f8fafd;border-radius:10px;overflow:hidden;">
+        <tr><td style="padding:8px 14px;color:#666;width:100px;">受測者</td><td style="padding:8px 14px;font-weight:600;">{subject_name}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">顧問</td><td style="padding:8px 14px;font-weight:600;">{consultant_name}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">訂單編號</td><td style="padding:8px 14px;font-family:monospace;">{order_id}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">金額</td><td style="padding:8px 14px;font-weight:600;">NT${amount:,}</td></tr>
+        <tr><td style="padding:8px 14px;color:#666;">付款時間</td><td style="padding:8px 14px;">{paid_at_str}</td></tr>
+      </table>
+      <p style="margin-top:20px;color:#555;">此為「加購報告諮詢」項目，不會自動生成任何報告，請安排顧問與受測者聯繫諮詢時間。</p>
+    </div>
+  </div>
+</body>
+</html>"""
+        plain = (
+            f"{subject_name} 加購了報告諮詢，請預約時間\n\n"
+            f"受測者：{subject_name}\n顧問：{consultant_name}\n"
+            f"訂單編號：{order_id}\n金額：NT${amount:,}\n付款時間：{paid_at_str}\n"
+        )
+        result = send_admin_notify_email(
+            to=settings.ADMIN_NOTIFY_EMAIL,
+            subject=subject_line,
+            html=html,
+            plain_text=plain,
+        )
+        if not result.get("ok"):
+            logger.error("[payments] 加購報告諮詢通知信寄送失敗: %s", result.get("error"))
+    except Exception as e:
+        logger.warning("[payments] 加購報告諮詢通知信例外: %s", e)
 
 
 def _maybe_consultant(authorization: Optional[str], db: DbSession) -> tuple[Optional[int], Optional[str]]:
@@ -282,6 +341,7 @@ async def create_payment(
         "teen_full":   "青少年未來人生戰略發展完整版",
         "teen_vip":    "青少年未來人生戰略發展VIP版",
         "test_1":      "功能測試NT1元",
+        "up_consult":  "加購報告諮詢",
     }
     desc = report_labels.get(req.report_type, "腦波報告")
     order_id = _generate_order_id()

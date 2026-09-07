@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     GMAIL_APP_PASSWORD: str = ""   # 16 字元 App Password（不是 Gmail 密碼）
     GMAIL_FROM_NAME:    str = "onlineReport 線上腦波分析系統"
 
+    # 管理員通知信箱（例如：加購報告諮詢等需要人工跟進的付款通知）
+    ADMIN_NOTIFY_EMAIL: str = "returntohealth.tw@gmail.com"
+
     @property
     def get_database_url(self) -> str:
         # 1. Railway / 任何環境注入的 DATABASE_URL

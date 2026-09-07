@@ -349,6 +349,32 @@ def send_consultant_welcome_email(
     }
 
 
+def send_admin_notify_email(
+    to: str,
+    subject: str,
+    html: str,
+    plain_text: Optional[str] = None,
+) -> dict:
+    """
+    寄一封「管理員通知信」（例如：加購報告諮詢待安排）。
+    傳送策略同 send_report_link_email：先本地 SMTP，失敗再走 Vercel proxy。
+    """
+    result = send_email(to=to, subject=subject, html=html, plain_text=plain_text)
+    if result.get("ok"):
+        logger.info("✅ 管理員通知信寄發成功（SMTP）→ %s", to)
+        return result
+
+    logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy raw", result.get("error"))
+    proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject, html=html)
+    if proxy_result.get("ok"):
+        logger.info("✅ 管理員通知信寄發成功（Vercel proxy）→ %s", to)
+        return proxy_result
+
+    logger.error("❌ 管理員通知信兩種方式都失敗: smtp=%s, proxy=%s",
+                 result.get("error"), proxy_result.get("error"))
+    return {"ok": False, "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}", "to": to}
+
+
 def _vercel_email_proxy() -> str:
     """指向其中一個已部署的 Vercel app 的 /api/sendEmail。
     Railway 擋了 outbound SMTP 時用 Vercel 代寄，因為 Vercel 沒擋。

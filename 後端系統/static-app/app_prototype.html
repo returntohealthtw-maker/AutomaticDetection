@@ -1901,6 +1901,14 @@
                 </div>
                 <div class="report-price" style="color:#e65100;">NT$9,000</div>
               </div>
+              <div class="report-item" data-report-key="up_consult" onclick="selectUpgrade(this,'up_consult',4000,'screen-qr-up-consult')" style="margin:0;border-color:#ffcc80;">
+                <div class="report-icon" style="font-size:20px;width:32px;">🗣️</div>
+                <div class="report-info">
+                  <div class="name" style="font-size:13px;">加購報告諮詢</div>
+                  <div class="desc">由專業顧問一對一說明腦波報告內容</div>
+                </div>
+                <div class="report-price" style="color:#e65100;">NT$4,000</div>
+              </div>
             </div>
           </div>
 
@@ -2170,6 +2178,50 @@
         </div>
       </div>
 
+      <!-- 加購報告諮詢 NT$4,000 -->
+      <div class="screen" id="screen-qr-up-consult">
+        <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
+        <div class="top-bar" style="--header-bg:#e65100;">
+          <button class="back-btn" onclick="goto('screen-reports')">‹</button>
+          <h2>掃碼付款 · 加購升級</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px;padding-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="background:linear-gradient(135deg,#5d4037,#bf8f48);border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2);width:100%;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:4px;">🗣️ 加購升級</div>
+            <div style="font-size:18px;font-weight:700;color:white;" id="qr-up-consult-title">加購報告諮詢</div>
+            <div class="qr-amount-display" data-default-amount="4000" style="font-size:32px;font-weight:800;color:#FFD700;margin:8px 0;">NT$4,000</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.85);">由專業顧問一對一說明腦波報告內容</div>
+          </div>
+
+          <div style="background:white;border-radius:18px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="font-size:13px;font-weight:600;color:#2D3561;">📱 客戶掃描付款</div>
+            <img id="qr-up-consult-img" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23fffbe6'/%3E%3Ctext x='100' y='105' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%23b8860b'%3ELoading QR...%3C/text%3E%3C/svg%3E" alt="加購報告諮詢 QR Code NT$4,000" onerror="this.alt='QR Code 載入失敗，請使用下方連結'" style="width:200px;height:200px;border-radius:12px;border:3px solid #FFD700;background:#fffbe6;">
+            <div style="font-size:11px;color:#aaa;text-align:center;">付款成功後，顧問將盡快與您聯繫安排諮詢時間</div>
+            <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:10px 14px;width:100%;font-size:12px;color:#e65100;text-align:center;">
+              ⏱️ <span class="qr-countdown">請於 15:00 內完成付款</span>
+            </div>
+            <div id="qr-up-consult-link-box" style="width:100%;background:#fffde7;border:1px dashed #FFD700;border-radius:10px;padding:10px 12px;display:none;">
+              <div style="font-size:11px;color:#f9a825;margin-bottom:6px;font-weight:600;">🔗 或點擊連結付款</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a id="qr-up-consult-link" href="#" target="_blank" style="font-size:12px;color:#f57f17;word-break:break-all;flex:1;text-decoration:underline;"></a>
+                <button onclick="copyPayLink('qr-up-consult-link')" style="flex-shrink:0;padding:4px 10px;border:1px solid #FFD700;background:white;border-radius:8px;font-size:11px;color:#f57f17;cursor:pointer;">複製</button>
+              </div>
+            </div>
+            <div class="qr-order-id" style="font-size:10px;color:#ccc;"></div>
+          </div>
+
+          <div style="background:white;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,0.06);width:100%;display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#ff9800;animation:blink 1.5s infinite;flex-shrink:0;"></div>
+            <div style="font-size:13px;color:#555;">等待付款中，每 3 秒自動確認...</div>
+          </div>
+
+          <button type="button" data-dev-only class="btn" style="width:100%;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;font-size:13px;" onclick="simulatePaid('screen-qr-up-consult')">
+            💳 虛擬付款（測試用，加購成功）
+          </button>
+          <div style="font-size:11px;color:#aaa;text-align:center;">🔒 由統一金流 PayUni 提供安全付款服務</div>
+        </div>
+      </div>
+
       <!-- 體驗版升級 VIP 版 NT$9,000 -->
       <div class="screen" id="screen-qr-up-9000">
         <div class="status-bar"><span class="time">9:41</span><span class="icons">📶 🔋 <span class="eeg-battery off" id="eeg-bat-icon">🧠--</span></span></div>
@@ -2223,7 +2275,7 @@
           <div id="upgrade-done-msg" style="font-size:13px;color:#666;line-height:1.6;margin-bottom:16px;">
             報告版本已升級，新版本報告生成中
           </div>
-          <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#e65100;margin-bottom:24px;">
+          <div id="upgrade-done-email-hint" style="background:#fff3e0;border:1px solid #ffb74d;border-radius:12px;padding:12px 14px;width:100%;max-width:300px;font-size:12px;color:#e65100;margin-bottom:24px;">
             📧 完整報告將於 1-2 分鐘內寄送至受測者 Email；如需立即查看可至「歷史紀錄」開啟。
           </div>
           <button class="btn btn-primary" style="max-width:300px;" onclick="goto('screen-history')">前往歷史紀錄</button>
@@ -3340,6 +3392,7 @@ const screens = [
   { id: 'screen-qr-up-2000',      label: '加購升級 · 體驗→完整 NT$2,000' },
   { id: 'screen-qr-up-7000',      label: '加購升級 · 完整→VIP NT$7,000' },
   { id: 'screen-qr-up-9000',      label: '加購升級 · 體驗→VIP NT$9,000' },
+  { id: 'screen-qr-up-consult',   label: '加購升級 · 報告諮詢 NT$4,000' },
   { id: 'screen-upgrade-done',    label: '升級成功' },
   { id: 'screen-qr-test',         label: '付款 · NT$1 測試' },
   { id: 'screen-relation-select', label: '關係報告選人' },
@@ -4757,6 +4810,7 @@ const REPORT_PRICING = {
     up_trial_full: { amount: 2000,  display: 'NT$2,000',  qrScreen: 'screen-qr-up-2000' },
     up_full_vip:   { amount: 7000,  display: 'NT$7,000',  qrScreen: 'screen-qr-up-7000' },
     up_trial_vip:  { amount: 9000,  display: 'NT$9,000',  qrScreen: 'screen-qr-up-9000' },
+    up_consult:    { amount: 4000,  display: 'NT$4,000',  qrScreen: 'screen-qr-up-consult' },
     test_1:        { amount: 1,     display: 'NT$1',      qrScreen: 'screen-qr-test'    },
   },
   // 直營商：刪體驗版＋體驗→升級項；完整／VIP／完整→VIP 改新價
@@ -4768,6 +4822,7 @@ const REPORT_PRICING = {
     teen_full:     { amount: 4800,  display: 'NT$4,800',  qrScreen: 'screen-qr-full'    },
     teen_vip:      { amount: 8800,  display: 'NT$8,800',  qrScreen: 'screen-qr-vip'     },
     up_full_vip:   { amount: 4000,  display: 'NT$4,000',  qrScreen: 'screen-qr-up-7000' },
+    up_consult:    { amount: 4000,  display: 'NT$4,000',  qrScreen: 'screen-qr-up-consult' },
     test_1:        { amount: 1,     display: 'NT$1',      qrScreen: 'screen-qr-test'    },
   },
 };
@@ -5632,10 +5687,11 @@ function showPaymentResult(status, qrScreenId) {
   const targetScreen = isUpgrade ? 'screen-upgrade-done' : 'screen-connect';
 
   if (status === "paid" && isUpgrade) {
+    const isConsult = (qrScreenId === 'screen-qr-up-consult');
     icon.textContent  = "🎉";
-    title.textContent = "升級付款成功！";
-    msg.textContent   = "正在生成升級後的新版本報告…";
-    btn.textContent   = "查看升級結果 →";
+    title.textContent = isConsult ? "加購成功！" : "升級付款成功！";
+    msg.textContent   = isConsult ? "已收到您加購的報告諮詢，顧問將盡快與您聯繫安排時間。" : "正在生成升級後的新版本報告…";
+    btn.textContent   = isConsult ? "確定 →" : "查看升級結果 →";
     btn.style.display = '';
     btn.onclick = () => { overlay.style.display = "none"; overlay.style.pointerEvents = "none"; goto(targetScreen); };
     // 升級路徑：也設 pointerEvents=auto（修正升級 overlay 按鈕無法點擊的 bug）
@@ -5687,6 +5743,7 @@ function _reportKeyToZh(key) {
     'up_trial_full': '加購升級：體驗版 → 完整版',
     'up_full_vip':   '加購升級：完整版 → VIP版',
     'up_trial_vip':  '加購升級：體驗版 → VIP版',
+    'up_consult':    '加購報告諮詢',
   };
   return map[key] || key || '—';
 }
@@ -8221,6 +8278,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'up_trial_full': '加購升級：體驗版 → 完整版',
     'up_full_vip':   '加購升級：完整版 → VIP版',
     'up_trial_vip':  '加購升級：體驗版 → VIP版',
+    'up_consult':    '加購報告諮詢',
   };
 
   // ── 管理員 NT$1 測試模式：點選任何正式報告，統一導向 NT$1 測試付款畫面 ──
@@ -8241,6 +8299,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
     'screen-qr-up-2000': 'qr-up-2000-title',
     'screen-qr-up-7000': 'qr-up-7000-title',
     'screen-qr-up-9000': 'qr-up-9000-title',
+    'screen-qr-up-consult': 'qr-up-consult-title',
   };
   const titleEl = document.getElementById(titleMap[qrScreen]);
   if (titleEl) titleEl.textContent = reportNames[reportKey] || '';
@@ -8256,7 +8315,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
       'child_trial':3000,'child_full':5000,'child_vip':12000,
       'teen_trial':3000,'teen_full':5000,'teen_vip':12000,
       'test_1':1,
-      'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000
+      'up_trial_full':2000, 'up_full_vip':7000, 'up_trial_vip':9000, 'up_consult':4000
     };
     // 管理員 NT$1 測試模式：忽略正式定價，一律使用 NT$1
     const amt = _adminNt1Test ? 1 : ((cfg && typeof cfg.amount === 'number') ? cfg.amount : (fallbackMap[reportKey] || 3000));
@@ -8287,6 +8346,7 @@ function selectSingleReport(el, reportKey, price, qrScreen) {
         'screen-qr-up-2000': { box: 'qr-up-2000-link-box', a: 'qr-up-2000-link', img: 'qr-up-2000-img' },
         'screen-qr-up-7000': { box: 'qr-up-7000-link-box', a: 'qr-up-7000-link', img: 'qr-up-7000-img' },
         'screen-qr-up-9000': { box: 'qr-up-9000-link-box', a: 'qr-up-9000-link', img: 'qr-up-9000-img' },
+        'screen-qr-up-consult': { box: 'qr-up-consult-link-box', a: 'qr-up-consult-link', img: 'qr-up-consult-img' },
       };
       const lm = linkMap[qrScreen];
       if (lm) {
@@ -11334,6 +11394,7 @@ const _PRODUCTS = [
   { key:'up_full_vip_direct', label:'加購升級：完整→VIP（直營）',     price:4000,  upgrade:true, rolesOnly:['direct'] },
   // ── 共用品項（所有身份）────────────────────────────────────────────
   { key:'relation',           label:'關係報告（共振）',                price:8000  },
+  { key:'up_consult',         label:'加購報告諮詢',                    price:4000, upgrade:true },
 ];
 
 // 快取，避免每次 render 都 re-fetch
@@ -11609,6 +11670,20 @@ function _onPaymentPaid(qrScreenId) {
 
   const isUpgrade = (qrScreenId || '').startsWith('screen-qr-up-');
   const targetScreen = isUpgrade ? 'screen-upgrade-done' : 'screen-connect';
+
+  // 「加購報告諮詢」不生成任何報告，客製 screen-upgrade-done 的完成文案
+  if (qrScreenId === 'screen-qr-up-consult') {
+    const msgEl  = document.getElementById('upgrade-done-msg');
+    const hintEl = document.getElementById('upgrade-done-email-hint');
+    if (msgEl)  msgEl.textContent  = '已收到您加購的報告諮詢，顧問將盡快與您聯繫安排時間';
+    if (hintEl) hintEl.style.display = 'none';
+  } else {
+    // 還原成預設文案（避免上一次是 up_consult、下一次又是其他升級項目時殘留客製文字）
+    const msgEl  = document.getElementById('upgrade-done-msg');
+    const hintEl = document.getElementById('upgrade-done-email-hint');
+    if (msgEl)  msgEl.textContent  = '報告版本已升級，新版本報告生成中';
+    if (hintEl) { hintEl.style.display = ''; hintEl.textContent = '📧 完整報告將於 1-2 分鐘內寄送至受測者 Email；如需立即查看可至「歷史紀錄」開啟。'; }
+  }
 
   // 立即顯示付款成功畫面
   showPaymentResult("paid", qrScreenId);
