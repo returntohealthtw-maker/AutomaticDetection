@@ -1,0 +1,241 @@
+2026-06-20 23:27:43,565 [INFO] ✅ Firebase 登入成功，Token 有效至 00:27:43
+2026-06-20 23:27:44,076 [INFO] ✅ Railway 登入成功
+2026-06-20 23:27:44,350 [INFO] Railway sessions 總數：50
+2026-06-20 23:27:44,351 [INFO] ▶ Railway session_id=3, 受測者=鄭小怡
+2026-06-20 23:27:45,659 [INFO]   ✅ 建立受測者 鄭小怡 → subjectId=e60d16a8-5a20-4015-aa45-b9d1d9ffd9e2
+2026-06-20 23:27:46,833 [INFO]     ✅ 建立 Session → sessionId=dc9841e7-8817-47ad-91f5-2fcde1ee2def
+2026-06-20 23:27:47,129 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:27:48,826 [INFO]   ✔ Railway session 3 → Firebase dc9841e7-8817-47ad-91f5-2fcde1ee2def
+2026-06-20 23:27:48,826 [INFO] ▶ Railway session_id=4, 受測者=貴肥
+2026-06-20 23:27:49,206 [INFO]   ✅ 建立受測者 貴肥 → subjectId=af160145-5e22-4f1e-ab6d-2cee659b0156
+2026-06-20 23:27:50,370 [INFO]     ✅ 建立 Session → sessionId=5c9da0f2-c318-44d8-82b3-abea31433329
+2026-06-20 23:27:50,670 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:27:52,087 [INFO]   ✔ Railway session 4 → Firebase 5c9da0f2-c318-44d8-82b3-abea31433329
+2026-06-20 23:27:52,087 [INFO] ▶ Railway session_id=5, 受測者=貴肥肥
+2026-06-20 23:27:52,374 [INFO]   ✅ 建立受測者 貴肥肥 → subjectId=3014d95a-8ed1-4114-b949-2b6fc57b1d9a
+2026-06-20 23:27:53,556 [INFO]     ✅ 建立 Session → sessionId=ced585aa-76b6-4735-b4ed-4580541b7d0f
+2026-06-20 23:27:53,847 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:27:55,331 [INFO]   ✔ Railway session 5 → Firebase ced585aa-76b6-4735-b4ed-4580541b7d0f
+2026-06-20 23:27:55,331 [INFO] ▶ Railway session_id=6, 受測者=鄭小怡
+2026-06-20 23:27:56,514 [INFO]     ✅ 建立 Session → sessionId=f37b483c-6652-4002-b2c9-c78db0e14e42
+2026-06-20 23:27:56,818 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:27:58,275 [INFO]   ✔ Railway session 6 → Firebase f37b483c-6652-4002-b2c9-c78db0e14e42
+2026-06-20 23:27:58,275 [INFO] ▶ Railway session_id=7, 受測者=鄭小怡
+2026-06-20 23:27:59,441 [INFO]     ✅ 建立 Session → sessionId=d1044321-64d7-43ad-9248-c2f81f9b5396
+2026-06-20 23:27:59,733 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:01,179 [INFO]   ✔ Railway session 7 → Firebase d1044321-64d7-43ad-9248-c2f81f9b5396
+2026-06-20 23:28:01,179 [INFO] ▶ Railway session_id=8, 受測者=鄭小怡
+2026-06-20 23:28:02,356 [INFO]     ✅ 建立 Session → sessionId=62851366-4268-4cdb-9d27-a310adb4446b
+2026-06-20 23:28:02,645 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:04,065 [INFO]   ✔ Railway session 8 → Firebase 62851366-4268-4cdb-9d27-a310adb4446b
+2026-06-20 23:28:04,065 [INFO] ▶ Railway session_id=9, 受測者=楊女毓
+2026-06-20 23:28:04,340 [INFO]   ✅ 建立受測者 楊女毓 → subjectId=ea28e15c-5422-43ca-b8ac-efc6cad38c41
+2026-06-20 23:28:05,484 [INFO]     ✅ 建立 Session → sessionId=edaa5c91-6a7f-4acd-a16e-f7f6eadc5976
+2026-06-20 23:28:05,785 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:07,225 [INFO]   ✔ Railway session 9 → Firebase edaa5c91-6a7f-4acd-a16e-f7f6eadc5976
+2026-06-20 23:28:07,225 [INFO] ▶ Railway session_id=10, 受測者=楊肥點
+2026-06-20 23:28:07,510 [INFO]   ✅ 建立受測者 楊肥點 → subjectId=fddc5732-71d8-44e7-b1bb-7f47b1736fb4
+2026-06-20 23:28:08,716 [INFO]     ✅ 建立 Session → sessionId=3c2d038c-ab51-4f32-87af-9d889dacf9e9
+2026-06-20 23:28:09,008 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:10,481 [INFO]   ✔ Railway session 10 → Firebase 3c2d038c-ab51-4f32-87af-9d889dacf9e9
+2026-06-20 23:28:10,481 [INFO] ▶ Railway session_id=11, 受測者=受測者
+2026-06-20 23:28:10,756 [INFO]   ✅ 建立受測者 受測者 → subjectId=42bf213c-f78b-45de-84b7-be2e846f5b72
+2026-06-20 23:28:11,941 [INFO]     ✅ 建立 Session → sessionId=17bdbd04-313c-4839-b00a-578c2a1fff92
+2026-06-20 23:28:12,234 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:13,636 [INFO]   ✔ Railway session 11 → Firebase 17bdbd04-313c-4839-b00a-578c2a1fff92
+2026-06-20 23:28:13,636 [INFO] ▶ Railway session_id=12, 受測者=受測者
+2026-06-20 23:28:14,798 [INFO]     ✅ 建立 Session → sessionId=79156e2f-c21e-4aa4-b1f4-2886f3bf4b2b
+2026-06-20 23:28:15,093 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:16,617 [INFO]   ✔ Railway session 12 → Firebase 79156e2f-c21e-4aa4-b1f4-2886f3bf4b2b
+2026-06-20 23:28:16,618 [INFO] ▶ Railway session_id=13, 受測者=受測者
+2026-06-20 23:28:17,783 [INFO]     ✅ 建立 Session → sessionId=e22cc845-1fb4-4e9f-a7c9-8cfb617eaa00
+2026-06-20 23:28:18,085 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:19,506 [INFO]   ✔ Railway session 13 → Firebase e22cc845-1fb4-4e9f-a7c9-8cfb617eaa00
+2026-06-20 23:28:19,506 [INFO] ▶ Railway session_id=14, 受測者=鄭小靜
+2026-06-20 23:28:19,772 [INFO]   ✅ 建立受測者 鄭小靜 → subjectId=c7bedc73-cbae-4563-b72a-72136abb2609
+2026-06-20 23:28:20,897 [INFO]     ✅ 建立 Session → sessionId=67215db7-257c-4329-b38c-e1be5f3bad2c
+2026-06-20 23:28:22,375 [WARNING]       ⚠ EEG 批次上傳失敗 (500): {'raw': 'Internal Server Error'}
+2026-06-20 23:28:23,853 [INFO]   ✔ Railway session 14 → Firebase 67215db7-257c-4329-b38c-e1be5f3bad2c
+2026-06-20 23:28:23,853 [INFO] ▶ Railway session_id=15, 受測者=受測者
+2026-06-20 23:28:25,028 [INFO]     ✅ 建立 Session → sessionId=8534a56e-7606-4fdd-ad66-aa4fb5989711
+2026-06-20 23:28:25,326 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:26,775 [INFO]   ✔ Railway session 15 → Firebase 8534a56e-7606-4fdd-ad66-aa4fb5989711
+2026-06-20 23:28:26,775 [INFO] ▶ Railway session_id=16, 受測者=鄭小靜
+2026-06-20 23:28:27,955 [INFO]     ✅ 建立 Session → sessionId=fcebaff7-1352-4630-b0a4-ba26b9661317
+2026-06-20 23:28:29,446 [WARNING]       ⚠ EEG 批次上傳失敗 (500): {'raw': 'Internal Server Error'}
+2026-06-20 23:28:30,891 [INFO]   ✔ Railway session 16 → Firebase fcebaff7-1352-4630-b0a4-ba26b9661317
+2026-06-20 23:28:30,891 [INFO] ▶ Railway session_id=17, 受測者=楊女毓
+2026-06-20 23:28:32,067 [INFO]     ✅ 建立 Session → sessionId=5822095c-d8c0-4cd1-adc0-35441d6110e3
+2026-06-20 23:28:33,544 [WARNING]       ⚠ EEG 批次上傳失敗 (500): {'raw': 'Internal Server Error'}
+2026-06-20 23:28:35,016 [INFO]   ✔ Railway session 17 → Firebase 5822095c-d8c0-4cd1-adc0-35441d6110e3
+2026-06-20 23:28:35,016 [INFO] ▶ Railway session_id=18, 受測者=受測者
+2026-06-20 23:28:36,191 [INFO]     ✅ 建立 Session → sessionId=b98ad4ce-a04d-46ed-92a3-0db499eb5c7c
+2026-06-20 23:28:36,486 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:37,918 [INFO]   ✔ Railway session 18 → Firebase b98ad4ce-a04d-46ed-92a3-0db499eb5c7c
+2026-06-20 23:28:37,918 [INFO] ▶ Railway session_id=19, 受測者=受測者
+2026-06-20 23:28:39,091 [INFO]     ✅ 建立 Session → sessionId=fadcdcdb-048d-4552-a588-bc862bf3b4d7
+2026-06-20 23:28:39,385 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:40,796 [INFO]   ✔ Railway session 19 → Firebase fadcdcdb-048d-4552-a588-bc862bf3b4d7
+2026-06-20 23:28:40,796 [INFO] ▶ Railway session_id=20, 受測者=肥肥
+2026-06-20 23:28:41,062 [INFO]   ✅ 建立受測者 肥肥 → subjectId=eff73d52-87dd-4777-b1fd-13ac7e3dee4b
+2026-06-20 23:28:42,202 [INFO]     ✅ 建立 Session → sessionId=e5d5a9c3-2885-4201-b974-3b4e13ac8793
+2026-06-20 23:28:42,497 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:43,948 [INFO]   ✔ Railway session 20 → Firebase e5d5a9c3-2885-4201-b974-3b4e13ac8793
+2026-06-20 23:28:43,948 [INFO] ▶ Railway session_id=21, 受測者=受測者
+2026-06-20 23:28:45,147 [INFO]     ✅ 建立 Session → sessionId=a98ffdf0-7ec9-47d3-aade-cfbc00125512
+2026-06-20 23:28:45,434 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:46,885 [INFO]   ✔ Railway session 21 → Firebase a98ffdf0-7ec9-47d3-aade-cfbc00125512
+2026-06-20 23:28:46,885 [INFO] ▶ Railway session_id=22, 受測者=貴肥肥
+2026-06-20 23:28:48,049 [INFO]     ✅ 建立 Session → sessionId=09c43e07-17f2-403f-8ea8-66950a87da14
+2026-06-20 23:28:48,378 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:49,854 [INFO]   ✔ Railway session 22 → Firebase 09c43e07-17f2-403f-8ea8-66950a87da14
+2026-06-20 23:28:49,854 [INFO] ▶ Railway session_id=23, 受測者=楊女毓
+2026-06-20 23:28:51,064 [INFO]     ✅ 建立 Session → sessionId=83e71cd1-6142-4e6a-b711-0ff5808c8660
+2026-06-20 23:28:51,358 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:52,773 [INFO]   ✔ Railway session 23 → Firebase 83e71cd1-6142-4e6a-b711-0ff5808c8660
+2026-06-20 23:28:52,773 [INFO] ▶ Railway session_id=24, 受測者=受測者
+2026-06-20 23:28:53,427 [INFO]     ✅ 建立 Session → sessionId=94bdc657-d698-408b-84ae-0957561a16b3
+2026-06-20 23:28:53,720 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:54,464 [INFO]   ✔ Railway session 24 → Firebase 94bdc657-d698-408b-84ae-0957561a16b3
+2026-06-20 23:28:54,464 [INFO] ▶ Railway session_id=25, 受測者=劉玉璇
+2026-06-20 23:28:54,723 [INFO]   ✅ 建立受測者 劉玉璇 → subjectId=947cc40f-ed51-4a79-b578-6c28c6a5ee5e
+2026-06-20 23:28:55,218 [INFO]     ✅ 建立 Session → sessionId=9c175dfa-9196-4d9e-8726-4cbd95a59586
+2026-06-20 23:28:55,513 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:56,246 [INFO]   ✔ Railway session 25 → Firebase 9c175dfa-9196-4d9e-8726-4cbd95a59586
+2026-06-20 23:28:56,246 [INFO] ▶ Railway session_id=26, 受測者=貴肥肥
+2026-06-20 23:28:56,744 [INFO]     ✅ 建立 Session → sessionId=7d4d60db-09ba-497c-9a0a-75a2da4e3349
+2026-06-20 23:28:57,039 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:57,819 [INFO]   ✔ Railway session 26 → Firebase 7d4d60db-09ba-497c-9a0a-75a2da4e3349
+2026-06-20 23:28:57,819 [INFO] ▶ Railway session_id=27, 受測者=洪川雅
+2026-06-20 23:28:58,086 [INFO]   ✅ 建立受測者 洪川雅 → subjectId=2d0b3d69-45b7-4792-b396-ae9aab80d27f
+2026-06-20 23:28:58,568 [INFO]     ✅ 建立 Session → sessionId=36e560de-9d46-4432-beeb-d9dadb0f13d9
+2026-06-20 23:28:58,865 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:28:59,614 [INFO]   ✔ Railway session 27 → Firebase 36e560de-9d46-4432-beeb-d9dadb0f13d9
+2026-06-20 23:28:59,614 [INFO] ▶ Railway session_id=28, 受測者=貴肥肥
+2026-06-20 23:29:00,104 [INFO]     ✅ 建立 Session → sessionId=36f1779d-9c55-4386-8ce3-19669aba90de
+2026-06-20 23:29:00,396 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:01,145 [INFO]   ✔ Railway session 28 → Firebase 36f1779d-9c55-4386-8ce3-19669aba90de
+2026-06-20 23:29:01,145 [INFO] ▶ Railway session_id=29, 受測者=鄭怡怡
+2026-06-20 23:29:01,403 [INFO]   ✅ 建立受測者 鄭怡怡 → subjectId=59eb7eff-ea90-4036-bd28-694b5930936a
+2026-06-20 23:29:01,884 [INFO]     ✅ 建立 Session → sessionId=e4144810-1376-4b77-9a8d-7d682395b005
+2026-06-20 23:29:02,181 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:03,019 [INFO]   ✔ Railway session 29 → Firebase e4144810-1376-4b77-9a8d-7d682395b005
+2026-06-20 23:29:03,019 [INFO] ▶ Railway session_id=30, 受測者=鄭怡怡
+2026-06-20 23:29:03,529 [INFO]     ✅ 建立 Session → sessionId=b32150ac-5c80-422f-93af-2d5c47af1088
+2026-06-20 23:29:03,822 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:04,552 [INFO]   ✔ Railway session 30 → Firebase b32150ac-5c80-422f-93af-2d5c47af1088
+2026-06-20 23:29:04,552 [INFO] ▶ Railway session_id=31, 受測者=鄭怡
+2026-06-20 23:29:04,806 [INFO]   ✅ 建立受測者 鄭怡 → subjectId=53e5abb9-939e-4d7c-83c8-2c808ca7fd0b
+2026-06-20 23:29:05,313 [INFO]     ✅ 建立 Session → sessionId=9b67a135-e933-4f9c-a8ca-3a90be736530
+2026-06-20 23:29:05,611 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:06,341 [INFO]   ✔ Railway session 31 → Firebase 9b67a135-e933-4f9c-a8ca-3a90be736530
+2026-06-20 23:29:06,341 [INFO] ▶ Railway session_id=32, 受測者=黃子茜
+2026-06-20 23:29:06,598 [INFO]   ✅ 建立受測者 黃子茜 → subjectId=381717f1-809b-4da9-99fb-c5df7fa1bcea
+2026-06-20 23:29:07,096 [INFO]     ✅ 建立 Session → sessionId=ec990e80-a788-4045-8cbe-b696f8600c70
+2026-06-20 23:29:07,390 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:08,168 [INFO]   ✔ Railway session 32 → Firebase ec990e80-a788-4045-8cbe-b696f8600c70
+2026-06-20 23:29:08,168 [INFO] ▶ Railway session_id=33, 受測者=辜純純
+2026-06-20 23:29:08,414 [INFO]   ✅ 建立受測者 辜純純 → subjectId=76ae1223-7c8b-43fe-8be0-4539c7abb7b2
+2026-06-20 23:29:08,898 [INFO]     ✅ 建立 Session → sessionId=1b5c7347-2a72-42c0-ae0c-b4d300b77031
+2026-06-20 23:29:09,192 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:09,930 [INFO]   ✔ Railway session 33 → Firebase 1b5c7347-2a72-42c0-ae0c-b4d300b77031
+2026-06-20 23:29:09,930 [INFO] ▶ Railway session_id=34, 受測者=趙亞倫
+2026-06-20 23:29:10,203 [INFO]   ✅ 建立受測者 趙亞倫 → subjectId=31578730-5ca4-4e72-b096-c740853a9893
+2026-06-20 23:29:10,688 [INFO]     ✅ 建立 Session → sessionId=5a30fa54-f403-4f78-b8f1-85a4b43ce8a7
+2026-06-20 23:29:10,981 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:11,738 [INFO]   ✔ Railway session 34 → Firebase 5a30fa54-f403-4f78-b8f1-85a4b43ce8a7
+2026-06-20 23:29:11,739 [INFO] ▶ Railway session_id=35, 受測者=趙亞倫
+2026-06-20 23:29:12,197 [INFO]     ✅ 建立 Session → sessionId=1508f016-5dfa-439b-bcdc-6cba2972a4f0
+2026-06-20 23:29:12,488 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:13,203 [INFO]   ✔ Railway session 35 → Firebase 1508f016-5dfa-439b-bcdc-6cba2972a4f0
+2026-06-20 23:29:13,203 [INFO] ▶ Railway session_id=36, 受測者=鄭小怡
+2026-06-20 23:29:13,697 [INFO]     ✅ 建立 Session → sessionId=2cd13b1e-061d-4344-8f9f-a6cc69999dfb
+2026-06-20 23:29:14,011 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:14,740 [INFO]   ✔ Railway session 36 → Firebase 2cd13b1e-061d-4344-8f9f-a6cc69999dfb
+2026-06-20 23:29:14,740 [INFO] ▶ Railway session_id=37, 受測者=鄭怡怡
+2026-06-20 23:29:15,219 [INFO]     ✅ 建立 Session → sessionId=2ba456ca-9176-43d5-8f0e-e38c4e6c5e8d
+2026-06-20 23:29:15,517 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:16,254 [INFO]   ✔ Railway session 37 → Firebase 2ba456ca-9176-43d5-8f0e-e38c4e6c5e8d
+2026-06-20 23:29:16,254 [INFO] ▶ Railway session_id=38, 受測者=鄭小靜
+2026-06-20 23:29:16,734 [INFO]     ✅ 建立 Session → sessionId=b1ae3ddb-896e-48e1-ba04-3bb1f8fa91dd
+2026-06-20 23:29:17,026 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:17,772 [INFO]   ✔ Railway session 38 → Firebase b1ae3ddb-896e-48e1-ba04-3bb1f8fa91dd
+2026-06-20 23:29:17,772 [INFO] ▶ Railway session_id=39, 受測者=陳暐昕
+2026-06-20 23:29:18,013 [INFO]   ✅ 建立受測者 陳暐昕 → subjectId=bd1d95fa-2170-4abe-84a4-1bc277e91c98
+2026-06-20 23:29:18,481 [INFO]     ✅ 建立 Session → sessionId=5d71524c-2f8b-40cb-91d6-939ddd041115
+2026-06-20 23:29:18,781 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:19,513 [INFO]   ✔ Railway session 39 → Firebase 5d71524c-2f8b-40cb-91d6-939ddd041115
+2026-06-20 23:29:19,513 [INFO] ▶ Railway session_id=40, 受測者=邱心又
+2026-06-20 23:29:19,765 [INFO]   ✅ 建立受測者 邱心又 → subjectId=4f026b6f-56e3-4f9f-9a02-d71f84d0820f
+2026-06-20 23:29:20,257 [INFO]     ✅ 建立 Session → sessionId=d42ee0ab-219d-4d3b-b979-930576317244
+2026-06-20 23:29:20,553 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:21,280 [INFO]   ✔ Railway session 40 → Firebase d42ee0ab-219d-4d3b-b979-930576317244
+2026-06-20 23:29:21,280 [INFO] ▶ Railway session_id=41, 受測者=王筱琪
+2026-06-20 23:29:21,556 [INFO]   ✅ 建立受測者 王筱琪 → subjectId=454f9cc5-4d57-4973-95c6-9b449704b324
+2026-06-20 23:29:22,026 [INFO]     ✅ 建立 Session → sessionId=0695959b-5d29-46b6-be2e-c9cd23c179ff
+2026-06-20 23:29:22,438 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:23,202 [INFO]   ✔ Railway session 41 → Firebase 0695959b-5d29-46b6-be2e-c9cd23c179ff
+2026-06-20 23:29:23,202 [INFO] ▶ Railway session_id=42, 受測者=劉素惠
+2026-06-20 23:29:23,449 [INFO]   ✅ 建立受測者 劉素惠 → subjectId=4dbacaa5-11dc-41ef-92b3-2d8c6d986784
+2026-06-20 23:29:23,929 [INFO]     ✅ 建立 Session → sessionId=5ed25f05-a33e-495a-8a02-818619856c3e
+2026-06-20 23:29:24,230 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:24,960 [INFO]   ✔ Railway session 42 → Firebase 5ed25f05-a33e-495a-8a02-818619856c3e
+2026-06-20 23:29:24,960 [INFO] ▶ Railway session_id=43, 受測者=劉素惠
+2026-06-20 23:29:25,437 [INFO]     ✅ 建立 Session → sessionId=bd414f7d-f310-4079-8287-1a73be694864
+2026-06-20 23:29:25,727 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:26,475 [INFO]   ✔ Railway session 43 → Firebase bd414f7d-f310-4079-8287-1a73be694864
+2026-06-20 23:29:26,475 [INFO] ▶ Railway session_id=44, 受測者=王筱琪
+2026-06-20 23:29:27,127 [INFO]     ✅ 建立 Session → sessionId=a2c6f8ca-e760-4c06-aa20-3edb1943d7f6
+2026-06-20 23:29:27,424 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:28,177 [INFO]   ✔ Railway session 44 → Firebase a2c6f8ca-e760-4c06-aa20-3edb1943d7f6
+2026-06-20 23:29:28,177 [INFO] ▶ Railway session_id=45, 受測者=王筱琪
+2026-06-20 23:29:28,660 [INFO]     ✅ 建立 Session → sessionId=597cae93-1302-4f0a-a37e-eaf69d313d75
+2026-06-20 23:29:28,956 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:29,703 [INFO]   ✔ Railway session 45 → Firebase 597cae93-1302-4f0a-a37e-eaf69d313d75
+2026-06-20 23:29:29,703 [INFO] ▶ Railway session_id=46, 受測者=翁嫣黛
+2026-06-20 23:29:29,978 [INFO]   ✅ 建立受測者 翁嫣黛 → subjectId=16a2a0d0-4c9e-472e-b9e7-6b2a7e552817
+2026-06-20 23:29:30,448 [INFO]     ✅ 建立 Session → sessionId=130f59a7-2169-4ea2-8370-a17aaed85b9e
+2026-06-20 23:29:30,744 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:31,481 [INFO]   ✔ Railway session 46 → Firebase 130f59a7-2169-4ea2-8370-a17aaed85b9e
+2026-06-20 23:29:31,481 [INFO] ▶ Railway session_id=47, 受測者=張佩渝
+2026-06-20 23:29:31,749 [INFO]   ✅ 建立受測者 張佩渝 → subjectId=29b34565-4d99-4049-8118-b50614a5b47e
+2026-06-20 23:29:32,218 [INFO]     ✅ 建立 Session → sessionId=294611e6-1f30-4eaf-8167-5a13014e2d68
+2026-06-20 23:29:32,516 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:33,241 [INFO]   ✔ Railway session 47 → Firebase 294611e6-1f30-4eaf-8167-5a13014e2d68
+2026-06-20 23:29:33,241 [INFO] ▶ Railway session_id=48, 受測者=紀羽珊
+2026-06-20 23:29:33,514 [INFO]   ✅ 建立受測者 紀羽珊 → subjectId=d9e0a027-cc62-47ae-925e-0d4b7f78d7a8
+2026-06-20 23:29:33,975 [INFO]     ✅ 建立 Session → sessionId=75d7d0d5-c1dc-4a88-9d27-6a1b18afc6eb
+2026-06-20 23:29:34,271 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:35,018 [INFO]   ✔ Railway session 48 → Firebase 75d7d0d5-c1dc-4a88-9d27-6a1b18afc6eb
+2026-06-20 23:29:35,018 [INFO] ▶ Railway session_id=49, 受測者=王筱琪
+2026-06-20 23:29:35,495 [INFO]     ✅ 建立 Session → sessionId=52967ab6-6737-4d2f-83d0-8bfaf5635c9f
+2026-06-20 23:29:35,788 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:36,537 [INFO]   ✔ Railway session 49 → Firebase 52967ab6-6737-4d2f-83d0-8bfaf5635c9f
+2026-06-20 23:29:36,537 [INFO] ▶ Railway session_id=50, 受測者=鄭小怡
+2026-06-20 23:29:37,002 [INFO]     ✅ 建立 Session → sessionId=2b467c47-3266-47cf-9caa-6e94447d016f
+2026-06-20 23:29:37,299 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:38,005 [INFO]   ✔ Railway session 50 → Firebase 2b467c47-3266-47cf-9caa-6e94447d016f
+2026-06-20 23:29:38,005 [INFO] ▶ Railway session_id=51, 受測者=鄭小怡
+2026-06-20 23:29:38,477 [INFO]     ✅ 建立 Session → sessionId=f1072710-1ad0-42da-972f-042e1e7f00b2
+2026-06-20 23:29:38,768 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:39,480 [INFO]   ✔ Railway session 51 → Firebase f1072710-1ad0-42da-972f-042e1e7f00b2
+2026-06-20 23:29:39,481 [INFO] ▶ Railway session_id=52, 受測者=鄭小怡
+2026-06-20 23:29:39,974 [INFO]     ✅ 建立 Session → sessionId=3b5a618d-f8aa-4c4b-9ef2-e0b4f3b76534
+2026-06-20 23:29:40,267 [WARNING]       ⚠ EEG 批次上傳失敗 (400): {'error': 'VALIDATION_ERROR', 'message': '"features[0].windowSec" must be less than or equal to 60'}
+2026-06-20 23:29:40,989 [INFO]   ✔ Railway session 52 → Firebase 3b5a618d-f8aa-4c4b-9ef2-e0b4f3b76534
+2026-06-20 23:29:41,021 [INFO] ============================================================
+2026-06-20 23:29:41,021 [INFO] 開始遷移：7 筆 sessions
+2026-06-20 23:29:41,021 [INFO] ============================================================
+2026-06-20 23:29:41,022 [INFO] ▶ 處理 session_id=1, 受測者=Wang Test
+2026-06-20 23:29:41,269 [INFO]   ✅ 建立受測者 Wang Test → subjectId=b242c5a8-fa4d-48c7-84b4-8a93e309b60a
+2026-06-20 23:29:41,727 [INFO]     ✅ 建立 Session → sessionId=49440ed1-80cb-45d8-a343-7936112e922f
+2026-06-20 23:29:42,225 [WARNING]       ⚠ EEG 批次上傳失敗 (500): {'raw': 'Internal Server Error'}
+2026-06-20 23:29:42,225 [INFO]   EEG：成功 0 筆，失敗 4 筆
+2026-06-20 23:29:42,715 [ERROR] SQLite 遷移失敗
+Traceback (most recent call last):
+  File "D:\Write program\AutomaticDetection\後端系統\migrate_to_firebase.py", line 641, in main
+    r2 = migrate(SQLITE_DB_PATH, client)
+  File "D:\Write program\AutomaticDetection\後端系統\migrate_to_firebase.py", line 556, in migrate
+    mbti = _extract_mbti(rep["client_summary"])
+                         ~~~^^^^^^^^^^^^^^^^^^
+IndexError: No item with that key

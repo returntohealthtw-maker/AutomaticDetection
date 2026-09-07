@@ -1,0 +1,70 @@
+---
+description: 腦波資料系統架構 — EEG 資料、報告、Firebase 大水庫的位置與存取方式
+alwaysApply: true
+---
+
+# 腦波資料系統架構
+
+## 系統概覽
+
+本專案有兩個主要後端，所有資料最終匯聚至 Firebase 大水庫。
+
+```
+Android APP
+  → 採集完成後批次上傳（~180 筆/session）
+  → POST https://backend-production-2da61.up.railway.app/api/v1/sessions/upload
+
+Railway 後端（Python/FastAPI）
+  URL: https://backend-production-2da61.up.railway.app
+  資料庫: PostgreSQL
+  登入: POST /api/v1/auth/login { phone, password }
+  管理員帳號: phone=0900000000, password=admin123
+
+Firebase 大水庫（所有APP資料匯流處）
+  Cloud Functions: https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api
+  Firestore collections: sessions, subjects, eeg_features, reports
+  BigQuery dataset: gen-lang-client-0435688289.eeg_brainwave
+  遷移帳號: migration@returntohealthtw.com / MigrateEEG@2026
+  Firebase Web API Key: AIzaSyBc-ZEcT8fvyn-dBZ0Bhm5IsakncVp1ngQ
+```
+
+## 主要 Railway API 端點
+
+| 端點 | 說明 |
+|------|------|
+| GET /api/v1/eeg/sessions | 所有 session 列表 |
+| GET /api/v1/eeg/sessions/{id}/stats | session 統計（含 bands_avg, report_url） |
+| GET /api/v1/sessions/{id}/captures | 逐秒原始腦波資料（~180 筆） |
+| GET /api/v1/reports/session/{id}/signed-url?days=7 | 產生有效的 GCS PDF 連結 |
+
+## 報告 PDF 儲存
+
+- 存放位置: GCS bucket `brainwave-child-reports`
+- 路徑格式: `reports/general/{timestamp}_{name}_成人腦波報告.pdf`
+- Railway DB 存的是有時效的 Signed URL（7天過期）
+- Firebase 存的是**不含簽名的基礎 URL**（永久有效）
+- 要取有效連結: 呼叫 Railway `GET /reports/session/{id}/signed-url`
+
+## Firebase 主要 API 端點
+
+| 端點 | 說明 |
+|------|------|
+| POST /api/sessions | 建立 session |
+| POST /api/eeg/batch | 批次上傳 EEG 特徵（支援 isBaseline, seqNum） |
+| POST /api/reports/store | 儲存報告 metadata（含 pdfUrl） |
+| POST /api/analytics/resonance | 多人共振評分計算 |
+| GET /api/analytics/eeg-summary | 跨人腦波統計摘要 |
+| GET /api/analytics/top-subjects | 腦波指標排行榜 |
+
+## 遷移腳本位置
+
+- `後端系統/migrate_to_firebase.py` — sessions + subjects 歷史遷移
+- `後端系統/upload_eeg_to_firebase.py` — EEG 逐秒資料上傳
+- `後端系統/migrate_reports_to_firebase.py` — 報告 metadata 同步
+
+## 新增其他 APP 的資料時
+
+若有新的 APP 也把腦波存到 Railway、報告存到 GCS：
+1. 確認該 APP 的 Railway session_id → Firebase session_id 對應關係
+2. 修改遷移腳本的 `session_map` 或新增對應的遷移邏輯
+3. 使用 `POST /api/eeg/batch` 上傳 EEG，`POST /api/reports/store` 上傳報告

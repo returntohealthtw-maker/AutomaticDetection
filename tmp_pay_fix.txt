@@ -1,0 +1,44 @@
+commit 3164c507fa7b9b742ddd308d072cfbb2da976852
+Author: returntohealthtw-maker <returntohealth.tw@gmail.com>
+Date:   Wed Jul 15 15:54:16 2026 +0800
+
+    fix: 憿批?隞狡?葫??寧?葫??摮?撠?閫?捱隞狡?︷onsultant_id?“??銝??憿?    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git "a/\345\276\214\347\253\257\347\263\273\347\265\261/app/routers/payments.py" "b/\345\276\214\347\253\257\347\263\273\347\265\261/app/routers/payments.py"
+index 83ec0b4..2386629 100644
+--- "a/\345\276\214\347\253\257\347\263\273\347\265\261/app/routers/payments.py"
++++ "b/\345\276\214\347\253\257\347\263\273\347\265\261/app/routers/payments.py"
+@@ -910,21 +910,21 @@ def admin_paid_not_detected(
+             if (sum_att or 0) == 0 and (sum_med or 0) == 0:
+                 zero_quality_sess.add(sid)
+ 
+-    # ???payment by subject_name嚗allback嚗?+    # ???payment by subject_name
++    # 憿批????芾??葫?惇?潸府憿批?嚗ubject 銵典歇?蕪嚗?銝? payment.consultant_id嚗?+    # ?踹?隞狡??admin 撱箇??餅?撣?consultant_id ?“??銝?芸楛摰Ｘ??憿?     pay_by_subj_name: dict[str, M.Payment] = {}
+-    if not is_admin:
+-        for p in db.query(M.Payment).filter(
+-            M.Payment.consultant_id == user.consultant_id,
+-            M.Payment.status == "paid",
+-        ).order_by(M.Payment.created_at.desc()).all():
+-            if p.subject_name and p.subject_name not in pay_by_subj_name:
+-                pay_by_subj_name[p.subject_name] = p
+-    else:
+-        for p in db.query(M.Payment).filter(
+-            M.Payment.status == "paid",
+-        ).order_by(M.Payment.created_at.desc()).all():
+-            if p.subject_name and p.subject_name not in pay_by_subj_name:
+-                pay_by_subj_name[p.subject_name] = p
++    cons_subject_names: set[str] = {s.name for s in all_subjects if s.name} if not is_admin else set()
++    for p in db.query(M.Payment).filter(
++        M.Payment.status == "paid",
++    ).order_by(M.Payment.created_at.desc()).all():
++        if not p.subject_name:
++            continue
++        if p.subject_name in pay_by_subj_name:
++            continue
++        # admin ??剁?憿批??芰?撅祆?芸楛撣唾???甈暹??芸楛?葫??銝?隞狡
++        if is_admin or p.consultant_id == user.consultant_id or p.subject_name in cons_subject_names:
++            pay_by_subj_name[p.subject_name] = p
+ 
+     out = []
+     seen_subject_ids: set[int] = set()

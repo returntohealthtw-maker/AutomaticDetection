@@ -1,14 +1,68 @@
 === commit ===
-[master 6615158] fix(report-app): add Imagen quota circuit-breaker to avoid headless timeout on 429
- 7 files changed, 477 insertions(+)
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/client-DFoQMHJy.js"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/html2canvas.esm-QH1iLAAe.js"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/index-CYynoh6d.css"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/index-nQM_EIYQ.js"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/index.es-C2WOdCaW.js"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/assets/purify.es-B9ZVCkUG.js"
- create mode 100644 "\346\225\272\357\227\274\345\236\242\350\235\237\351\244\214\347\265\236/static-app/report-app/index.html"
+On branch master
+Your branch is ahead of 'origin/master' by 1 commit.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   _gitpush_result.txt
+	modified:   "\345\276\214\347\253\257\347\263\273\347\265\261/app/services/gcs_uploader.py"
+	modified:   "\345\276\214\347\253\257\347\263\273\347\265\261/check_db.py"
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	_analyze_eeg.py
+	_commit_msg.txt
+	count_sections.py
+	extract_rar.py
+	extract_rar2.py
+	extract_winrar.py
+	find_mbti2.py
+	find_mbti_usage.py
+	list_algo.py
+	list_algo_files.py
+	list_dirs.py
+	list_py.py
+	read_algo.py
+	read_reports.py
+	tmp_a6.txt
+	tmp_ac.txt
+	tmp_auto.txt
+	tmp_debug.txt
+	tmp_dl.txt
+	tmp_dl2.txt
+	tmp_done.txt
+	tmp_empty.txt
+	tmp_it_call.txt
+	tmp_it_calls.txt
+	tmp_ro.txt
+	tmp_ro2.txt
+	tmp_upload.txt
+	tmp_upload2.txt
+	tmp_ws.txt
+	"\345\276\214\347\253\257\347\263\273\347\265\261/_check_y_val.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/_check_y_val2.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_db2.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_js_patterns.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_mbti2.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_mbti_debug.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_mindcolor.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_prod_api.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/check_secondary.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/diagnose_mbti_local.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/diagnose_mbti_new.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/diagnose_mbti_prod.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/inspect_eeg_stats.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/migrate_to_firebase.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/probe_api.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/test_group_scoring.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/test_mbti_layers.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/test_real_users.py"
+	"\345\276\214\347\253\257\347\263\273\347\265\261/tmp_a6check.txt"
+
+no changes added to commit (use "git add" and/or "git commit -a")
 === push ===
 To https://github.com/returntohealthtw-maker/AutomaticDetection.git
-   1593593..6615158  master -> master
+   6eb76fa..198a3b1  master -> master
 DONE

@@ -1,0 +1,9 @@
+fix: 統一三處 MBTI 演算法，加入 screen-results 多性格聚合 UI
+
+- algorithms.py: 新增 build_mbti_payload / compute_mbti_layers_from_captures / aggregate_mbti_profiles
+- report_generator.py: 報告生成時嵌入 4 層 MBTI payload
+- headless_renderer.py: bw_b64 帶入 mbti_primary/secondaries/profiles
+- report_orchestrator.py: trigger 前確保 brainwave_data 含 mbti_primary
+- report-app JS: Ux() 預設 8 卦(useLi=true)；wu() 優先讀後端 MBTI 不重算
+- app_prototype.html: screen-results 加 4 層多性格聚合 UI + r2-mbti-current badge
+- main.py: APP_HTML_VERSION 2026.06.17.01

@@ -118,7 +118,7 @@ try:
     r = requests.post(
         f'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}',
         json={'email': FIREBASE_EMAIL, 'password': FIREBASE_PASSWORD, 'returnSecureToken': True},
-        timeout=15
+        verify=False, timeout=15
     )
     if r.status_code == 200:
         firebase_token = r.json().get('idToken', '')
@@ -131,14 +131,22 @@ except Exception as e:
 if firebase_token:
     try:
         r = requests.get(
-            f'{FIREBASE_API_BASE}/sessions?limit=10',
-            headers={'Authorization': f'Bearer {firebase_token}'}, timeout=15
+            f'{FIREBASE_API_BASE}/sessions?limit=50',
+            headers={'Authorization': f'Bearer {firebase_token}'}, verify=False, timeout=15
         )
         if r.status_code == 200:
-            sessions = r.json()
+            raw = r.json()
+            # API 回傳 {"sessions": [...]} 格式
+            if isinstance(raw, dict):
+                sessions = raw.get('sessions', raw.get('data', list(raw.values())[0] if raw else []))
+            else:
+                sessions = raw
             print(f"✅ 查詢到 {len(sessions)} 個 Firebase sessions")
+
             for sess in sessions:
-                meta = sess.get('metadata', {})
+                if not isinstance(sess, dict):
+                    continue
+                meta = sess.get('metadata', {}) or {}
                 if str(meta.get('railway_session_id')) == str(railway_session_id):
                     found = True
                     print(f"\n🎯 找到對應的 Firebase session！")
@@ -148,11 +156,13 @@ if firebase_token:
                     print(f"   railway_session_id:  {meta.get('railway_session_id')}")
                     print(f"   subject_name:        {meta.get('subject_name')}")
                     break
+
             if not found:
                 print(f"\n⚠️  未找到對應的 Firebase session (railway_session_id={railway_session_id})")
-                for sess in sessions[:3]:
-                    m = sess.get('metadata', {})
-                    print(f"   - Firebase: {sess.get('id')}, Railway: {m.get('railway_session_id')}, 受測者: {m.get('subject_name')}")
+                for sess in sessions[:5]:
+                    if isinstance(sess, dict):
+                        m = sess.get('metadata', {}) or {}
+                        print(f"   - Firebase: {sess.get('id','?')[:8]}..., Railway: {m.get('railway_session_id')}, 受測者: {m.get('subject_name')}")
         else:
             print(f"❌ 查詢 Firebase sessions 失敗: {r.status_code} {r.text[:300]}")
     except Exception as e:

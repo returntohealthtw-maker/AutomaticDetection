@@ -1,0 +1,49 @@
+---
+description: 實作任何演算法或資料處理前，必須先驗證實際資料源存在且格式正確
+alwaysApply: true
+---
+
+# 實作前資料源驗證協議（血淚教訓）
+
+## 禁止行為：未驗證就聲稱已實作
+
+過去的錯誤教訓：花數個月實作 BrainDNA 180 筆逐秒演算，但資料庫從來只有 1 筆 bandTo100 平均值，算法從未真正運作。AI 沒有驗證資料源就聲稱「已修正」，浪費大量時間與金錢。
+
+## 強制規則：實作前必先執行資料審計
+
+### 1. 查出實際資料筆數（不信任 UI 顯示的數字）
+
+```python
+# 在後端 API 呼叫，不信任 session.total_captures 欄位
+# 必須直接查 eeg_captures 表
+SELECT COUNT(*) FROM eeg_captures WHERE session_id = ?
+```
+
+### 2. 確認資料的值域（raw 值 vs bandTo100 值）
+
+```python
+# raw 值：delta 通常在 10,000 ~ 500,000 範圍
+# bandTo100 值：所有欄位都在 0 ~ 100 範圍
+# 若 delta < 200，代表是 bandTo100，不能用於 BrainDNA 原始比例計算
+```
+
+### 3. 在 commit 前必須貼出驗證結果
+
+```
+❌ 禁止說：「已修正，BrainDNA 算法現在使用 180 筆逐秒資料」
+✅ 必須說：「驗證結果：Session #60 DB 實際筆數 = X，值域 delta 均值 = Y」
+```
+
+## 後端演算法的先決條件
+
+| 演算法 | 所需資料 | 驗證指令 |
+|--------|---------|---------|
+| BrainDNA 比例法 | 每秒 1 筆 × 180 筆，raw 值 | `SELECT COUNT(*) FROM eeg_captures WHERE session_id=?` |
+| 最佳 30 秒視窗 | 至少 30 筆不同時間戳 | 確認 `seq_num` 有 0,1,2,...,29 |
+| delta 品質過濾 | raw delta 值（> 1,000） | `SELECT AVG(delta) FROM eeg_captures WHERE session_id=?` |
+
+## Android APP 資料格式確認（尚未完成的工作）
+
+目前 Android APP 只上傳 1 筆 bandTo100 平均值。
+BrainDNA 要求 Android APP 改為上傳 180 筆原始逐秒資料。
+**在 Android APP 未修正前，所有 BrainDNA 相關演算對實際 session 均無效。**

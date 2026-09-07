@@ -1,0 +1,296 @@
+{
+  "timestamp": "2026-06-28T10:20:40.889821",
+  "missing_sessions": 72,
+  "synced_ok": 72,
+  "synced_fail": 0,
+  "sessions": [
+    {
+      "session_id": 72,
+      "subject_name": "許恩蕊"
+    },
+    {
+      "session_id": 71,
+      "subject_name": "米米"
+    },
+    {
+      "session_id": 70,
+      "subject_name": "邱勝翊"
+    },
+    {
+      "session_id": 69,
+      "subject_name": "潘槿珊"
+    },
+    {
+      "session_id": 68,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 67,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 66,
+      "subject_name": "TEST_ADULT"
+    },
+    {
+      "session_id": 65,
+      "subject_name": "TEST_CHILD"
+    },
+    {
+      "session_id": 64,
+      "subject_name": "測試受測者"
+    },
+    {
+      "session_id": 63,
+      "subject_name": "李沂穗"
+    },
+    {
+      "session_id": 62,
+      "subject_name": "鄭怡怡"
+    },
+    {
+      "session_id": 61,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 60,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 59,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 58,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 57,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 56,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 55,
+      "subject_name": "蘇劭揚"
+    },
+    {
+      "session_id": 54,
+      "subject_name": "蘇晨瑄"
+    },
+    {
+      "session_id": 53,
+      "subject_name": "王映筑"
+    },
+    {
+      "session_id": 52,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 51,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 50,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 49,
+      "subject_name": "王筱琪"
+    },
+    {
+      "session_id": 48,
+      "subject_name": "紀羽珊"
+    },
+    {
+      "session_id": 47,
+      "subject_name": "張佩渝"
+    },
+    {
+      "session_id": 46,
+      "subject_name": "翁嫣黛"
+    },
+    {
+      "session_id": 45,
+      "subject_name": "王筱琪"
+    },
+    {
+      "session_id": 44,
+      "subject_name": "王筱琪"
+    },
+    {
+      "session_id": 43,
+      "subject_name": "劉素惠"
+    },
+    {
+      "session_id": 42,
+      "subject_name": "劉素惠"
+    },
+    {
+      "session_id": 41,
+      "subject_name": "王筱琪"
+    },
+    {
+      "session_id": 40,
+      "subject_name": "邱心又"
+    },
+    {
+      "session_id": 39,
+      "subject_name": "陳暐昕"
+    },
+    {
+      "session_id": 38,
+      "subject_name": "鄭小靜"
+    },
+    {
+      "session_id": 37,
+      "subject_name": "鄭怡怡"
+    },
+    {
+      "session_id": 36,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 35,
+      "subject_name": "趙亞倫"
+    },
+    {
+      "session_id": 34,
+      "subject_name": "趙亞倫"
+    },
+    {
+      "session_id": 33,
+      "subject_name": "辜純純"
+    },
+    {
+      "session_id": 32,
+      "subject_name": "黃子茜"
+    },
+    {
+      "session_id": 31,
+      "subject_name": "鄭怡"
+    },
+    {
+      "session_id": 30,
+      "subject_name": "鄭怡怡"
+    },
+    {
+      "session_id": 29,
+      "subject_name": "鄭怡怡"
+    },
+    {
+      "session_id": 28,
+      "subject_name": "貴肥肥"
+    },
+    {
+      "session_id": 27,
+      "subject_name": "洪川雅"
+    },
+    {
+      "session_id": 26,
+      "subject_name": "貴肥肥"
+    },
+    {
+      "session_id": 25,
+      "subject_name": "劉玉璇"
+    },
+    {
+      "session_id": 24,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 23,
+      "subject_name": "楊女毓"
+    },
+    {
+      "session_id": 22,
+      "subject_name": "貴肥肥"
+    },
+    {
+      "session_id": 21,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 20,
+      "subject_name": "肥肥"
+    },
+    {
+      "session_id": 19,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 18,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 17,
+      "subject_name": "楊女毓"
+    },
+    {
+      "session_id": 16,
+      "subject_name": "鄭小靜"
+    },
+    {
+      "session_id": 15,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 14,
+      "subject_name": "鄭小靜"
+    },
+    {
+      "session_id": 13,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 12,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 11,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 10,
+      "subject_name": "楊肥點"
+    },
+    {
+      "session_id": 9,
+      "subject_name": "楊女毓"
+    },
+    {
+      "session_id": 8,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 7,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 6,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 5,
+      "subject_name": "貴肥肥"
+    },
+    {
+      "session_id": 4,
+      "subject_name": "貴肥"
+    },
+    {
+      "session_id": 3,
+      "subject_name": "鄭小怡"
+    },
+    {
+      "session_id": 2,
+      "subject_name": "受測者"
+    },
+    {
+      "session_id": 1,
+      "subject_name": "端對端測試者"
+    }
+  ]
+}

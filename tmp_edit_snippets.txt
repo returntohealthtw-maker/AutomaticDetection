@@ -1,0 +1,5 @@
+=== h1 @ 1655959 ===
+-[0.2em]",children:"Child Neural Mapping v1.0"})]}),j.jsxs("div",{className:"flex gap-[13px]",children:[j.jsx("button",{onClick:()=>Ce(),className:"bg-blue-600 text-white px-[21px] py-[8px] rounded-[13px] font-bold text-
+
+=== h2 @ 1657896 ===
+b-[13px]",children:"Children's Brainwave Neural Map · Growth Report"}),j.jsxs("h2",{className:"font-black text-slate-900 tracking-tighter leading-tight",style:{fontSize:"42px",marginBottom:"21px"},children:["兒童腦波分析",j.jsx("br",{}),"專屬成長報告"]}),j.jsxs("div",{className:"inline-flex 

@@ -107,21 +107,48 @@ async def gemini_proxy(request: Request):
             return JSONResponse({key_name: text}, headers=_cors_headers())
 
         # ── image ─────────────────────────────────────────────────────────────
+        # 注意：Imagen 4（imagen-4.0-generate-001 等）已於 2026-08-17 被 Google 關閉，
+        # 呼叫會回 404 "not found ... or is not supported for predict"。
+        # 已改用 Nano Banana 2（gemini-3.1-flash-image，正式穩定版，非preview，
+        # 最高支援4K），呼叫方式從 :predict 改為 :generateContent，圖片回傳於
+        # candidates[0].content.parts[].inlineData.data（不再是 predictions[].bytesBase64Encoded）。
+        # （gemini-2.5-flash-image 也可用、較便宜，但官方標為preview，可用 IMAGEN_MODEL
+        # 環境變數覆蓋切換。）
         if req_type == "image":
             prompt = body.get("prompt")
             if not prompt:
                 return JSONResponse({"error": "缺少 prompt"}, status_code=400, headers=_cors_headers())
-            imagen_model = os.environ.get("IMAGEN_MODEL", "imagen-4.0-generate-001")
+            imagen_model = os.environ.get("IMAGEN_MODEL", "gemini-3.1-flash-image")
             status, d = await _call(
-                imagen_model, "predict",
-                {"instances": [{"prompt": prompt}],
-                 "parameters": {"sampleCount": 1, "aspectRatio": "16:9", "personGeneration": "dont_allow"}}
+                imagen_model, "generateContent",
+                {
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseModalities": ["IMAGE"],
+                        "imageConfig": {"aspectRatio": "16:9"},
+                    },
+                }
             )
             if status >= 400:
-                return JSONResponse({"error": d.get("error", {}).get("message", "Imagen 錯誤")},
+                return JSONResponse({"error": d.get("error", {}).get("message", "圖片生成錯誤")},
                                     status_code=status, headers=_cors_headers())
-            pred0 = (d.get("predictions") or [{}])[0]
-            image_bytes = pred0.get("bytesBase64Encoded")
+            candidates = d.get("candidates") or []
+            image_bytes = None
+            if candidates:
+                parts = (candidates[0].get("content") or {}).get("parts") or []
+                for part in parts:
+                    inline = part.get("inlineData") or part.get("inline_data")
+                    if inline and inline.get("data"):
+                        image_bytes = inline["data"]
+                        break
+            if not image_bytes:
+                filter_reason = (
+                    (candidates[0].get("finishReason") if candidates else None)
+                    or (d.get("promptFeedback") or {}).get("blockReason")
+                    or "未知"
+                )
+                logger.warning("[report_app_api/gemini/image] 無圖片，filterReason=%s", filter_reason)
+                return JSONResponse({"filterReason": str(filter_reason)}, headers=_cors_headers())
             return JSONResponse({"imageBytes": image_bytes, "model": imagen_model}, headers=_cors_headers())
 
         # ── extract ───────────────────────────────────────────────────────────

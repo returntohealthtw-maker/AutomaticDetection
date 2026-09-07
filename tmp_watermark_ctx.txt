@@ -1,0 +1,12 @@
+=== @ 1643179 ===
+fter:600},children:[new xi({text:"我的大腦地圖",bold:!0,size:72,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:"兒童腦波分析專屬成長報告",bold:!0,size:48,color:"1e3a8a"})]}),new ia({alignment:Oa.CENTER,spacing:{after:600},children:[new xi({text:`姓名：${De}　年齡：${qe||"—"}　日期：${
+
+=== @ 1646494 ===
+{width:ct,height:it}})],spacing:{before:0,after:0}}))}else Tr.push(new ia({alignment:Oa.CENTER,spacing:{before:5e3,after:200},children:[new xi({text:"兒童腦波分析專屬成長報告",bold:!0,size:48,color:"1e3a8a"})]}));Ca.push({properties:{page:{margin:{top:0,right:0,bottom:0,left:0,header:0,footer:0,gutter:0}}},chil
+
+=== @ 1646897 ===
+ngHei",size:24,color:"1a202c"},paragraph:{spacing:{line:360,lineRule:$f.AUTO},alignment:Oa.JUSTIFIED}}]},sections:Ca});wE.saveAs(await yE.toBlob(on),`兒童腦波分析報告_${De}.docx`)},Ie=async(_e=as,Se,Me,Fe=!1,De,qe,dt,st,Ke=!1)=>{if(Mn&&!Fe)return;const Re=Se??a,ct=s,kt=hT(st??M,ct),xt=kt!==null?`${kt} 歲`:e,
+
+=== @ 1654609 ===
+ll),bt.font=`bold 56px ${zr}`,bt.fillStyle=Tr?"rgba(255,255,255,0.12)":"rgba(0,0,0,0.10)",bt.textAlign="center",bt.textBaseline="middle",bt.fillText("兒童腦波分析專屬成長報告",1240/2,1754/2));{const It=await Pr(Nt,.95);It&&Kr.addImage(It,"JPEG",0,0,210,297)}Nt.width=0,Nt.height=0}const mi=_e==="dark"?"深色版":"淺色版
+

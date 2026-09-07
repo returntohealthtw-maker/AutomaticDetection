@@ -281,6 +281,13 @@ def start_headless_job(
         "mbti_ns":           (brainwave_data or {}).get("mbti_ns"),
         "mbti_tf":           (brainwave_data or {}).get("mbti_tf"),
         "mbti_jp":           (brainwave_data or {}).get("mbti_jp"),
+        # 2026-08-20 修正：React App 第2章「性格光譜強度」讀的是 *_diff 欄位
+        # （mbti_ei_diff/ns_diff/tf_diff/jp_diff），不是上面已 clamp 過的 5-99 分數。
+        # 這裡漏帶導致前端 `a.mbti_ei_diff ?? 0` 永遠拿到 0 → 四軸永遠固定顯示 50%。
+        "mbti_ei_diff":      (brainwave_data or {}).get("mbti_ei_diff"),
+        "mbti_ns_diff":      (brainwave_data or {}).get("mbti_ns_diff"),
+        "mbti_tf_diff":      (brainwave_data or {}).get("mbti_tf_diff"),
+        "mbti_jp_diff":      (brainwave_data or {}).get("mbti_jp_diff"),
         "mbti_bagua":        (brainwave_data or {}).get("mbti_bagua"),
         "mbti_bagua_name":   (brainwave_data or {}).get("mbti_bagua_name"),
         "mbti_secondaries":  (brainwave_data or {}).get("mbti_secondaries"),

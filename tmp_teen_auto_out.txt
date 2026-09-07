@@ -1,0 +1,8 @@
+=== report_type @ 855894 ===
+ t=new URL(window.location.href),e=t.searchParams.get("api_base")||"";if(!e)return;const i=t.searchParams.get("session_id")||"",s=t.searchParams.get("report_type")||b8,l=t.searchParams.get("variant")||"full",u=t.searchParams.get("ingest_secret")||"",c={correlation_id:g8(),session_id:i?parseInt(i,10)
+
+=== report_type @ 856050 ===
+_type")||b8,l=t.searchParams.get("variant")||"full",u=t.searchParams.get("ingest_secret")||"",c={correlation_id:g8(),session_id:i?parseInt(i,10):null,report_type:s,variant:l,subject_name:a.subject_name||null,subject_email:a.subject_email||null,source:v8,phase:a.phase,chapter_num:a.chapter_num??null,
+
+=== report_type @ 1631608 ===
+et"]=Sr),await fetch(`${Et}/api/v1/reports/record`,{method:"POST",headers:An,body:JSON.stringify({session_id:or||null,subject_name:a,subject_email:Re,report_type:"teen",variant:xt.searchParams.get("variant")||"full",pdf_url:kt,source:"BrianaveReportImage_Teen",pending_send:1})})}catch(Sr){console.wa

@@ -1,0 +1,47 @@
+=== neural @ 735870 ===
+). Right half: explosive orange-red fire and molten sparks bursting outward (explosion state). Metallic debris and lightning arcs. ${u}`},{test:p=>/情緒恢復力|恢復.*彈性|韌性/.test(p),scene:`A photorealistic 3D brain-heart hybrid model glowing in blue and red, neural connections merging with cardiac vessels. Energy waves radiating outward. Left side: two simple dark floating orbs. Right side: two semi-transparent orbs. ${u}, dark background`},{test:p=>/MBTI|主性格|四.*維度|性格.*四/.test(p),scene:`Four tall crystal
+
+=== neural @ 821621 ===
+ rainbow equilibrium light between them","2-4":"A magical crystal hourglass combined with a priority-timeline — structured ticking rhythms on one face and flexible swirling free-form patterns on the other","3-1":"A glowing crystal brain with complex neural network patterns and rainbow logical circuits — bold mathematical constellations in the logic hemisphere, colorful reading spirals in the language hemisphere","3-2":"Two crystal modes side-by-side: a perfectly organized crystal grid system and
+
+=== neural @ 822406 ===
+rant crystal competitive advantage chart with colorful power-zone gems and radiant strength markers in each quadrant","4-1":"A magical 3D crystal brain visibly growing stronger and more brilliant with rainbow energy infusion, growth rings expanding, neural circuits lighting up progressively","4-2":"A powerful glowing phoenix crystal rising from rainbow sparks, wings spreading in triumphant arc, resilience glow, upward trajectory — confident and reborn","4-3":"A crystal badge dramatically shatter
+
+=== neural @ 843752 ===
+ainbow energy beams"],[/防護罩|盾牌|勇氣/,"shining rainbow crystal shield radiating protective golden light and sparkles"],[/拼圖|拼接/,"magical rainbow puzzle pieces assembling into a glowing star pattern"],[/大腦|指揮官|腦波/,"glowing 3D brain crystal with colorful neural pathways and rainbow circuits"],[/氣象台|天氣|晴天|情緒/,"colorful 3D magical weather globe with rainbow crystals and star clouds"],[/超能力|天賦|魔法屬性/,"radiant power badge surrounded by colorful magical emblems and star sparks"],[/武器|戰力|升學/,"magical rainbo
+
+=== neural @ 1655965 ===
+hildren:[j.jsxs("div",{className:"flex items-center gap-[13px]",children:[j.jsx("div",{className:"w-[8px] h-[34px] bg-blue-600 rounded-full"}),j.jsx("span",{className:"text-[13px] font-black text-slate-900 uppercase tracking-[0.2em]",children:"Child Neural Mapping v1.0"})]}),j.jsxs("div",{className:"flex gap-[13px]",children:[j.jsx("button",{onClick:()=>Ce(),className:"bg-blue-600 text-white px-[21px] py-[8px] rounded-[13px] font-bold text-[13px] hover:bg-blue-700 transition-colors shadow-sm",ch
+
+=== neural @ 1657917 ===
+gTop:"89px",paddingBottom:"144px"},children:[j.jsxs("div",{className:"text-center",style:{marginBottom:"89px"},children:[j.jsx("p",{className:"text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-[13px]",children:"Children's Brainwave Neural Map · Growth Report"}),j.jsxs("h2",{className:"font-black text-slate-900 tracking-tighter leading-tight",style:{fontSize:"42px",marginBottom:"21px"},children:["兒童腦波分析",j.jsx("br",{}),"專屬成長報告"]}),j.jsxs("div",{className:"inline-flex items-cente
+
+=== neural @ 1702973 ===
+{marginBottom:"55px",paddingBottom:"34px",borderBottom:"2px solid #e8e6df"},children:[j.jsxs("div",{children:[j.jsx("p",{className:"font-black text-slate-400 uppercase tracking-[0.4em]",style:{fontSize:"10px",marginBottom:"8px"},children:"Children's Neural Mapping Control Center v1.0"}),j.jsx("h1",{className:"font-black text-slate-900 tracking-tighter",style:{fontSize:"42px",lineHeight:"1"},children:"兒童腦波工作站"})]}),j.jsxs("div",{className:"flex items-center gap-[34px]",children:[j.jsxs("div",{cla
+
+=== neural @ 1719513 ===
+x rgba(0,0,0,0.04)"},children:[j.jsxs("div",{className:"w-full flex justify-between items-center",style:{marginBottom:"21px"},children:[j.jsx("span",{className:"font-black text-slate-400 uppercase tracking-[0.25em]",style:{fontSize:"10px"},children:"Neural Aura Map"}),j.jsxs("div",{className:"flex items-center gap-[8px] border border-emerald-200 bg-emerald-50",style:{padding:"5px 13px",borderRadius:"13px"},children:[j.jsx("div",{className:"bg-emerald-500 rounded-full animate-pulse",style:{width:
+
+=== growth report @ 1657930 ===
+addingBottom:"144px"},children:[j.jsxs("div",{className:"text-center",style:{marginBottom:"89px"},children:[j.jsx("p",{className:"text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-[13px]",children:"Children's Brainwave Neural Map · Growth Report"}),j.jsxs("h2",{className:"font-black text-slate-900 tracking-tighter leading-tight",style:{fontSize:"42px",marginBottom:"21px"},children:["兒童腦波分析",j.jsx("br",{}),"專屬成長報告"]}),j.jsxs("div",{className:"inline-flex items-center gap-[13px] 
+
+=== rainbow brain @ 1658801 ===
+-100 shadow-lg flex flex-col items-center",style:{borderRadius:"34px",padding:"55px",marginBottom:"89px"},children:[j.jsx("p",{className:"text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-[34px]",children:"Full Brainwave Spectrum · Rainbow Brain Analysis"}),j.jsx(G5,{data:ya})]}),ba.map(_e=>j.jsxs("div",{className:"print-page-break",style:{marginBottom:"89px"},children:[j.jsxs("div",{className:"flex items-stretch",style:{marginBottom:"55px"},children:[j.jsx("div",{className:"bg
+
+=== spectrum @ 819560 ===
+ and a colorful crystal heart orbiting each other and merging into one unified super-crystal of wisdom and emotion, rainbow fusion arc connecting them, warm powerful glow","10-4":"A breathtaking full holographic rainbow crystal mandala radiating all spectrum colors in perfect symmetry — the complete personal universe, most spectacular magical image, all five colors (blue, gold, green, pink, purple) unified"},u8={"1-1":"Exactly five distinct large glowing crystal power weapons arranged in a fanne
+
+=== spectrum @ 821146 ===
+battery showing two charge modes: sparkling social energy bursts on one half and peaceful restorative inner glow on the other, pressure-meter crystal gauge beside it","2-2":"A magical crystal prism lens splitting white light — one side into detailed spectrum rainbow analysis, other side into a big-picture holographic arc — both glowing","2-3":"An elegant crystalline balance scale with logical circuit-crystal on one side and a warm glowing heart-crystal on the other, soft rainbow equilibrium ligh
+
+=== spectrum @ 1658790 ===
+order-slate-100 shadow-lg flex flex-col items-center",style:{borderRadius:"34px",padding:"55px",marginBottom:"89px"},children:[j.jsx("p",{className:"text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-[34px]",children:"Full Brainwave Spectrum · Rainbow Brain Analysis"}),j.jsx(G5,{data:ya})]}),ba.map(_e=>j.jsxs("div",{className:"print-page-break",style:{marginBottom:"89px"},children:[j.jsxs("div",{className:"flex items-stretch",style:{marginBottom:"55px"},children:[j.jsx("div",{cl
+
+=== children's @ 1657896 ===
+[34px]",style:{paddingTop:"89px",paddingBottom:"144px"},children:[j.jsxs("div",{className:"text-center",style:{marginBottom:"89px"},children:[j.jsx("p",{className:"text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-[13px]",children:"Children's Brainwave Neural Map · Growth Report"}),j.jsxs("h2",{className:"font-black text-slate-900 tracking-tighter leading-tight",style:{fontSize:"42px",marginBottom:"21px"},children:["兒童腦波分析",j.jsx("br",{}),"專屬成長報告"]}),j.jsxs("div",{className:"in
+
+=== children's @ 1702962 ===
+ter",style:{marginBottom:"55px",paddingBottom:"34px",borderBottom:"2px solid #e8e6df"},children:[j.jsxs("div",{children:[j.jsx("p",{className:"font-black text-slate-400 uppercase tracking-[0.4em]",style:{fontSize:"10px",marginBottom:"8px"},children:"Children's Neural Mapping Control Center v1.0"}),j.jsx("h1",{className:"font-black text-slate-900 tracking-tighter",style:{fontSize:"42px",lineHeight:"1"},children:"兒童腦波工作站"})]}),j.jsxs("div",{className:"flex items-center gap-[34px]",children:[j.jsxs
+
+=== children's @ 1712623 ===
+eLinecap:"round",strokeLinejoin:"round",strokeWidth:"2.5",d:"M15 19l-7-7 7-7"})}),"返回選擇模式"]}),j.jsx("p",{className:"font-black text-slate-400 uppercase tracking-[0.4em]",style:{fontSize:"10px",marginBottom:"8px"},children:Z==="xin"?"心教育機構 · 五維整合模型":"Children's Brainwave Analysis System v2.0"}),j.jsx("h1",{className:"font-black text-slate-900 tracking-tighter",style:{fontSize:"34px",lineHeight:"1.1"},children:Z==="xin"?"心教育報告生成":"腦波分析系統"}),Z==="xin"&&de&&j.jsx("p",{className:"font-bold",style:{fo

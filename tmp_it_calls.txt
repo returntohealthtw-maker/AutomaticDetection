@@ -1,0 +1,3 @@
+=== idx=1103431 ===
+l/${Date.now()}_${a}_成人腦波報告.pdf`,vt=Date.now(),it=await iT(Ye,He,mt=>{l(`☁️ ${mt}`);try{document.title=`PDF_LOG: ${Date.now()} ☁️ ${mt}`}catch{}});if(!it){l("❌ 上傳雲端失敗，請聯絡管理員（未設定 GCS 或 Blob）"),ro({phase:"failed",subject_name:a,error_message:"cloud upload failed",duration_ms:Date.now()-vt});return}ro({phase:"gcs_upload",subject_name:a,duration_ms:Dat
+
