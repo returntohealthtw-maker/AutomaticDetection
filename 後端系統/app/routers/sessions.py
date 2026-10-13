@@ -328,6 +328,8 @@ def upload_session(
             braindna_result = _bdna_result,
             subject_age     = getattr(req, "subject_age", None),
             subject_gender  = getattr(req, "subject_gender", None),
+            subject_id      = linked_subject_id,
+            consultant_name = req.consultant_name,
         ))
         if fb_sid and fb_sid is not False:
             _fb_sync_ok = True

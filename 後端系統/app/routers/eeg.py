@@ -381,6 +381,8 @@ def save_eeg_stats(
                 qeeg_result     = _qeeg_result,
                 subject_age     = getattr(payload, "subject_age", None) or getattr(sess, "subject_age", None),
                 subject_gender  = getattr(payload, "subject_gender", None) or getattr(sess, "subject_gender", None),
+                subject_id      = getattr(sess, "subject_id", None),
+                consultant_name = getattr(sess, "consultant_name", None),
             ))
             if fb_sid and fb_sid is not False:
                 _fb_sync_ok = True

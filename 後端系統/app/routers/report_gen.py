@@ -848,14 +848,15 @@ def start_full(
                                     M.Session.session_id == req.session_id
                                 ).first()
                                 fb_sid = getattr(sess_obj, "firebase_session_id", None) if sess_obj else None
+                                _rg_subject_id = getattr(sess_obj, "subject_id", None) if sess_obj else None
                                 if fb_sid:
                                     import threading as _th
-                                    def _sync_pdf(fsid, rt, purl):
+                                    def _sync_pdf(fsid, rt, purl, sid):
                                         try:
-                                            _fb.sync_report_pdf_to_firebase(fsid, rt, purl)
+                                            _fb.sync_report_pdf_to_firebase(fsid, rt, purl, subject_id=sid)
                                         except Exception as _e:
                                             logger.debug("Firebase PDF 同步失敗（可忽略）: %s", _e)
-                                    _th.Thread(target=_sync_pdf, args=(fb_sid, req.report_type, pdf_url), daemon=True).start()
+                                    _th.Thread(target=_sync_pdf, args=(fb_sid, req.report_type, pdf_url, _rg_subject_id), daemon=True).start()
                     except Exception as _fb_err:
                         logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
 

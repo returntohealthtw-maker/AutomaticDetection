@@ -256,6 +256,12 @@ class Subject(Base):
     medications     = Column(Text,        nullable=True)
     created_at      = Column(TIMESTAMP,   server_default=func.now())
     updated_at      = Column(TIMESTAMP,   server_default=func.now(), onupdate=func.now())
+    # Firebase subjects 頂層集合對應的 subjectId（快取）。
+    # 2026-09 修正：先前 Firebase 同步從不帶 subjectId、建受測者時也不查全表，
+    # 造成 56 筆報告沒有受測者、同名受測者重複建檔。快取這個 ID 後：
+    # 1) 不用每次都重新呼叫 Firebase /subjects/resolve 或重複建立
+    # 2) /reports/store 可直接帶上，不再依賴 Firebase 端的姓名猜測比對
+    firebase_subject_id = Column(String(100), nullable=True, index=True)
 
     __table_args__ = (
         Index("idx_subject_email_name", "email", "name"),

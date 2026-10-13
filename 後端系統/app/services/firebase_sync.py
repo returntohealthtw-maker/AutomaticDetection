@@ -27,6 +27,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, List, Optional
@@ -120,6 +121,64 @@ def _get_auth_headers(force_bearer: bool = False) -> dict:
 def _needs_bearer_fallback(status_code: int) -> bool:
     """401/403 時嘗試用 Bearer Token 替代 X-Service-Key。"""
     return status_code in (401, 403) and bool(FIREBASE_SERVICE_KEY)
+
+
+# ── 測試／debug 資料過濾（2026-09）────────────────────────────────────────────
+# 使用者要求：含「測試」「debug」「Wayne」等字樣的 session 不應同步到 Firebase，
+# 避免持續汙染 Firebase 的受測者／報告資料庫。
+_TEST_SUBJECT_PATTERNS = [
+    r"測試", r"test", r"debug", r"wayne", r"示範", r"demo", r"範例", r"sample", r"dummy",
+]
+
+
+def _is_test_subject(subject_name: Optional[str], consultant_name: Optional[str] = None) -> bool:
+    """判斷是否為測試/debug 資料，不應同步到 Firebase。"""
+    combined = f"{subject_name or ''} {consultant_name or ''}"
+    return any(re.search(p, combined, re.IGNORECASE) for p in _TEST_SUBJECT_PATTERNS)
+
+
+def _get_subject_row(pg_subject_id: Optional[int]):
+    """從 Postgres subjects 表讀取一筆完整受測者資料（name/birth_date/gender/email/phone/firebase_subject_id）。
+    失敗或找不到回傳 None，不拋例外。"""
+    if not pg_subject_id:
+        return None
+    try:
+        from app.core.database import SessionLocal
+        from app.core.models import Subject as _SubjectModel
+        db = SessionLocal()
+        try:
+            return db.query(_SubjectModel).filter(
+                _SubjectModel.subject_id == pg_subject_id
+            ).first()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug("[Firebase] 讀取 Postgres subject(%s) 失敗: %s", pg_subject_id, e)
+        return None
+
+
+def _cache_firebase_subject_id(pg_subject_id: Optional[int], fb_subject_id: str) -> None:
+    """把解析/建立出來的 Firebase subjectId 寫回 Postgres subjects 表快取，
+    避免下次重複查找/建立（根因修正：避免同名受測者重複建檔）。"""
+    if not pg_subject_id or not fb_subject_id:
+        return
+    try:
+        from app.core.database import SessionLocal
+        from app.core.models import Subject as _SubjectModel
+        db = SessionLocal()
+        try:
+            row = db.query(_SubjectModel).filter(
+                _SubjectModel.subject_id == pg_subject_id
+            ).first()
+            if row and row.firebase_subject_id != fb_subject_id:
+                row.firebase_subject_id = fb_subject_id
+                db.commit()
+                logger.info("[Firebase] subjects.subject_id=%s 已快取 firebase_subject_id=%s",
+                            pg_subject_id, fb_subject_id)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug("[Firebase] 寫入 firebase_subject_id 快取失敗（略過）: %s", e)
 
 
 def _band_to_100(raw: float) -> float:
@@ -273,16 +332,61 @@ async def _ensure_firebase_subject(
     subject_name: str,
     subject_age: Optional[int] = None,
     subject_gender: Optional[str] = None,
+    pg_subject_id: Optional[int] = None,
 ) -> Optional[str]:
     """
     確保 Firebase 有此受測者的 subject 記錄，回傳 subjectId。
     先嘗試從現有清單找同名受測者；找不到則新建。
     失敗時回傳 None（不影響主流程）。
+
+    pg_subject_id：Postgres subjects.subject_id（若有）。提供時：
+      1. 先查 Postgres 快取的 firebase_subject_id，命中就直接回傳（不再呼叫 Firebase）
+      2. 用 Postgres 的 email/phone/birth_date（真實資料，比 subject_age 粗估生日準確）
+         帶入 /subjects/resolve 消歧義，降低「同名多筆」而重複建檔的機率
+      3. 解析/建立成功後把結果寫回 Postgres 快取
     """
     if not subject_name:
         return None
+
+    pg_row = _get_subject_row(pg_subject_id)
+    if pg_row and pg_row.firebase_subject_id:
+        return pg_row.firebase_subject_id
+
+    subject_email = getattr(pg_row, "email", None) if pg_row else None
+    subject_phone = getattr(pg_row, "phone", None) if pg_row else None
+    subject_birth_date = getattr(pg_row, "birth_date", None) if pg_row else None
+
     try:
-        # 1. 搜尋現有受測者（同名）
+        # 0.（2026-10）先用 /subjects/resolve 比對：用 Service Key 呼叫時可看到「全部」受測者
+        #    （包含診所既有資料），下面舊的 /users/subjects 只看得到呼叫帳號自己名下的，
+        #    以致每次都找不到而重複建立同名受測者、報告／session 也連不到正確的人。
+        #    帶入 email/phone（若有）可在「同名多筆」時縮小範圍，避免誤判 ambiguous。
+        #    同名多筆仍無法消歧義時不要新建（會製造更多重複），回傳 None，
+        #    讓 Cloud Functions 端依 metadata.subject_name 嘗試補連結或留待人工處理。
+        try:
+            resolve_params: dict = {"name": subject_name}
+            if subject_email:
+                resolve_params["email"] = subject_email
+            if subject_phone:
+                resolve_params["phone"] = subject_phone
+            rr = await client.get(
+                f"{FIREBASE_API_BASE}/subjects/resolve",
+                params=resolve_params, headers=headers, timeout=10,
+            )
+            if rr.status_code == 200:
+                rj = rr.json()
+                st = rj.get("status")
+                sj = rj.get("subject") or {}
+                if st in ("matched", "needs_completion") and sj.get("subjectId"):
+                    _cache_firebase_subject_id(pg_subject_id, sj["subjectId"])
+                    return sj["subjectId"]
+                if st == "ambiguous":
+                    logger.warning("[Firebase] subject '%s' 同名多筆，不自動建立/連結", subject_name)
+                    return None
+        except Exception as _e:
+            logger.debug("[Firebase] /subjects/resolve 失敗，改用舊流程: %s", _e)
+
+        # 1. 搜尋現有受測者（同名，僅看得到呼叫帳號自己名下的，作為備援）
         list_resp = await client.get(f"{FIREBASE_API_BASE}/users/subjects", headers=headers, timeout=10)
         if list_resp.status_code == 200:
             subjects = list_resp.json().get("subjects", [])
@@ -291,17 +395,24 @@ async def _ensure_firebase_subject(
                     sid = s.get("subjectId") or s.get("id","")
                     if sid:
                         logger.debug("[Firebase] subject '%s' 已存在 → %s", subject_name, sid)
+                        _cache_firebase_subject_id(pg_subject_id, sid)
                         return sid
 
-        # 2. 不存在，建立新受測者
+        # 2. 不存在，建立新受測者（優先用 Postgres 精確生日，沒有才用年齡粗估）
         payload: dict = {"name": subject_name, "relationship": "個案"}
-        if subject_age and subject_age > 0:
+        if subject_birth_date:
+            payload["birthDate"] = subject_birth_date
+        elif subject_age and subject_age > 0:
             birth_year = datetime.now(timezone.utc).year - int(subject_age)
             payload["birthDate"] = f"{birth_year}-01-01"
         if subject_gender in ("男", "M", "male"):
             payload["gender"] = "male"
         elif subject_gender in ("女", "F", "female"):
             payload["gender"] = "female"
+        if subject_email:
+            payload["email"] = subject_email
+        if subject_phone:
+            payload["phone"] = subject_phone
 
         create_resp = await client.post(
             f"{FIREBASE_API_BASE}/users/subjects", headers=headers, json=payload, timeout=10
@@ -309,6 +420,8 @@ async def _ensure_firebase_subject(
         if create_resp.status_code in (200, 201):
             new_sid = create_resp.json().get("subjectId") or create_resp.json().get("id","")
             logger.info("[Firebase] 新建 subject '%s' → %s", subject_name, new_sid)
+            if new_sid:
+                _cache_firebase_subject_id(pg_subject_id, new_sid)
             return new_sid or None
         else:
             logger.warning("[Firebase] 建立 subject '%s' 失敗: %s %s",
@@ -328,6 +441,8 @@ async def sync_to_firebase(
     qeeg_result: Optional[dict] = None,
     subject_age: Optional[int] = None,
     subject_gender: Optional[str] = None,
+    subject_id: Optional[int] = None,
+    consultant_name: Optional[str] = None,
 ) -> Optional[str]:
     """
     非同步將 180 筆原始腦波資料同步到 Firebase 腦波資料庫。
@@ -338,8 +453,16 @@ async def sync_to_firebase(
       2. POST /api/eeg/batch（每批最多 100 筆，分批上傳）→ 存入 Firestore + BigQuery
       3. PATCH /api/sessions/{id} → 標記 completed
 
+    subject_id：Postgres subjects.subject_id（若有），用於快取/查找 Firebase subjectId
+    及取得真實 email/phone/生日，避免受測者重複建檔。
+    consultant_name：連同 subject_name 用於過濾測試/debug 資料，不同步到 Firebase。
+
     返回 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外，避免影響主流程）。
     """
+    if _is_test_subject(subject_name, consultant_name):
+        logger.info("[Firebase] subject_name='%s' 判定為測試/debug 資料，跳過同步", subject_name)
+        return False
+
     # 優先使用 X-Service-Key（admin 權限，支援寫入 BrainDNA/QEEG 欄位）
     # 未設定時 fallback Bearer Token
     headers = _get_auth_headers(force_bearer=False)
@@ -369,7 +492,8 @@ async def sync_to_firebase(
         async with httpx.AsyncClient(timeout=30.0) as client:
             # ── 0. 確保受測者 subject 記錄存在 ──────────────────────────────
             fb_subject_id = await _ensure_firebase_subject(
-                client, headers, subject_name, subject_age, subject_gender
+                client, headers, subject_name, subject_age, subject_gender,
+                pg_subject_id=subject_id,
             )
             if fb_subject_id:
                 _sess_payload["subjectId"] = fb_subject_id
@@ -575,13 +699,21 @@ async def sync_captures_to_firebase(
     braindna_result: Optional[dict] = None,
     subject_age: Optional[int] = None,
     subject_gender: Optional[str] = None,
+    subject_id: Optional[int] = None,
+    consultant_name: Optional[str] = None,
 ) -> Optional[str]:
     """
     將 Android 上傳路徑（/sessions/upload）的 180 筆 EegCapture 同步到 Firebase。
 
     captures 中為 ThinkGear 原始值，計算相對功率比例後上傳。
+    subject_id：Postgres subjects.subject_id（若有），用於快取/查找 Firebase subjectId，
+    避免受測者重複建檔。consultant_name：用於過濾測試/debug 資料。
     回傳 firebase_session_id（字串）表示成功；None 表示失敗（不拋例外）。
     """
+    if _is_test_subject(subject_name, consultant_name):
+        logger.info("[Firebase] subject_name='%s' 判定為測試/debug 資料，跳過同步", subject_name)
+        return False
+
     # 優先使用 X-Service-Key（admin 權限）；未設定時 fallback Bearer Token
     headers = _get_auth_headers(force_bearer=False)
     if not headers:
@@ -608,7 +740,8 @@ async def sync_captures_to_firebase(
         async with httpx.AsyncClient(timeout=30.0) as client:
             # 0. 確保受測者 subject 記錄存在
             fb_subject_id = await _ensure_firebase_subject(
-                client, headers, subject_name, subject_age, subject_gender
+                client, headers, subject_name, subject_age, subject_gender,
+                pg_subject_id=subject_id,
             )
             if fb_subject_id:
                 _sess_payload["subjectId"] = fb_subject_id
@@ -1012,11 +1145,18 @@ def sync_report_pdf_to_firebase(
     report_type: str,
     pdf_url: str,
     railway_session_id: int = 0,
+    subject_id: Optional[int] = None,
 ) -> bool:
     """
     將報告 PDF 連結同步到 Firebase reports collection。
     使用 POST /reports/store CF 端點（需要 X-Service-Key）。
     同步失敗只記錄 warning，不影響主流程。
+
+    subject_id：Postgres subjects.subject_id（若有）。
+    2026-09 根因修正：先前這裡完全不帶 subjectId，賭 Firebase 端能從 session
+    自動回填，但 Firebase 端那時還沒有這個 fallback，造成 56 筆報告沒有受測者。
+    現在直接帶上已快取/可查到的 subjectId，並補帶 subjectName／subjectBirthDate
+    作為保底（即使 subjectId 查不到，Firebase 2.10.2 的 fallback 比對仍有東西可用）。
     """
     if not firebase_session_id or not pdf_url:
         return False
@@ -1036,6 +1176,39 @@ def sync_report_pdf_to_firebase(
             "pdfUrl":      pdf_url,
             "generatedAt": datetime.now(_tz.utc).isoformat(),
         }
+
+        # ── 補帶 subjectId／subjectName／subjectBirthDate ──────────────────────
+        subj_row = _get_subject_row(subject_id)
+        if subj_row:
+            fb_sid = subj_row.firebase_subject_id
+            if not fb_sid:
+                # 沒快取到 fb subjectId：唯讀 resolve 一次（不新建，避免跟 EEG 同步流程
+                # 搶著建立重複受測者；新建統一交給 _ensure_firebase_subject）
+                try:
+                    resolve_params: dict = {"name": subj_row.name}
+                    if subj_row.email:
+                        resolve_params["email"] = subj_row.email
+                    if subj_row.phone:
+                        resolve_params["phone"] = subj_row.phone
+                    rr = _hx.get(
+                        f"{FIREBASE_API_BASE}/subjects/resolve",
+                        params=resolve_params, headers=headers, timeout=10.0,
+                    )
+                    if rr.status_code == 200:
+                        rj = rr.json()
+                        sj = rj.get("subject") or {}
+                        if rj.get("status") in ("matched", "needs_completion") and sj.get("subjectId"):
+                            fb_sid = sj["subjectId"]
+                            _cache_firebase_subject_id(subject_id, fb_sid)
+                except Exception as _re_ex:
+                    logger.debug("[Firebase] sync_report_pdf_to_firebase resolve 失敗: %s", _re_ex)
+            if fb_sid:
+                payload["subjectId"] = fb_sid
+            # 保底欄位：即使沒拿到 subjectId，Firebase 端仍可用這兩個欄位比對（2026-10 新增支援）
+            payload["subjectName"] = subj_row.name
+            if subj_row.birth_date:
+                payload["subjectBirthDate"] = subj_row.birth_date
+
         resp = _hx.post(
             f"{FIREBASE_API_BASE}/reports/store",
             headers=headers,
@@ -1043,7 +1216,8 @@ def sync_report_pdf_to_firebase(
             timeout=15.0,
         )
         if resp.status_code in (200, 201):
-            logger.info("[Firebase] report pdf synced fb_sid=%s", firebase_session_id)
+            logger.info("[Firebase] report pdf synced fb_sid=%s subjectId=%s",
+                        firebase_session_id, payload.get("subjectId", "(none)"))
             return True
         else:
             logger.warning("[Firebase] sync_report_pdf_to_firebase fb_sid=%s 失敗 %s: %s",
@@ -1149,7 +1323,18 @@ def run_pending_syncs(SessionLocalFactory) -> None:
                         .order_by(EegCapture.seq_num)
                         .all()
                     )
-                    ok = asyncio.run(sync_captures_to_firebase(sess, captures))
+                    # 🔒 2026-09 修正：先前這裡把 sess(ORM 物件)/captures 直接當位置參數
+                    # 傳入(subject_name, session_id, ...)，型別完全不符，呼叫必定拋例外，
+                    # 導致排程補漏功能形同虛設（每次都靜默失敗、重試到 MAX_RETRY 後放棄）。
+                    ok = asyncio.run(sync_captures_to_firebase(
+                        subject_name    = sess.subject_name,
+                        session_id      = sess.session_id,
+                        captures        = captures,
+                        subject_age     = getattr(sess, "subject_age", None),
+                        subject_gender  = getattr(sess, "subject_gender", None),
+                        subject_id      = getattr(sess, "subject_id", None),
+                        consultant_name = getattr(sess, "consultant_name", None),
+                    ))
                     if ok:
                         log.status   = "synced"
                         log.synced_at = datetime.now(timezone.utc)

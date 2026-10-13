@@ -327,6 +327,33 @@ def _run_full_generation(
                                 session_id=job["session_id"],
                                 report_id=None,
                             )
+                            # 報告 PDF 連結同步到 Firebase reports collection
+                            # （2026-09 新增：先前單人報告 life_script/child/teen 從未呼叫
+                            #  sync_report_pdf_to_firebase，完全沒進 Firebase 的 reports collection）
+                            try:
+                                _sdb = SessionLocal()
+                                try:
+                                    _sess_obj = _sdb.query(M.Session).filter(
+                                        M.Session.session_id == job["session_id"]
+                                    ).first()
+                                    _ar_fb_sid = getattr(_sess_obj, "firebase_session_id", None) if _sess_obj else None
+                                    _ar_subject_id = getattr(_sess_obj, "subject_id", None) if _sess_obj else None
+                                finally:
+                                    _sdb.close()
+                                if _ar_fb_sid:
+                                    import threading as _ar_th
+                                    def _ar_sync_pdf(fsid, rt, purl, sid):
+                                        try:
+                                            _fb.sync_report_pdf_to_firebase(fsid, rt, purl, subject_id=sid)
+                                        except Exception as _ar_e:
+                                            logger.debug("Firebase 報告 PDF 同步失敗（可忽略）: %s", _ar_e)
+                                    _ar_th.Thread(
+                                        target=_ar_sync_pdf,
+                                        args=(_ar_fb_sid, report_type, pdf_url, _ar_subject_id),
+                                        daemon=True,
+                                    ).start()
+                            except Exception as _ar_prep_e:
+                                logger.debug("Firebase 報告 PDF 同步準備失敗（可忽略）: %s", _ar_prep_e)
                     except Exception as _fb_err:
                         logger.debug("Firebase 入列失敗（可忽略）: %s", _fb_err)
             except Exception as e:

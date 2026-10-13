@@ -381,6 +381,12 @@ def _run_lightweight_migrations():
     if not has_column("sessions", "algo_mode"):
         pending.append("ALTER TABLE sessions ADD COLUMN algo_mode VARCHAR(20) DEFAULT 'braindna'")
 
+    # subjects.firebase_subject_id：快取 Firebase subjects 頂層集合的 subjectId
+    # （2026-09 修正：報告同步到 Firebase 從不帶 subjectId、建受測者時又不查全表，
+    #  造成 56 筆報告沒有受測者、同名受測者重複建檔）
+    if not has_column("subjects", "firebase_subject_id"):
+        pending.append("ALTER TABLE subjects ADD COLUMN firebase_subject_id VARCHAR(100) NULL")
+
     # ── 欄位長度擴展 ────────────────────────────────────────────────────────────
     # sessions.report_type 原本只有 VARCHAR(10)，導致 "child_report"(12字) / "child_trial"(11字) 上傳 500
     pending.append("ALTER TABLE sessions ALTER COLUMN report_type TYPE VARCHAR(50)")
