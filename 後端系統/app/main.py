@@ -92,7 +92,7 @@ APK_RELEASE_NOTES = (
 
 from app.core import models  # 必須在 create_all 前 import，讓 SQLAlchemy 發現所有表
 from app.core.database import Base, engine, check_connection
-from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules, report_app_api, parent_child
+from app.routers import sessions, payments, monitor, companies, client_view, contact_requests, subjects, auth, analysis, report_gen, eeg, reports, share_rules, report_app_api, parent_child, dashboard_registrants
 
 app = FastAPI(
     title="腦波檢測報告系統 API",
@@ -192,6 +192,7 @@ app.include_router(reports.router)
 app.include_router(share_rules.router)
 app.include_router(report_app_api.router)
 app.include_router(parent_child.router)
+app.include_router(dashboard_registrants.router)
 
 
 def _friendly_error_html(title: str, message: str, hint: str = "") -> str:
