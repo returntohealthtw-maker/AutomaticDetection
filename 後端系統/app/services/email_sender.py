@@ -383,6 +383,14 @@ def _vercel_email_proxy() -> str:
             "https://brianwave-child.vercel.app").rstrip("/")
 
 
+def _vercel_relay_headers() -> dict:
+    """Vercel /api/sendEmail 的 raw 模式要求 x-relay-secret（對應 Vercel 專案的
+    MAILER_RELAY_SECRET）。2026-10 發現本專案先前完全沒帶，備援寄信一律 401。
+    密鑰只從環境變數讀取（Railway 設 MAILER_RELAY_SECRET），不寫進程式碼。"""
+    secret = os.environ.get("MAILER_RELAY_SECRET", "").strip()
+    return {"x-relay-secret": secret} if secret else {}
+
+
 def send_via_vercel_proxy(to: str, name: str, pdf_url: str) -> dict:
     """走 Vercel /api/sendEmail（避開 Railway SMTP 封鎖）。
     Vercel app 已驗證可寄信，這裡只是當 HTTP proxy 用。
@@ -391,7 +399,8 @@ def send_via_vercel_proxy(to: str, name: str, pdf_url: str) -> dict:
     url = f"{_vercel_email_proxy()}/api/sendEmail"
     try:
         with httpx.Client(timeout=30) as client:
-            r = client.post(url, json={"to": to, "name": name, "pdfUrl": pdf_url})
+            r = client.post(url, json={"to": to, "name": name, "pdfUrl": pdf_url},
+                            headers=_vercel_relay_headers())
             if r.status_code == 200:
                 data = r.json()
                 if data.get("success"):
@@ -418,7 +427,7 @@ def send_via_vercel_proxy_raw(to: str, subject: str, html: str) -> dict:
                 "to":      to,
                 "subject": subject,
                 "html":    html,
-            })
+            }, headers=_vercel_relay_headers())
             if r.status_code == 200:
                 data = r.json()
                 if data.get("success"):
