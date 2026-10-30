@@ -18,7 +18,7 @@ import json
 import time
 import secrets
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -114,10 +114,18 @@ def _send_welcome(row: M.ContactRequest) -> dict:
     except Exception as e:
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
+    # 記錄「寄信方式 + 時間（台灣時間）」，讓管理員知道信是怎麼送出的
+    # （系統只能確認「已送出」，無法確認對方信箱是否真的收到）
+    sent_at = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+    via     = str(result.get("via") or result.get("from") or "unknown")
+    via     = via.replace("[", "(").replace("]", ")").replace(" ", "_")  # 避免破壞 note_admin 的 [..] 解析
+    result["sent_at"] = sent_at
+    result["via"]     = via
+
     if result.get("ok"):
-        row.note_admin = (row.note_admin or "") + f" [email sent to {row.email}]"
+        row.note_admin = (row.note_admin or "") + f" [email sent to {row.email} via={via} at={sent_at}]"
     else:
-        row.note_admin = (row.note_admin or "") + f" [email failed: {result.get('error')}]"
+        row.note_admin = (row.note_admin or "") + f" [email failed: {result.get('error')} (at={sent_at})]"
     return result
 
 

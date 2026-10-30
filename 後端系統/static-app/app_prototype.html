@@ -11164,7 +11164,12 @@ async function renderAdminList() {
       if (lastFail && (!lastSent || noteAdmin.lastIndexOf(lastFail) > noteAdmin.lastIndexOf(lastSent))) {
         emailLine = `<div class="row" style="margin-top:8px;color:#c62828;font-weight:600;">⚠️ 寄信失敗：${lastFail.replace(/^\[email (failed|skipped):\s*/,'').replace(/\]$/,'')}</div>`;
       } else if (lastSent) {
-        emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准 · 已寄送帳號至 Email</div>`;
+        const mVia = lastSent.match(/via=(\S+)/);
+        const mAt  = lastSent.match(/at=(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/);
+        const detail = (mVia || mAt)
+          ? `<div style="font-weight:400;font-size:11px;color:#666;margin-top:2px;">寄信方式：${mVia ? mVia[1] : '未記錄'} · 時間：${mAt ? mAt[1] : '未記錄'}（僅代表系統已送出，無法確認對方是否收到）</div>`
+          : '';
+        emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准 · 已寄送帳號至 Email${detail}</div>`;
       } else {
         emailLine = `<div class="row" style="margin-top:8px;color:#2e7d32;font-weight:600;">✅ 已核准</div>`;
       }
@@ -11198,6 +11203,7 @@ async function renderAdminList() {
       } else if (r.initial_password) {
         actionRow = `<div class="actions" style="margin-top:8px;">
              <button class="admin-btn" style="background:#1976d2;color:white;" onclick="resendWelcomeEmail('${r.id}')">📧 重新寄送歡迎信</button>
+             <button class="admin-btn" style="background:#455a64;color:white;" onclick="showCredentialsForRequest('${r.id}')">🔑 查看帳號與密碼</button>
            </div>`;
       } else {
         actionRow = `<div class="row" style="margin-top:4px;color:#888;font-size:11px;">（初始密碼已被使用者修改，無法重新寄送）</div>`;
@@ -11308,7 +11314,21 @@ async function adminAction(id, status) {
 
   // 3) 提示管理員
   const targetName = (i >= 0 ? arr[i].name : (backendData && backendData.name) || id);
-  if (status === 'approved') {
+  if (status === 'approved' && backendData && backendData.initial_password) {
+    // 核准後一律顯示帳號 + 初始密碼（不會自動消失），管理員可直接轉交申請人，不必等對方查信
+    const es0 = backendData.email_status || {};
+    _showCredentialsDialog({
+      title:    `已核准 ${targetName} 的申請`,
+      phone:    backendData.phone || (i >= 0 ? arr[i].phone : ''),
+      password: backendData.initial_password,
+      email:    backendData.email || (i >= 0 ? arr[i].email : ''),
+      ok:       !!es0.ok,
+      via:      es0.via,
+      sentAt:   es0.sent_at,
+      error:    es0.error,
+    });
+    if (!backendOk) showToast('⚠️ 後端連線失敗，本次僅本機更新', 'warn', 4000);
+  } else if (status === 'approved') {
     let msg = `已核准 ${targetName} 的申請`;
     const targetEmail = (i >= 0 ? arr[i].email : (backendData && backendData.email) || '');
     const es = backendData && backendData.email_status;
@@ -11336,6 +11356,94 @@ async function adminAction(id, status) {
   await renderAdminList();
 }
 
+// 帳號 + 初始密碼視窗（不會自動消失，附複製按鈕）
+function _showCredentialsDialog({ title, phone, password, email, ok, via, sentAt, error }) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:16px;padding:22px 20px 18px;max-width:340px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.35);font-family:inherit';
+
+  const h = document.createElement('div');
+  h.style.cssText = 'font-size:15px;font-weight:700;color:#222;margin-bottom:12px';
+  h.textContent = title || '帳號資訊';
+
+  const info = document.createElement('div');
+  info.style.cssText = 'font-size:14px;color:#333;line-height:1.8;background:#f5f7fa;border-radius:10px;padding:10px 12px;font-family:monospace;word-break:break-all';
+  info.textContent = `登入帳號（手機）：${phone || ''}\n初始密碼：${password || ''}`;
+  info.style.whiteSpace = 'pre-wrap';
+
+  const st = document.createElement('div');
+  st.style.cssText = 'font-size:12px;line-height:1.6;margin-top:10px;color:' + (ok ? '#2e7d32' : '#c62828');
+  if (ok) {
+    st.textContent = `✅ 系統已寄出至 ${email || ''}\n寄信方式：${via || '未記錄'} · 時間：${sentAt || '未記錄'}\n（僅代表系統已送出，無法確認對方是否收到，建議同時直接轉交上方帳號密碼）`;
+  } else {
+    st.textContent = `⚠️ 寄信失敗：${error || '未知錯誤'}\n請直接把上方帳號與初始密碼轉交申請人。`;
+  }
+  st.style.whiteSpace = 'pre-wrap';
+
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:16px';
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '複製帳號密碼';
+  copyBtn.style.cssText = 'padding:10px 16px;border:1px solid #ddd;border-radius:10px;background:#f5f5f5;font-size:14px;cursor:pointer;color:#555';
+  copyBtn.onclick = () => {
+    const text = `登入帳號（手機）：${phone || ''}\n初始密碼：${password || ''}`;
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+      copyBtn.textContent = '已複製 ✓';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { copyBtn.textContent = '已複製 ✓'; }).catch(fallback);
+    } else { fallback(); }
+  };
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '關閉';
+  closeBtn.style.cssText = 'padding:10px 18px;border:none;border-radius:10px;background:#ff6b35;color:#fff;font-size:14px;font-weight:600;cursor:pointer';
+  closeBtn.onclick = () => overlay.remove();
+  btns.append(copyBtn, closeBtn);
+
+  box.append(h, info, st, btns);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// 已核准列表：查看該申請人的帳號與初始密碼（資料取自後端）
+async function showCredentialsForRequest(id) {
+  try {
+    const resp = await apiFetch('/contact-requests');
+    if (!resp.ok) { showToast(`❌ 讀取失敗：HTTP ${resp.status}`, 'error'); return; }
+    const list = await resp.json();
+    const r = (list || []).find(x => x.id === id);
+    if (!r || !r.initial_password) {
+      showToast('此申請已無初始密碼（可能已被使用者修改）', 'warn', 4000);
+      return;
+    }
+    const note = r.note_admin || '';
+    const sentArr = note.match(/\[email sent to [^\]]+\]/g) || [];
+    const failArr = note.match(/\[email (?:failed|skipped):[^\]]+\]/g) || [];
+    const lastSent = sentArr[sentArr.length - 1] || '';
+    const lastFail = failArr[failArr.length - 1] || '';
+    const ok = !!lastSent && (!lastFail || note.lastIndexOf(lastSent) > note.lastIndexOf(lastFail));
+    const mVia = lastSent.match(/via=(\S+)/);
+    const mAt  = lastSent.match(/at=(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/);
+    _showCredentialsDialog({
+      title:    `${r.name} 的帳號資訊`,
+      phone:    r.phone,
+      password: r.initial_password,
+      email:    r.email,
+      ok,
+      via:      mVia ? mVia[1] : '',
+      sentAt:   mAt ? mAt[1] : '',
+      error:    lastFail.replace(/^\[email (failed|skipped):\s*/, '').replace(/\]$/, ''),
+    });
+  } catch (e) {
+    showToast(`❌ 連線失敗：${e.message}`, 'error');
+  }
+}
+
 async function resendWelcomeEmail(id) {
   if (!(await _appConfirm('重新寄送歡迎信給此申請人？', { okLabel: '確定寄送' }))) return;
   try {
@@ -11348,7 +11456,7 @@ async function resendWelcomeEmail(id) {
     const es = data && data.email_status;
     const to = data && data.request && data.request.email;
     if (es && es.ok) {
-      showToast(`✅ 已重新寄送至 ${to}`, 'ok', 4000);
+      showToast(`✅ 已重新寄送至 ${to}（方式：${es.via || '未記錄'} · ${es.sent_at || ''}）`, 'ok', 6000);
     } else {
       showToast(`⚠️ 寄信仍失敗：${(es && es.error) || '未知錯誤'}（請檢查 GMAIL 設定）`, 'warn', 5000);
     }

@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import time
 
-APP_HTML_VERSION = "2026.09.08.01"  # 每次改 HTML/JS 都更新這個
+APP_HTML_VERSION = "2026.10.30.01"  # 每次改 HTML/JS 都更新這個
 
 # ── 演算法模式全域設定（管理員可透過 PUT /api/v1/admin/settings/algo_mode 動態切換）──
 # "braindna" = 使用 BrainDNA 佔比演算法（MBTI/八卦/壓力平衡活力）
@@ -337,6 +337,8 @@ def _run_lightweight_migrations():
         pending.append("ALTER TABLE reports ADD COLUMN line_sent INTEGER DEFAULT 0")
     if not has_column("reports", "completed_at"):
         pending.append("ALTER TABLE reports ADD COLUMN completed_at TIMESTAMP NULL")
+    if not has_column("reports", "report_input_json"):
+        pending.append("ALTER TABLE reports ADD COLUMN report_input_json TEXT NULL")
     # firebase_sync_log 表（若不存在則由 SQLAlchemy create_all 建立，這裡補保護性欄位檢查）
     if not has_column("firebase_sync_log", "id"):
         # 整張表不存在，用 create_all 建立（Base.metadata.create_all 已在啟動時呼叫）
