@@ -8811,7 +8811,9 @@ function onOrgTypeChange() {
 
 function submitContactRequest() {
   const name    = (document.getElementById('contact-name').value || '').trim();
-  const phone   = (document.getElementById('contact-phone').value || '').trim();
+  // 手機：全形轉半形、去掉空白與連字號後，必須是 09 開頭的 10 碼數字（登入帳號就是這個值）
+  const phoneRaw = (document.getElementById('contact-phone').value || '').trim();
+  const phone    = _toHalfWidth(phoneRaw).replace(/[\s-]/g, '');
   const email   = (document.getElementById('contact-email').value || '').trim();
   const orgType = (document.getElementById('contact-org-type').value || '').trim();
   const orgName = (document.getElementById('contact-org').value || '').trim();
@@ -8821,6 +8823,12 @@ function submitContactRequest() {
 
   if (!name || !phone || !email) {
     showToast('請填寫姓名、手機與 Email', 'warn');
+    return;
+  }
+  if (!/^09\d{8}$/.test(phone)) {
+    showToast(`手機格式不正確：必須是 09 開頭的 10 碼數字（目前輸入 ${phone.length} 碼），請檢查是否漏打或多打`, 'warn', 5000);
+    const pEl = document.getElementById('contact-phone');
+    if (pEl) pEl.focus();
     return;
   }
   if (!orgType) {
@@ -9238,14 +9246,16 @@ function _filterAdminConsultants() {
   listEl.innerHTML = rows.map(r => {
     const isSelf = r.consultant_id === myCid;
     let actions;
+    const editBtn = `<button class="admin-btn" style="background:#00897b;color:white;font-size:11px;padding:5px 10px;"
+                onclick="openEditConsultantModal(${r.consultant_id})">✏️ 編輯</button>`;
     if (isSelf) {
-      actions = `<span style="font-size:11px;color:#888;">（自己，不可操作）</span>`;
+      actions = editBtn + `<span style="font-size:11px;color:#888;">（自己，不可停用/刪除）</span>`;
     } else {
       const toggleLabel = r.is_active ? '⏸️ 停用' : '▶️ 啟用';
       const toggleBg    = r.is_active ? '#ef6c00' : '#4caf50';
       const safeName    = (r.name  || '').replace(/'/g, '');
       const safePhone   = (r.phone || '').replace(/'/g, '');
-      actions = `
+      actions = editBtn + `
         <button class="admin-btn" style="background:${toggleBg};color:white;font-size:11px;padding:5px 10px;"
                 onclick="toggleConsultantActive(${r.consultant_id}, '${safeName}')">${toggleLabel}</button>
         <button class="admin-btn" style="background:#1565c0;color:white;font-size:11px;padding:5px 10px;"
@@ -9277,6 +9287,96 @@ function _filterAdminConsultants() {
     </div>
   `;
   }).join('');
+}
+
+// ─── 編輯顧問資料（姓名 / 手機 / Email / 身份 / 單位）─────────────────────────
+function openEditConsultantModal(cid) {
+  const c = (_adminConsultantsCache || []).find(x => x.consultant_id === cid);
+  if (!c) { showToast('找不到此顧問資料，請重新整理清單', 'warn'); return; }
+  const me = (typeof _getAuth === 'function') ? _getAuth() : null;
+  const isSelf = !!me && me.consultant_id === cid;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;overflow-y:auto';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:16px;padding:20px;max-width:360px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.35);font-family:inherit';
+
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fieldCss = 'width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #ccd3dc;border-radius:8px;font-size:14px;margin-top:4px';
+  const lblCss = 'display:block;font-size:12px;color:#555;margin-top:10px';
+  const types = ['', '加盟商', '直營商', '代理商', '專案人員', '工作人員', '其他'];
+  // 舊資料的身份若不在標準清單內，保留成一個選項，避免儲存時被誤判為「改成未設定」
+  if (c.org_type && !types.includes(c.org_type)) types.push(c.org_type);
+  const typeOpts = types.map(t => `<option value="${t}" ${t === (c.org_type || '') ? 'selected' : ''}>${t || '— 未設定 —'}</option>`).join('');
+
+  box.innerHTML = `
+    <div style="font-size:16px;font-weight:700;color:#1a3a6e;">✏️ 編輯顧問資料 <span style="font-size:11px;color:#888;font-weight:400;">#${cid}</span></div>
+    <label style="${lblCss}">姓名<input id="ec-name" style="${fieldCss}" value="${esc(c.name)}"></label>
+    <label style="${lblCss}">手機（登入帳號，09 開頭 10 碼）<input id="ec-phone" type="tel" style="${fieldCss}" value="${esc(c.phone)}"></label>
+    <div id="ec-phone-hint" style="font-size:11px;margin-top:3px;min-height:14px;"></div>
+    <label style="${lblCss}">Email<input id="ec-email" type="email" style="${fieldCss}" value="${esc(c.email)}"></label>
+    <label style="${lblCss}">身份<select id="ec-orgtype" style="${fieldCss}">${typeOpts}</select></label>
+    <label style="${lblCss}">單位名稱<input id="ec-org" style="${fieldCss}" value="${esc(c.org)}"></label>
+    <div style="font-size:11px;color:#888;margin-top:10px;line-height:1.6;">密碼請用「🔑 改密碼」；角色（管理員/顧問）不在此修改。<br>修改手機後，對方須改用新手機登入，密碼不變。</div>
+    <div id="ec-error" style="color:#c62828;font-size:12px;margin-top:8px;white-space:pre-wrap;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+      <button id="ec-cancel" style="padding:10px 18px;border:1px solid #ddd;border-radius:10px;background:#f5f5f5;font-size:14px;cursor:pointer;color:#555;">取消</button>
+      <button id="ec-save" style="padding:10px 18px;border:none;border-radius:10px;background:#00897b;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">儲存</button>
+    </div>`;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const $ = id => box.querySelector('#' + id);
+  const normPhone = v => _toHalfWidth(v || '').replace(/[\s-]/g, '');
+  const checkPhoneHint = () => {
+    const p = normPhone($('ec-phone').value);
+    const hint = $('ec-phone-hint');
+    if (p === (c.phone || '')) { hint.textContent = ''; return true; }   // 沒改就不檢查（舊資料可能格式不標準）
+    if (/^09\d{8}$/.test(p)) { hint.style.color = '#2e7d32'; hint.textContent = '✓ 格式正確'; return true; }
+    hint.style.color = '#c62828'; hint.textContent = `✗ 必須是 09 開頭的 10 碼數字（目前 ${p.length} 碼）`;
+    return false;
+  };
+  $('ec-phone').addEventListener('input', checkPhoneHint);
+  $('ec-cancel').onclick = () => overlay.remove();
+
+  $('ec-save').onclick = async () => {
+    const err = $('ec-error'); err.textContent = '';
+    const name  = $('ec-name').value.trim();
+    const phone = normPhone($('ec-phone').value);
+    if (!name) { err.textContent = '姓名不可空白'; return; }
+    if (!checkPhoneHint()) { err.textContent = '手機格式不正確'; return; }
+    const phoneChanged = phone !== (c.phone || '');
+    if (phoneChanged && isSelf) {
+      if (!(await _appConfirm('你正在修改「自己」的登入手機。\n修改後下次須用新手機登入，確定嗎？', { okLabel: '確定修改' }))) return;
+    }
+    const btn = $('ec-save'); btn.disabled = true; btn.textContent = '儲存中…';
+    try {
+      const r = await apiFetch(`/auth/consultants/${cid}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name, phone,
+          email:    $('ec-email').value.trim(),
+          org_type: $('ec-orgtype').value,
+          org:      $('ec-org').value.trim(),
+        }),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        err.textContent = (data && data.detail) || `HTTP ${r.status}`;
+        btn.disabled = false; btn.textContent = '儲存';
+        return;
+      }
+      overlay.remove();
+      const ch = (data && data.changed) || [];
+      showToast(ch.length
+        ? `✅ 已更新「${data.name}」：${ch.join('、')}${ch.includes('phone') ? '\n請通知對方改用新手機登入（密碼不變）' : ''}`
+        : 'ℹ️ 沒有任何變動', 'ok', 5000);
+      await renderAdminConsultants();
+    } catch (e) {
+      err.textContent = `連線失敗：${e.message}`;
+      btn.disabled = false; btn.textContent = '儲存';
+    }
+  };
 }
 
 // ─── 停用 / 啟用顧問帳號 ──────────────────────────────────────────────────────

@@ -13,8 +13,10 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -356,6 +358,134 @@ def admin_reset_password(
     ).update({"initial_password": None}, synchronize_session=False)
     db.commit()
     return {"ok": True, "consultant_id": cid, "name": target.name}
+
+
+_ALLOWED_ORG_TYPES = ("加盟商", "直營商", "代理商", "專案人員", "工作人員", "其他")
+_PHONE_RE = re.compile(r"^09\d{8}$")
+_EMAIL_RE = re.compile(r"^[\w\.\-\+]+@[\w\-]+\.[\w\-\.]+$")
+
+
+class AdminUpdateConsultantRequest(BaseModel):
+    # 欄位皆為選填：沒帶（None）= 不修改
+    name:     Optional[str] = None
+    phone:    Optional[str] = None
+    email:    Optional[str] = None
+    org_type: Optional[str] = None
+    org:      Optional[str] = None
+
+
+@router.patch("/consultants/{cid}")
+def admin_update_consultant(
+    cid: int,
+    req: AdminUpdateConsultantRequest,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    管理員修改顧問資料（admin only）：姓名 / 手機（登入帳號）/ Email / 身份 / 單位。
+
+    不處理：密碼（用 reset-password）、角色 role（v1 不開放，避免誤升權限）。
+    只驗證「有變動」的欄位，因此舊資料（例如格式不標準的舊手機）不會擋住其他欄位的修改。
+    修改後會同步更新 contact_requests 中同一 consultant_id 的申請紀錄，並在 note_admin 留稽核紀錄。
+    """
+    require_admin(authorization, db)
+    target = db.query(M.Consultant).filter(M.Consultant.consultant_id == cid).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="顧問帳號不存在")
+
+    changes: dict = {}  # field -> (old, new)
+
+    if req.name is not None:
+        new_name = req.name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="姓名不可空白")
+        if len(new_name) > 50:
+            raise HTTPException(status_code=400, detail="姓名最多 50 字")
+        if new_name != (target.name or ""):
+            changes["name"] = (target.name or "", new_name)
+
+    if req.phone is not None:
+        new_phone = _phone_normalize(req.phone)
+        if new_phone != (target.phone or ""):
+            if not _PHONE_RE.match(new_phone):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"手機格式不正確：必須是 09 開頭的 10 碼數字（目前 {len(new_phone)} 碼）",
+                )
+            dup = (
+                db.query(M.Consultant)
+                .filter(M.Consultant.phone == new_phone, M.Consultant.consultant_id != cid)
+                .first()
+            )
+            if dup:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"此手機已被顧問 #{dup.consultant_id}（{dup.name}）使用",
+                )
+            changes["phone"] = (target.phone or "", new_phone)
+
+    if req.email is not None:
+        new_email = req.email.strip()
+        if new_email != (target.email or ""):
+            if new_email and not _EMAIL_RE.match(new_email):
+                raise HTTPException(status_code=400, detail="Email 格式不正確")
+            if len(new_email) > 120:
+                raise HTTPException(status_code=400, detail="Email 最多 120 字")
+            changes["email"] = (target.email or "", new_email)
+
+    if req.org_type is not None:
+        new_ot = req.org_type.strip()
+        if new_ot != (target.org_type or ""):
+            if new_ot not in _ALLOWED_ORG_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"身份必須是：{'、'.join(_ALLOWED_ORG_TYPES)}",
+                )
+            changes["org_type"] = (target.org_type or "", new_ot)
+
+    if req.org is not None:
+        new_org = req.org.strip()
+        if len(new_org) > 100:
+            raise HTTPException(status_code=400, detail="單位名稱最多 100 字")
+        if new_org != (target.org or ""):
+            changes["org"] = (target.org or "", new_org)
+
+    if not changes:
+        return {"ok": True, "changed": [], "consultant_id": cid, "name": target.name}
+
+    # 套用到顧問本體（email 空字串 → None）
+    for field, (_old, new) in changes.items():
+        if field == "email":
+            target.email = new or None
+        else:
+            setattr(target, field, new)
+
+    # 同步申請紀錄（讓「已核准名單」與「重新寄送歡迎信」使用最新資料）
+    stamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+    audit = " [admin edit: " + ", ".join(
+        f"{f} {o or '(空)'}→{n or '(空)'}" for f, (o, n) in changes.items()
+    ) + f" at {stamp}]"
+    reqs = db.query(M.ContactRequest).filter(M.ContactRequest.consultant_id == cid).all()
+    for cr in reqs:
+        for field, (_old, new) in changes.items():
+            if field == "email" and not new:
+                continue  # contact_requests.email 為 NOT NULL，不用空值覆蓋
+            setattr(cr, field, new)
+        cr.note_admin = (cr.note_admin or "") + audit
+
+    db.commit()
+    db.refresh(target)
+    return {
+        "ok":              True,
+        "changed":         list(changes.keys()),
+        "consultant_id":   target.consultant_id,
+        "name":            target.name,
+        "phone":           target.phone,
+        "email":           target.email or "",
+        "org_type":        target.org_type or "",
+        "org":             target.org or "",
+        "synced_requests": len(reqs),
+    }
 
 
 @router.delete("/consultants/{cid}")
