@@ -325,28 +325,9 @@ def send_consultant_welcome_email(
         "— onlineReport 線上腦波分析系統"
     )
 
-    # 1) 先試 Railway 直連 Gmail SMTP
-    result = send_email(to=to, subject=subject_line, html=html, plain_text=plain)
-    if result.get("ok"):
-        logger.info("✅ 顧問歡迎信寄送成功（SMTP）→ %s", to)
-        return result
-
-    # 2) Railway 偶爾擋 SMTP（"Network is unreachable" 等）→ 改打 Vercel proxy 繞道
-    logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy raw", result.get("error"))
-    proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject_line, html=html)
-    if proxy_result.get("ok"):
-        logger.info("✅ 顧問歡迎信寄送成功（Vercel proxy）→ %s", to)
-        return proxy_result
-
-    logger.error(
-        "❌ 顧問歡迎信兩種方式都失敗: smtp=%s, proxy=%s",
-        result.get("error"), proxy_result.get("error"),
+    return _send_raw_with_fallback(
+        to=to, subject=subject_line, html=html, plain_text=plain, label="顧問歡迎信",
     )
-    return {
-        "ok":    False,
-        "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}",
-        "to":    to,
-    }
 
 
 def send_admin_notify_email(
@@ -359,20 +340,54 @@ def send_admin_notify_email(
     寄一封「管理員通知信」（例如：加購報告諮詢待安排）。
     傳送策略同 send_report_link_email：先本地 SMTP，失敗再走 Vercel proxy。
     """
-    result = send_email(to=to, subject=subject, html=html, plain_text=plain_text)
-    if result.get("ok"):
-        logger.info("✅ 管理員通知信寄發成功（SMTP）→ %s", to)
-        return result
+    return _send_raw_with_fallback(
+        to=to, subject=subject, html=html, plain_text=plain_text, label="管理員通知信",
+    )
 
-    logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy raw", result.get("error"))
-    proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject, html=html)
-    if proxy_result.get("ok"):
-        logger.info("✅ 管理員通知信寄發成功（Vercel proxy）→ %s", to)
-        return proxy_result
 
-    logger.error("❌ 管理員通知信兩種方式都失敗: smtp=%s, proxy=%s",
-                 result.get("error"), proxy_result.get("error"))
-    return {"ok": False, "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}", "to": to}
+def _send_raw_with_fallback(
+    to: str,
+    subject: str,
+    html: str,
+    plain_text: Optional[str],
+    label: str,
+) -> dict:
+    """raw 模式寄信（顧問歡迎信、管理員通知信共用）。
+
+    Railway 直連 Gmail SMTP 長期被擋（Network is unreachable），且逾時會卡約 50 秒
+    才改走 Vercel。因此：
+      - 已設定 MAILER_RELAY_SECRET → 先走 Vercel proxy raw，失敗才退回 SMTP
+      - 未設定 → 維持原順序（先 SMTP，失敗再走 Vercel）
+    回傳格式與原本一致：失敗時 error 為 "smtp: ...; proxy: ..."。
+    """
+    if os.environ.get("MAILER_RELAY_SECRET", "").strip():
+        proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject, html=html)
+        if proxy_result.get("ok"):
+            logger.info("✅ %s寄送成功（Vercel proxy 優先）→ %s", label, to)
+            return proxy_result
+        logger.warning("⚠ Vercel proxy 失敗 (%s)，退回 SMTP", proxy_result.get("error"))
+        result = send_email(to=to, subject=subject, html=html, plain_text=plain_text)
+        if result.get("ok"):
+            logger.info("✅ %s寄送成功（SMTP）→ %s", label, to)
+            return result
+    else:
+        result = send_email(to=to, subject=subject, html=html, plain_text=plain_text)
+        if result.get("ok"):
+            logger.info("✅ %s寄送成功（SMTP）→ %s", label, to)
+            return result
+        logger.warning("⚠ SMTP 失敗 (%s)，改走 Vercel proxy raw", result.get("error"))
+        proxy_result = send_via_vercel_proxy_raw(to=to, subject=subject, html=html)
+        if proxy_result.get("ok"):
+            logger.info("✅ %s寄送成功（Vercel proxy）→ %s", label, to)
+            return proxy_result
+
+    logger.error("❌ %s兩種方式都失敗: smtp=%s, proxy=%s",
+                 label, result.get("error"), proxy_result.get("error"))
+    return {
+        "ok":    False,
+        "error": f"smtp: {result.get('error')}; proxy: {proxy_result.get('error')}",
+        "to":    to,
+    }
 
 
 def _vercel_email_proxy() -> str:
