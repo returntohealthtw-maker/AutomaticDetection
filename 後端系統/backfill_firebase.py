@@ -25,7 +25,7 @@ import httpx
 # ── 設定 ────────────────────────────────────────────────────────────────────
 RAILWAY_DB_URL    = os.getenv("DATABASE_URL", "")
 FIREBASE_API_BASE = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api"
-FIREBASE_SERVICE_KEY   = os.getenv("FIREBASE_SERVICE_KEY", "86pjyXNhJ1PFDEBiIMukV2WxK4QvYZ97qemHLrbG3wngdUfA")
+FIREBASE_SERVICE_KEY   = os.getenv("FIREBASE_SERVICE_KEY", "")
 FIREBASE_API_KEY       = os.getenv("FIREBASE_API_KEY", "AIzaSyBc-ZEcT8fvyn-dBZ0Bhm5IsakncVp1ngQ")
 FIREBASE_SYNC_EMAIL    = os.getenv("FIREBASE_SYNC_EMAIL", "migration@returntohealthtw.com")
 FIREBASE_SYNC_PASSWORD = os.getenv("FIREBASE_SYNC_PASSWORD", "MigrateEEG@2026")

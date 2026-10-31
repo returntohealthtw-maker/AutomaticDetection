@@ -1290,7 +1290,7 @@ def admin_sync_missing_sessions_to_firebase(
     import sqlalchemy as _sa
 
     _FB_API   = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api"
-    _FB_KEY   = os.getenv("FIREBASE_SERVICE_KEY", "86pjyXNhJ1PFDEBiIMukV2WxK4QvYZ97qemHLrbG3wngdUfA")
+    _FB_KEY   = os.getenv("FIREBASE_SERVICE_KEY", "")
     _FB_HDR   = {"X-Service-Key": _FB_KEY, "Content-Type": "application/json"}
     _COLOR_MAP = {0: "orange", 1: "green", 2: "blue", 3: "yellow"}
 

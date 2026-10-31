@@ -25,7 +25,7 @@ import sqlalchemy as sa
 
 # ── CONFIG ──────────────────────────────────────────────────────────────────
 FIREBASE_API_BASE    = "https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api"
-FIREBASE_SERVICE_KEY = os.getenv("FIREBASE_SERVICE_KEY", "86pjyXNhJ1PFDEBiIMukV2WxK4QvYZ97qemHLrbG3wngdUfA")
+FIREBASE_SERVICE_KEY = os.getenv("FIREBASE_SERVICE_KEY", "")
 DATABASE_URL         = os.getenv("DATABASE_URL", "")
 
 if not DATABASE_URL:

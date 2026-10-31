@@ -18,7 +18,7 @@ if no_fb:
 
     # 直接測試 Firebase POST
     FB_API = 'https://asia-east1-gen-lang-client-0435688289.cloudfunctions.net/api/api'
-    FB_KEY = '86pjyXNhJ1PFDEBiIMukV2WxK4QvYZ97qemHLrbG3wngdUfA'
+    FB_KEY = __import__('os').environ.get('FIREBASE_SERVICE_KEY', '')
     fh = {'X-Service-Key': FB_KEY, 'Content-Type': 'application/json'}
 
     payload = {
