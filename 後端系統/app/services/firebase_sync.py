@@ -326,6 +326,49 @@ def _build_qeeg_patch(qeeg_result: Optional[dict]) -> dict:
     return {k: v for k, v in out.items() if v is not None}
 
 
+def _normalize_birth_date(birth_date: Optional[str], age: Optional[int] = None) -> Optional[str]:
+    """把生日整理成 Firebase 要的明確 YYYY-MM-DD；絕不回傳空字串。
+
+    優先序：
+      1. Postgres 完整生日 YYYY-MM-DD（原樣）
+      2. 只有 YYYY-MM → 補 YYYY-MM-01；只有 YYYY → 補 YYYY-01-01
+      3. 完全沒有生日但有年齡 → 用「今年 - 年齡」推 YYYY-01-01（未成年判斷用，粗估）
+      4. 都沒有 → None（呼叫端不要送 birthDate，也不要送空字串）
+    """
+    if birth_date:
+        s = str(birth_date).strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+            return s
+        if re.fullmatch(r"\d{4}-\d{2}", s):
+            return f"{s}-01"
+        if re.fullmatch(r"\d{4}", s):
+            return f"{s}-01-01"
+    if age and age > 0:
+        return f"{datetime.now(timezone.utc).year - int(age)}-01-01"
+    return None
+
+
+async def _patch_subject_birth_date(
+    client: httpx.AsyncClient,
+    headers: dict,
+    fb_subject_id: str,
+    birth_date: str,
+) -> None:
+    """既有 Firebase 受測者缺 birthDate 時補上（失敗不影響主流程）。"""
+    try:
+        resp = await client.patch(
+            f"{FIREBASE_API_BASE}/users/subjects/{fb_subject_id}",
+            headers=headers, json={"birthDate": birth_date}, timeout=10,
+        )
+        if resp.status_code in (200, 201):
+            logger.info("[Firebase] subject %s 已補 birthDate=%s", fb_subject_id, birth_date)
+        else:
+            logger.warning("[Firebase] 補 subject %s birthDate 失敗: %s %s",
+                           fb_subject_id, resp.status_code, resp.text[:100])
+    except Exception as e:
+        logger.warning("[Firebase] 補 subject %s birthDate 例外: %s", fb_subject_id, e)
+
+
 async def _ensure_firebase_subject(
     client: httpx.AsyncClient,
     headers: dict,
@@ -355,6 +398,8 @@ async def _ensure_firebase_subject(
     subject_email = getattr(pg_row, "email", None) if pg_row else None
     subject_phone = getattr(pg_row, "phone", None) if pg_row else None
     subject_birth_date = getattr(pg_row, "birth_date", None) if pg_row else None
+    # 未成年判斷依賴生日：整理成明確 YYYY-MM-DD（只知年份補 YYYY-01-01），不留空
+    birth_to_send = _normalize_birth_date(subject_birth_date, subject_age)
 
     try:
         # 0.（2026-10）先用 /subjects/resolve 比對：用 Service Key 呼叫時可看到「全部」受測者
@@ -379,6 +424,8 @@ async def _ensure_firebase_subject(
                 sj = rj.get("subject") or {}
                 if st in ("matched", "needs_completion") and sj.get("subjectId"):
                     _cache_firebase_subject_id(pg_subject_id, sj["subjectId"])
+                    if birth_to_send and not sj.get("birthDate"):
+                        await _patch_subject_birth_date(client, headers, sj["subjectId"], birth_to_send)
                     return sj["subjectId"]
                 if st == "ambiguous":
                     logger.warning("[Firebase] subject '%s' 同名多筆，不自動建立/連結", subject_name)
@@ -396,15 +443,14 @@ async def _ensure_firebase_subject(
                     if sid:
                         logger.debug("[Firebase] subject '%s' 已存在 → %s", subject_name, sid)
                         _cache_firebase_subject_id(pg_subject_id, sid)
+                        if birth_to_send and not s.get("birthDate"):
+                            await _patch_subject_birth_date(client, headers, sid, birth_to_send)
                         return sid
 
         # 2. 不存在，建立新受測者（優先用 Postgres 精確生日，沒有才用年齡粗估）
         payload: dict = {"name": subject_name, "relationship": "個案"}
-        if subject_birth_date:
-            payload["birthDate"] = subject_birth_date
-        elif subject_age and subject_age > 0:
-            birth_year = datetime.now(timezone.utc).year - int(subject_age)
-            payload["birthDate"] = f"{birth_year}-01-01"
+        if birth_to_send:
+            payload["birthDate"] = birth_to_send
         if subject_gender in ("男", "M", "male"):
             payload["gender"] = "male"
         elif subject_gender in ("女", "F", "female"):
@@ -495,8 +541,14 @@ async def sync_to_firebase(
                 client, headers, subject_name, subject_age, subject_gender,
                 pg_subject_id=subject_id,
             )
-            if fb_subject_id:
-                _sess_payload["subjectId"] = fb_subject_id
+            if not fb_subject_id:
+                # 2026-10：POST /sessions 一律帶 subjectId。沒有 subjectId 的 session 在
+                # Database 端無法判斷未成年（依賴生日），也無法連到受測者。
+                logger.error(
+                    "[Firebase] 無法取得 subjectId（同名多筆/查不到/建立失敗），不建立 session，"
+                    "railway_session_id=%s subject_name=%s", session_id, subject_name)
+                return False
+            _sess_payload["subjectId"] = fb_subject_id
 
             # ── 1. 建立 Firebase Session ─────────────────────────────────────
             sess_resp = await client.post(
@@ -732,7 +784,6 @@ async def sync_captures_to_firebase(
         "metadata": {
             "railway_session_id": session_id,
             "subject_name":       subject_name,
-            "data_format":        "bandTo100",
         },
     }
 
@@ -743,8 +794,14 @@ async def sync_captures_to_firebase(
                 client, headers, subject_name, subject_age, subject_gender,
                 pg_subject_id=subject_id,
             )
-            if fb_subject_id:
-                _sess_payload["subjectId"] = fb_subject_id
+            if not fb_subject_id:
+                # 2026-10：POST /sessions 一律帶 subjectId（理由同 sync_to_firebase）。
+                # 回傳 False 會讓 FirebaseSyncLog 排程依指數退避重試。
+                logger.error(
+                    "[Firebase] 無法取得 subjectId（同名多筆/查不到/建立失敗），不建立 Android session，"
+                    "railway_session_id=%s subject_name=%s", session_id, subject_name)
+                return False
+            _sess_payload["subjectId"] = fb_subject_id
 
             # 1. 建立 Firebase Session
             sess_resp = await client.post(
@@ -1146,6 +1203,7 @@ def sync_report_pdf_to_firebase(
     pdf_url: str,
     railway_session_id: int = 0,
     subject_id: Optional[int] = None,
+    extra_data: Optional[dict] = None,
 ) -> bool:
     """
     將報告 PDF 連結同步到 Firebase reports collection。
@@ -1176,6 +1234,9 @@ def sync_report_pdf_to_firebase(
             "pdfUrl":      pdf_url,
             "generatedAt": datetime.now(_tz.utc).isoformat(),
         }
+        # 多存一份當時餵給報告前端的 base / subject。不改 pdfUrl，也不重算指標。
+        if extra_data:
+            payload["extraData"] = extra_data
 
         # ── 補帶 subjectId／subjectName／subjectBirthDate ──────────────────────
         subj_row = _get_subject_row(subject_id)
