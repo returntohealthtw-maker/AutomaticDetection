@@ -23,6 +23,9 @@ router = APIRouter()
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
+# 管理員 A/B 測試可指定的文字模型白名單（預設仍是 gemini-2.5-flash）
+_MODEL_OVERRIDE_ALLOW = {"gemini-3.8-flash", "gemini-3.6-flash"}  # Gemini 3 系列（thinkingLevel）；基準仍走預設路徑
+
 
 def _gemini_key() -> str:
     key = (os.environ.get("GEMINI_API_KEY") or "").strip()
@@ -81,15 +84,41 @@ async def gemini_proxy(request: Request):
             prompt = body.get("prompt")
             if not prompt:
                 return JSONResponse({"error": "缺少 prompt"}, status_code=400, headers=_cors_headers())
+            _model = "gemini-2.5-flash"
+            _gen_cfg = {
+                "temperature": 0.75 if req_type == "text" else 0.3,
+                "maxOutputTokens": 32768,
+                "thinkingConfig": {"thinkingBudget": 4096},
+            }
+            # ── 管理員專用：A/B 比較其他模型（預設行為完全不變）──────────────────
+            # 需同時滿足：body.model 在白名單內 + Authorization 為管理員 token。
+            # 瀏覽器端（headless 報告）不會帶這兩樣，所以不影響正式報告。
+            _ov = body.get("model")
+            if _ov and req_type == "text":
+                if _ov not in _MODEL_OVERRIDE_ALLOW:
+                    return JSONResponse({"error": f"model 不在白名單: {_ov}"}, status_code=400, headers=_cors_headers())
+                from fastapi import HTTPException as _HTTPEx
+                from app.core.database import SessionLocal as _SL
+                from app.routers.auth import require_admin as _req_admin
+                _db = _SL()
+                try:
+                    _req_admin(request.headers.get("authorization"), _db)
+                except _HTTPEx as _he:
+                    return JSONResponse({"error": _he.detail}, status_code=_he.status_code, headers=_cors_headers())
+                finally:
+                    _db.close()
+                _lvl = body.get("thinking_level")
+                _model = _ov
+                # Gemini 3 系列：thinkingBudget → thinkingLevel；不再支援 temperature
+                _gen_cfg = {
+                    "maxOutputTokens": 32768,
+                    "thinkingConfig": {"thinkingLevel": _lvl if _lvl in ("low", "medium", "high") else "medium"},
+                }
             status, d = await _call(
-                "gemini-2.5-flash", "generateContent",
+                _model, "generateContent",
                 {
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "temperature": 0.75 if req_type == "text" else 0.3,
-                        "maxOutputTokens": 32768,
-                        "thinkingConfig": {"thinkingBudget": 4096},
-                    },
+                    "generationConfig": _gen_cfg,
                 }
             )
             if status >= 400:
