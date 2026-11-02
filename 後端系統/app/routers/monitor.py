@@ -47,6 +47,101 @@ async def websocket_monitor(ws: WebSocket):
         _clients.remove(ws)
 
 
+# ─── 管理員端點：用八卦 MBTI（唯一權威）重算 DB / Firebase 的 mbti、bagua ───────────
+
+@router.post("/api/admin/resync-mbti", tags=["管理員"])
+def resync_mbti(
+    dry_run: bool = True,
+    firebase: bool = False,
+    session_ids: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+    db: DBSession = Depends(get_db),
+):
+    """
+    只重算並更新 sessions.mbti / sessions.bagua（不動腦波資料、不生成報告）。
+
+    - dry_run=true（預設）：只回傳 before/after，不寫入
+    - firebase=true：同時 PATCH Firebase sessions/{firebase_session_id} 的 mbti、bagua
+    - session_ids：以逗號分隔，只處理指定 session；不給則處理全部有腦波資料的 session
+    來源與報告 / 上傳流程相同：compute_bagua_mbti(raw_arrays_json → captures → 平均)
+    """
+    require_admin(authorization, db)
+    from app.services.algorithms import compute_averages, compute_bagua_mbti
+
+    wanted = None
+    if session_ids:
+        wanted = {int(x) for x in session_ids.split(",") if x.strip().isdigit()}
+
+    q = db.query(M.Session).order_by(M.Session.session_id)
+    if wanted:
+        q = q.filter(M.Session.session_id.in_(wanted))
+    sessions = q.all()
+
+    changed, same, skipped = [], 0, []
+    fb_ok, fb_fail = 0, 0
+    fb_client = None
+    fb_headers = {}
+    if firebase and not dry_run:
+        import httpx as _httpx
+        from app.services import firebase_sync as _fbs
+        fb_headers = _fbs._get_auth_headers()
+        fb_client = _httpx.Client(timeout=20.0)
+
+    for sess in sessions:
+        sid = sess.session_id
+        try:
+            caps = db.query(M.EegCapture).filter(M.EegCapture.session_id == sid)\
+                     .order_by(M.EegCapture.seq_num).all()
+            if not caps:
+                skipped.append({"session_id": sid, "reason": "no captures"})
+                continue
+            fields = ["good_signal", "attention", "meditation", "delta", "theta", "low_alpha",
+                      "high_alpha", "low_beta", "high_beta", "low_gamma", "high_gamma"]
+            det = [{k: getattr(c, k) for k in fields} for c in caps if c.is_baseline == 0] or \
+                  [{k: getattr(c, k) for k in fields} for c in caps]
+            avg = compute_averages(det)
+            raw = json.loads(sess.raw_arrays_json) if sess.raw_arrays_json else None
+            is_child = (sess.report_type or "").lower().startswith("child")
+            bm = compute_bagua_mbti(avg, det, raw, is_child)
+            if not bm or not bm.get("mbti_type"):
+                skipped.append({"session_id": sid, "reason": "no mbti result"})
+                continue
+            new_m, new_b = bm.get("mbti_type"), bm.get("bagua")
+            if sess.mbti == new_m and sess.bagua == new_b:
+                same += 1
+                continue
+            changed.append({"session_id": sid, "subject": sess.subject_name,
+                            "old_mbti": sess.mbti, "new_mbti": new_m,
+                            "old_bagua": sess.bagua, "new_bagua": new_b,
+                            "source": bm.get("source")})
+            if not dry_run:
+                sess.mbti, sess.bagua = new_m, new_b
+                if fb_client is not None and sess.firebase_session_id and fb_headers:
+                    try:
+                        from app.services import firebase_sync as _fbs
+                        r = fb_client.patch(f"{_fbs.FIREBASE_API_BASE}/sessions/{sess.firebase_session_id}",
+                                            headers=fb_headers, json={"mbti": new_m, "bagua": new_b})
+                        if r.status_code in (200, 204):
+                            fb_ok += 1
+                        else:
+                            fb_fail += 1
+                            changed[-1]["firebase_error"] = f"{r.status_code} {r.text[:80]}"
+                    except Exception as _fe:
+                        fb_fail += 1
+                        changed[-1]["firebase_error"] = str(_fe)[:80]
+        except Exception as e:
+            skipped.append({"session_id": sid, "reason": f"error: {str(e)[:120]}"})
+
+    if not dry_run:
+        db.commit()
+    if fb_client is not None:
+        fb_client.close()
+    return {"ok": True, "dry_run": dry_run, "total": len(sessions), "unchanged": same,
+            "changed": len(changed), "skipped": len(skipped),
+            "firebase_ok": fb_ok, "firebase_fail": fb_fail,
+            "changes": changed, "skipped_detail": skipped}
+
+
 # ─── 管理員端點：批次重算舊 Session 的 BrainDNA 值 ────────────────────────────
 
 @router.post("/api/admin/recompute-braindna", tags=["管理員"])
@@ -158,26 +253,17 @@ def recompute_braindna(
                 cap.low_gamma  = b.get("low_gamma",  cap.low_gamma)
                 cap.high_gamma = b.get("high_gamma", cap.high_gamma)
 
-            # 重算 MBTI / 八卦
+            # 重算 MBTI / 八卦：唯一權威 = compute_bagua_mbti（與上傳 / 報告 / Firebase 同源）。
+            # 舊版這裡用 generate_quick_mbti（另一套算法），force=true 會把 DB 的 mbti 蓋回舊算法。
             try:
-                bw = _select_best_window(raw)
-                _bw_delta = bw.get("r_delta") or []
-                def _mean(key):
-                    arr = bw.get(key) or []
-                    # 排除 delta<MIN_DELTA_QUALITY 的低品質秒（與頻段比例計算一致）
-                    valid = [v for j, v in enumerate(arr)
-                             if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
-                    return statistics.mean(valid) if valid else (statistics.mean([v for v in arr if v > 0]) if arr else 0.0)
-                mbti_r = generate_quick_mbti({
-                    "lowAlpha":  _mean("r_lalpha"), "highAlpha": _mean("r_halpha"),
-                    "lowBeta":   _mean("r_lbeta"),  "highBeta":  _mean("r_hbeta"),
-                    "lowGamma":  _mean("r_lgamma"),  "midGamma":  _mean("r_hgamma"),
-                    "theta":     _mean("r_theta"),   "delta":     _mean("r_delta"),
-                })
-                sess.mbti  = mbti_r.get("mbti")
-                sess.bagua = mbti_r.get("bagua")
+                from app.services.algorithms import compute_bagua_mbti as _bagua_mbti
+                _bm = _bagua_mbti(raw_arrays=raw, is_child=_is_child)
+                if not _bm:
+                    raise ValueError("bagua mbti empty")
+                sess.mbti  = _bm.get("mbti_type")
+                sess.bagua = _bm.get("bagua")
             except Exception:
-                pass  # MBTI 失敗不影響主要指標
+                pass  # MBTI 失敗不影響主要指標（不回退舊算法，避免把 DB 蓋回另一套 MBTI）
 
             stats["updated"] += 1
             stats["details"].append({
