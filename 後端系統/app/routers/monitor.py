@@ -54,6 +54,8 @@ def resync_mbti(
     dry_run: bool = True,
     firebase: bool = False,
     session_ids: Optional[str] = None,
+    sources: str = "raw_arrays",
+    min_rows: int = 30,
     authorization: Optional[str] = Header(None),
     db: DBSession = Depends(get_db),
 ):
@@ -64,6 +66,9 @@ def resync_mbti(
     - firebase=true：同時 PATCH Firebase sessions/{firebase_session_id} 的 mbti、bagua
     - session_ids：以逗號分隔，只處理指定 session；不給則處理全部有腦波資料的 session
     來源與報告 / 上傳流程相同：compute_bagua_mbti(raw_arrays_json → captures → 平均)
+    - sources：只接受哪些輸入來源（預設只收 raw_arrays；"avg" 是 0-100 單點平均，
+      曾造成大量 INTP/ESTP 擠壓，不應拿來覆蓋 DB）。可用逗號指定 raw_arrays,captures
+    - min_rows：來源為 captures 時，至少要有幾筆逐秒資料才接受
     """
     require_admin(authorization, db)
     from app.services.algorithms import compute_averages, compute_bagua_mbti
@@ -77,6 +82,7 @@ def resync_mbti(
         q = q.filter(M.Session.session_id.in_(wanted))
     sessions = q.all()
 
+    allowed_sources = {x.strip() for x in sources.split(",") if x.strip()}
     changed, same, skipped = [], 0, []
     fb_ok, fb_fail = 0, 0
     fb_client = None
@@ -107,6 +113,11 @@ def resync_mbti(
                 skipped.append({"session_id": sid, "reason": "no mbti result"})
                 continue
             new_m, new_b = bm.get("mbti_type"), bm.get("bagua")
+            _src = bm.get("source")
+            _n_rows = len([c for c in caps if c.is_baseline == 0])
+            if _src not in allowed_sources or (_src == "captures" and _n_rows < min_rows):
+                skipped.append({"session_id": sid, "reason": f"source={_src} rows={_n_rows} not accepted"})
+                continue
             if sess.mbti == new_m and sess.bagua == new_b:
                 same += 1
                 continue
