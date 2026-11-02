@@ -135,6 +135,35 @@ def test_build_mbti_payload_includes_diff_fields_for_frontend():
         assert payload[key] is not None
 
 
+def test_bagua_gain_free_is_invariant_to_overall_amplitude():
+    """gain_free 模式：整體振幅放大/縮小 10 倍（電極增益不同）不應改變 MBTI 結果。"""
+    import random
+    rnd = random.Random(7)
+    base = {"r_delta": 120000, "r_theta": 45000, "r_lalpha": 9000, "r_halpha": 8000,
+            "r_lbeta": 6000, "r_hbeta": 7000, "r_lgamma": 5000, "r_hgamma": 4000}
+    n = 180
+    raw = {k: [v * rnd.uniform(0.6, 1.6) for _ in range(n)] for k, v in base.items()}
+    scaled = {k: [x * 10 for x in arr] for k, arr in raw.items()}
+    a = compute_bagua_mbti(raw_arrays=raw)
+    b = compute_bagua_mbti(raw_arrays=scaled)
+    assert a["mode"] == "gain_free"
+    assert a["mbti_type"] == b["mbti_type"]
+    assert a["ei_score"] == b["ei_score"] and a["ns_score"] == b["ns_score"]
+
+
+def test_bagua_geometric_mean_resists_outlier_seconds():
+    """少數離群秒（重尾）不應主宰結果：加入 3 個極端秒，型別不變。"""
+    n = 180
+    base = {"r_delta": 120000, "r_theta": 45000, "r_lalpha": 9000, "r_halpha": 8000,
+            "r_lbeta": 6000, "r_hbeta": 7000, "r_lgamma": 5000, "r_hgamma": 4000}
+    raw = {k: [v * (0.8 + 0.4 * ((i * 7) % 10) / 10) for i in range(n)] for k, v in base.items()}
+    noisy = {k: list(v) for k, v in raw.items()}
+    for k in noisy:
+        for i in (3, 50, 120):
+            noisy[k][i] *= 200
+    assert compute_bagua_mbti(raw_arrays=raw)["mbti_type"] == compute_bagua_mbti(raw_arrays=noisy)["mbti_type"]
+
+
 def test_best_window_ignores_tail_and_low_quality_seconds():
     """
     #184 稽核：181 筆資料的第 181 筆（1 秒尾巴）曾被選為最佳視窗，
@@ -166,6 +195,8 @@ if __name__ == "__main__":
         test_bagua_mbti_is_the_single_source_for_payload,
         test_bagua_mbti_ignores_norm100_summary_row,
         test_best_window_ignores_tail_and_low_quality_seconds,
+        test_bagua_gain_free_is_invariant_to_overall_amplitude,
+        test_bagua_geometric_mean_resists_outlier_seconds,
     ]
     passed = failed = 0
     for t in tests:

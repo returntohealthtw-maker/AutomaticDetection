@@ -251,7 +251,9 @@ def save_eeg_stats(
             #   與報告/Firebase 的算法與輸入都不同，導致 DB 與報告 MBTI 不一致）
             try:
                 from app.services.algorithms import compute_bagua_mbti as _bagua_mbti
-                mbti_result = _bagua_mbti(raw_arrays=payload.raw_arrays)
+                mbti_result = _bagua_mbti(
+                    raw_arrays=payload.raw_arrays,
+                    is_child=(payload.report_type or "").lower().startswith("child"))
                 if mbti_result:
                     sess.mbti  = mbti_result.get("mbti_type")
                     sess.bagua = mbti_result.get("bagua")

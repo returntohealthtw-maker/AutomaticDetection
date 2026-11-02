@@ -267,7 +267,7 @@ def upload_session(
                     # 改用八卦演算法 compute_bagua_mbti（與報告 / Firebase 同源）
                     try:
                         from app.services.algorithms import compute_bagua_mbti as _bagua_mbti
-                        _bm = _bagua_mbti(raw_arrays=_raw_arrays)
+                        _bm = _bagua_mbti(raw_arrays=_raw_arrays, is_child=_is_child)
                         if _bm:
                             _s2.mbti  = _bm.get("mbti_type")
                             _s2.bagua = _bm.get("bagua")

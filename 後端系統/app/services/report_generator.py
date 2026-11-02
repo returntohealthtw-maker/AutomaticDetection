@@ -161,6 +161,7 @@ async def generate_report_async(report_id: int, session_id: int):
 
         # 2b. 載入 raw_arrays_json（若有），供 30 秒視窗矛盾距離 MBTI 分層使用
         _raw_arrays_for_mbti: dict | None = None
+        _sess_for_raw = None
         try:
             import json as _json
             _sess_for_raw = db.query(models.Session).filter(
@@ -175,7 +176,9 @@ async def generate_report_async(report_id: int, session_id: int):
         indices = compute_all_indices(avg)
 
         # 4. 計算 MBTI（八卦演算法，與 DB Session.mbti / Firebase / build_mbti_payload 同源）
-        mbti = compute_bagua_mbti(avg, detection_captures, _raw_arrays_for_mbti)
+        _rt_for_mbti = ((_sess_for_raw.report_type if _sess_for_raw else None) or "").lower()
+        _is_child_mbti = _rt_for_mbti.startswith("child")
+        mbti = compute_bagua_mbti(avg, detection_captures, _raw_arrays_for_mbti, _is_child_mbti)
 
         # 5. 儲存計算結果到資料庫
         index_objects = [
@@ -250,7 +253,7 @@ async def generate_report_async(report_id: int, session_id: int):
                         "gamma_low":  max(0,   _sf(avg.low_gamma)),
                     },
                 }
-                bw.update(build_mbti_payload(avg, detection_captures, _raw_arrays_for_mbti))
+                bw.update(build_mbti_payload(avg, detection_captures, _raw_arrays_for_mbti, _is_child_mbti))
 
                 # ── 補充 qEEG 七大能力分數（若 session 有計算結果）──
                 try:

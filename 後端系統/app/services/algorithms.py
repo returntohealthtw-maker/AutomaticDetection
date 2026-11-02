@@ -802,20 +802,81 @@ def compute_mbti_group_scoring(captures: list) -> list | None:
     return [{"type": t, "pct": p, "layers": ["群組評分"]} for t, p in pcts]
 
 
-def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
-    """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 完全一致。"""
+# ── 八卦輸入模式（2026-11）────────────────────────────────────────────────
+# 'gain_free'  ：扣掉整體振幅（每人 8 頻段逐秒 log10 均值先減去自己的 8 頻段平均），
+#                再以「本系統自己的 between-person 常模」換成百分位。
+# 'legacy_abs' ：BrainDNA 原廠做法（lowAlpha 絕對百分位；theta 也用 lowAlpha 常模）。
+# 想退回舊行為只需改這個常數（前端 app_prototype.html 的 _ET_BAGUA_MODE 要同步）。
+BAGUA_INPUT_MODE = "gain_free"
+
+# 統計參數來源聲明（依 statistical-parameter-validation 規則）：
+#   類型      ：between-person individual（session 層級，非逐秒時間波動）
+#   均值層級  ：每人先對 180 秒逐秒 log10 取均值（僅 v>0），再減去自己 8 頻段的平均（扣整體振幅），最後跨人
+#   樣本      ：Railway 正式環境 2026-11-02，raw_arrays_json 筆數>=100 且 median(delta)>1000 的 48 個 session
+#               成人 n=41（report_type 非 child*）、兒童 n=7（child*）
+#   合理性檢驗：奇偶秒切半一致性 la_clr r=0.86 / th_clr r=0.92（成人 n=41），表示非量測雜訊
+#   注意      ：兒童 n=7 偏小，SD 套用下限 _GAIN_FREE_SD_FLOOR；n 增加後須重算
+_GAIN_FREE_NORM = {
+    "adult": {"la": (-0.1910, 0.0890), "th": (0.3810, 0.1100)},
+    "child": {"la": (0.0470, 0.1220),  "th": (0.4590, 0.0830)},
+}
+_GAIN_FREE_SD_FLOOR = 0.10
+
+_BAND_KEYS_8 = ("r_delta", "r_theta", "r_lalpha", "r_halpha",
+                "r_lbeta", "r_hbeta", "r_lgamma", "r_hgamma")
+
+
+def _log10_mean(values) -> float | None:
+    """逐秒 log10 均值（只取 v>0）；取代算術平均，避免重尾離群秒把均值拉高（實測 lowAlpha 高估 0.32）。"""
+    vs = [math.log10(float(v)) for v in values if v and float(v) > 0]
+    return (sum(vs) / len(vs)) if vs else None
+
+
+def gain_free_pcts(band_log_means: dict, is_child: bool = False):
+    """
+    band_log_means：{'r_theta': log10均值, 'r_lalpha': ..., ...}，需含 8 個頻段。
+    回傳 (la_pct, th_pct)；頻段不足 8 個回傳 None。
+    """
+    if any(band_log_means.get(k) is None for k in _BAND_KEYS_8):
+        return None
+    gain = sum(band_log_means[k] for k in _BAND_KEYS_8) / 8.0
+    norm = _GAIN_FREE_NORM["child" if is_child else "adult"]
+    out = []
+    for key, band in (("la", "r_lalpha"), ("th", "r_theta")):
+        mean, sd = norm[key]
+        z = ((band_log_means[band] - gain) - mean) / max(sd, _GAIN_FREE_SD_FLOOR)
+        out.append(float(_NORM.cdf(z)))
+    return out[0], out[1]
+
+
+def _bagua_obj_from_pcts(la_pct: float, high: bool):
+    bounds = [0.125, 0.250, 0.375, 0.500, 0.625, 0.750]
+    objs = [Bagua.QIAN, Bagua.DUI, Bagua.ZHEN, Bagua.XUN, Bagua.KAN, Bagua.GEN]
+    for i, b in enumerate(bounds):
+        if la_pct < b:
+            return Bagua.LI if (i == 2 and high) else objs[i]
+    return Bagua.KUN
+
+
+def _bagua_mbti_from_raw(raw_la: float, raw_th: float,
+                         la_pct: float | None = None, th_pct: float | None = None) -> dict:
+    """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 一致。
+    若傳入 la_pct / th_pct（gain_free 模式已算好的百分位）則直接使用，否則走 legacy 絕對百分位。"""
     LA_MEAN = DATA_STATS["lowAlpha"]["mean"]
     LA_STD  = DATA_STATS["lowAlpha"]["std"]
     BOUNDS  = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
 
-    la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD)) if raw_la > 0 else 0.4
+    precomputed = la_pct is not None and th_pct is not None
+    if not precomputed:
+        la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD)) if raw_la > 0 else 0.4
     bagua  = 6
     for i in range(6):
         if la_pct < BOUNDS[i + 1]:
             bagua = i
             break
 
-    th_pct = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD)) if raw_th > 0 else 0.4
+    if not precomputed:
+        th_pct = float(_NORM.cdf((math.log10(max(raw_th, 0.1)) - LA_MEAN) / LA_STD)) if raw_th > 0 else 0.4
     high   = th_pct > 0.5
     li_active = bagua == 2 and high
 
@@ -856,7 +917,8 @@ def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
         if alt != primary:
             secondary = alt
 
-    bagua_obj = Bagua.calcBaguaWithLi(raw_la, raw_th)
+    bagua_obj = (_bagua_obj_from_pcts(la_pct, high) if precomputed
+                 else Bagua.calcBaguaWithLi(raw_la, raw_th))
     return {
         "type": primary,
         "secondary": secondary,
@@ -868,12 +930,16 @@ def _bagua_mbti_from_raw(raw_la: float, raw_th: float) -> dict:
     }
 
 
-def _mbti_layer_from_raw_arrays(r_la: list, r_th: list) -> dict:
+def _mbti_layer_from_raw_arrays(r_la: list, r_th: list,
+                                la_pct: float | None = None, th_pct: float | None = None) -> dict:
     if len(r_la) < 1 or len(r_th) < 1:
         return {}
-    raw_la = sum(r_la) / len(r_la)
-    raw_th = sum(r_th) / len(r_th)
-    br = _bagua_mbti_from_raw(raw_la, raw_th)
+    # 2026-11：逐秒 log10 均值（幾何平均）取代算術平均（重尾離群秒會把 lowAlpha 高估約 2 倍）
+    _la_log = _log10_mean(r_la)
+    _th_log = _log10_mean(r_th)
+    raw_la = (10 ** _la_log) if _la_log is not None else 0.0
+    raw_th = (10 ** _th_log) if _th_log is not None else 0.0
+    br = _bagua_mbti_from_raw(raw_la, raw_th, la_pct, th_pct)
     mbti_type = br["type"]
     la_pct, th_pct = br["la_pct"], br["th_pct"]
 
@@ -911,7 +977,7 @@ def _mbti_contradiction(a: str, b: str) -> int:
     return sum(a[i] != b[i] for i in range(4))
 
 
-def compute_window_mbtis(raw_arrays: dict) -> list:
+def compute_window_mbtis(raw_arrays: dict, is_child: bool = False) -> list:
     """
     BrainDNA 原始算法：每 30 秒視窗各自計算一個 MBTI（狀態性格樣本）。
 
@@ -966,6 +1032,21 @@ def compute_window_mbtis(raw_arrays: dict) -> list:
 
         # 卦位（7 卦，不含離卦，與 BrainDNA calcBagua 一致）
         la_pct = float(_NORM.cdf((math.log10(max(raw_la, 0.1)) - LA_MEAN) / LA_STD))
+        if BAGUA_INPUT_MODE == "gain_free":
+            # 與主型同一套：視窗內 8 頻段 log10 均值 → 扣整體振幅 → 本系統常模百分位
+            _win = {
+                "r_delta": _log10_mean((raw_arrays.get("r_delta") or [])[s:e]),
+                "r_theta": _log10_mean((raw_arrays.get("r_theta") or [])[s:e]),
+                "r_lalpha": _log10_mean((raw_arrays.get("r_lalpha") or [])[s:e]),
+                "r_halpha": _log10_mean((raw_arrays.get("r_halpha") or [])[s:e]),
+                "r_lbeta": _log10_mean((raw_arrays.get("r_lbeta") or [])[s:e]),
+                "r_hbeta": _log10_mean((raw_arrays.get("r_hbeta") or [])[s:e]),
+                "r_lgamma": _log10_mean((raw_arrays.get("r_lgamma") or [])[s:e]),
+                "r_hgamma": _log10_mean((raw_arrays.get("r_hgamma") or [])[s:e]),
+            }
+            _gf = gain_free_pcts(_win, is_child)
+            if _gf:
+                la_pct = _gf[0]
         bagua_int = 6
         for i in range(6):
             if la_pct < BOUNDS[i + 1]:
@@ -1181,39 +1262,55 @@ def _is_norm100_summary_row(c) -> bool:
             and _cap_num(c, "low_alpha") <= 100)
 
 
-def compute_bagua_mbti(avg: BandAverages = None, captures: list = None,
-                       raw_arrays: dict = None) -> dict:
-    """
-    ★ 唯一權威的 MBTI 計算（八卦演算法；2026-11 起，資料庫 / Firebase 同步 / 報告共用）。
+_CAP_FIELD_BY_BAND = {
+    "r_delta": "delta", "r_theta": "theta", "r_lalpha": "low_alpha", "r_halpha": "high_alpha",
+    "r_lbeta": "low_beta", "r_hbeta": "high_beta", "r_lgamma": "low_gamma", "r_hgamma": "high_gamma",
+}
 
-    與 App 前端 _etBaguaMBTI(useLi=True) 原型層同一條路徑：
-      整段 lowAlpha 均值、theta 均值（原始 ThinkGear 值）→ 常模百分位 → 八卦（含離卦）
-      → MBTI 16 型；副性格 = 卦位邊界相鄰卦 / theta 翻轉。
+
+def compute_bagua_mbti(avg: BandAverages = None, captures: list = None,
+                       raw_arrays: dict = None, is_child: bool = False) -> dict:
+    """
+    ★ 唯一權威的 MBTI 計算（八卦演算法；資料庫 / Firebase 同步 / 報告共用）。
+
+    流程（BAGUA_INPUT_MODE='gain_free'，2026-11 起）：
+      8 頻段逐秒 log10 均值（幾何平均）→ 扣掉自己的整體振幅 → 以本系統 between-person 常模
+      換成 lowAlpha / theta 百分位 → 八卦（含離卦）→ MBTI 16 型；副性格 = 卦位邊界相鄰卦 / theta 翻轉。
+    BAGUA_INPUT_MODE='legacy_abs' 則為 BrainDNA 原廠（絕對百分位），僅保留作對照。
 
     輸入優先序：raw_arrays（逐秒陣列）→ captures（排除 0-100 摘要列）→ avg（單點）。
     回傳：type / mbti_type / secondary / confidence / bagua / bagua_name /
-          ei_score / ns_score / tf_score / jp_score（皆為 E/N/T/J 側百分比）/ source。
+          ei_score / ns_score / tf_score / jp_score（皆為 E/N/T/J 側百分比）/ source / mode。
     """
-    r_la: list = []
-    r_th: list = []
+    bands: dict = {k: [] for k in _BAND_KEYS_8}
     source = "none"
     if raw_arrays:
-        r_la = [float(v) for v in (raw_arrays.get("r_lalpha") or []) if v]
-        r_th = [float(v) for v in (raw_arrays.get("r_theta") or []) if v]
+        for k in _BAND_KEYS_8:
+            bands[k] = [float(v) for v in (raw_arrays.get(k) or []) if v]
         source = "raw_arrays"
-    if (len(r_la) < 4 or len(r_th) < 4) and captures:
+    if (len(bands["r_lalpha"]) < 4 or len(bands["r_theta"]) < 4) and captures:
         rows = [c for c in captures if not _is_norm100_summary_row(c)]
-        r_la = [_cap_num(c, "low_alpha") for c in rows if _cap_num(c, "low_alpha") > 0]
-        r_th = [_cap_num(c, "theta") for c in rows if _cap_num(c, "theta") > 0]
+        for k in _BAND_KEYS_8:
+            f = _CAP_FIELD_BY_BAND[k]
+            bands[k] = [_cap_num(c, f) for c in rows if _cap_num(c, f) > 0]
         source = "captures"
-    if len(r_la) < 1 or len(r_th) < 1:
+    if len(bands["r_lalpha"]) < 1 or len(bands["r_theta"]) < 1:
         if avg is None:
             return {}
-        r_la = [_to_raw(avg.low_alpha)]
-        r_th = [_to_raw(avg.theta)]
+        for k in _BAND_KEYS_8:
+            bands[k] = [_to_raw(getattr(avg, _CAP_FIELD_BY_BAND[k], 0) or 0)]
         source = "avg"
 
-    layer = _mbti_layer_from_raw_arrays(r_la, r_th)
+    pcts = None
+    mode = "legacy_abs"
+    if BAGUA_INPUT_MODE == "gain_free":
+        pcts = gain_free_pcts({k: _log10_mean(v) for k, v in bands.items()}, is_child)
+        if pcts:
+            mode = "gain_free"
+
+    layer = _mbti_layer_from_raw_arrays(
+        bands["r_lalpha"], bands["r_theta"],
+        pcts[0] if pcts else None, pcts[1] if pcts else None)
     mbti_type = layer["type"]
     return {
         **layer,
@@ -1223,12 +1320,13 @@ def compute_bagua_mbti(avg: BandAverages = None, captures: list = None,
         "tf_label":  mbti_type[2],
         "jp_label":  mbti_type[3],
         "source":    source,
-        "n_seconds": len(r_la),
+        "mode":      mode,
+        "n_seconds": len(bands["r_lalpha"]),
     }
 
 
 def build_mbti_payload(avg: BandAverages, captures: list = None,
-                       raw_arrays: dict = None) -> dict:
+                       raw_arrays: dict = None, is_child: bool = False) -> dict:
     """
     產出報告 App / headless 共用的 MBTI 欄位。
 
@@ -1239,7 +1337,7 @@ def build_mbti_payload(avg: BandAverages, captures: list = None,
     欄位語意（與 React 報告一致）：*_diff 為 (E/N/T/J 側百分比 - 50) * 2，
     React 以 50 + diff/2 還原百分比。
     """
-    b = compute_bagua_mbti(avg, captures, raw_arrays)
+    b = compute_bagua_mbti(avg, captures, raw_arrays, is_child)
     mbti_type = b["mbti_type"]
 
     def _diff(score: float) -> float:

@@ -7503,18 +7503,53 @@ function _etMakeMbtiResult(ei, ns, tf, jp) {
 // useLi=true 啟用 8 卦系統（含「離」卦）：
 //   在 laPct 0.250~0.375 帶，若 thPct > 0.5 → 離卦（INFJ/INFP），否則仍為震卦（ENFJ/ENFP）
 //   此改動引入 INFJ/INFP 兩型，增加多元性格覆蓋率
-function _etBaguaMBTI(rawLA, rawTH, useLi = false) {
+// ── 八卦輸入模式（2026-11，與後端 algorithms.py BAGUA_INPUT_MODE / _GAIN_FREE_NORM 同步）──
+// 'gain_free'：8 頻段逐秒 log10 均值 → 扣自己的整體振幅 → 以本系統 between-person 常模換百分位
+// 'legacy_abs'：BrainDNA 原廠（lowAlpha 絕對百分位；theta 也用 lowAlpha 常模）
+const _ET_BAGUA_MODE = 'gain_free';
+const _ET_GAIN_FREE_NORM = {
+  adult: { la: [-0.1910, 0.0890], th: [0.3810, 0.1100] },
+  child: { la: [ 0.0470, 0.1220], th: [0.4590, 0.0830] },
+};
+const _ET_GAIN_FREE_SD_FLOOR = 0.10;
+const _ET_BAND_KEYS_8 = ['r_delta','r_theta','r_lalpha','r_halpha','r_lbeta','r_hbeta','r_lgamma','r_hgamma'];
+function _etLog10Mean(arr) {
+  let s = 0, n = 0;
+  for (const v of arr) { const x = Number(v); if (x > 0) { s += Math.log10(x); n++; } }
+  return n ? s / n : null;
+}
+function _etIsChildReport() {
+  const t = (typeof _currentReportType !== 'undefined' && _currentReportType) ? String(_currentReportType) : '';
+  return t.startsWith('child_') || t === 'child';
+}
+// acc：含 8 個 r_* 逐秒陣列；s,e 為切片範圍（省略 = 全段）。回傳 {laPct, thPct} 或 null
+function _etGainFreePcts(acc, s, e, isChild) {
+  if (_ET_BAGUA_MODE !== 'gain_free') return null;
+  const logs = {};
+  for (const k of _ET_BAND_KEYS_8) {
+    const full = acc[k] || [];
+    const seg = (s === undefined) ? full : full.slice(s, e);
+    const m = _etLog10Mean(seg);
+    if (m === null) return null;
+    logs[k] = m;
+  }
+  const gain = _ET_BAND_KEYS_8.reduce((a, k) => a + logs[k], 0) / 8;
+  const norm = _ET_GAIN_FREE_NORM[isChild ? 'child' : 'adult'];
+  const pct = (band, nm) => _etNormCdf(((logs[band] - gain) - nm[0]) / Math.max(nm[1], _ET_GAIN_FREE_SD_FLOOR));
+  return { laPct: pct('r_lalpha', norm.la), thPct: pct('r_theta', norm.th) };
+}
+function _etBaguaMBTI(rawLA, rawTH, useLi = false, pre = null) {
   const LA_MEAN = _ET_DATA_STATS.lowAlpha.mean;
   const LA_STD  = _ET_DATA_STATS.lowAlpha.std;
 
-  // 1. lowAlpha 百分位 → 7 個區間（與 BrainDNA 原始演算法一致）
-  const laPct = (rawLA > 0) ? _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD) : 0.4;
+  // 1. lowAlpha 百分位 → 7 個區間（pre 為 gain_free 已算好的百分位；否則走 BrainDNA 原廠絕對百分位）
+  const laPct = pre ? pre.laPct : ((rawLA > 0) ? _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD) : 0.4);
   const BOUNDS = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0];
   let bagua = 6;
   for (let i = 0; i < 6; i++) { if (laPct < BOUNDS[i+1]) { bagua = i; break; } }
 
   // 2. theta 百分位
-  const thPct = (rawTH > 0) ? _etNormCdf((Math.log10(rawTH) - LA_MEAN) / LA_STD) : 0.4;
+  const thPct = pre ? pre.thPct : ((rawTH > 0) ? _etNormCdf((Math.log10(rawTH) - LA_MEAN) / LA_STD) : 0.4);
   const high  = thPct > 0.5;
 
   // 3. 8 卦（含離卦）：zone 2（0.250~0.375）且 theta 高 → 離卦映射 INFJ/INFP
@@ -7699,7 +7734,10 @@ function _etComputeWindowMbtis(acc) {
     const rawLA = _segMean(r_la, s, e), rawTH = _segMean(r_th, s, e);
     if (rawLA <= 0 || rawTH <= 0) continue;
 
-    const laPct = _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD);
+    let laPct = _etNormCdf((Math.log10(rawLA) - LA_MEAN) / LA_STD);
+    // gain_free：視窗內 8 頻段扣整體振幅後的百分位（與後端 compute_window_mbtis 同步）
+    const _gfw = _etGainFreePcts(acc, s, e, _etIsChildReport());
+    if (_gfw) laPct = _gfw.laPct;
     let bagua = 6;
     for (let i = 0; i < 6; i++) { if (laPct < BOUNDS[i+1]) { bagua = i; break; } }
 
@@ -7756,9 +7794,11 @@ function _etComputeMBTILayers(acc) {
     return { archetype: fb, family: fb, social: fb, peer: fb, _source: 'fallback' };
   }
 
-  const rawLA = r_la.reduce((a,b)=>a+b,0) / r_la.length;
-  const rawTH = r_th.reduce((a,b)=>a+b,0) / r_th.length;
-  const archetypeBr  = _etBaguaMBTI(rawLA, rawTH, true);
+  // 2026-11：逐秒 log10 均值（幾何平均）取代算術平均（重尾離群秒會把 lowAlpha 高估約 2 倍）
+  const rawLA = Math.pow(10, _etLog10Mean(r_la));
+  const rawTH = Math.pow(10, _etLog10Mean(r_th));
+  const _gfPre = _etGainFreePcts(acc, undefined, undefined, _etIsChildReport());
+  const archetypeBr  = _etBaguaMBTI(rawLA, rawTH, true, _gfPre);
   const archetypeScores = _etBaguaScores(archetypeBr.type, archetypeBr.laPct, archetypeBr.thPct);
   const archetype = { ...archetypeScores, confidence: archetypeBr.confidence, secondary: archetypeBr.secondary };
   const archetypeType = archetype.type;
@@ -7771,7 +7811,7 @@ function _etComputeMBTILayers(acc) {
 
   const _mkLayer = (src) => {
     if (!src || !src.type) return archetype;
-    const br = _etBaguaMBTI(rawLA, rawTH, true);  // 取同一 laPct/thPct 作 scores
+    const br = _etBaguaMBTI(rawLA, rawTH, true, _gfPre);  // 取同一 laPct/thPct 作 scores
     const s  = _etBaguaScores(src.type, archetypeBr.laPct, archetypeBr.thPct);
     return { ...s, type: src.type, confidence: src.confidence || 70, secondary: src.secondary };
   };
