@@ -255,6 +255,18 @@ async def generate_report_async(report_id: int, session_id: int):
                 }
                 bw.update(build_mbti_payload(avg, detection_captures, _raw_arrays_for_mbti, _is_child_mbti))
 
+                # Android 原生上傳的 captures 是 ThinkGear 原始值（delta 常為 1e4~1e6），
+                # 上面 bands_avg / bands_7 直接放原始平均 → clamped_values_from_brainwave
+                # 會全部截成 100。改用管理後台「重新生成」同一個函式（BrainDNA 0-100 頻段），
+                # 讓兩條路徑吃到的頻段數值一致。skip_firebase：此處在 event loop 內，不能 asyncio.run。
+                try:
+                    from app.routers.reports import _session_to_brainwave_data as _s2bw
+                    _bw_std = _s2bw(db, session_id, skip_firebase=True)
+                    if _bw_std and _bw_std.get("bands_avg"):
+                        bw = _bw_std
+                except Exception as _bwe:
+                    print(f"[WARN] Report {report_id}: 標準 brainwave_data 組裝失敗，沿用原始平均 ({_bwe})")
+
                 # ── 補充 qEEG 七大能力分數（若 session 有計算結果）──
                 try:
                     _qraw = getattr(session_obj, "qeeg_scores_json", None)

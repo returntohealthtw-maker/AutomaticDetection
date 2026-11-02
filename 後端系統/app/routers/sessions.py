@@ -262,7 +262,7 @@ def upload_session(
                     _s2.mind_stress   = _bdna_result.get("stress")
                     _s2.mind_balance  = _bdna_result.get("balance")
                     _s2.mind_energy   = _bdna_result.get("energy")
-                    _s2.mind_color    = _bdna_result.get("mind_color")
+                    _s2.mind_color    = _bdna_result.get("color")
                     # 2026-11：compute_all 不回傳 mbti/bagua（舊程式讀到的永遠是 None），
                     # 改用八卦演算法 compute_bagua_mbti（與報告 / Firebase 同源）
                     try:

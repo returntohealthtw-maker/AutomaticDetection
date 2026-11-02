@@ -871,7 +871,7 @@ async def sync_captures_to_firebase(
                     "mindStress":   braindna_result.get("stress"),
                     "mindBalance":  braindna_result.get("balance"),
                     "mindEnergy":   braindna_result.get("energy"),
-                    "mindColor":    _color_to_str(braindna_result.get("mind_color")),
+                    "mindColor":    _color_to_str(braindna_result.get("color")),
                     "overallScore": braindna_result.get("overall_score"),
                     "mbti":         braindna_result.get("mbti"),
                     "bagua":        braindna_result.get("bagua"),

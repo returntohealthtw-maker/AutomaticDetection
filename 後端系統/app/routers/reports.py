@@ -1239,6 +1239,22 @@ def _session_to_brainwave_data(db: Session, session_id: int, skip_firebase: bool
         "bands_7": _bands_7,
         "_source": _bdna_source,  # 偵錯用：firebase_180 / pg_raw_arrays / avg_approx / db_avg
     }
+    # ── 報告用 MBTI：八卦 gain_free（與 DB Session.mbti / Firebase 同源）──────────
+    # 舊版這裡不帶 mbti_*，report_orchestrator 會退而用「0-100 單點」重算，
+    # 實測 48 個 session 與 DB 型別只有 9 個相同，且 21 個擠成 INTP。
+    try:
+        import json as _jm
+        from app.services.algorithms import build_mbti_payload as _build_mbti
+        _raw_for_mbti = None
+        if sess_for_sc is not None and getattr(sess_for_sc, "raw_arrays_json", None):
+            _raw_for_mbti = _jm.loads(sess_for_sc.raw_arrays_json)
+        _rt_mbti = ((getattr(sess_for_sc, "report_type", None) or "") if sess_for_sc is not None else "").lower()
+        bw.update(_build_mbti(avg, detection, _raw_for_mbti, _rt_mbti.startswith("child")))
+    except Exception as _mbti_err:
+        import logging as _lgm
+        _lgm.getLogger(__name__).warning("[_session_to_brainwave_data] MBTI payload 失敗 session=%s: %s",
+                                         session_id, _mbti_err)
+
     # 只在有 qEEG 分數時才附加（避免 null 汙染）
     if _qeeg_abilities:
         bw["qeeg_abilities"] = _qeeg_abilities

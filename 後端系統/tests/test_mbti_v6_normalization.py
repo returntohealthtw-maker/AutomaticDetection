@@ -185,8 +185,59 @@ def test_best_window_ignores_tail_and_low_quality_seconds():
     assert res["valid"] and res["bands"], "尾巴低品質秒不得讓 compute_all 失效"
 
 
+def test_secondaries_two_distinct_types_with_axes_and_order():
+    """主性格 + 2 個副性格：型別互異、不等於主性格、依強度由高到低、附差異軸。"""
+    from app.services.algorithms import _secondary_candidates, _zone_type
+    primary = _zone_type(3, True)             # 巽區 + θ 高 = ISTJ
+    assert primary == "ISTJ"
+    sec = _secondary_candidates(3, True, la_pct=0.40, th_pct=0.55, primary=primary)
+    assert len(sec) == 2
+    assert [s["kind"] for s in sec] == ["gua_lower", "theta_flip"] or sec[0]["strength"] >= sec[1]["strength"]
+    assert sec[0]["strength"] >= sec[1]["strength"]
+    types = [s["mbti"] for s in sec]
+    assert len(set(types)) == 2 and primary not in types
+    assert "INFJ" in types                    # 下界相鄰為離卦區 + θ 高 → INFJ
+    for s in sec:
+        assert s["axes"] and all(a in ("E/I", "N/S", "T/F", "J/P") for a in s["axes"])
+        assert "八卦" not in s["reason"] and "卦" not in s["reason"]
+
+
+def test_secondaries_li_zone_theta_flip_is_enfp_not_infp():
+    """離卦區 θ 高 = INFJ；θ 翻低是震卦 = ENFP（舊版誤給 INFP）。"""
+    from app.services.algorithms import _secondary_candidates
+    sec = _secondary_candidates(2, True, la_pct=0.31, th_pct=0.52, primary="INFJ")
+    assert any(s["kind"] == "theta_flip" and s["mbti"] == "ENFP" for s in sec)
+
+
+def test_secondaries_edge_zone_far_from_boundaries_gives_fewer():
+    """最外側卦位只有單側鄰居，且 θ 極端時，允許只剩 1 個副性格（不硬湊）。"""
+    from app.services.algorithms import _secondary_candidates
+    sec = _secondary_candidates(6, False, la_pct=0.95, th_pct=0.02, primary="ESFP")
+    assert 1 <= len(sec) <= 2
+    assert all(s["mbti"] != "ESFP" for s in sec)
+
+
+def test_payload_secondaries_at_most_two_with_metadata():
+    raw = {"r_delta": [120000] * 180, "r_theta": [40000 + (i % 9) * 3000 for i in range(180)],
+           "r_lalpha": [12000 + (i % 11) * 900 for i in range(180)],
+           "r_halpha": [10000 + (i % 7) * 500 for i in range(180)],
+           "r_lbeta": [8000 + (i % 5) * 400 for i in range(180)],
+           "r_hbeta": [9000 + (i % 6) * 300 for i in range(180)],
+           "r_lgamma": [7000 + (i % 8) * 200 for i in range(180)],
+           "r_hgamma": [6000 + (i % 4) * 100 for i in range(180)]}
+    p = build_mbti_payload(None, None, raw)
+    secs = p["mbti_secondaries"]
+    assert 1 <= len(secs) <= 2
+    assert all(s["mbti"] != p["mbti_primary"] for s in secs)
+    assert all({"mbti", "strength", "reason", "kind", "axes"} <= set(s) for s in secs)
+
+
 if __name__ == "__main__":
     tests = [
+        test_secondaries_two_distinct_types_with_axes_and_order,
+        test_secondaries_li_zone_theta_flip_is_enfp_not_infp,
+        test_secondaries_edge_zone_far_from_boundaries_gives_fewer,
+        test_payload_secondaries_at_most_two_with_metadata,
         test_raw_band_to_norm100_normalizes_raw_thinkgear_values,
         test_raw_band_to_norm100_passthrough_for_already_normalized,
         test_mbti_v6_scores_are_not_pinned_to_extreme_clamp_bounds,

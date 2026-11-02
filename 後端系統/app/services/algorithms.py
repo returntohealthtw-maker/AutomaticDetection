@@ -858,6 +858,79 @@ def _bagua_obj_from_pcts(la_pct: float, high: bool):
     return Bagua.KUN
 
 
+_ZONE_MBTI = [
+    ("INTJ", "INTP"),
+    ("ENTJ", "ENTP"),
+    ("ENFJ", "ENFP"),   # 離卦區（zone 2）：theta 高時改為 INFJ，見 _zone_type
+    ("ISTJ", "ISFJ"),
+    ("ESTJ", "ESFJ"),
+    ("ISTP", "ISFP"),
+    ("ESTP", "ESFP"),
+]
+_SEC_BOUNDS = [0, 0.125, 0.250, 0.375, 0.500, 0.625, 0.750, 1.0]
+_AXIS_NAMES = ("E/I", "N/S", "T/F", "J/P")
+_SEC_MIN_STRENGTH = 5      # 第 2 副性格低於此強度視為「分不出來」而不呈現（48 個真實 session 中 5 個只剩 1 個副性格）
+_SEC_DECAY_Z = 0.5         # 強度 = 100 * exp(-距離z / 0.5)
+
+
+def _zone_type(bagua: int, high: bool) -> str:
+    """與主性格相同的對照表（含離卦：zone 2 且 theta 高 → INFJ，低 → ENFP）。"""
+    if bagua == 2 and high:
+        return "INFJ"
+    return _ZONE_MBTI[bagua][0 if high else 1]
+
+
+def _secondary_candidates(bagua: int, high: bool, la_pct: float, th_pct: float,
+                          primary: str) -> list:
+    """
+    副性格候選（至多回傳 2 個，依強度由高到低）。
+
+    候選三種，距離都換成同一把尺（常態 z 分數距離，數值越小代表離「翻轉點」越近）：
+      ① 相鄰卦位（下）：lowAlpha 百分位離本卦位下界的 z 距離
+      ② 相鄰卦位（上）：lowAlpha 百分位離本卦位上界的 z 距離
+      ③ θ 高低翻轉：theta 百分位離 0.5 的 z 距離
+    強度 = 100*exp(-z/0.5)；兩個候選型別相同或等於主性格者去除。
+    至少保留 1 個（若存在），第 2 個強度 < _SEC_MIN_STRENGTH 則捨棄。
+    統計來源聲明：la_pct/th_pct 為 between-person 常模百分位（見 _GAIN_FREE_NORM），
+    z 距離只用來排序/換算強度，不是新的常模參數。
+    """
+    la = max(0.001, min(0.999, la_pct))
+    th = max(0.001, min(0.999, th_pct))
+    z_la = float(_NORM.ppf(la))
+    cands = []
+    if bagua > 0:
+        cands.append(("gua_lower", _zone_type(bagua - 1, high),
+                      abs(z_la - float(_NORM.ppf(_SEC_BOUNDS[bagua])))))
+    if bagua < 6:
+        cands.append(("gua_upper", _zone_type(bagua + 1, high),
+                      abs(z_la - float(_NORM.ppf(_SEC_BOUNDS[bagua + 1])))))
+    cands.append(("theta_flip", _zone_type(bagua, not high),
+                  abs(float(_NORM.ppf(th)))))
+
+    out, seen = [], {primary}
+    for kind, mt, d in sorted(cands, key=lambda x: x[2]):
+        if mt in seen:
+            continue
+        seen.add(mt)
+        strength = int(round(100 * math.exp(-d / _SEC_DECAY_Z)))
+        axes = [_AXIS_NAMES[i] for i in range(4) if mt[i] != primary[i]]
+        # reason 會被丟給報告 AI 引用，只用定性描述（不放標準差等內部數字，避免出現在客戶報告裡）
+        close = ("幾乎就落在分界線上" if d < 0.3 else "貼近分界線" if d < 0.7 else "離分界線有一小段距離")
+        if kind == "theta_flip":
+            reason = (f"直覺波(θ){close}，"
+                      f"狀態改變時 {'、'.join(axes)} 會翻到另一側")
+        else:
+            reason = (f"安定波(α↓)的落點{close}（相鄰類型的交界），"
+                      f"情境改變時 {'、'.join(axes)} 傾向偏向此型")
+        out.append({"mbti": mt, "kind": kind, "strength": strength,
+                    "distance_z": round(d, 2), "axes": axes, "reason": reason})
+        if len(out) == 2:
+            break
+    if len(out) == 2 and out[1]["strength"] < _SEC_MIN_STRENGTH:
+        out = out[:1]
+    return out
+
+
 def _bagua_mbti_from_raw(raw_la: float, raw_th: float,
                          la_pct: float | None = None, th_pct: float | None = None) -> dict:
     """與前端 _etBaguaMBTI(rawLA, rawTH, useLi=True) 一致。
@@ -899,29 +972,17 @@ def _bagua_mbti_from_raw(raw_la: float, raw_th: float,
     th_conf    = min(1.0, abs(th_pct - 0.5) / 0.3)
     confidence = round((la_conf * 0.65 + th_conf * 0.35) * 100)
 
-    secondary = None
-    if la_conf < 0.6:
-        closer_lower = (la_pct - zone_start) < (zone_end - la_pct)
-        adj = bagua - 1 if closer_lower else bagua + 1
-        if 0 <= adj <= 6:
-            adj_li = adj == 2 and high
-            adj_map = ("INFJ", "INFP") if adj_li else MAP[adj]
-            alt = adj_map[0 if high else 1]
-            if alt != primary:
-                secondary = alt
-    # Always compute the theta-flip type as fallback secondary (same bagua zone,
-    # opposite theta half).  This ensures every report has at least one secondary
-    # to display, mirroring the APP's 4-layer multi-personality behaviour.
-    if not secondary:
-        alt = MAP[bagua][1 if high else 0]
-        if alt != primary:
-            secondary = alt
+    # 2026-11：主性格 + 最多 2 個副性格（見 _secondary_candidates）。
+    # `secondary` 保留為第一個副性格（舊呼叫端相容），完整清單在 `secondaries`。
+    secondaries = _secondary_candidates(bagua, high, la_pct, th_pct, primary)
+    secondary = secondaries[0]["mbti"] if secondaries else None
 
     bagua_obj = (_bagua_obj_from_pcts(la_pct, high) if precomputed
                  else Bagua.calcBaguaWithLi(raw_la, raw_th))
     return {
         "type": primary,
         "secondary": secondary,
+        "secondaries": secondaries,
         "confidence": confidence,
         "la_pct": la_pct,
         "th_pct": th_pct,
@@ -960,6 +1021,7 @@ def _mbti_layer_from_raw_arrays(r_la: list, r_th: list,
     return {
         "type": mbti_type,
         "secondary": br["secondary"],
+        "secondaries": br.get("secondaries") or [],
         "confidence": br["confidence"],
         "bagua": br["bagua"],
         "bagua_name": br["bagua_name"],
@@ -1343,14 +1405,18 @@ def build_mbti_payload(avg: BandAverages, captures: list = None,
     def _diff(score: float) -> float:
         return round((float(score) - 50.0) * 2.0, 2)
 
-    secondaries = []
-    sec = b.get("secondary")
-    if sec and sec != mbti_type:
-        secondaries.append({
-            "mbti":     sec,
-            "strength": max(5, 100 - int(b.get("confidence", 70) or 70)),
-            "reason":   "八卦卦位邊界／θ 翻轉特質",
-        })
+    # 主性格 + 最多 2 個副性格（強度由高到低；分不出第 2 個時只給 1 個）
+    secondaries = [
+        {
+            "mbti":       s["mbti"],
+            "strength":   s["strength"],
+            "reason":     s["reason"],
+            "kind":       s["kind"],
+            "axes":       s["axes"],
+            "distance_z": s["distance_z"],
+        }
+        for s in (b.get("secondaries") or []) if s.get("mbti") != mbti_type
+    ]
 
     return {
         "mbti_primary":      mbti_type,
