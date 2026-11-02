@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.core.database import SessionLocal
 from app.core import models
 from app.core.config import settings
-from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti, build_mbti_payload
+from app.services.algorithms import compute_averages, compute_all_indices, compute_mbti, compute_bagua_mbti, build_mbti_payload
 
 
 def _clip_zh(text: str, max_len: int = 100) -> str:
@@ -174,8 +174,8 @@ async def generate_report_async(report_id: int, session_id: int):
         # 3. 計算 30 個指標
         indices = compute_all_indices(avg)
 
-        # 4. 計算 MBTI
-        mbti = compute_mbti(avg)
+        # 4. 計算 MBTI（八卦演算法，與 DB Session.mbti / Firebase / build_mbti_payload 同源）
+        mbti = compute_bagua_mbti(avg, detection_captures, _raw_arrays_for_mbti)
 
         # 5. 儲存計算結果到資料庫
         index_objects = [

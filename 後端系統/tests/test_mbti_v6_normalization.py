@@ -23,6 +23,7 @@ from app.services.algorithms import (
     BandAverages,
     build_mbti_payload,
     compute_mbti_v6,
+    compute_bagua_mbti,
     _raw_band_to_norm100,
 )
 
@@ -94,9 +95,33 @@ def test_two_different_children_get_different_mbti_results():
     )
     assert not same_scores, "兩個不同孩子的四軸分數完全相同，常模化修正可能失效"
 
-    # 已知（修正後）正確結果，鎖住避免未來再度跑掉
-    assert p174["mbti_primary"] == "INTP"
-    assert p175["mbti_primary"] == "INFP"
+    # 2026-11：報告 MBTI 已統一為八卦演算法（compute_bagua_mbti），不再走 v6。
+    # 下列為八卦演算法對同一份 fixture 的實際輸出，鎖住避免未來又被換掉。
+    # v6 的原始輸出（INTP / INFP）仍可由 compute_mbti_v6() 直接取得，見上方測試。
+    assert p174["mbti_primary"] == "ESTP"
+    assert p175["mbti_primary"] == "ESTP"
+    assert compute_mbti_v6(_avg(SESSION_174))["mbti_type"] == "INTP"
+    assert compute_mbti_v6(_avg(SESSION_175))["mbti_type"] == "INFP"
+
+
+def test_bagua_mbti_is_the_single_source_for_payload():
+    """build_mbti_payload 的主型 = compute_bagua_mbti 的主型；diff 以 50+diff/2 還原百分比。"""
+    avg = _avg(SESSION_174)
+    b = compute_bagua_mbti(avg)
+    p = build_mbti_payload(avg)
+    assert p["mbti_primary"] == b["mbti_type"]
+    assert abs((50 + p["mbti_ei_diff"] / 2) - b["ei_score"]) < 0.01
+    assert abs((50 + p["mbti_jp_diff"] / 2) - b["jp_score"]) < 0.01
+
+
+def test_bagua_mbti_ignores_norm100_summary_row():
+    """Web 路徑 seq_num=0 的 0-100 摘要列不得混入原始值均值。"""
+    raw_rows = [dict(delta=100000 + i, theta=30000 + i, low_alpha=9000 + 10 * i) for i in range(30)]
+    summary = dict(delta=100, theta=47, low_alpha=58)
+    a = compute_bagua_mbti(captures=raw_rows)
+    b = compute_bagua_mbti(captures=[summary] + raw_rows)
+    assert a["mbti_type"] == b["mbti_type"]
+    assert a["n_seconds"] == b["n_seconds"] == 30
 
 
 def test_build_mbti_payload_includes_diff_fields_for_frontend():
@@ -110,6 +135,27 @@ def test_build_mbti_payload_includes_diff_fields_for_frontend():
         assert payload[key] is not None
 
 
+def test_best_window_ignores_tail_and_low_quality_seconds():
+    """
+    #184 稽核：181 筆資料的第 181 筆（1 秒尾巴）曾被選為最佳視窗，
+    且該秒 delta 低於品質門檻 → compute_all 回傳 None。修正後必須有效。
+    """
+    from app.services.braindna_algorithms import compute_all
+    n = 181
+    arr = lambda base: [base + (i % 7) * 100 for i in range(n)]
+    raw = {
+        "r_delta": arr(120000), "r_theta": arr(40000), "r_lalpha": arr(12000),
+        "r_halpha": arr(10000), "r_lbeta": arr(8000), "r_hbeta": arr(9000),
+        "r_lgamma": arr(7000), "r_hgamma": arr(6000),
+        "attn": [50] * n, "medi": [50] * n,
+    }
+    # 最後一秒：低品質（delta < 30000）且 lowGamma 佔比極高 → 舊版會被選為最佳視窗
+    raw["r_delta"][-1] = 3916
+    raw["r_lgamma"][-1] = 60000
+    res = compute_all(raw)
+    assert res["valid"] and res["bands"], "尾巴低品質秒不得讓 compute_all 失效"
+
+
 if __name__ == "__main__":
     tests = [
         test_raw_band_to_norm100_normalizes_raw_thinkgear_values,
@@ -117,6 +163,9 @@ if __name__ == "__main__":
         test_mbti_v6_scores_are_not_pinned_to_extreme_clamp_bounds,
         test_two_different_children_get_different_mbti_results,
         test_build_mbti_payload_includes_diff_fields_for_frontend,
+        test_bagua_mbti_is_the_single_source_for_payload,
+        test_bagua_mbti_ignores_norm100_summary_row,
+        test_best_window_ignores_tail_and_low_quality_seconds,
     ]
     passed = failed = 0
     for t in tests:

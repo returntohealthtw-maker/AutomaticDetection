@@ -106,6 +106,9 @@ MINDCOLOR_WINDOW = 30
 # 這類秒數的 beta/gamma 比例因分母過小而虛高，應排除
 MIN_DELTA_QUALITY: int = 30_000
 
+# 最佳視窗的最少合格秒數（避免挑到大半是壞秒的視窗）。90 秒視窗中至少 30 秒合格。
+MIN_VALID_SECONDS: int = 30
+
 
 def _detect_input_scale(raw_arrays: Dict[str, List]) -> str:
     """
@@ -283,15 +286,22 @@ def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None,
     lgamma_cap = active_cap.get("r_lgamma", CAP["r_lgamma"])
     pr_l1, pr_l2 = active_pr.get("r_lgamma", _PROP_RANGE["r_lgamma"])
 
-    # BrainDNA evaluationReport.py 第 36 行：`if len(tmpArr) > 0: mindArray.append(tmpArr)`
-    # 最後不足 30 秒的部分視窗也納入
-    num_windows = math.ceil(n / WINDOW_SIZE)
-    best_idx = 0
-    best_score = -1.0
+    # 2026-11 修正（Session #183-#185 稽核）：
+    #   舊版把「最後不足一個視窗的尾巴」也納入競爭。Android 上傳 seq 0..180 共 181 筆時，
+    #   第 181 筆單獨成為 1 秒視窗，lowGamma 單秒分數易為 1.0 而被選為最佳視窗，
+    #   且該秒 delta 常低於品質門檻 → calc_band_proportions 過濾後 valid=0 → 回傳 None。
+    #   另外舊版先選窗、後過濾品質，會選到大半是壞秒的視窗（#183 最佳窗僅 17/90 秒合格）。
+    # 新規則：
+    #   1) 只有「完整視窗」(長度 == WINDOW_SIZE) 參與競爭；若資料不足一個完整視窗已在上方回傳
+    #   2) 計分時只計入通過品質門檻 (delta >= MIN_DELTA_QUALITY) 的秒
+    #   3) 合格秒數不足 MIN_VALID_SECONDS 的視窗不參與；全部不足則選合格秒最多者
+    num_windows = n // WINDOW_SIZE          # 只算完整視窗
+    min_delta_q = float(MIN_DELTA_QUALITY)
+    stats = []                              # (idx, valid_count, score)
 
     for i in range(num_windows):
         start = i * WINDOW_SIZE
-        end   = min(start + WINDOW_SIZE, n)  # 最後視窗可能短於 30 秒
+        end   = start + WINDOW_SIZE
         prop_sum = 0.0
         valid = 0
         for j in range(start, end):
@@ -299,16 +309,23 @@ def _select_best_window(raw_arrays: Dict[str, List], cap: Optional[Dict] = None,
             raw_row = {k: float((raw_arrays.get(k) or [])[j]
                                 if j < len(raw_arrays.get(k) or []) else 0.0)
                        for k in RAW_KEYS}
+            if raw_row["r_delta"] < min_delta_q:
+                continue                    # 品質不合格秒不計分
             uncapped_total = sum(raw_row.values())
             if uncapped_total > 0:
                 # 分子：capped lowGamma（使用 active_cap）
                 prop_sum += _clamp(raw_row["r_lgamma"], lgamma_cap) / uncapped_total
                 valid += 1
-        if valid > 0:
-            score = _proportion_range(prop_sum / valid, pr_l1, pr_l2)
-            if score > best_score:
-                best_score = score
-                best_idx = i
+        score = _proportion_range(prop_sum / valid, pr_l1, pr_l2) if valid > 0 else -1.0
+        stats.append((i, valid, score))
+
+    eligible = [t for t in stats if t[1] >= MIN_VALID_SECONDS]
+    if eligible:
+        best_idx = max(eligible, key=lambda t: (t[2], t[1]))[0]
+    elif stats:
+        best_idx = max(stats, key=lambda t: t[1])[0]
+    else:
+        best_idx = 0
 
     start = best_idx * WINDOW_SIZE
     end   = start + WINDOW_SIZE

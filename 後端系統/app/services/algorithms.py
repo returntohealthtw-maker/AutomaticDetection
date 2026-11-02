@@ -1162,38 +1162,111 @@ def aggregate_mbti_profiles(layers: dict) -> list:
     ]
 
 
+def _cap_num(c, key: str) -> float:
+    v = c.get(key, 0) if isinstance(c, dict) else getattr(c, key, 0)
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _is_norm100_summary_row(c) -> bool:
+    """
+    Web 路徑（/eeg/save-stats）會在 seq_num=0 另存一筆「平均統計筆」，
+    其 delta/theta/lowAlpha 是 BrainDNA 0-100 分數（例如 #183: delta=100, theta=47），
+    不是原始 ThinkGear 值。若混入原始值平均或視窗計算會造成污染，必須排除。
+    判斷：delta / theta / lowAlpha 三者皆 ≤ 100（真實 raw 不可能三者同時 ≤ 100）。
+    """
+    return (_cap_num(c, "delta") <= 100 and _cap_num(c, "theta") <= 100
+            and _cap_num(c, "low_alpha") <= 100)
+
+
+def compute_bagua_mbti(avg: BandAverages = None, captures: list = None,
+                       raw_arrays: dict = None) -> dict:
+    """
+    ★ 唯一權威的 MBTI 計算（八卦演算法；2026-11 起，資料庫 / Firebase 同步 / 報告共用）。
+
+    與 App 前端 _etBaguaMBTI(useLi=True) 原型層同一條路徑：
+      整段 lowAlpha 均值、theta 均值（原始 ThinkGear 值）→ 常模百分位 → 八卦（含離卦）
+      → MBTI 16 型；副性格 = 卦位邊界相鄰卦 / theta 翻轉。
+
+    輸入優先序：raw_arrays（逐秒陣列）→ captures（排除 0-100 摘要列）→ avg（單點）。
+    回傳：type / mbti_type / secondary / confidence / bagua / bagua_name /
+          ei_score / ns_score / tf_score / jp_score（皆為 E/N/T/J 側百分比）/ source。
+    """
+    r_la: list = []
+    r_th: list = []
+    source = "none"
+    if raw_arrays:
+        r_la = [float(v) for v in (raw_arrays.get("r_lalpha") or []) if v]
+        r_th = [float(v) for v in (raw_arrays.get("r_theta") or []) if v]
+        source = "raw_arrays"
+    if (len(r_la) < 4 or len(r_th) < 4) and captures:
+        rows = [c for c in captures if not _is_norm100_summary_row(c)]
+        r_la = [_cap_num(c, "low_alpha") for c in rows if _cap_num(c, "low_alpha") > 0]
+        r_th = [_cap_num(c, "theta") for c in rows if _cap_num(c, "theta") > 0]
+        source = "captures"
+    if len(r_la) < 1 or len(r_th) < 1:
+        if avg is None:
+            return {}
+        r_la = [_to_raw(avg.low_alpha)]
+        r_th = [_to_raw(avg.theta)]
+        source = "avg"
+
+    layer = _mbti_layer_from_raw_arrays(r_la, r_th)
+    mbti_type = layer["type"]
+    return {
+        **layer,
+        "mbti_type": mbti_type,
+        "ei_label":  mbti_type[0],
+        "ns_label":  mbti_type[1],
+        "tf_label":  mbti_type[2],
+        "jp_label":  mbti_type[3],
+        "source":    source,
+        "n_seconds": len(r_la),
+    }
+
+
 def build_mbti_payload(avg: BandAverages, captures: list = None,
                        raw_arrays: dict = None) -> dict:
     """
     產出報告 App / headless 共用的 MBTI 欄位。
 
-    v6.0：使用直接競爭演算法，不再依賴八卦中間層。
-    主性格、4軸分數、次性格全部由 compute_mbti_v6() 計算。
+    2026-11：全面改用八卦演算法（compute_bagua_mbti），與資料庫 Session.mbti、
+    Firebase 同步值同源。v6（compute_mbti_v6）保留在檔案中但不再被報告使用
+    （稽核：48 個 raw session 中 T/F 軸差值標準差僅 1.14、約 60% 為 INFP/INTP，區分力不足）。
+
+    欄位語意（與 React 報告一致）：*_diff 為 (E/N/T/J 側百分比 - 50) * 2，
+    React 以 50 + diff/2 還原百分比。
     """
-    v6 = compute_mbti_v6(avg)
-    mbti_type  = v6['mbti_type']
-    secondaries = [
-        {
-            "mbti":     s['mbti'],
-            "strength": s['strength'],
-            "reason":   s.get('reason', f"{s.get('axis','')}軸邊界特質"),
-        }
-        for s in v6.get('secondaries', [])
-    ]
+    b = compute_bagua_mbti(avg, captures, raw_arrays)
+    mbti_type = b["mbti_type"]
+
+    def _diff(score: float) -> float:
+        return round((float(score) - 50.0) * 2.0, 2)
+
+    secondaries = []
+    sec = b.get("secondary")
+    if sec and sec != mbti_type:
+        secondaries.append({
+            "mbti":     sec,
+            "strength": max(5, 100 - int(b.get("confidence", 70) or 70)),
+            "reason":   "八卦卦位邊界／θ 翻轉特質",
+        })
 
     return {
         "mbti_primary":      mbti_type,
-        "mbti_ei":           v6['ei_score'],
-        "mbti_ns":           v6['ns_score'],
-        "mbti_tf":           v6['tf_score'],
-        "mbti_jp":           v6['jp_score'],
-        "mbti_ei_diff":      v6['eiDiff'],
-        "mbti_ns_diff":      v6['nsDiff'],
-        "mbti_tf_diff":      v6['tfDiff'],
-        "mbti_jp_diff":      v6['jpDiff'],
-        "mbti_bagua":        "",
-        "mbti_bagua_name":   "",
+        "mbti_ei":           b['ei_score'],
+        "mbti_ns":           b['ns_score'],
+        "mbti_tf":           b['tf_score'],
+        "mbti_jp":           b['jp_score'],
+        "mbti_ei_diff":      _diff(b['ei_score']),
+        "mbti_ns_diff":      _diff(b['ns_score']),
+        "mbti_tf_diff":      _diff(b['tf_score']),
+        "mbti_jp_diff":      _diff(b['jp_score']),
+        "mbti_bagua":        b.get("bagua", ""),
+        "mbti_bagua_name":   b.get("bagua_name", ""),
         "mbti_secondaries":  secondaries,
-        "mbti_profiles":     [{"type": mbti_type, "pct": 100, "layers": ["v6"]}],
+        "mbti_profiles":     [{"type": mbti_type, "pct": 100, "layers": ["bagua"]}],
         "mbti_layers":       None,
     }

@@ -246,36 +246,21 @@ def save_eeg_stats(
             sess.mind_energy   = _bdna_result.get("energy")
             sess.mind_color    = _bdna_result.get("color")
             sess.overall_score = _bdna_result.get("overall_score")
-            # MBTI / bagua：從 algorithms/report.py 快速推算
+            # MBTI / bagua：2026-11 起統一使用八卦演算法 compute_bagua_mbti
+            # （舊版用「最佳視窗 + 品質過濾均值」走 generate_quick_mbti，
+            #   與報告/Firebase 的算法與輸入都不同，導致 DB 與報告 MBTI 不一致）
             try:
-                from app.algorithms.report import generate_quick_mbti as _qmbti
-                from app.services.braindna_algorithms import (
-                    _select_best_window as _sbw,
-                    MIN_DELTA_QUALITY as _MDQ,
-                )
-                bw = _sbw(payload.raw_arrays)
-                import statistics as _stat
-                _bw_delta = bw.get("r_delta") or []
-                def _mean_raw(key):
-                    arr = bw.get(key) or []
-                    # 排除 delta<MIN_DELTA_QUALITY 的低品質秒
-                    valid = [v for j, v in enumerate(arr)
-                             if j < len(_bw_delta) and _bw_delta[j] >= _MDQ and v > 0]
-                    return _stat.mean(valid) if valid else (_stat.mean([v for v in arr if v > 0]) if arr else 0.0)
-                mbti_result = _qmbti({
-                    "lowAlpha":  _mean_raw("r_lalpha"),
-                    "highAlpha": _mean_raw("r_halpha"),
-                    "lowBeta":   _mean_raw("r_lbeta"),
-                    "highBeta":  _mean_raw("r_hbeta"),
-                    "lowGamma":  _mean_raw("r_lgamma"),
-                    "midGamma":  _mean_raw("r_hgamma"),
-                    "theta":     _mean_raw("r_theta"),
-                    "delta":     _mean_raw("r_delta"),
-                })
-                sess.mbti  = mbti_result.get("mbti")
-                sess.bagua = mbti_result.get("bagua")
-            except Exception:
-                pass
+                from app.services.algorithms import compute_bagua_mbti as _bagua_mbti
+                mbti_result = _bagua_mbti(raw_arrays=payload.raw_arrays)
+                if mbti_result:
+                    sess.mbti  = mbti_result.get("mbti_type")
+                    sess.bagua = mbti_result.get("bagua")
+                    # 同步給 Firebase：firebase_sync 從 braindna_result 讀 mbti/bagua
+                    # （compute_all 本身不回傳這兩個鍵，舊版 Firebase 這兩欄一律為 None）
+                    _bdna_result["mbti"]  = sess.mbti
+                    _bdna_result["bagua"] = sess.bagua
+            except Exception as _mbti_ex:
+                logger.warning("[EEG] 八卦 MBTI 計算失敗 session=%s: %s", sess.session_id, _mbti_ex)
         except Exception:
             pass
 

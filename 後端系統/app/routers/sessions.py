@@ -263,8 +263,20 @@ def upload_session(
                     _s2.mind_balance  = _bdna_result.get("balance")
                     _s2.mind_energy   = _bdna_result.get("energy")
                     _s2.mind_color    = _bdna_result.get("mind_color")
-                    _s2.mbti          = _bdna_result.get("mbti")
-                    _s2.bagua         = _bdna_result.get("bagua")
+                    # 2026-11：compute_all 不回傳 mbti/bagua（舊程式讀到的永遠是 None），
+                    # 改用八卦演算法 compute_bagua_mbti（與報告 / Firebase 同源）
+                    try:
+                        from app.services.algorithms import compute_bagua_mbti as _bagua_mbti
+                        _bm = _bagua_mbti(raw_arrays=_raw_arrays)
+                        if _bm:
+                            _s2.mbti  = _bm.get("mbti_type")
+                            _s2.bagua = _bm.get("bagua")
+                            # 同步給 Firebase：firebase_sync 從 braindna_result 讀 mbti/bagua
+                            _bdna_result["mbti"]  = _s2.mbti
+                            _bdna_result["bagua"] = _s2.bagua
+                    except Exception as _bm_ex:
+                        _logger.warning("[BrainDNA] 八卦 MBTI 計算失敗 session=%d: %s",
+                                        session.session_id, _bm_ex)
                     _s2.overall_score = _bdna_result.get("overall_score")
                     _s2.bdna_mode     = f"bdna_{_bdna_result.get('input_scale','raw')}"
                     db.commit()
