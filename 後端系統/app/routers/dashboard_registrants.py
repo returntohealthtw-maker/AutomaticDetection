@@ -5,13 +5,19 @@ GET /api/v1/dashboard/registrants
   驗證：header  X-Dashboard-Key  必須等於環境變數 DASHBOARD_API_KEY（未設定時一律拒絕）。
   回傳：所有顧問帳號 + 尚未建立帳號的待審核申請（contact_requests.status = pending）。
   不含密碼雜湊、初始密碼。
+
+POST /api/v1/dashboard/registrants/{id}/profile
+  修改顧問帳號／待審核申請的個人資料（姓名、手機、Email、單位類型、單位）。同一個 X-Dashboard-Key 驗證。
 """
 import hmac
 import os
+import re
+import unicodedata
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -96,3 +102,100 @@ def registrants(x_dashboard_key: Optional[str] = Header(None), db: Session = Dep
             "connection_count": 0, "group_count": 0, "data_request_count": 0, "analysis_rehits": 0,
         })
     return {"app": "automaticdetection", "count": len(out), "registrants": out}
+
+
+# ── 修改註冊者個人資料（總後台儀表板用）──────────────────────────────────────
+class ProfileUpdate(BaseModel):
+    """只更新有帶的欄位。display_name 對應顧問姓名；org_type／org 為單位類型與單位名稱。"""
+    display_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    org_type: Optional[str] = None
+    org: Optional[str] = None
+
+
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+
+
+def _clean(value, limit: int) -> str:
+    s = unicodedata.normalize("NFKC", str(value if value is not None else ""))
+    s = re.sub(r"[\x00-\x1f\x7f<>]", "", s)
+    return re.sub(r"\s+", " ", s).strip()[:limit]
+
+
+def _validate_profile(body: ProfileUpdate, *, email_required: bool) -> dict:
+    """回傳整理後的欄位（只含有帶的）；格式不對丟 400。"""
+    out = {}
+    given = body.model_dump(exclude_unset=True) if hasattr(body, "model_dump") else body.dict(exclude_unset=True)
+    for k, v in given.items():
+        if k == "display_name":
+            s = _clean(v, 50)
+            if not s:
+                raise HTTPException(status_code=400, detail="姓名不能空白")
+        elif k == "phone":
+            s = re.sub(r"[\s\-]", "", _clean(v, 30))
+            if not re.fullmatch(r"\d{8,15}", s):
+                raise HTTPException(status_code=400, detail="手機號碼只能是 8～15 位數字")
+        elif k == "email":
+            s = _clean(v, 120).lower()
+            if (s or email_required) and not _EMAIL_RE.match(s):
+                raise HTTPException(status_code=400, detail="Email 格式不正確")
+        elif k == "org_type":
+            s = _clean(v, 50)
+        else:  # org
+            s = _clean(v, 100)
+        out[k] = s
+    if not out:
+        raise HTTPException(status_code=400, detail="沒有要修改的欄位")
+    return out
+
+
+@router.post("/registrants/{registrant_id}/profile")
+def update_registrant_profile(
+    registrant_id: str,
+    body: ProfileUpdate,
+    x_dashboard_key: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """修改顧問帳號（registrant_id 為數字）或尚未核准的申請（registrant_id 為 REQ 開頭）的個人資料。
+
+    顧問姓名改變時，同步更新 sessions.consultant_name：系統是用「姓名」把檢測紀錄對回顧問的
+    （顧問只能看自己的檢測、報告），不同步的話改名後會看不到過去的紀錄。
+    """
+    _check_key(x_dashboard_key)
+
+    if registrant_id.isdigit():
+        c = db.query(M.Consultant).filter(M.Consultant.consultant_id == int(registrant_id)).first()
+        if not c:
+            raise HTTPException(status_code=404, detail="找不到顧問帳號")
+        fields = _validate_profile(body, email_required=False)
+        if "phone" in fields and fields["phone"] != c.phone:
+            dup = db.query(M.Consultant).filter(
+                M.Consultant.phone == fields["phone"], M.Consultant.consultant_id != c.consultant_id).first()
+            if dup:
+                raise HTTPException(status_code=409, detail="此手機號碼已被其他顧問帳號使用")
+        changed = []
+        old_name = c.name
+        for key, attr in (("display_name", "name"), ("phone", "phone"), ("email", "email"),
+                          ("org_type", "org_type"), ("org", "org")):
+            if key in fields and (getattr(c, attr) or "") != fields[key]:
+                setattr(c, attr, fields[key] if (fields[key] or attr in ("name", "phone")) else None)
+                changed.append(key)
+        if "display_name" in changed and old_name:
+            db.query(M.Session).filter(M.Session.consultant_name == old_name).update(
+                {M.Session.consultant_name: c.name}, synchronize_session=False)
+        db.commit()
+        return {"ok": True, "changed": changed}
+
+    r = db.query(M.ContactRequest).filter(M.ContactRequest.id == registrant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="找不到註冊者")
+    fields = _validate_profile(body, email_required=True)
+    changed = []
+    for key, attr in (("display_name", "name"), ("phone", "phone"), ("email", "email"),
+                      ("org_type", "org_type"), ("org", "org")):
+        if key in fields and (getattr(r, attr) or "") != fields[key]:
+            setattr(r, attr, fields[key])
+            changed.append(key)
+    db.commit()
+    return {"ok": True, "changed": changed}
